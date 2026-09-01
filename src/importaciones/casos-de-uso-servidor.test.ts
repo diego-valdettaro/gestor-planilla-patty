@@ -132,7 +132,7 @@ describe("casos de uso de importaciones en el servidor", () => {
       ],
     });
 
-    expect(importaciones[0].propuestas).toEqual([
+    expect(importaciones[0].marcasPendientesSinTurno).toEqual([
       {
         idHuellero: "HU-1024",
         fecha: "2026-09-02",
@@ -141,5 +141,22 @@ describe("casos de uso de importaciones en el servidor", () => {
         salidaPropuesta: "2026-09-02T18:00:00-05:00",
       },
     ]);
+  });
+
+  it("conserva pendiente una asistencia esperada que no recibe marcas", async () => {
+    const { asistencias, importaciones, repositorio } = crearRepositorioEnMemoria();
+    const casosDeUso = crearCasosDeUsoDeImportaciones(repositorio, {
+      obtenerActorActual: async () => ({ id: "administracion-1", rol: "administracion" }),
+    });
+
+    await casosDeUso.importar({
+      sede: "Lima",
+      semana: "2026-08-31",
+      archivo: { nombre: "huellero.csv", ubicacion: "importaciones/archivo.csv", hashSha256: "abc123" },
+      marcasCrudas: [],
+    });
+
+    expect(importaciones[0].propuestas).toEqual([]);
+    expect(asistencias).toEqual([{ idHuellero: "HU-1024", fecha: "2026-09-01", estado: "pendiente" }]);
   });
 });

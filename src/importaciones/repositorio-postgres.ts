@@ -1,4 +1,4 @@
-import { and, eq, gte, lte } from "drizzle-orm";
+import { and, eq, gte, isNull, lte } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import * as schema from "@/db/schema";
@@ -56,5 +56,32 @@ export class RepositorioPostgresDeImportaciones implements RepositorioDeImportac
         });
       }
     });
+  }
+
+  async listarAsistenciasPendientes(): Promise<Array<{
+    idHuellero: string;
+    fecha: string;
+    entradaPropuesta: string | null;
+    salidaPropuesta: string | null;
+  }>> {
+    return this.db.select({
+      idHuellero: asistenciasEsperadas.idHuellero,
+      fecha: asistenciasEsperadas.fecha,
+      entradaPropuesta: asistenciasEsperadas.entradaPropuesta,
+      salidaPropuesta: asistenciasEsperadas.salidaPropuesta,
+    }).from(asistenciasEsperadas).where(eq(asistenciasEsperadas.estado, "pendiente"));
+  }
+
+  async listarIncidencias(): Promise<Array<{ idHuellero: string; fecha: string; motivo: string }>> {
+    return this.db.select({ idHuellero: incidenciasDeImportacion.idHuellero, fecha: incidenciasDeImportacion.fecha, motivo: incidenciasDeImportacion.motivo })
+      .from(incidenciasDeImportacion);
+  }
+
+  async listarMarcasSinTurno(): Promise<Array<{ idHuellero: string; fecha: string; instante: string }>> {
+    return this.db.select({ idHuellero: marcasCrudas.idHuellero, fecha: marcasCrudas.fecha, instante: marcasCrudas.instante })
+      .from(marcasCrudas)
+      .innerJoin(colaboradores, eq(marcasCrudas.idHuellero, colaboradores.idHuellero))
+      .leftJoin(turnosPublicados, and(eq(marcasCrudas.idHuellero, turnosPublicados.idHuellero), eq(marcasCrudas.fecha, turnosPublicados.fecha)))
+      .where(isNull(turnosPublicados.id));
   }
 }

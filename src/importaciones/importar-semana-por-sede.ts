@@ -26,6 +26,14 @@ export interface IncidenciaDeImportacion {
   motivo: "ID de huellero desconocido.";
 }
 
+export interface MarcaPendienteSinTurno {
+  idHuellero: string;
+  fecha: string;
+  estado: "pendiente";
+  entradaPropuesta?: string;
+  salidaPropuesta?: string;
+}
+
 export interface ImportacionSemanal {
   sede: string;
   semana: string;
@@ -34,6 +42,7 @@ export interface ImportacionSemanal {
   importadaEn: Date;
   marcasCrudas: MarcaCruda[];
   propuestas: AsistenciaPendiente[];
+  marcasPendientesSinTurno: MarcaPendienteSinTurno[];
   incidencias: IncidenciaDeImportacion[];
 }
 
@@ -62,10 +71,11 @@ export async function importarSemanaPorSede(
 
   const agrupadas = agruparMarcas(solicitud.marcasCrudas);
   const propuestas: AsistenciaPendiente[] = [];
+  const marcasPendientesSinTurno: MarcaPendienteSinTurno[] = [];
   const incidencias: IncidenciaDeImportacion[] = [];
 
-  for (const [clave, marcas] of agrupadas) {
-    const [idHuellero, fecha] = clave.split("\u0000");
+  for (const [idHuellero, marcasPorFecha] of agrupadas) {
+    for (const [fecha, marcas] of marcasPorFecha) {
     if (!(await repositorio.perteneceAPeriodoAbierto(fecha))) {
       throw new Error("Todas las marcas deben pertenecer a un período de planilla abierto.");
     }
@@ -79,13 +89,14 @@ export async function importarSemanaPorSede(
       throw new Error("La marca no pertenece a la sede de la importación.");
     }
 
-    await repositorio.buscarTurnoPublicado(idHuellero, fecha);
-    const propuesta: AsistenciaPendiente = { idHuellero, fecha, estado: "pendiente" };
-    if (marcas.length > 1 && marcas.length % 2 === 0) {
-      propuesta.entradaPropuesta = marcas[0].instante;
-      propuesta.salidaPropuesta = marcas.at(-1)!.instante;
+    const turnoPublicado = await repositorio.buscarTurnoPublicado(idHuellero, fecha);
+    const propuesta = crearPropuesta(idHuellero, fecha, marcas);
+    if (!turnoPublicado) {
+      marcasPendientesSinTurno.push(propuesta);
+      continue;
     }
-    propuestas.push(propuesta);
+    propuestas.push({ ...propuesta, estado: "pendiente" });
+    }
   }
 
   await repositorio.guardar({
@@ -96,18 +107,31 @@ export async function importarSemanaPorSede(
     importadaEn: new Date(),
     marcasCrudas: solicitud.marcasCrudas,
     propuestas,
+    marcasPendientesSinTurno,
     incidencias,
   });
 }
 
-function agruparMarcas(marcas: MarcaCruda[]): Map<string, MarcaCruda[]> {
-  const agrupadas = new Map<string, MarcaCruda[]>();
-  for (const marca of marcas) {
-    const clave = `${marca.idHuellero}\u0000${marca.fecha}`;
-    agrupadas.set(clave, [...(agrupadas.get(clave) ?? []), marca]);
+function crearPropuesta(idHuellero: string, fecha: string, marcas: MarcaCruda[]): MarcaPendienteSinTurno {
+  const propuesta: MarcaPendienteSinTurno = { idHuellero, fecha, estado: "pendiente" };
+  if (marcas.length > 1 && marcas.length % 2 === 0) {
+    propuesta.entradaPropuesta = marcas[0].instante;
+    propuesta.salidaPropuesta = marcas.at(-1)!.instante;
   }
-  for (const marcasDelDia of agrupadas.values()) {
-    marcasDelDia.sort((a, b) => a.instante.localeCompare(b.instante));
+  return propuesta;
+}
+
+function agruparMarcas(marcas: MarcaCruda[]): Map<string, Map<string, MarcaCruda[]>> {
+  const agrupadas = new Map<string, Map<string, MarcaCruda[]>>();
+  for (const marca of marcas) {
+    const marcasPorFecha = agrupadas.get(marca.idHuellero) ?? new Map<string, MarcaCruda[]>();
+    marcasPorFecha.set(marca.fecha, [...(marcasPorFecha.get(marca.fecha) ?? []), marca]);
+    agrupadas.set(marca.idHuellero, marcasPorFecha);
+  }
+  for (const marcasPorFecha of agrupadas.values()) {
+    for (const marcasDelDia of marcasPorFecha.values()) {
+      marcasDelDia.sort((a, b) => a.instante.localeCompare(b.instante));
+    }
   }
   return agrupadas;
 }
