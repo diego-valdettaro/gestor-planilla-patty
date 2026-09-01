@@ -4,6 +4,7 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "@/db/schema";
 import {
   asistenciasEsperadas,
+  colaboradores,
   historialDeTurnosPublicados,
   periodosPlanilla,
   turnosPublicados,
@@ -70,5 +71,52 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos {
       );
 
     return Boolean(periodo);
+  }
+
+  async listarSedesConColaboradoresActivos(): Promise<string[]> {
+    const sedes = await this.db
+      .selectDistinct({ sede: colaboradores.sede })
+      .from(colaboradores)
+      .where(eq(colaboradores.activo, true));
+
+    return sedes.map(({ sede }) => sede).sort();
+  }
+
+  async listarColaboradoresActivosPorSede(sede: string): Promise<
+    Array<{ idHuellero: string; nombre: string; centroDeCosto: string }>
+  > {
+    return this.db
+      .select({
+        idHuellero: colaboradores.idHuellero,
+        nombre: colaboradores.nombre,
+        centroDeCosto: colaboradores.centroDeCosto,
+      })
+      .from(colaboradores)
+      .where(and(eq(colaboradores.sede, sede), eq(colaboradores.activo, true)));
+  }
+
+  async listarPublicadosPorSedeYSemana(
+    sede: string,
+    inicio: string,
+    fin: string,
+  ): Promise<TurnoPublicado[]> {
+    return this.db
+      .select({
+        idHuellero: turnosPublicados.idHuellero,
+        fecha: turnosPublicados.fecha,
+        sede: turnosPublicados.sede,
+        entradaProgramada: turnosPublicados.entradaProgramada,
+        salidaProgramada: turnosPublicados.salidaProgramada,
+        minutosDeAlmuerzo: turnosPublicados.minutosDeAlmuerzo,
+        descanso: turnosPublicados.descanso,
+      })
+      .from(turnosPublicados)
+      .where(
+        and(
+          eq(turnosPublicados.sede, sede),
+          gte(turnosPublicados.fecha, inicio),
+          lte(turnosPublicados.fecha, fin),
+        ),
+      );
   }
 }

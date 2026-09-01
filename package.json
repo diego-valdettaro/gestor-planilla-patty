@@ -9,9 +9,12 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "provisionar:administracion": "tsx scripts/provisionar-administracion.ts",
+    "provisionar:cuenta": "tsx scripts/provisionar-cuenta.ts"
   },
   "dependencies": {
+    "@node-rs/argon2": "^2.2.0",
     "drizzle-orm": "^0.44.7",
     "next": "^15.5.2",
     "pg": "^8.16.3",
@@ -24,6 +27,7 @@
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "drizzle-kit": "^0.31.10",
+    "tsx": "^4.23.13",
     "typescript": "^5.8.3",
     "vitest": "^3.2.4"
   },

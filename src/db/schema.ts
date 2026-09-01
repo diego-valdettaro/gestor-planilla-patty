@@ -2,6 +2,7 @@ import {
   boolean,
   date,
   integer,
+  index,
   pgTable,
   text,
   timestamp,
@@ -19,6 +20,28 @@ export const colaboradores = pgTable("colaboradores", {
   creadoEn: timestamp("creado_en", { withTimezone: true }).notNull().defaultNow(),
   actualizadoEn: timestamp("actualizado_en", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const cuentasLocales = pgTable("cuentas_locales", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  nombreUsuario: text("nombre_usuario").notNull().unique(),
+  hashContrasena: text("hash_contrasena").notNull(),
+  rol: text("rol", { enum: ["operaciones", "administracion", "finanzas"] }).notNull(),
+  creadaEn: timestamp("creada_en", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const sesiones = pgTable(
+  "sesiones",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    cuentaId: uuid("cuenta_id")
+      .notNull()
+      .references(() => cuentasLocales.id),
+    tokenHash: text("token_hash").notNull().unique(),
+    venceEn: timestamp("vence_en", { withTimezone: true }).notNull(),
+    creadaEn: timestamp("creada_en", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("sesiones_cuenta_id").on(table.cuentaId)],
+);
 
 export const periodosPlanilla = pgTable("periodos_planilla", {
   id: uuid("id").primaryKey().defaultRandom(),

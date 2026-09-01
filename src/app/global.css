@@ -1,0 +1,28 @@
+:root { color: #1d2733; font-family: Arial, sans-serif; background: #f4f6f8; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+button, input, select { font: inherit; }
+button { background: #075985; border: 0; border-radius: 0.35rem; color: white; cursor: pointer; padding: 0.55rem 0.8rem; }
+label { display: grid; gap: 0.35rem; font-size: 0.9rem; }
+input, select { border: 1px solid #cbd5e1; border-radius: 0.3rem; padding: 0.45rem; }
+.centrado { align-items: center; display: flex; justify-content: center; min-height: 100vh; padding: 1rem; }
+.tarjeta { background: white; border: 1px solid #e2e8f0; border-radius: 0.7rem; box-shadow: 0 0.5rem 2rem #0f172a12; padding: 1.5rem; }
+.formulario-inicio-sesion { display: grid; gap: 1rem; width: min(100%, 23rem); }
+.contenido { margin: 0 auto; max-width: 90rem; padding: 2rem; }
+.encabezado { align-items: center; display: flex; justify-content: space-between; }
+.eyebrow { color: #0369a1; font-size: 0.8rem; font-weight: 700; letter-spacing: 0.08em; margin: 0; text-transform: uppercase; }
+.encabezado h1 { margin: 0.2rem 0 1.5rem; }
+.filtros { align-items: flex-end; display: flex; gap: 1rem; margin-bottom: 1.5rem; }
+.grilla { display: grid; gap: 1rem; }
+.fila-colaborador { background: white; border: 1px solid #e2e8f0; border-radius: 0.6rem; overflow: hidden; }
+.fila-colaborador > header { background: #f8fafc; display: grid; gap: 0.15rem; padding: 0.8rem 1rem; }
+.fila-colaborador header span { color: #475569; font-size: 0.85rem; }
+.dias { display: grid; grid-template-columns: repeat(7, minmax(10rem, 1fr)); overflow-x: auto; }
+.turno-borrador, .turno-publicado { border-right: 1px solid #e2e8f0; display: grid; gap: 0.45rem; min-height: 13rem; padding: 0.7rem; }
+.turno-publicado { background: #ecfdf5; color: #065f46; }
+time { color: #475569; font-size: 0.8rem; }
+.turno-borrador label { font-size: 0.72rem; }
+.turno-borrador input { min-width: 0; padding: 0.25rem; width: 100%; }
+.checkbox { align-items: center; display: flex; gap: 0.35rem; }
+.checkbox input { width: auto; }
+@media (max-width: 700px) { .contenido { padding: 1rem; } .filtros { align-items: stretch; flex-direction: column; } }
