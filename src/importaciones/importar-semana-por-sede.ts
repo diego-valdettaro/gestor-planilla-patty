@@ -12,13 +12,15 @@ export interface ArchivoFuente {
   hashSha256: string;
 }
 
-export interface AsistenciaPendiente {
+export interface PropuestaDeMarcas {
   idHuellero: string;
   fecha: string;
   estado: "pendiente";
   entradaPropuesta?: string;
   salidaPropuesta?: string;
 }
+
+export type AsistenciaPendiente = PropuestaDeMarcas;
 
 export interface IncidenciaDeImportacion {
   idHuellero: string;
@@ -26,13 +28,7 @@ export interface IncidenciaDeImportacion {
   motivo: "ID de huellero desconocido.";
 }
 
-export interface MarcaPendienteSinTurno {
-  idHuellero: string;
-  fecha: string;
-  estado: "pendiente";
-  entradaPropuesta?: string;
-  salidaPropuesta?: string;
-}
+export type MarcaPendienteSinTurno = PropuestaDeMarcas;
 
 export interface ImportacionSemanal {
   sede: string;

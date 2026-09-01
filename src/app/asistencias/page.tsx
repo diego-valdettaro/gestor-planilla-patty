@@ -36,8 +36,8 @@ export default async function PaginaDeAsistencias() {
       </section>
       <section>
         <h2>Marcas sin turno publicado</h2>
-        {marcasSinTurno.length ? <ul>{marcasSinTurno.map((marca) => <li key={`${marca.idHuellero}-${marca.fecha}-${marca.instante}`}>
-          {marca.idHuellero} · {marca.fecha} · {marca.instante}
+        {marcasSinTurno.length ? <ul>{marcasSinTurno.map((marca) => <li key={`${marca.importacionId}-${marca.idHuellero}-${marca.fecha}`}>
+          {marca.idHuellero} · {marca.fecha} · entrada propuesta: {marca.entradaPropuesta ?? "sin propuesta"} · salida propuesta: {marca.salidaPropuesta ?? "sin propuesta"}
         </li>)}</ul> : <p>No hay marcas sin turno publicado.</p>}
       </section>
       <section>

@@ -77,11 +77,37 @@ export class RepositorioPostgresDeImportaciones implements RepositorioDeImportac
       .from(incidenciasDeImportacion);
   }
 
-  async listarMarcasSinTurno(): Promise<Array<{ idHuellero: string; fecha: string; instante: string }>> {
-    return this.db.select({ idHuellero: marcasCrudas.idHuellero, fecha: marcasCrudas.fecha, instante: marcasCrudas.instante })
+  async listarMarcasSinTurno(): Promise<Array<{
+    importacionId: string;
+    idHuellero: string;
+    fecha: string;
+    entradaPropuesta?: string;
+    salidaPropuesta?: string;
+  }>> {
+    const marcas = await this.db.select({
+      importacionId: marcasCrudas.importacionId,
+      idHuellero: marcasCrudas.idHuellero,
+      fecha: marcasCrudas.fecha,
+      instante: marcasCrudas.instante,
+    })
       .from(marcasCrudas)
       .innerJoin(colaboradores, eq(marcasCrudas.idHuellero, colaboradores.idHuellero))
       .leftJoin(turnosPublicados, and(eq(marcasCrudas.idHuellero, turnosPublicados.idHuellero), eq(marcasCrudas.fecha, turnosPublicados.fecha)))
       .where(isNull(turnosPublicados.id));
+    const agrupadas = new Map<string, typeof marcas>();
+    for (const marca of marcas) {
+      const clave = `${marca.importacionId}:${marca.idHuellero}:${marca.fecha}`;
+      agrupadas.set(clave, [...(agrupadas.get(clave) ?? []), marca]);
+    }
+    return [...agrupadas.values()].map((marcasDelDia) => {
+      marcasDelDia.sort((a, b) => a.instante.localeCompare(b.instante));
+      const propuesta = marcasDelDia.length > 1 && marcasDelDia.length % 2 === 0;
+      return {
+        importacionId: marcasDelDia[0].importacionId,
+        idHuellero: marcasDelDia[0].idHuellero,
+        fecha: marcasDelDia[0].fecha,
+        ...(propuesta ? { entradaPropuesta: marcasDelDia[0].instante, salidaPropuesta: marcasDelDia.at(-1)!.instante } : {}),
+      };
+    });
   }
 }
