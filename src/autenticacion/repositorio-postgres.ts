@@ -28,6 +28,10 @@ export class RepositorioPostgresDeCuentas implements RepositorioDeCuentas {
     await this.db.insert(sesiones).values(sesion);
   }
 
+  async eliminarSesion(tokenHash: string): Promise<void> {
+    await this.db.delete(sesiones).where(eq(sesiones.tokenHash, tokenHash));
+  }
+
   async buscarActorPorTokenHash(tokenHash: string, ahora: Date): Promise<Actor | undefined> {
     const [sesion] = await this.db
       .select({ id: cuentasLocales.id, rol: cuentasLocales.rol })

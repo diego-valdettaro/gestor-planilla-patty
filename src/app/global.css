@@ -3,6 +3,11 @@
 body { margin: 0; }
 button, input, select { font: inherit; }
 button { background: #075985; border: 0; border-radius: 0.35rem; color: white; cursor: pointer; padding: 0.55rem 0.8rem; }
+.navegacion { align-items: center; background: #0f172a; color: white; display: flex; gap: 1rem; padding: 0.75rem max(1rem, calc((100% - 90rem) / 2)); }
+.navegacion a { color: white; text-decoration: none; }
+.navegacion form { margin-left: auto; }
+.navegacion button { background: #334155; }
+.actor-actual { color: #cbd5e1; font-size: 0.9rem; }
 label { display: grid; gap: 0.35rem; font-size: 0.9rem; }
 input, select { border: 1px solid #cbd5e1; border-radius: 0.3rem; padding: 0.45rem; }
 .centrado { align-items: center; display: flex; justify-content: center; min-height: 100vh; padding: 1rem; }

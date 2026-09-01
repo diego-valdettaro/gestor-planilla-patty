@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 
+import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
+
+import { Navegacion } from "./navegacion";
 import "./global.css";
 
 export const metadata: Metadata = {
@@ -7,10 +10,11 @@ export const metadata: Metadata = {
   description: "Gestión de asistencia y planilla",
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const actor = await obtenerActorActual().catch(() => undefined);
   return (
     <html lang="es">
-      <body>{children}</body>
+      <body><Navegacion actor={actor} />{children}</body>
     </html>
   );
 }

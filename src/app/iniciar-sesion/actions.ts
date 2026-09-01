@@ -9,7 +9,7 @@ export async function iniciarSesionDesdeFormulario(formData: FormData): Promise<
   const contrasena = obtenerTexto(formData, "contrasena");
 
   await iniciarSesionDelServidor({ nombreUsuario, contrasena });
-  redirect("/turnos");
+  redirect("/");
 }
 
 function obtenerTexto(formData: FormData, nombre: string): string {

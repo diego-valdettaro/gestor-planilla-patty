@@ -18,7 +18,7 @@ export default async function PaginaDeTurnos({ searchParams }: PropiedadesDePagi
   if (!actor) {
     redirect("/iniciar-sesion");
   }
-  if (actor.rol !== "operaciones") {
+  if (actor.rol !== "operaciones" && actor.rol !== "administracion") {
     return <main className="centrado"><p>No tiene permiso para administrar turnos.</p></main>;
   }
 
@@ -39,7 +39,7 @@ export default async function PaginaDeTurnos({ searchParams }: PropiedadesDePagi
     <main className="contenido">
       <header className="encabezado">
         <div>
-          <p className="eyebrow">Operaciones</p>
+          <p className="eyebrow">{actor.rol === "administracion" ? "Administración" : "Operaciones"}</p>
           <h1>Turnos semanales</h1>
         </div>
       </header>

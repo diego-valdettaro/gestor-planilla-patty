@@ -117,10 +117,30 @@ describe("casos de uso de turnos en el servidor", () => {
     expect(asistenciasEsperadas).toHaveLength(0);
   });
 
-  it("rechaza a Administración antes de publicar un turno", async () => {
+  it("permite a Administración publicar un turno", async () => {
     const { asistenciasEsperadas, historial, repositorio } = crearRepositorioEnMemoria();
     const casosDeUso = crearCasosDeUsoDeTurnos(repositorio, {
       obtenerActorActual: async () => ({ id: "administracion-1", rol: "administracion" }),
+    });
+
+    await casosDeUso.publicar({
+      idHuellero: "HU-1024",
+      fecha: "2026-09-01",
+      sede: "Lima",
+      entradaProgramada: "09:00",
+      salidaProgramada: "18:00",
+      minutosDeAlmuerzo: 60,
+      descanso: false,
+    });
+
+    expect(historial).toHaveLength(1);
+    expect(asistenciasEsperadas).toHaveLength(1);
+  });
+
+  it("rechaza a Finanzas antes de publicar un turno", async () => {
+    const { asistenciasEsperadas, historial, repositorio } = crearRepositorioEnMemoria();
+    const casosDeUso = crearCasosDeUsoDeTurnos(repositorio, {
+      obtenerActorActual: async () => ({ id: "finanzas-1", rol: "finanzas" }),
     });
 
     await expect(

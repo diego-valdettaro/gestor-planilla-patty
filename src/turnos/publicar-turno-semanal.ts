@@ -30,7 +30,7 @@ export async function publicarTurnoSemanal(
   actor: Actor,
   turno: TurnoPublicado,
 ): Promise<void> {
-  if (actor.rol !== "operaciones") {
+  if (actor.rol !== "operaciones" && actor.rol !== "administracion") {
     throw new Error("No tiene permiso para publicar turnos.");
   }
 

@@ -52,3 +52,13 @@ export async function obtenerActorActual(): Promise<Actor> {
 
   return actor;
 }
+
+export async function cerrarSesionDelServidor(): Promise<void> {
+  const almacenDeCookies = await cookies();
+  const token = almacenDeCookies.get(NOMBRE_DE_COOKIE)?.value;
+
+  if (token) {
+    await repositorio.eliminarSesion(hashDelToken(token));
+  }
+  almacenDeCookies.delete(NOMBRE_DE_COOKIE);
+}
