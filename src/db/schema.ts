@@ -85,9 +85,46 @@ export const asistenciasEsperadas = pgTable(
       .references(() => colaboradores.idHuellero),
     fecha: date("fecha", { mode: "string" }).notNull(),
     estado: text("estado", { enum: ["pendiente"] }).notNull().default("pendiente"),
+    entradaPropuesta: text("entrada_propuesta"),
+    salidaPropuesta: text("salida_propuesta"),
     creadaEn: timestamp("creada_en", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     uniqueIndex("asistencias_esperadas_colaborador_fecha").on(table.idHuellero, table.fecha),
   ],
+);
+
+export const importacionesSemanales = pgTable("importaciones_semanales", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  sede: text("sede").notNull(),
+  semana: date("semana", { mode: "string" }).notNull(),
+  archivoNombre: text("archivo_nombre").notNull(),
+  archivoUbicacion: text("archivo_ubicacion").notNull(),
+  archivoHashSha256: text("archivo_hash_sha256").notNull(),
+  usuarioId: uuid("usuario_id").notNull().references(() => cuentasLocales.id),
+  importadaEn: timestamp("importada_en", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const marcasCrudas = pgTable(
+  "marcas_crudas",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    importacionId: uuid("importacion_id").notNull().references(() => importacionesSemanales.id),
+    idHuellero: text("id_huellero").notNull(),
+    fecha: date("fecha", { mode: "string" }).notNull(),
+    instante: text("instante").notNull(),
+  },
+  (table) => [index("marcas_crudas_importacion_id").on(table.importacionId)],
+);
+
+export const incidenciasDeImportacion = pgTable(
+  "incidencias_de_importacion",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    importacionId: uuid("importacion_id").notNull().references(() => importacionesSemanales.id),
+    idHuellero: text("id_huellero").notNull(),
+    fecha: date("fecha", { mode: "string" }).notNull(),
+    motivo: text("motivo").notNull(),
+  },
+  (table) => [index("incidencias_importacion_id").on(table.importacionId)],
 );
