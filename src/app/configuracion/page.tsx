@@ -4,8 +4,9 @@ import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
 import { repositorioDeColaboradores } from "@/colaboradores/servicio";
 import { db } from "@/db/client";
 import { sedes } from "@/db/schema";
+import { eq } from "drizzle-orm";
 
-import { eliminarColaborador, eliminarSede, guardarColaborador, guardarPoliticaDeTardanzas, guardarSede } from "./actions";
+import { asignarEquipoOperativoASede, eliminarColaborador, eliminarSede, guardarColaborador, guardarPoliticaDeTardanzas, guardarSede } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,7 @@ export default async function PaginaDeConfiguracion() {
   if (actor.rol !== "administracion") return <main className="centrado"><p>No tiene permiso para cambiar la configuración.</p></main>;
 
   const [listaDeSedes, colaboradores] = await Promise.all([
-    db.select({ nombre: sedes.nombre }).from(sedes).orderBy(sedes.nombre),
+    db.select({ nombre: sedes.nombre, equipoOperativo: sedes.equipoOperativo }).from(sedes).where(eq(sedes.activa, true)).orderBy(sedes.nombre),
     repositorioDeColaboradores.listar(),
   ]);
 
@@ -23,7 +24,7 @@ export default async function PaginaDeConfiguracion() {
     <header className="encabezado"><div><p className="eyebrow">Administración</p><h1>Configuración</h1><p>Administre sedes, colaboradores y la política de tardanzas.</p></div></header>
     <section className="tarjeta"><h2>Sedes</h2>
       <form action={guardarSede} className="filtros"><label>Nombre<input name="nombre" required /></label><button type="submit">Crear sede</button></form>
-      <ul className="lista-configuracion">{listaDeSedes.map((sede) => <li key={sede.nombre}><span>{sede.nombre}</span><form action={eliminarSede}><input name="nombre" type="hidden" value={sede.nombre} /><button type="submit" className="peligro">Eliminar</button></form></li>)}</ul>
+      <ul className="lista-configuracion">{listaDeSedes.map((sede) => <li key={sede.nombre}><span>{sede.nombre}</span><form action={asignarEquipoOperativoASede} className="fila-configuracion"><input name="nombre" type="hidden" value={sede.nombre} /><label>Equipo operativo<select name="equipoOperativo" defaultValue={sede.equipoOperativo ?? ""} required><option value="" disabled>Sin asignar</option><option value="tiendas">Tiendas</option><option value="taller">Taller</option></select></label><button type="submit">Guardar</button></form><form action={eliminarSede}><input name="nombre" type="hidden" value={sede.nombre} /><button type="submit" className="peligro">Eliminar</button></form></li>)}</ul>
     </section>
     <section className="tarjeta"><h2>Colaboradores</h2>
       <form action={guardarColaborador} className="filtros"><label>ID de huellero<input name="idHuellero" required /></label><label>Nombre<input name="nombre" required /></label><label>Sede<select name="sede" required>{listaDeSedes.map((sede) => <option key={sede.nombre}>{sede.nombre}</option>)}</select></label><label>Centro de costo<input name="centroDeCosto" required /></label><button type="submit">Crear colaborador</button></form>

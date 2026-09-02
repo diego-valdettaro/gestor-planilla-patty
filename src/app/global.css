@@ -38,6 +38,15 @@ th, td { border: 1px solid #e2e8f0; padding: 0.6rem; text-align: left; }
 .horario-semanal > header span { color: #475569; font-size: 0.9rem; }
 .lista-configuracion { display: grid; gap: 0.5rem; list-style: none; margin: 0; padding: 0; }
 .lista-configuracion li { align-items: center; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; padding-top: 0.5rem; }
+.fila-configuracion { align-items: end; display: flex; gap: 0.5rem; }
+.grilla-consulta-semanal { display: grid; gap: 1.5rem; }
+.tabla-semanal { overflow-x: auto; }
+.tabla-semanal table { min-width: 60rem; }
+.tabla-semanal th small, .celda-turno small { color: #475569; display: block; font-weight: 400; margin-top: 0.2rem; }
+.celda-turno { min-width: 8rem; }
+.celda-turno.publicado { background: #ecfdf5; color: #065f46; }
+.celda-turno.descanso { background: #eff6ff; color: #1e3a8a; }
+.celda-turno.sin-publicacion { background: #f8fafc; color: #475569; }
 .peligro { background: #b91c1c; }
 .selector-asistencia { margin-top: 2rem; }
 .encabezado-seccion { margin-bottom: 1rem; }

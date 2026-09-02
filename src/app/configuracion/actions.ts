@@ -10,6 +10,8 @@ import { db } from "@/db/client";
 import { sedes } from "@/db/schema";
 import { crearCasosDeUsoDeTardanzas } from "@/tardanzas/casos-de-uso-servidor";
 import { repositorioDeTardanzas } from "@/tardanzas/servicio";
+import { asignarEquipoOperativo } from "@/turnos/configurar-equipos-operativos";
+import { repositorioDeTurnos } from "@/turnos/servicio";
 
 export async function guardarSede(formData: FormData): Promise<void> {
   await exigirAdministracion();
@@ -28,6 +30,20 @@ export async function eliminarSede(formData: FormData): Promise<void> {
   revalidatePath("/configuracion");
   revalidatePath("/turnos");
   revalidatePath("/asistencias");
+}
+
+export async function asignarEquipoOperativoASede(formData: FormData): Promise<void> {
+  await exigirAdministracion();
+  const equipoOperativo = texto(formData, "equipoOperativo");
+  if (equipoOperativo !== "tiendas" && equipoOperativo !== "taller") throw new Error("El equipo operativo no es válido.");
+  await asignarEquipoOperativo(
+    repositorioDeTurnos,
+    await obtenerActorActual(),
+    texto(formData, "nombre"),
+    equipoOperativo,
+  );
+  revalidatePath("/configuracion");
+  revalidatePath("/turnos");
 }
 
 export async function guardarColaborador(formData: FormData): Promise<void> {

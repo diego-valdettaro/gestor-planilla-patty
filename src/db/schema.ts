@@ -26,6 +26,7 @@ export const sedes = pgTable("sedes", {
   id: uuid("id").primaryKey().defaultRandom(),
   nombre: text("nombre").notNull().unique(),
   activa: boolean("activa").notNull().default(true),
+  equipoOperativo: text("equipo_operativo", { enum: ["tiendas", "taller"] }),
   creadaEn: timestamp("creada_en", { withTimezone: true }).notNull().defaultNow(),
 });
 
