@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import * as schema from "@/db/schema";
-import { ajustesDeAsistencia, asistenciasEsperadas, estadosManuales, marcasCrudas, tardanzas, turnosPublicados } from "@/db/schema";
+import { ajustesDeAsistencia, asistenciasEsperadas, estadosManuales, horasExtra, marcasCrudas, tardanzas, turnosPublicados } from "@/db/schema";
 import { RepositorioPostgresDeTardanzas } from "@/tardanzas/repositorio-postgres";
 
 import type {
@@ -10,8 +10,10 @@ import type {
   RepositorioDeAsistencias,
   AjusteDeAsistencia,
   EstadoManual,
+  InstantaneaDeTurno,
   TurnoParaConfirmar,
 } from "./confirmar-y-ajustar-asistencia";
+import type { EstadoDeHoraExtra, HoraExtraCalculada } from "./calcular-hora-extra";
 
 export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencias {
   private readonly repositorioDeTardanzas: RepositorioPostgresDeTardanzas;
@@ -39,10 +41,18 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
       }).where(and(eq(asistenciasEsperadas.idHuellero, asistencia.idHuellero), eq(asistenciasEsperadas.fecha, asistencia.fecha), eq(asistenciasEsperadas.estado, "pendiente"))).returning({ id: asistenciasEsperadas.id });
       if (!resultado.length) throw new Error("La asistencia no está pendiente de revisión.");
       if (asistencia.tardanza) await tx.insert(tardanzas).values({ asistenciaId: resultado[0].id, ...asistencia.tardanza });
+      if (asistencia.horaExtra) await tx.insert(horasExtra).values({ asistenciaId: resultado[0].id, ...asistencia.horaExtra });
     });
   }
 
-  async ajustar(solicitud: AjusteDeAsistencia, responsableId: string): Promise<void> {
+  async buscarInstantaneaDeTurno(idHuellero: string, fecha: string): Promise<InstantaneaDeTurno | undefined> {
+    const [asistencia] = await this.db.select({ instantaneaDeTurno: asistenciasEsperadas.instantaneaDeTurno })
+      .from(asistenciasEsperadas)
+      .where(and(eq(asistenciasEsperadas.idHuellero, idHuellero), eq(asistenciasEsperadas.fecha, fecha), eq(asistenciasEsperadas.estado, "confirmada")));
+    return asistencia?.instantaneaDeTurno ?? undefined;
+  }
+
+  async ajustar(solicitud: AjusteDeAsistencia, responsableId: string, horaExtra: HoraExtraCalculada | undefined): Promise<void> {
     await this.db.transaction(async (tx) => {
       const [asistencia] = await tx.update(asistenciasEsperadas).set({
         entradaReal: solicitud.entradaReal, salidaReal: solicitud.salidaReal, minutosTrabajados: solicitud.minutosTrabajados,
@@ -52,7 +62,24 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
         asistenciaId: asistencia.id, entradaReal: solicitud.entradaReal, salidaReal: solicitud.salidaReal,
         motivo: solicitud.motivo, responsableId,
       });
+      if (horaExtra) {
+        await tx.insert(horasExtra).values({ asistenciaId: asistencia.id, ...horaExtra }).onConflictDoUpdate({
+          target: horasExtra.asistenciaId,
+          set: { ...horaExtra, decididaPorId: null, decididaEn: null },
+        });
+      } else {
+        await tx.delete(horasExtra).where(eq(horasExtra.asistenciaId, asistencia.id));
+      }
     });
+  }
+
+  async decidirHoraExtra(idHuellero: string, fecha: string, estado: EstadoDeHoraExtra, responsableId: string): Promise<void> {
+    if (estado === "pendiente") throw new Error("La hora extra debe aprobarse o rechazarse.");
+    const resultado = await this.db.update(horasExtra).set({ estado, decididaPorId: responsableId, decididaEn: new Date() })
+      .from(asistenciasEsperadas)
+      .where(and(eq(horasExtra.asistenciaId, asistenciasEsperadas.id), eq(asistenciasEsperadas.idHuellero, idHuellero), eq(asistenciasEsperadas.fecha, fecha), eq(horasExtra.estado, "pendiente")))
+      .returning({ id: horasExtra.id });
+    if (!resultado.length) throw new Error("La hora extra debe estar pendiente para decidirla.");
   }
 
   async registrarEstadoManual(estadoManual: EstadoManual): Promise<void> {
@@ -75,6 +102,15 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
       idHuellero: asistenciasEsperadas.idHuellero, fecha: asistenciasEsperadas.fecha,
       tipo: estadosManuales.tipo, comentario: estadosManuales.comentario, responsableId: estadosManuales.responsableId,
     }).from(estadosManuales).innerJoin(asistenciasEsperadas, eq(estadosManuales.asistenciaId, asistenciasEsperadas.id));
+  }
+
+  async listarHorasExtra(): Promise<Array<{
+    idHuellero: string; fecha: string; minutosAl25: number; minutosAl35: number; estado: string;
+  }>> {
+    return this.db.select({
+      idHuellero: asistenciasEsperadas.idHuellero, fecha: asistenciasEsperadas.fecha,
+      minutosAl25: horasExtra.minutosAl25, minutosAl35: horasExtra.minutosAl35, estado: horasExtra.estado,
+    }).from(horasExtra).innerJoin(asistenciasEsperadas, eq(horasExtra.asistenciaId, asistenciasEsperadas.id));
   }
 
   async listarMarcasCrudasPorAsistencia(): Promise<Array<{ idHuellero: string; fecha: string; instante: string }>> {

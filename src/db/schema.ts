@@ -165,6 +165,20 @@ export const tardanzas = pgTable(
   (table) => [index("tardanzas_asistencia_id").on(table.asistenciaId)],
 );
 
+export const horasExtra = pgTable(
+  "horas_extra",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    asistenciaId: uuid("asistencia_id").notNull().unique().references(() => asistenciasEsperadas.id),
+    minutosAl25: integer("minutos_al_25").notNull(),
+    minutosAl35: integer("minutos_al_35").notNull(),
+    estado: text("estado", { enum: ["pendiente", "aprobada", "rechazada"] }).notNull().default("pendiente"),
+    decididaPorId: uuid("decidida_por_id").references(() => cuentasLocales.id),
+    decididaEn: timestamp("decidida_en", { withTimezone: true }),
+  },
+  (table) => [index("horas_extra_asistencia_id").on(table.asistenciaId)],
+);
+
 export const importacionesSemanales = pgTable("importaciones_semanales", {
   id: uuid("id").primaryKey().defaultRandom(),
   sede: text("sede").notNull(),

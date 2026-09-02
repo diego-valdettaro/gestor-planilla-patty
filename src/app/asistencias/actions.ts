@@ -47,6 +47,24 @@ export async function ajustarAsistencia(formData: FormData): Promise<void> {
   revalidatePath("/asistencias");
 }
 
+export async function aprobarHoraExtra(formData: FormData): Promise<void> {
+  const casosDeUso = crearCasosDeUsoDeAsistencias(repositorioDeAsistencias, { obtenerActorActual });
+  await casosDeUso.aprobarHoraExtra({
+    idHuellero: obtenerTexto(formData, "idHuellero"),
+    fecha: obtenerTexto(formData, "fecha"),
+  });
+  revalidatePath("/asistencias");
+}
+
+export async function rechazarHoraExtra(formData: FormData): Promise<void> {
+  const casosDeUso = crearCasosDeUsoDeAsistencias(repositorioDeAsistencias, { obtenerActorActual });
+  await casosDeUso.rechazarHoraExtra({
+    idHuellero: obtenerTexto(formData, "idHuellero"),
+    fecha: obtenerTexto(formData, "fecha"),
+  });
+  revalidatePath("/asistencias");
+}
+
 export async function registrarEstadoManual(formData: FormData): Promise<void> {
   const casosDeUso = crearCasosDeUsoDeAsistencias(repositorioDeAsistencias, { obtenerActorActual });
   const tipo = obtenerTexto(formData, "tipo");

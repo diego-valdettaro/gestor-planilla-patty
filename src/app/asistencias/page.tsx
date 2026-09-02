@@ -5,7 +5,7 @@ import { repositorioDeAsistencias } from "@/asistencias/servicio";
 import { repositorioDeImportaciones } from "@/importaciones/servicio";
 import { repositorioDeTurnos } from "@/turnos/servicio";
 
-import { ajustarAsistencia, configurarPoliticaDeTardanzas, confirmarAsistencia, importarAsistencia, registrarEstadoManual } from "./actions";
+import { ajustarAsistencia, aprobarHoraExtra, configurarPoliticaDeTardanzas, confirmarAsistencia, importarAsistencia, rechazarHoraExtra, registrarEstadoManual } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +15,7 @@ export default async function PaginaDeAsistencias() {
   if (actor.rol !== "administracion" && actor.rol !== "finanzas") {
     return <main className="centrado"><p>No tiene permiso para importar asistencias.</p></main>;
   }
-  const [asistencias, incidencias, marcasSinTurno, sedes, confirmadas, estadosManuales, marcasCrudas] = await Promise.all([
+  const [asistencias, incidencias, marcasSinTurno, sedes, confirmadas, estadosManuales, marcasCrudas, horasExtra] = await Promise.all([
     repositorioDeImportaciones.listarAsistenciasPendientes(),
     repositorioDeImportaciones.listarIncidencias(),
     repositorioDeImportaciones.listarMarcasSinTurno(),
@@ -23,6 +23,7 @@ export default async function PaginaDeAsistencias() {
     repositorioDeImportaciones.listarAsistenciasConfirmadas(),
     repositorioDeAsistencias.listarEstadosManuales(),
     repositorioDeAsistencias.listarMarcasCrudasPorAsistencia(),
+    repositorioDeAsistencias.listarHorasExtra(),
   ]);
   const marcasPorAsistencia = new Map<string, string[]>();
   for (const marca of marcasCrudas) {
@@ -89,6 +90,18 @@ export default async function PaginaDeAsistencias() {
           {estado.idHuellero} · {estado.fecha} · {estado.tipo}: {estado.comentario} · responsable: {estado.responsableId}
           <p>Marcas crudas: {marcasPorAsistencia.get(`${estado.idHuellero}:${estado.fecha}`)?.join(" · ") ?? "sin marcas"}</p>
         </li>)}</ul> : <p>No hay estados manuales.</p>}
+      </section>
+      <section>
+        <h2>Horas extra</h2>
+        {horasExtra.length ? <ul>{horasExtra.map((horaExtra) => <li key={`${horaExtra.idHuellero}-${horaExtra.fecha}`}>
+          {horaExtra.idHuellero} Â· {horaExtra.fecha} Â· 25%: {horaExtra.minutosAl25 / 60} h Â· 35%: {horaExtra.minutosAl35 / 60} h Â· {horaExtra.estado}
+          {actor.rol === "finanzas" && horaExtra.estado === "pendiente" ? <form className="filtros">
+            <input name="idHuellero" type="hidden" value={horaExtra.idHuellero} />
+            <input name="fecha" type="hidden" value={horaExtra.fecha} />
+            <button formAction={aprobarHoraExtra}>Aprobar</button>
+            <button formAction={rechazarHoraExtra}>Rechazar</button>
+          </form> : null}
+        </li>)}</ul> : <p>No hay horas extra calculadas.</p>}
       </section>
       <section>
         <h2>Asistencias confirmadas</h2>

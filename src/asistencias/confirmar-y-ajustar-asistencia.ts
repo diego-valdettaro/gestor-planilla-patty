@@ -1,6 +1,8 @@
 import type { Actor } from "@/colaboradores/registrar-colaborador";
 import { calcularTardanza, type PoliticaDePenalizacionPorTardanzas, type TardanzaCalculada } from "@/tardanzas/politica-de-penalizacion";
 
+import { calcularHoraExtra, type EstadoDeHoraExtra, type HoraExtraCalculada } from "./calcular-hora-extra";
+
 export interface InstantaneaDeTurno {
   sede: string;
   entradaProgramada: string;
@@ -24,6 +26,7 @@ export interface AsistenciaConfirmada {
   confirmadoPorId: string;
   confirmadoEn: Date;
   tardanza?: TardanzaCalculada;
+  horaExtra?: HoraExtraCalculada;
 }
 
 export interface SolicitudDeConfirmacion {
@@ -58,10 +61,17 @@ export interface AjusteDeAsistencia extends SolicitudDeAjuste {
 export interface RepositorioDeAsistencias {
   buscarTurnoPublicado(idHuellero: string, fecha: string): Promise<TurnoParaConfirmar | undefined>;
   confirmar(asistencia: AsistenciaConfirmada): Promise<void>;
-  ajustar(solicitud: AjusteDeAsistencia, responsableId: string): Promise<void>;
+  buscarInstantaneaDeTurno(idHuellero: string, fecha: string): Promise<InstantaneaDeTurno | undefined>;
+  ajustar(solicitud: AjusteDeAsistencia, responsableId: string, horaExtra: HoraExtraCalculada | undefined): Promise<void>;
+  decidirHoraExtra(idHuellero: string, fecha: string, estado: EstadoDeHoraExtra, responsableId: string): Promise<void>;
   registrarEstadoManual(estadoManual: EstadoManual): Promise<void>;
   buscarPoliticaVigente(sede: string, fecha: string): Promise<PoliticaDePenalizacionPorTardanzas | undefined>;
   contarTardanzas(idHuellero: string, inicio: string, fin: string): Promise<number>;
+}
+
+export interface SolicitudDeDecisionDeHoraExtra {
+  idHuellero: string;
+  fecha: string;
 }
 
 export async function confirmarAsistencia(
@@ -89,6 +99,7 @@ export async function confirmarAsistencia(
     confirmadoPorId: actor.id,
     confirmadoEn: new Date(),
     tardanza,
+    horaExtra: calcularHoraExtra(turno.salidaProgramada, solicitud.salidaReal),
   });
 }
 
@@ -99,11 +110,31 @@ export async function ajustarAsistencia(
 ): Promise<void> {
   autorizarRevision(actor);
   if (!solicitud.motivo.trim()) throw new Error("El ajuste de asistencia requiere un motivo.");
+  const instantaneaDeTurno = await repositorio.buscarInstantaneaDeTurno(solicitud.idHuellero, solicitud.fecha);
+  if (!instantaneaDeTurno) throw new Error("La asistencia debe estar confirmada para ajustarla.");
   await repositorio.ajustar({
     ...solicitud,
     motivo: solicitud.motivo.trim(),
     minutosTrabajados: calcularMinutosTrabajados(solicitud.entradaReal, solicitud.salidaReal),
-  }, actor.id);
+  }, actor.id, calcularHoraExtra(instantaneaDeTurno.salidaProgramada, solicitud.salidaReal));
+}
+
+export async function aprobarHoraExtra(
+  repositorio: RepositorioDeAsistencias,
+  actor: Actor,
+  solicitud: SolicitudDeDecisionDeHoraExtra,
+): Promise<void> {
+  autorizarFinanzas(actor);
+  await repositorio.decidirHoraExtra(solicitud.idHuellero, solicitud.fecha, "aprobada", actor.id);
+}
+
+export async function rechazarHoraExtra(
+  repositorio: RepositorioDeAsistencias,
+  actor: Actor,
+  solicitud: SolicitudDeDecisionDeHoraExtra,
+): Promise<void> {
+  autorizarFinanzas(actor);
+  await repositorio.decidirHoraExtra(solicitud.idHuellero, solicitud.fecha, "rechazada", actor.id);
 }
 
 export async function registrarEstadoManual(
@@ -129,4 +160,8 @@ function autorizarRevision(actor: Actor): void {
   if (actor.rol !== "administracion" && actor.rol !== "finanzas") {
     throw new Error("No tiene permiso para revisar asistencias.");
   }
+}
+
+function autorizarFinanzas(actor: Actor): void {
+  if (actor.rol !== "finanzas") throw new Error("No tiene permiso para decidir horas extra.");
 }
