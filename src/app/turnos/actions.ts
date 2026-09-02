@@ -49,6 +49,34 @@ export async function borrarCeldaDelBorrador(formData: FormData): Promise<void> 
   revalidatePath("/turnos");
 }
 
+export async function copiarSemanaAnteriorEnBorrador(formData: FormData): Promise<void> {
+  await casosDeUsoDePlanesSemanales().copiarSemanaAnterior(obtenerTexto(formData, "planId"));
+  revalidatePath("/turnos");
+}
+
+export async function aplicarHorarioEnLoteAlBorrador(formData: FormData): Promise<void> {
+  const datosDelHorario = interpretarHorario(obtenerTexto(formData, "horario"));
+  if (!datosDelHorario) throw new Error("El horario seleccionado no es válido.");
+  const seleccion = formData.getAll("celda").flatMap((valor) => {
+    if (typeof valor !== "string") return [];
+    try {
+      const celda = JSON.parse(valor) as { idHuellero?: unknown; fecha?: unknown; sede?: unknown };
+      return typeof celda.idHuellero === "string" && typeof celda.fecha === "string" && typeof celda.sede === "string"
+        ? [{ idHuellero: celda.idHuellero, fecha: celda.fecha, sede: celda.sede }]
+        : [];
+    } catch {
+      return [];
+    }
+  });
+  await casosDeUsoDePlanesSemanales().aplicarHorarioACeldas(obtenerTexto(formData, "planId"), seleccion, {
+    entradaProgramada: datosDelHorario.entrada,
+    salidaProgramada: datosDelHorario.salida,
+    minutosDeAlmuerzo: datosDelHorario.minutosDeAlmuerzo,
+    descanso: datosDelHorario.descanso,
+  });
+  revalidatePath("/turnos");
+}
+
 export async function publicarPlanSemanalDesdeGrilla(formData: FormData): Promise<void> {
   const personasSeleccionadas = formData.getAll("idHuellero").filter((valor): valor is string => typeof valor === "string" && Boolean(valor));
   if (!personasSeleccionadas.length) throw new Error("Seleccione al menos una persona para publicar.");

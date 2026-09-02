@@ -7,7 +7,7 @@ import { revisarPlanSemanal } from "@/turnos/publicar-plan-semanal";
 import { diasDeLaSemana, inicioDeSemana } from "@/turnos/semana";
 import { repositorioDeTurnos } from "@/turnos/servicio";
 
-import { borrarCeldaDelBorrador, guardarCeldaDelBorrador, publicarPlanSemanalDesdeGrilla } from "./actions";
+import { aplicarHorarioEnLoteAlBorrador, borrarCeldaDelBorrador, copiarSemanaAnteriorEnBorrador, guardarCeldaDelBorrador, publicarPlanSemanalDesdeGrilla } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -52,12 +52,14 @@ export default async function PaginaDeTurnos({ searchParams }: PropiedadesDePagi
     <form className="filtros" method="get"><label>Semana<input defaultValue={semana} name="semana" type="date" /></label><label>Equipo operativo<select defaultValue={equipo} name="equipo">{equipos.map((opcion) => <option key={opcion} value={opcion}>{etiquetasDeEquipo[opcion]}</option>)}</select></label><button type="submit">Ver semana</button></form>
     {!equipo ? <p>Asigne las sedes activas a un equipo operativo desde Configuración.</p> : grupos.length === 0 ? <p>No hay colaboradores activos en {etiquetasDeEquipo[equipo]}.</p> : <div className="grilla-consulta-semanal">
       <section className="tarjeta"><h2>Revisión para publicar</h2><p>{idsDeColaboradores.length - personasConErrores.size} personas listas; {personasConErrores.size} requieren revisión.</p><form action={publicarPlanSemanalDesdeGrilla}><input name="planId" type="hidden" value={plan!.id} />{colaboradores.map((colaborador) => <label key={colaborador.idHuellero}><input defaultChecked={!personasConErrores.has(colaborador.idHuellero)} disabled={personasConErrores.has(colaborador.idHuellero)} name="idHuellero" type="checkbox" value={colaborador.idHuellero} /> {colaborador.nombre}</label>)}<button type="submit">Publicar personas seleccionadas</button></form></section>
+      <section className="tarjeta"><h2>Carga en lote</h2><form action={copiarSemanaAnteriorEnBorrador}><input name="planId" type="hidden" value={plan!.id} /><button type="submit">Copiar semana anterior</button></form><form action={aplicarHorarioEnLoteAlBorrador} id="aplicar-horario-en-lote"><input name="planId" type="hidden" value={plan!.id} /><label>Horario<select name="horario" required><option value="">Seleccione un horario</option>{opcionesDeHorario.map((opcion) => <option key={opcion.valor} value={opcion.valor}>{opcion.etiqueta}</option>)}</select></label><button type="submit">Aplicar a celdas seleccionadas</button></form></section>
       {grupos.map((grupo) => <section className="tarjeta" key={grupo.sede}><h2>{grupo.sede}</h2><div className="tabla-semanal"><table><thead><tr><th>Colaborador</th>{dias.map((dia) => <th key={dia}><time>{dia}</time></th>)}</tr></thead><tbody>{grupo.colaboradores.map((colaborador) => <tr key={colaborador.idHuellero}><th>{colaborador.nombre}<small>{colaborador.idHuellero}</small></th>{dias.map((fecha) => {
         const celdaDelBorrador = celdas.get(`${colaborador.idHuellero}:${fecha}`);
         const horario = celdaDelBorrador?.descanso ? "descanso" : celdaDelBorrador ? `${celdaDelBorrador.entradaProgramada}|${celdaDelBorrador.salidaProgramada}|${celdaDelBorrador.minutosDeAlmuerzo}` : "";
         const estado = celdaDelBorrador ? celdaDelBorrador.descanso ? "descanso" : "borrador" : "sin-definir";
         const errores = erroresPorCelda.get(`${colaborador.idHuellero}:${fecha}`) ?? [];
         return <td className={`celda-turno ${estado}`} key={fecha}>
+          <label><input form="aplicar-horario-en-lote" name="celda" type="checkbox" value={JSON.stringify({ idHuellero: colaborador.idHuellero, fecha, sede: grupo.sede })} /> Seleccionar</label>
           <form action={guardarCeldaDelBorrador}>
             <input name="planId" type="hidden" value={plan!.id} />
             <input name="idHuellero" type="hidden" value={colaborador.idHuellero} />

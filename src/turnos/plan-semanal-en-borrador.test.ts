@@ -27,8 +27,13 @@ function crearRepositorioEnMemoria(): {
         return existente ? { ...existente, celdas: [...celdas.values()].filter((celda) => celda.planId === id) } : undefined;
       },
       guardarCelda: async (celda) => { celdas.set(`${celda.planId}:${celda.idHuellero}:${celda.fecha}`, celda); },
+      guardarCeldas: async (celdasParaGuardar) => { celdasParaGuardar.forEach((celda) => celdas.set(`${celda.planId}:${celda.idHuellero}:${celda.fecha}`, celda)); },
       borrarCelda: async (planId, idHuellero, fecha) => { celdas.delete(`${planId}:${idHuellero}:${fecha}`); },
       colaboradorPerteneceAEquipo: async (idHuellero, equipo) => idHuellero === "HU-1024" && equipo === "tiendas",
+      listarHorariosPublicadosDelEquipoEnSemana: async () => [{
+        idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima",
+        entradaProgramada: "09:00", salidaProgramada: "18:00", minutosDeAlmuerzo: 60, descanso: false,
+      }],
     },
   };
 }
@@ -66,6 +71,40 @@ describe("casos de uso de planes semanales en borrador", () => {
     await casosDeUso.borrarCelda(plan.id, "HU-1024", "2026-09-01");
 
     expect((await casosDeUso.obtenerOCrear("2026-08-31", "tiendas")).celdas).toEqual([]);
+  });
+
+  it("copia los horarios semanales publicados de la semana anterior al borrador sin publicarlos otra vez", async () => {
+    const { asistenciasEsperadas, repositorio, turnosPublicados } = crearRepositorioEnMemoria();
+    const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio, {
+      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "operaciones" }),
+    });
+    const plan = await casosDeUso.obtenerOCrear("2026-09-07", "tiendas");
+
+    await casosDeUso.copiarSemanaAnterior(plan.id);
+
+    expect((await casosDeUso.obtenerOCrear("2026-09-07", "tiendas")).celdas).toEqual([
+      expect.objectContaining({ idHuellero: "HU-1024", fecha: "2026-09-08", descanso: false }),
+    ]);
+    expect(turnosPublicados).toEqual([]);
+    expect(asistenciasEsperadas).toEqual([]);
+  });
+
+  it("aplica un descanso solo a las celdas seleccionadas del borrador", async () => {
+    const { repositorio } = crearRepositorioEnMemoria();
+    const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio, {
+      obtenerActorActual: async () => ({ id: "administracion-1", rol: "administracion" }),
+    });
+    const plan = await casosDeUso.obtenerOCrear("2026-08-31", "tiendas");
+
+    await casosDeUso.aplicarHorarioACeldas(plan.id, [
+      { idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima" },
+      { idHuellero: "HU-1024", fecha: "2026-09-02", sede: "Lima" },
+    ], { entradaProgramada: "00:00", salidaProgramada: "00:00", minutosDeAlmuerzo: 0, descanso: true });
+
+    expect((await casosDeUso.obtenerOCrear("2026-08-31", "tiendas")).celdas).toEqual([
+      expect.objectContaining({ fecha: "2026-09-01", descanso: true }),
+      expect.objectContaining({ fecha: "2026-09-02", descanso: true }),
+    ]);
   });
 
   it("rechaza a Finanzas antes de crear o editar el borrador", async () => {

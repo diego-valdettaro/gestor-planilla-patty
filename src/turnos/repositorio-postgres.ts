@@ -17,6 +17,7 @@ import type { RepositorioDeEquiposOperativos } from "./configurar-equipos-operat
 import type { EquipoOperativo } from "./configurar-equipos-operativos";
 import type { CeldaDePlanSemanalEnBorrador, PlanSemanalEnBorrador, RepositorioDePlanesSemanales } from "./plan-semanal-en-borrador";
 import type { RepositorioDeTurnos, TurnoPublicado } from "./publicar-turno-semanal";
+import { desplazarFecha } from "./semana";
 
 export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, RepositorioDeEquiposOperativos, RepositorioDePlanesSemanales {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}
@@ -233,19 +234,27 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
   }
 
   async guardarCelda(celda: CeldaDePlanSemanalEnBorrador): Promise<void> {
-    await this.db.insert(celdasDePlanesSemanalesEnBorrador).values(celda).onConflictDoUpdate({
-      target: [
-        celdasDePlanesSemanalesEnBorrador.planId,
-        celdasDePlanesSemanalesEnBorrador.idHuellero,
-        celdasDePlanesSemanalesEnBorrador.fecha,
-      ],
-      set: {
-        sede: celda.sede,
-        entradaProgramada: celda.entradaProgramada,
-        salidaProgramada: celda.salidaProgramada,
-        minutosDeAlmuerzo: celda.minutosDeAlmuerzo,
-        descanso: celda.descanso,
-      },
+    await this.guardarCeldas([celda]);
+  }
+
+  async guardarCeldas(celdas: CeldaDePlanSemanalEnBorrador[]): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      for (const celda of celdas) {
+        await tx.insert(celdasDePlanesSemanalesEnBorrador).values(celda).onConflictDoUpdate({
+          target: [
+            celdasDePlanesSemanalesEnBorrador.planId,
+            celdasDePlanesSemanalesEnBorrador.idHuellero,
+            celdasDePlanesSemanalesEnBorrador.fecha,
+          ],
+          set: {
+            sede: celda.sede,
+            entradaProgramada: celda.entradaProgramada,
+            salidaProgramada: celda.salidaProgramada,
+            minutosDeAlmuerzo: celda.minutosDeAlmuerzo,
+            descanso: celda.descanso,
+          },
+        });
+      }
     });
   }
 
@@ -262,6 +271,29 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
       .innerJoin(sedes, eq(colaboradores.sede, sedes.nombre))
       .where(and(eq(colaboradores.idHuellero, idHuellero), eq(colaboradores.activo, true), eq(sedes.activa, true), eq(sedes.equipoOperativo, equipo)));
     return Boolean(colaborador);
+  }
+
+  async listarHorariosPublicadosDelEquipoEnSemana(semana: string, equipo: EquipoOperativo): Promise<
+    Array<Omit<CeldaDePlanSemanalEnBorrador, "planId">>
+  > {
+    return this.db.select({
+      idHuellero: turnosPublicados.idHuellero,
+      fecha: turnosPublicados.fecha,
+      sede: turnosPublicados.sede,
+      entradaProgramada: turnosPublicados.entradaProgramada,
+      salidaProgramada: turnosPublicados.salidaProgramada,
+      minutosDeAlmuerzo: turnosPublicados.minutosDeAlmuerzo,
+      descanso: turnosPublicados.descanso,
+    }).from(turnosPublicados)
+      .innerJoin(colaboradores, eq(turnosPublicados.idHuellero, colaboradores.idHuellero))
+      .innerJoin(sedes, eq(colaboradores.sede, sedes.nombre))
+      .where(and(
+        eq(colaboradores.activo, true),
+        eq(sedes.activa, true),
+        eq(sedes.equipoOperativo, equipo),
+        gte(turnosPublicados.fecha, semana),
+        lte(turnosPublicados.fecha, desplazarFecha(semana, 6)),
+      ));
   }
 
   private async conCeldas(plan: { id: string; semana: string; equipo: EquipoOperativo }): Promise<PlanSemanalEnBorrador> {
