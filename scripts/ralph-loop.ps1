@@ -21,13 +21,30 @@ function Get-GitText {
   return ($value -join "`n").Trim()
 }
 
+$pnpm = Get-Command "pnpm" -ErrorAction SilentlyContinue
+$pnpmPrefix = @()
+if (-not $pnpm) {
+  $corepack = Get-Command "corepack" -ErrorAction SilentlyContinue
+  if (-not $corepack) {
+    throw "No encuentro pnpm ni Corepack en PATH. Instale pnpm o instale Node.js con Corepack."
+  }
+  $pnpm = $corepack
+  $pnpmPrefix = @("pnpm")
+}
+
+function Invoke-Pnpm {
+  param([string[]]$Arguments)
+  & $script:pnpm.Source @script:pnpmPrefix @Arguments
+  if ($LASTEXITCODE -ne 0) { throw "Falló: pnpm $($Arguments -join ' ')" }
+}
+
 $repoRoot = Get-GitText @("rev-parse", "--show-toplevel")
 Set-Location $repoRoot
 $schema = Join-Path $repoRoot "scripts/ralph-loop.schema.json"
 $logRoot = Join-Path $env:LOCALAPPDATA "gestor-planilla-patty/ralph"
 New-Item -ItemType Directory -Force -Path $logRoot | Out-Null
 
-foreach ($command in @("git", "gh", "codex", "pnpm")) {
+foreach ($command in @("git", "gh", "codex")) {
   if (-not (Get-Command $command -ErrorAction SilentlyContinue)) { throw "No encuentro '$command' en PATH." }
 }
 
@@ -99,9 +116,9 @@ while ($MaxIssues -eq 0 -or $completed -lt $MaxIssues) {
   $statusAfter = Get-GitText @("status", "--porcelain")
   if ($statusAfter) { throw "El agente dejó cambios sin commitear:`n$statusAfter" }
 
-  Invoke-External pnpm @("test")
-  Invoke-External pnpm @("typecheck")
-  Invoke-External pnpm @("build")
+  Invoke-Pnpm @("test")
+  Invoke-Pnpm @("typecheck")
+  Invoke-Pnpm @("build")
 
   Invoke-External gh @("issue", "comment", "$($result.issue)", "--repo", "diego-valdettaro/gestor-planilla-patty", "--body", "Implementado en $($result.commit). Validado con pnpm test, pnpm typecheck y pnpm build.")
   Invoke-External gh @("issue", "close", "$($result.issue)", "--repo", "diego-valdettaro/gestor-planilla-patty", "--reason", "completed")
