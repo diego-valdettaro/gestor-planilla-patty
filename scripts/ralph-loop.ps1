@@ -27,6 +27,14 @@ function Get-GitText {
   return ($value -join "`n").Trim()
 }
 
+# Una ejecución anterior puede haber dejado su shim en PATH si el script fue
+# dot-sourced. No permitas que el nuevo shim se encadene con uno viejo.
+$pathSeparator = [IO.Path]::PathSeparator
+$pathEntries = $env:PATH -split [regex]::Escape($pathSeparator) | Where-Object {
+  $_ -and $_ -notmatch '[\\/]ralph-loop-bin$' -and $_ -notmatch '[\\/]ralph-loop-\d+$'
+}
+$env:PATH = $pathEntries -join $pathSeparator
+
 $pnpm = Get-Command "pnpm" -ErrorAction SilentlyContinue
 $pnpmPrefix = @()
 if (-not $pnpm) {
@@ -38,7 +46,7 @@ if (-not $pnpm) {
   $pnpmPrefix = @("pnpm")
 }
 
-$pnpmShimDirectory = Join-Path $env:TEMP "ralph-loop-bin"
+$pnpmShimDirectory = Join-Path $env:TEMP "ralph-loop-$PID"
 New-Item -ItemType Directory -Force -Path $pnpmShimDirectory | Out-Null
 $pnpmShim = Join-Path $pnpmShimDirectory "pnpm.cmd"
 $pnpmCall = "call `"$($pnpm.Source)`" $($pnpmPrefix -join ' ') %*"
