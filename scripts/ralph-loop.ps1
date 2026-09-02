@@ -150,13 +150,15 @@ while ($completed -lt $MaxIssues) {
   Write-RunState @{ status = "running"; iteration = $iteration; baseCommit = $baseCommit; startedAt = (Get-Date).ToString("o") }
   Write-LoopHeader "Iteración $iteration$(if ($MaxIssues -gt 0) { "/$MaxIssues" })"
   Write-Host "Ejecutando agente..." -ForegroundColor Yellow
-  $arguments = @("--sandbox", "danger-full-access", "--ask-for-approval", "never", "exec", "--output-schema", $schema, "--output-last-message", $resultFile, "--json", "--color", "never")
+  $arguments = @("--dangerously-bypass-approvals-and-sandbox", "exec", "--output-schema", $schema, "--output-last-message", $resultFile, "--json", "--color", "never")
   if ($Model) { $arguments += @("--model", $Model) }
-  $arguments += $prompt
+  # En Windows, un prompt multilínea pasado como argumento nativo puede llegar
+  # fragmentado a Codex. "-" indica que Codex debe leerlo completo desde stdin.
+  $arguments += "-"
 
   $previousErrorActionPreference = $ErrorActionPreference
   $ErrorActionPreference = "Continue"
-  & codex @arguments 2>&1 | ForEach-Object {
+  $prompt | & codex @arguments 2>&1 | ForEach-Object {
     $line = $_.ToString()
     Add-Content -LiteralPath $eventFile -Value $line
     try {
