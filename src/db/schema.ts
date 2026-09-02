@@ -134,6 +134,37 @@ export const estadosManuales = pgTable(
   (table) => [index("estados_manuales_asistencia_id").on(table.asistenciaId)],
 );
 
+export const politicasDePenalizacionPorTardanzas = pgTable(
+  "politicas_de_penalizacion_por_tardanzas",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sede: text("sede").notNull(),
+    toleranciaEnMinutos: integer("tolerancia_en_minutos").notNull(),
+    tardanzasAcumuladas: integer("tardanzas_acumuladas").notNull(),
+    horasPenalizadas: integer("horas_penalizadas").notNull(),
+    version: integer("version").notNull(),
+    vigenteDesde: date("vigente_desde", { mode: "string" }).notNull(),
+    configuradaPorId: uuid("configurada_por_id").notNull().references(() => cuentasLocales.id),
+    configuradaEn: timestamp("configurada_en", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("politicas_tardanzas_sede_version").on(table.sede, table.version),
+    uniqueIndex("politicas_tardanzas_sede_vigencia").on(table.sede, table.vigenteDesde),
+  ],
+);
+
+export const tardanzas = pgTable(
+  "tardanzas",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    asistenciaId: uuid("asistencia_id").notNull().references(() => asistenciasEsperadas.id).unique(),
+    minutosDeTardanza: integer("minutos_de_tardanza").notNull(),
+    minutosPenalizados: integer("minutos_penalizados").notNull(),
+    politicaVersion: integer("politica_version").notNull(),
+  },
+  (table) => [index("tardanzas_asistencia_id").on(table.asistenciaId)],
+);
+
 export const importacionesSemanales = pgTable("importaciones_semanales", {
   id: uuid("id").primaryKey().defaultRandom(),
   sede: text("sede").notNull(),

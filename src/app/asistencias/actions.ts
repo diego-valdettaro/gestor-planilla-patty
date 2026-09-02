@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
 import { crearCasosDeUsoDeAsistencias } from "@/asistencias/casos-de-uso-servidor";
 import { repositorioDeAsistencias } from "@/asistencias/servicio";
+import { crearCasosDeUsoDeTardanzas } from "@/tardanzas/casos-de-uso-servidor";
+import { repositorioDeTardanzas } from "@/tardanzas/servicio";
 import { conservarArchivoFuente } from "@/importaciones/almacenamiento-local";
 import { crearCasosDeUsoDeImportaciones } from "@/importaciones/casos-de-uso-servidor";
 import { parsearArchivoHuellero } from "@/importaciones/parsear-archivo-huellero";
@@ -58,10 +60,29 @@ export async function registrarEstadoManual(formData: FormData): Promise<void> {
   revalidatePath("/asistencias");
 }
 
+export async function configurarPoliticaDeTardanzas(formData: FormData): Promise<void> {
+  const casosDeUso = crearCasosDeUsoDeTardanzas(repositorioDeTardanzas, { obtenerActorActual });
+  await casosDeUso.configurarPolitica({
+    sede: obtenerTexto(formData, "sede"),
+    toleranciaEnMinutos: obtenerEntero(formData, "toleranciaEnMinutos"),
+    tardanzasAcumuladas: obtenerEntero(formData, "tardanzasAcumuladas"),
+    horasPenalizadas: obtenerEntero(formData, "horasPenalizadas"),
+    version: obtenerEntero(formData, "version"),
+    vigenteDesde: obtenerTexto(formData, "vigenteDesde"),
+  });
+  revalidatePath("/asistencias");
+}
+
 function obtenerTexto(formData: FormData, nombre: string): string {
   const valor = formData.get(nombre);
   if (typeof valor !== "string" || !valor.trim()) throw new Error(`El campo ${nombre} es obligatorio.`);
   return valor.trim();
+}
+
+function obtenerEntero(formData: FormData, nombre: string): number {
+  const valor = Number(obtenerTexto(formData, nombre));
+  if (!Number.isInteger(valor) || valor <= 0) throw new Error(`El campo ${nombre} debe ser un entero positivo.`);
+  return valor;
 }
 
 function esTipoDeEstadoManual(valor: string): valor is "falta" | "descanso" | "feriado" | "vacaciones" | "permiso" | "suspension" {

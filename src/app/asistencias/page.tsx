@@ -5,7 +5,7 @@ import { repositorioDeAsistencias } from "@/asistencias/servicio";
 import { repositorioDeImportaciones } from "@/importaciones/servicio";
 import { repositorioDeTurnos } from "@/turnos/servicio";
 
-import { ajustarAsistencia, confirmarAsistencia, importarAsistencia, registrarEstadoManual } from "./actions";
+import { ajustarAsistencia, configurarPoliticaDeTardanzas, confirmarAsistencia, importarAsistencia, registrarEstadoManual } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +43,18 @@ export default async function PaginaDeAsistencias() {
         <button type="submit">Importar</button>
       </form>
       <p>El archivo debe incluir las columnas ID de huellero, fecha y marca (o fecha y hora).</p>
+      <section>
+        <h2>Política de penalización por tardanzas</h2>
+        <form action={configurarPoliticaDeTardanzas} className="filtros">
+          <label>Sede<select name="sede" required>{sedes.map((sede) => <option key={sede} value={sede}>{sede}</option>)}</select></label>
+          <label>Tolerancia en minutos<input name="toleranciaEnMinutos" required min="1" type="number" defaultValue="10" /></label>
+          <label>Tardanzas acumuladas<input name="tardanzasAcumuladas" required min="1" type="number" defaultValue="3" /></label>
+          <label>Horas penalizadas<input name="horasPenalizadas" required min="1" type="number" defaultValue="1" /></label>
+          <label>Versión<input name="version" required min="1" type="number" /></label>
+          <label>Vigente desde<input name="vigenteDesde" required type="date" /></label>
+          <button type="submit">Guardar política</button>
+        </form>
+      </section>
       <section>
         <h2>Asistencias pendientes de revisión</h2>
         {asistencias.length ? <ul>{asistencias.map((asistencia) => <li key={`${asistencia.idHuellero}-${asistencia.fecha}`}>

@@ -1,4 +1,5 @@
 import type { Actor } from "@/colaboradores/registrar-colaborador";
+import { calcularTardanza, type PoliticaDePenalizacionPorTardanzas, type TardanzaCalculada } from "@/tardanzas/politica-de-penalizacion";
 
 export interface InstantaneaDeTurno {
   sede: string;
@@ -22,6 +23,7 @@ export interface AsistenciaConfirmada {
   instantaneaDeTurno: InstantaneaDeTurno;
   confirmadoPorId: string;
   confirmadoEn: Date;
+  tardanza?: TardanzaCalculada;
 }
 
 export interface SolicitudDeConfirmacion {
@@ -58,6 +60,8 @@ export interface RepositorioDeAsistencias {
   confirmar(asistencia: AsistenciaConfirmada): Promise<void>;
   ajustar(solicitud: AjusteDeAsistencia, responsableId: string): Promise<void>;
   registrarEstadoManual(estadoManual: EstadoManual): Promise<void>;
+  buscarPoliticaVigente(sede: string, fecha: string): Promise<PoliticaDePenalizacionPorTardanzas | undefined>;
+  contarTardanzas(idHuellero: string, inicio: string, fin: string): Promise<number>;
 }
 
 export async function confirmarAsistencia(
@@ -68,6 +72,10 @@ export async function confirmarAsistencia(
   autorizarRevision(actor);
   const turno = await repositorio.buscarTurnoPublicado(solicitud.idHuellero, solicitud.fecha);
   if (!turno) throw new Error("No existe un turno publicado para confirmar esta asistencia.");
+  const tardanza = await calcularTardanza(repositorio, {
+    idHuellero: solicitud.idHuellero, sede: turno.sede, fecha: solicitud.fecha,
+    entradaProgramada: turno.entradaProgramada, entradaReal: solicitud.entradaReal,
+  });
   await repositorio.confirmar({
     ...solicitud,
     minutosTrabajados: calcularMinutosTrabajados(solicitud.entradaReal, solicitud.salidaReal),
@@ -80,6 +88,7 @@ export async function confirmarAsistencia(
     },
     confirmadoPorId: actor.id,
     confirmadoEn: new Date(),
+    tardanza,
   });
 }
 

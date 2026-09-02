@@ -35,6 +35,11 @@ function crearRepositorioEnMemoria(): {
       confirmar: async (asistencia) => { asistencias.push(asistencia); },
       ajustar: async (solicitud, responsableId) => { ajustes.push({ motivo: solicitud.motivo, responsableId }); },
       registrarEstadoManual: async (estadoManual) => { estadosManuales.push(estadoManual); },
+      buscarPoliticaVigente: async () => ({
+        sede: "Lima", toleranciaEnMinutos: 10, tardanzasAcumuladas: 3, horasPenalizadas: 1,
+        version: 1, vigenteDesde: "2026-08-26", configuradaPorId: "administracion-1", configuradaEn: new Date(),
+      }),
+      contarTardanzas: async () => 0,
     },
   };
 }
@@ -74,6 +79,20 @@ describe("casos de uso de asistencias en el servidor", () => {
 
     expect(ajustes).toEqual([{ motivo: "Olvidó registrar la entrada.", responsableId: "finanzas-1" }]);
     expect(marcasCrudas).toEqual(["2026-09-01T09:04:00-05:00", "2026-09-01T18:02:00-05:00"]);
+  });
+
+  it("registra la tardanza calculada al confirmar una asistencia", async () => {
+    const { asistencias, repositorio } = crearRepositorioEnMemoria();
+    const casosDeUso = crearCasosDeUsoDeAsistencias(repositorio, {
+      obtenerActorActual: async () => ({ id: "finanzas-1", rol: "finanzas" }),
+    });
+
+    await casosDeUso.confirmar({
+      idHuellero: "HU-1024", fecha: "2026-09-01", entradaReal: "2026-09-01T09:11:00-05:00",
+      salidaReal: "2026-09-01T18:02:00-05:00",
+    });
+
+    expect(asistencias[0].tardanza).toEqual({ minutosDeTardanza: 11, minutosPenalizados: 0, politicaVersion: 1 });
   });
 
   it("registra un estado manual auditable que prevalece sobre las marcas crudas", async () => {

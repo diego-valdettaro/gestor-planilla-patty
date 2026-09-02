@@ -2,7 +2,8 @@ import { and, eq } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import * as schema from "@/db/schema";
-import { ajustesDeAsistencia, asistenciasEsperadas, estadosManuales, marcasCrudas, turnosPublicados } from "@/db/schema";
+import { ajustesDeAsistencia, asistenciasEsperadas, estadosManuales, marcasCrudas, tardanzas, turnosPublicados } from "@/db/schema";
+import { RepositorioPostgresDeTardanzas } from "@/tardanzas/repositorio-postgres";
 
 import type {
   AsistenciaConfirmada,
@@ -13,7 +14,11 @@ import type {
 } from "./confirmar-y-ajustar-asistencia";
 
 export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencias {
-  constructor(private readonly db: NodePgDatabase<typeof schema>) {}
+  private readonly repositorioDeTardanzas: RepositorioPostgresDeTardanzas;
+
+  constructor(private readonly db: NodePgDatabase<typeof schema>) {
+    this.repositorioDeTardanzas = new RepositorioPostgresDeTardanzas(db);
+  }
 
   async buscarTurnoPublicado(idHuellero: string, fecha: string): Promise<TurnoParaConfirmar | undefined> {
     const [turno] = await this.db.select({
@@ -25,13 +30,16 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
   }
 
   async confirmar(asistencia: AsistenciaConfirmada): Promise<void> {
-    const resultado = await this.db.update(asistenciasEsperadas).set({
-      estado: "confirmada", entradaReal: asistencia.entradaReal, salidaReal: asistencia.salidaReal,
-      minutosTrabajados: asistencia.minutosTrabajados,
-      instantaneaDeTurno: asistencia.instantaneaDeTurno, confirmadoPorId: asistencia.confirmadoPorId,
-      confirmadoEn: asistencia.confirmadoEn,
-    }).where(and(eq(asistenciasEsperadas.idHuellero, asistencia.idHuellero), eq(asistenciasEsperadas.fecha, asistencia.fecha), eq(asistenciasEsperadas.estado, "pendiente"))).returning({ id: asistenciasEsperadas.id });
-    if (!resultado.length) throw new Error("La asistencia no está pendiente de revisión.");
+    await this.db.transaction(async (tx) => {
+      const resultado = await tx.update(asistenciasEsperadas).set({
+        estado: "confirmada", entradaReal: asistencia.entradaReal, salidaReal: asistencia.salidaReal,
+        minutosTrabajados: asistencia.minutosTrabajados,
+        instantaneaDeTurno: asistencia.instantaneaDeTurno, confirmadoPorId: asistencia.confirmadoPorId,
+        confirmadoEn: asistencia.confirmadoEn,
+      }).where(and(eq(asistenciasEsperadas.idHuellero, asistencia.idHuellero), eq(asistenciasEsperadas.fecha, asistencia.fecha), eq(asistenciasEsperadas.estado, "pendiente"))).returning({ id: asistenciasEsperadas.id });
+      if (!resultado.length) throw new Error("La asistencia no está pendiente de revisión.");
+      if (asistencia.tardanza) await tx.insert(tardanzas).values({ asistenciaId: resultado[0].id, ...asistencia.tardanza });
+    });
   }
 
   async ajustar(solicitud: AjusteDeAsistencia, responsableId: string): Promise<void> {
@@ -73,5 +81,13 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
     return this.db.select({
       idHuellero: marcasCrudas.idHuellero, fecha: marcasCrudas.fecha, instante: marcasCrudas.instante,
     }).from(marcasCrudas);
+  }
+
+  async buscarPoliticaVigente(sede: string, fecha: string) {
+    return this.repositorioDeTardanzas.buscarPoliticaVigente(sede, fecha);
+  }
+
+  async contarTardanzas(idHuellero: string, inicio: string, fin: string): Promise<number> {
+    return this.repositorioDeTardanzas.contarTardanzas(idHuellero, inicio, fin);
   }
 }
