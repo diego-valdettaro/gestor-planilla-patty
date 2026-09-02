@@ -10,7 +10,7 @@ export async function parsearArchivoHuellero(archivo: File): Promise<MarcaCruda[
 
   return filas.map((fila, indice) => {
     const valores = Object.fromEntries(Object.entries(fila).map(([clave, valor]) => [normalizarClave(clave), valor]));
-    const idHuellero = texto(valores, ["idhuellero", "id", "codigo", "codigoempleado"]);
+    const idHuellero = texto(valores, ["idhuellero", "iddehuellero", "id", "codigo", "codigoempleado"]);
     const fecha = fechaIso(valores.fecha);
     const instante = instanteIso(valores, fecha);
     if (!idHuellero || !fecha || !instante) {
