@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { crearCasosDeUsoDeTurnos } from "@/turnos/casos-de-uso-servidor";
 import { crearCasosDeUsoDePlanesSemanales } from "@/turnos/casos-de-uso-planes-semanales";
+import { publicarPlanSemanal } from "@/turnos/publicar-plan-semanal";
 import { repositorioDeTurnos } from "@/turnos/servicio";
 import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
 
@@ -45,6 +46,14 @@ export async function guardarCeldaDelBorrador(formData: FormData): Promise<void>
 
 export async function borrarCeldaDelBorrador(formData: FormData): Promise<void> {
   await casosDeUsoDePlanesSemanales().borrarCelda(obtenerTexto(formData, "planId"), obtenerTexto(formData, "idHuellero"), obtenerTexto(formData, "fecha"));
+  revalidatePath("/turnos");
+}
+
+export async function publicarPlanSemanalDesdeGrilla(formData: FormData): Promise<void> {
+  const personasSeleccionadas = formData.getAll("idHuellero").filter((valor): valor is string => typeof valor === "string" && Boolean(valor));
+  if (!personasSeleccionadas.length) throw new Error("Seleccione al menos una persona para publicar.");
+  const resultado = await publicarPlanSemanal(repositorioDeTurnos, await obtenerActorActual(), obtenerTexto(formData, "planId"), personasSeleccionadas);
+  if (resultado.errores.length) throw new Error(resultado.errores.map(({ idHuellero, fecha, mensaje }) => `${idHuellero} ${fecha}: ${mensaje}`).join(" "));
   revalidatePath("/turnos");
 }
 

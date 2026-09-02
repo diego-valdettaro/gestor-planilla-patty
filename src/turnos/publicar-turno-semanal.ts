@@ -22,6 +22,7 @@ export interface RepositorioDeTurnos {
     fecha: string,
   ): Promise<TurnoPublicado | undefined>;
   publicar(turno: TurnoPublicado): Promise<void>;
+  publicarEnLote(turnos: TurnoPublicado[]): Promise<void>;
   perteneceAPeriodoAbierto(fecha: string): Promise<boolean>;
 }
 

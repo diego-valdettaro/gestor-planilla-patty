@@ -1,5 +1,7 @@
 # Progreso de Ralph
 
+- #14: revisión y publicación atómica de planes semanales seleccionados; valida celdas, período abierto, duplicados y autorización, y crea Horarios semanales, historial y Asistencias esperadas dentro de una transacción. Afecta `src/turnos` y la grilla; las pruebas de integración PostgreSQL quedan condicionadas a `TEST_DATABASE_URL`.
+
 - #12: plan semanal en borrador persistente por semana y equipo operativo, con celdas editables, descanso explícito y borrado a Sin definir; `src/turnos`, grilla de horarios, esquema y migración 0011. Copia en lote y publicación atómica quedan para #13 y #14.
 
 - #11: equipos operativos configurables por sede activa y consulta semanal agrupada; `src/turnos`, configuración, esquema y migración 0010. Los borradores y la publicación atómica quedan para #12 y #14.

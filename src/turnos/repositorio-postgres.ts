@@ -47,20 +47,26 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
   }
 
   async publicar(turno: TurnoPublicado): Promise<void> {
-    await this.db.transaction(async (tx) => {
-      const [turnoPublicado] = await tx
-        .insert(turnosPublicados)
-        .values(turno)
-        .returning({ id: turnosPublicados.id });
+    await this.publicarEnLote([turno]);
+  }
 
-      await tx.insert(historialDeTurnosPublicados).values({
-        turnoPublicadoId: turnoPublicado.id,
-      });
-      await tx.insert(asistenciasEsperadas).values({
-        idHuellero: turno.idHuellero,
-        fecha: turno.fecha,
-        estado: "pendiente",
-      });
+  async publicarEnLote(turnos: TurnoPublicado[]): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      for (const turno of turnos) {
+        const [periodo] = await tx.select({ id: periodosPlanilla.id }).from(periodosPlanilla).where(and(
+          eq(periodosPlanilla.estado, "abierto"), lte(periodosPlanilla.inicio, turno.fecha), gte(periodosPlanilla.fin, turno.fecha),
+        ));
+        if (!periodo) throw new Error("La fecha no pertenece a un período de planilla abierto.");
+        const [existente] = await tx.select({ id: turnosPublicados.id }).from(turnosPublicados).where(and(
+          eq(turnosPublicados.idHuellero, turno.idHuellero), eq(turnosPublicados.fecha, turno.fecha),
+        ));
+        if (existente) throw new Error("Ya existe un horario semanal publicado para este colaborador y fecha.");
+      }
+      for (const turno of turnos) {
+        const [turnoPublicado] = await tx.insert(turnosPublicados).values(turno).returning({ id: turnosPublicados.id });
+        await tx.insert(historialDeTurnosPublicados).values({ turnoPublicadoId: turnoPublicado.id });
+        await tx.insert(asistenciasEsperadas).values({ idHuellero: turno.idHuellero, fecha: turno.fecha, estado: "pendiente" });
+      }
     });
   }
 

@@ -17,6 +17,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeTurnos", () => {
   const repositorio = new RepositorioPostgresDeTurnos(db);
   const idHuellero = `TEST-${randomUUID()}`;
   const fecha = "2030-09-02";
+  const fechaParaAtomicidad = "2030-09-03";
 
   beforeAll(async () => {
     await db.insert(schema.colaboradores).values({
@@ -37,11 +38,14 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeTurnos", () => {
     const turnos = await db
       .select({ id: schema.turnosPublicados.id })
       .from(schema.turnosPublicados)
-      .where(and(eq(schema.turnosPublicados.idHuellero, idHuellero), eq(schema.turnosPublicados.fecha, fecha)));
+      .where(and(eq(schema.turnosPublicados.idHuellero, idHuellero), inArray(schema.turnosPublicados.fecha, [fecha, fechaParaAtomicidad])));
 
     await db
       .delete(schema.asistenciasEsperadas)
       .where(and(eq(schema.asistenciasEsperadas.idHuellero, idHuellero), eq(schema.asistenciasEsperadas.fecha, fecha)));
+    await db
+      .delete(schema.asistenciasEsperadas)
+      .where(and(eq(schema.asistenciasEsperadas.idHuellero, idHuellero), eq(schema.asistenciasEsperadas.fecha, fechaParaAtomicidad)));
     if (turnos.length) {
       await db
         .delete(schema.historialDeTurnosPublicados)
@@ -50,6 +54,9 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeTurnos", () => {
     await db
       .delete(schema.turnosPublicados)
       .where(and(eq(schema.turnosPublicados.idHuellero, idHuellero), eq(schema.turnosPublicados.fecha, fecha)));
+    await db
+      .delete(schema.turnosPublicados)
+      .where(and(eq(schema.turnosPublicados.idHuellero, idHuellero), eq(schema.turnosPublicados.fecha, fechaParaAtomicidad)));
     await db
       .delete(schema.periodosPlanilla)
       .where(and(eq(schema.periodosPlanilla.inicio, "2030-08-26"), eq(schema.periodosPlanilla.fin, "2030-09-25")));
@@ -89,5 +96,12 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeTurnos", () => {
         .from(schema.asistenciasEsperadas)
         .where(and(eq(schema.asistenciasEsperadas.idHuellero, idHuellero), eq(schema.asistenciasEsperadas.fecha, fecha))),
     ).resolves.toEqual([{ estado: "pendiente" }]);
+  });
+
+  it("revierte toda la publicación en lote cuando un horario semanal está duplicado", async () => {
+    const turno = { idHuellero, fecha: fechaParaAtomicidad, sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", minutosDeAlmuerzo: 60, descanso: false };
+
+    await expect(repositorio.publicarEnLote([turno, turno])).rejects.toThrow();
+    await expect(repositorio.buscarPublicado(idHuellero, fechaParaAtomicidad)).resolves.toBeUndefined();
   });
 });

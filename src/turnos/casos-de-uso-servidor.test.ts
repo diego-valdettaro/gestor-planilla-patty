@@ -30,6 +30,13 @@ function crearRepositorioEnMemoria(): {
           estado: "pendiente",
         });
       },
+      publicarEnLote: async (turnosParaPublicar) => {
+        for (const turno of turnosParaPublicar) {
+          turnos.set(`${turno.idHuellero}:${turno.fecha}`, turno);
+          historial.push(turno);
+          asistenciasEsperadas.push({ idHuellero: turno.idHuellero, fecha: turno.fecha, estado: "pendiente" });
+        }
+      },
       perteneceAPeriodoAbierto: async (fecha) => fecha >= "2026-08-26" && fecha <= "2026-09-25",
     },
   };
