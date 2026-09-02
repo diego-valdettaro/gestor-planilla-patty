@@ -55,12 +55,13 @@ export default async function PaginaDeTurnos({ searchParams }: PropiedadesDePagi
       <section className="tarjeta"><h2>Carga en lote</h2><form action={copiarSemanaAnteriorEnBorrador}><input name="planId" type="hidden" value={plan!.id} /><button type="submit">Copiar semana anterior</button></form><form action={aplicarHorarioEnLoteAlBorrador} id="aplicar-horario-en-lote"><input name="planId" type="hidden" value={plan!.id} /><label>Horario<select name="horario" required><option value="">Seleccione un horario</option>{opcionesDeHorario.map((opcion) => <option key={opcion.valor} value={opcion.valor}>{opcion.etiqueta}</option>)}</select></label><button type="submit">Aplicar a celdas seleccionadas</button></form></section>
       {grupos.map((grupo) => <section className="tarjeta" key={grupo.sede}><h2>{grupo.sede}</h2><div className="tabla-semanal"><table><thead><tr><th>Colaborador</th>{dias.map((dia) => <th key={dia}><time>{dia}</time></th>)}</tr></thead><tbody>{grupo.colaboradores.map((colaborador) => <tr key={colaborador.idHuellero}><th>{colaborador.nombre}<small>{colaborador.idHuellero}</small></th>{dias.map((fecha) => {
         const celdaDelBorrador = celdas.get(`${colaborador.idHuellero}:${fecha}`);
+        const turnoPublicado = turnos.find((turno) => turno.idHuellero === colaborador.idHuellero && turno.fecha === fecha);
         const horario = celdaDelBorrador?.descanso ? "descanso" : celdaDelBorrador ? `${celdaDelBorrador.entradaProgramada}|${celdaDelBorrador.salidaProgramada}|${celdaDelBorrador.minutosDeAlmuerzo}` : "";
-        const estado = celdaDelBorrador ? celdaDelBorrador.descanso ? "descanso" : "borrador" : "sin-definir";
+        const estado = turnoPublicado ? "publicado" : celdaDelBorrador ? celdaDelBorrador.descanso ? "descanso" : "borrador" : "sin-definir";
         const errores = erroresPorCelda.get(`${colaborador.idHuellero}:${fecha}`) ?? [];
         return <td className={`celda-turno ${estado}`} key={fecha}>
-          <label><input form="aplicar-horario-en-lote" name="celda" type="checkbox" value={JSON.stringify({ idHuellero: colaborador.idHuellero, fecha, sede: grupo.sede })} /> Seleccionar</label>
-          <form action={guardarCeldaDelBorrador}>
+          {!turnoPublicado && <label><input form="aplicar-horario-en-lote" name="celda" type="checkbox" value={JSON.stringify({ idHuellero: colaborador.idHuellero, fecha, sede: grupo.sede })} /> Seleccionar</label>}
+          {turnoPublicado ? <p>Publicado</p> : <form action={guardarCeldaDelBorrador}>
             <input name="planId" type="hidden" value={plan!.id} />
             <input name="idHuellero" type="hidden" value={colaborador.idHuellero} />
             <input name="fecha" type="hidden" value={fecha} />
@@ -72,7 +73,7 @@ export default async function PaginaDeTurnos({ searchParams }: PropiedadesDePagi
             <button type="submit">Guardar</button>
             {celdaDelBorrador && <button formAction={borrarCeldaDelBorrador} type="submit">Borrar</button>}
             {errores.map(({ mensaje }) => <small key={mensaje} role="alert">{mensaje}</small>)}
-          </form>
+          </form>}
         </td>;
       })}</tr>)}</tbody></table></div></section>)}
       <h2>Horarios publicados</h2>

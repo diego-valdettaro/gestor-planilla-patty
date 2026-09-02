@@ -29,6 +29,7 @@ function crearRepositorioEnMemoria(): {
       guardarCelda: async (celda) => { celdas.set(`${celda.planId}:${celda.idHuellero}:${celda.fecha}`, celda); },
       guardarCeldas: async (celdasParaGuardar) => { celdasParaGuardar.forEach((celda) => celdas.set(`${celda.planId}:${celda.idHuellero}:${celda.fecha}`, celda)); },
       borrarCelda: async (planId, idHuellero, fecha) => { celdas.delete(`${planId}:${idHuellero}:${fecha}`); },
+      buscarPublicado: async () => undefined,
       colaboradorPerteneceAEquipo: async (idHuellero, equipo) => idHuellero === "HU-1024" && equipo === "tiendas",
       listarHorariosPublicadosDelEquipoEnSemana: async () => [{
         idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima",
@@ -128,5 +129,35 @@ describe("casos de uso de planes semanales en borrador", () => {
     await expect(administracion.guardarCelda(plan.id, { ...celda, fecha: "2026-09-01", idHuellero: "HU-9999" })).rejects.toThrow("El colaborador no pertenece al equipo operativo del plan.");
     const finanzas = crearCasosDeUsoDePlanesSemanales(repositorio, { obtenerActorActual: async () => ({ id: "finanzas-1", rol: "finanzas" }) });
     await expect(finanzas.borrarCelda(plan.id, "HU-1024", "2026-09-01")).rejects.toThrow("No tiene permiso para editar planes semanales en borrador.");
+  });
+
+  it("impide modificar en el borrador una jornada que ya tiene un horario semanal publicado", async () => {
+    const { repositorio } = crearRepositorioEnMemoria();
+    repositorio.buscarPublicado = async (idHuellero, fecha) => idHuellero === "HU-1024" && fecha === "2026-09-01"
+      ? { idHuellero, fecha, sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", minutosDeAlmuerzo: 60, descanso: false }
+      : undefined;
+    const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio, {
+      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "operaciones" }),
+    });
+    const plan = await casosDeUso.obtenerOCrear("2026-08-31", "tiendas");
+    const celda = { idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima", entradaProgramada: "10:00", salidaProgramada: "19:00", minutosDeAlmuerzo: 60, descanso: false };
+
+    await expect(casosDeUso.guardarCelda(plan.id, celda)).rejects.toThrow("El horario semanal ya fue publicado y no se puede editar desde el borrador.");
+    await expect(casosDeUso.aplicarHorarioACeldas(plan.id, [celda], celda)).rejects.toThrow("El horario semanal ya fue publicado y no se puede editar desde el borrador.");
+    await expect(casosDeUso.borrarCelda(plan.id, celda.idHuellero, celda.fecha)).rejects.toThrow("El horario semanal ya fue publicado y no se puede editar desde el borrador.");
+  });
+
+  it("no copia la semana anterior sobre una jornada ya publicada", async () => {
+    const { repositorio } = crearRepositorioEnMemoria();
+    repositorio.buscarPublicado = async (idHuellero, fecha) => idHuellero === "HU-1024" && fecha === "2026-09-08"
+      ? { idHuellero, fecha, sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", minutosDeAlmuerzo: 60, descanso: false }
+      : undefined;
+    const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio, {
+      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "operaciones" }),
+    });
+    const plan = await casosDeUso.obtenerOCrear("2026-09-07", "tiendas");
+
+    await expect(casosDeUso.copiarSemanaAnterior(plan.id)).rejects.toThrow("El horario semanal ya fue publicado y no se puede editar desde el borrador.");
+    expect((await casosDeUso.obtenerOCrear("2026-09-07", "tiendas")).celdas).toEqual([]);
   });
 });

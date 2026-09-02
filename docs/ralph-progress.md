@@ -1,5 +1,7 @@
 # Progreso de Ralph
 
+- #10: las jornadas con Horario semanal publicado se muestran solo en consulta y el servidor rechaza guardar, borrar, aplicar en lote o copiar sobre sus celdas de borrador. Afecta `src/turnos` y la grilla de horarios; las pruebas de integración PostgreSQL siguen condicionadas a `TEST_DATABASE_URL`.
+
 - #13: copia los horarios semanales publicados de la semana previa al plan semanal en borrador y aplica horario o descanso solo a celdas seleccionadas; las escrituras en lote son atómicas en PostgreSQL. Afecta `src/turnos` y la grilla de horarios; las pruebas de integración PostgreSQL siguen condicionadas a `TEST_DATABASE_URL`.
 
 - #14: revisión y publicación atómica de planes semanales seleccionados; valida celdas, período abierto, duplicados y autorización, y crea Horarios semanales, historial y Asistencias esperadas dentro de una transacción. Afecta `src/turnos` y la grilla; las pruebas de integración PostgreSQL quedan condicionadas a `TEST_DATABASE_URL`.

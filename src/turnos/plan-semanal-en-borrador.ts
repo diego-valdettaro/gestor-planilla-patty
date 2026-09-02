@@ -35,5 +35,6 @@ export interface RepositorioDePlanesSemanales {
   guardarCeldas(celdas: CeldaDePlanSemanalEnBorrador[]): Promise<void>;
   borrarCelda(planId: string, idHuellero: string, fecha: string): Promise<void>;
   colaboradorPerteneceAEquipo(idHuellero: string, equipo: EquipoOperativo): Promise<boolean>;
+  buscarPublicado(idHuellero: string, fecha: string): Promise<HorarioSemanalParaCopiar | undefined>;
   listarHorariosPublicadosDelEquipoEnSemana(semana: string, equipo: EquipoOperativo): Promise<HorarioSemanalParaCopiar[]>;
 }
