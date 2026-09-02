@@ -1,5 +1,6 @@
 import {
   boolean,
+  check,
   date,
   integer,
   index,
@@ -10,6 +11,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 export const colaboradores = pgTable("colaboradores", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -95,6 +97,37 @@ export const historialDeTurnosPublicados = pgTable("historial_turnos_publicados"
     .references(() => turnosPublicados.id),
   publicadoEn: timestamp("publicado_en", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const planesSemanalesEnBorrador = pgTable(
+  "planes_semanales_en_borrador",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    semana: date("semana", { mode: "string" }).notNull(),
+    equipo: text("equipo", { enum: ["tiendas", "taller"] }).notNull(),
+    creadoEn: timestamp("creado_en", { withTimezone: true }).notNull().defaultNow(),
+    actualizadoEn: timestamp("actualizado_en", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    check("planes_borrador_equipo_valido", sql`${table.equipo} IN ('tiendas', 'taller')`),
+    uniqueIndex("planes_borrador_semana_equipo").on(table.semana, table.equipo),
+  ],
+);
+
+export const celdasDePlanesSemanalesEnBorrador = pgTable(
+  "celdas_planes_semanales_en_borrador",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    planId: uuid("plan_id").notNull().references(() => planesSemanalesEnBorrador.id),
+    idHuellero: text("id_huellero").notNull().references(() => colaboradores.idHuellero),
+    fecha: date("fecha", { mode: "string" }).notNull(),
+    sede: text("sede").notNull(),
+    entradaProgramada: text("entrada_programada").notNull(),
+    salidaProgramada: text("salida_programada").notNull(),
+    minutosDeAlmuerzo: integer("minutos_de_almuerzo").notNull(),
+    descanso: boolean("descanso").notNull(),
+  },
+  (table) => [uniqueIndex("celdas_borrador_plan_colaborador_fecha").on(table.planId, table.idHuellero, table.fecha)],
+);
 
 export const asistenciasEsperadas = pgTable(
   "asistencias_esperadas",

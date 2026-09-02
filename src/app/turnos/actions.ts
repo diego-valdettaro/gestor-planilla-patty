@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { crearCasosDeUsoDeTurnos } from "@/turnos/casos-de-uso-servidor";
+import { crearCasosDeUsoDePlanesSemanales } from "@/turnos/casos-de-uso-planes-semanales";
 import { repositorioDeTurnos } from "@/turnos/servicio";
 import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
 
@@ -29,6 +30,26 @@ export async function publicarTurnoDesdeGrilla(formData: FormData): Promise<void
   });
 
   revalidatePath("/turnos");
+}
+
+export async function guardarCeldaDelBorrador(formData: FormData): Promise<void> {
+  const datosDelHorario = interpretarHorario(obtenerTexto(formData, "horario"));
+  if (!datosDelHorario) throw new Error("El horario seleccionado no es válido.");
+  await casosDeUsoDePlanesSemanales().guardarCelda(obtenerTexto(formData, "planId"), {
+    idHuellero: obtenerTexto(formData, "idHuellero"), fecha: obtenerTexto(formData, "fecha"), sede: obtenerTexto(formData, "sede"),
+    entradaProgramada: datosDelHorario.entrada, salidaProgramada: datosDelHorario.salida,
+    minutosDeAlmuerzo: datosDelHorario.minutosDeAlmuerzo, descanso: datosDelHorario.descanso,
+  });
+  revalidatePath("/turnos");
+}
+
+export async function borrarCeldaDelBorrador(formData: FormData): Promise<void> {
+  await casosDeUsoDePlanesSemanales().borrarCelda(obtenerTexto(formData, "planId"), obtenerTexto(formData, "idHuellero"), obtenerTexto(formData, "fecha"));
+  revalidatePath("/turnos");
+}
+
+function casosDeUsoDePlanesSemanales() {
+  return crearCasosDeUsoDePlanesSemanales(repositorioDeTurnos, { obtenerActorActual });
 }
 
 function interpretarHorario(valor: string): { entrada: string; salida: string; minutosDeAlmuerzo: number; descanso: boolean } | undefined {

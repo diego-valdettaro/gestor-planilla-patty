@@ -4,17 +4,21 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "@/db/schema";
 import {
   asistenciasEsperadas,
+  celdasDePlanesSemanalesEnBorrador,
   colaboradores,
   historialDeTurnosPublicados,
   periodosPlanilla,
+  planesSemanalesEnBorrador,
   sedes,
   turnosPublicados,
 } from "@/db/schema";
 
 import type { RepositorioDeEquiposOperativos } from "./configurar-equipos-operativos";
+import type { EquipoOperativo } from "./configurar-equipos-operativos";
+import type { CeldaDePlanSemanalEnBorrador, PlanSemanalEnBorrador, RepositorioDePlanesSemanales } from "./plan-semanal-en-borrador";
 import type { RepositorioDeTurnos, TurnoPublicado } from "./publicar-turno-semanal";
 
-export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, RepositorioDeEquiposOperativos {
+export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, RepositorioDeEquiposOperativos, RepositorioDePlanesSemanales {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}
 
   async buscarPublicado(
@@ -207,5 +211,64 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
       gte(turnosPublicados.fecha, inicio),
       lte(turnosPublicados.fecha, fin),
     ));
+  }
+
+  async obtenerOCrear(semana: string, equipo: EquipoOperativo): Promise<PlanSemanalEnBorrador> {
+    await this.db.insert(planesSemanalesEnBorrador).values({ semana, equipo }).onConflictDoNothing();
+    const [plan] = await this.db.select().from(planesSemanalesEnBorrador).where(and(
+      eq(planesSemanalesEnBorrador.semana, semana), eq(planesSemanalesEnBorrador.equipo, equipo),
+    ));
+    return this.conCeldas(plan);
+  }
+
+  async buscarPorId(id: string): Promise<PlanSemanalEnBorrador | undefined> {
+    const [plan] = await this.db.select().from(planesSemanalesEnBorrador).where(eq(planesSemanalesEnBorrador.id, id));
+    return plan ? this.conCeldas(plan) : undefined;
+  }
+
+  async guardarCelda(celda: CeldaDePlanSemanalEnBorrador): Promise<void> {
+    await this.db.insert(celdasDePlanesSemanalesEnBorrador).values(celda).onConflictDoUpdate({
+      target: [
+        celdasDePlanesSemanalesEnBorrador.planId,
+        celdasDePlanesSemanalesEnBorrador.idHuellero,
+        celdasDePlanesSemanalesEnBorrador.fecha,
+      ],
+      set: {
+        sede: celda.sede,
+        entradaProgramada: celda.entradaProgramada,
+        salidaProgramada: celda.salidaProgramada,
+        minutosDeAlmuerzo: celda.minutosDeAlmuerzo,
+        descanso: celda.descanso,
+      },
+    });
+  }
+
+  async borrarCelda(planId: string, idHuellero: string, fecha: string): Promise<void> {
+    await this.db.delete(celdasDePlanesSemanalesEnBorrador).where(and(
+      eq(celdasDePlanesSemanalesEnBorrador.planId, planId),
+      eq(celdasDePlanesSemanalesEnBorrador.idHuellero, idHuellero),
+      eq(celdasDePlanesSemanalesEnBorrador.fecha, fecha),
+    ));
+  }
+
+  async colaboradorPerteneceAEquipo(idHuellero: string, equipo: EquipoOperativo): Promise<boolean> {
+    const [colaborador] = await this.db.select({ id: colaboradores.idHuellero }).from(colaboradores)
+      .innerJoin(sedes, eq(colaboradores.sede, sedes.nombre))
+      .where(and(eq(colaboradores.idHuellero, idHuellero), eq(colaboradores.activo, true), eq(sedes.activa, true), eq(sedes.equipoOperativo, equipo)));
+    return Boolean(colaborador);
+  }
+
+  private async conCeldas(plan: { id: string; semana: string; equipo: EquipoOperativo }): Promise<PlanSemanalEnBorrador> {
+    const celdas = await this.db.select({
+      planId: celdasDePlanesSemanalesEnBorrador.planId,
+      idHuellero: celdasDePlanesSemanalesEnBorrador.idHuellero,
+      fecha: celdasDePlanesSemanalesEnBorrador.fecha,
+      sede: celdasDePlanesSemanalesEnBorrador.sede,
+      entradaProgramada: celdasDePlanesSemanalesEnBorrador.entradaProgramada,
+      salidaProgramada: celdasDePlanesSemanalesEnBorrador.salidaProgramada,
+      minutosDeAlmuerzo: celdasDePlanesSemanalesEnBorrador.minutosDeAlmuerzo,
+      descanso: celdasDePlanesSemanalesEnBorrador.descanso,
+    }).from(celdasDePlanesSemanalesEnBorrador).where(eq(celdasDePlanesSemanalesEnBorrador.planId, plan.id));
+    return { ...plan, celdas };
   }
 }
