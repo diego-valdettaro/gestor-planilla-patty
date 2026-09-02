@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["issue", "outcome", "summary", "commit", "tests"],
+  "properties": {
+    "issue": { "type": "integer", "minimum": 1 },
+    "outcome": { "type": "string", "enum": ["completed", "blocked", "no-issue"] },
+    "summary": { "type": "string", "minLength": 1 },
+    "commit": { "type": ["string", "null"] },
+    "tests": { "type": "array", "items": { "type": "string" } }
+  }
+}

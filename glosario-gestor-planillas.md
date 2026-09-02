@@ -1,0 +1,21 @@
+# Glosario del gestor de planillas
+
+- **Marca cruda:** registro original importado desde el huellero.
+- **Turno publicado:** horario semanal confirmado por Operaciones que fija sede, entrada y salida programadas.
+- **Asistencia confirmada:** registro diario revisado por Administración y Finanzas.
+- **Asistencia esperada:** registro diario creado desde un turno publicado, incluso sin marcas del huellero.
+- **Asistencia pendiente de revisión:** registro diario con marcas insuficientes o inconsistentes que no permite confirmar asistencia ni ausencia.
+- **Instantánea de turno:** copia del turno publicado aplicada a una asistencia confirmada.
+- **Tardanza:** incidencia calculada cuando la entrada real supera en más de 10 minutos la entrada programada. No es un estado manual.
+- **Ajuste de asistencia:** corrección manual de una asistencia, con motivo y responsable.
+- **Política de penalización por tardanzas:** regla configurable por sede que convierte tardanzas acumuladas en horas penalizadas desde una fecha de vigencia.
+- **Importación semanal por sede:** archivo fuente del huellero con las marcas de una semana para una sede.
+- **Incidencia de importación:** registro del archivo que no puede asociarse de forma segura a una asistencia, por ejemplo un ID de huellero desconocido.
+- **Hora extra 25%:** primeras dos horas extra redondeadas de una jornada.
+- **Hora extra 35%:** horas extra redondeadas posteriores a las primeras dos.
+- **Hora extra pendiente:** hora extra calculada que aún no aprobó Finanzas.
+- **Hora extra aprobada:** hora extra aceptada por Finanzas para exportarla en el resumen del período.
+- **Exportación del período:** XLSX limpio con totales calculados e información de auditoría del período.
+- **Estado manual:** falta, descanso, feriado, vacaciones, permiso o suspensión. No incluye tardanza.
+- **Período de planilla:** conjunto de asistencias desde el día 26 hasta el día 25 siguiente que se revisa y confirma antes de producir un resumen.
+- **Período cerrado:** período de planilla fijado para auditoría que Administración y Finanzas puede reabrir solo dejando un motivo.
