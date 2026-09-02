@@ -32,6 +32,13 @@ if (-not $pnpm) {
   $pnpmPrefix = @("pnpm")
 }
 
+$pnpmShimDirectory = Join-Path $env:TEMP "ralph-loop-bin"
+New-Item -ItemType Directory -Force -Path $pnpmShimDirectory | Out-Null
+$pnpmShim = Join-Path $pnpmShimDirectory "pnpm.cmd"
+$pnpmCall = "call `"$($pnpm.Source)`" $($pnpmPrefix -join ' ') %*"
+Set-Content -LiteralPath $pnpmShim -Value @("@echo off", $pnpmCall) -Encoding ascii
+$env:PATH = "$pnpmShimDirectory;$env:PATH"
+
 function Invoke-Pnpm {
   param([string[]]$Arguments)
   & $script:pnpm.Source @script:pnpmPrefix @Arguments
@@ -42,6 +49,18 @@ function Write-LoopHeader {
   param([string]$Title)
   Write-Host ""
   Write-Host "=== $Title ===" -ForegroundColor Cyan
+}
+
+function Get-AgentStatus {
+  param([string]$Command)
+  if ($Command -match "gh issue (list|view)") { return "Revisando issues de GitHub..." }
+  if ($Command -match "CONTEXT\.md|docs[/\\]adr") { return "Leyendo contexto y ADRs..." }
+  if ($Command -match "pnpm.*(test|vitest)") { return "Ejecutando tests..." }
+  if ($Command -match "pnpm.*typecheck") { return "Ejecutando typecheck..." }
+  if ($Command -match "pnpm.*build") { return "Generando build..." }
+  if ($Command -match "git commit") { return "Creando commit..." }
+  if ($Command -match "git status|rg |Get-ChildItem") { return "Explorando el repositorio..." }
+  return "Trabajando..."
 }
 
 $repoRoot = Get-GitText @("rev-parse", "--show-toplevel")
@@ -125,12 +144,14 @@ while ($MaxIssues -eq 0 -or $completed -lt $MaxIssues) {
     try {
       $event = $line | ConvertFrom-Json -ErrorAction Stop
     } catch {
-      if ($line.Trim()) { Write-Host $line -ForegroundColor DarkYellow }
       return
     }
 
     if ($event.type -eq "item.started" -and $event.item.type -eq "command_execution") {
-      Write-Host "  > Ejecutando comando..." -ForegroundColor DarkGray
+      Write-Host "  > $(Get-AgentStatus $event.item.command)" -ForegroundColor DarkGray
+    }
+    if ($event.type -eq "item.completed" -and $event.item.type -eq "command_execution" -and $event.item.exit_code -ne 0) {
+      Write-Host "  ! Un comando falló. El agente está revisando y corrigiendo el problema..." -ForegroundColor DarkYellow
     }
     if ($event.type -eq "item.completed" -and $event.item.type -eq "agent_message") {
       $message = $event.item.text.Trim()
