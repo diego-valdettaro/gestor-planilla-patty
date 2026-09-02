@@ -98,8 +98,12 @@ while ($MaxIssues -eq 0 -or $completed -lt $MaxIssues) {
   if ($Model) { $arguments += @("--model", $Model) }
   $arguments += $prompt
 
+  $previousErrorActionPreference = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
   & codex @arguments 2>&1 | Tee-Object -FilePath $eventFile
-  if ($LASTEXITCODE -ne 0) { throw "Codex terminó con error. Log: $eventFile" }
+  $codexExitCode = $LASTEXITCODE
+  $ErrorActionPreference = $previousErrorActionPreference
+  if ($codexExitCode -ne 0) { throw "Codex terminó con error. Log: $eventFile" }
   if (-not (Test-Path $resultFile)) { throw "Codex no produjo el resultado estructurado. Log: $eventFile" }
 
   try { $result = Get-Content -Raw $resultFile | ConvertFrom-Json } catch { throw "El resultado de Codex no es JSON válido. Archivo: $resultFile" }
