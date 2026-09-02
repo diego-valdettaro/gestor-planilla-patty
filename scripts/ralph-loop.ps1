@@ -63,7 +63,12 @@ Trabajas en el repositorio gestor-planilla-patty dentro de un Ralph loop.
 
 Tu única tarea en esta ejecución es completar como máximo UN issue elegible. No cierres issues ni escribas comentarios en GitHub: el orquestador lo hará después de verificar tu trabajo.
 
-Invoca explícitamente la skill `/implement` para ejecutar el trabajo del issue. Esta es una instrucción del usuario, no una sugerencia. La skill determina el flujo de implementación y revisión antes del commit.
+Sigue este flujo de implementación, basado en la skill `implement` del usuario:
+- Implementa el trabajo descrito por el issue seleccionado.
+- Usa `/tdd` donde sea posible, en seams ya acordados.
+- Ejecuta typecheck regularmente, tests individuales regularmente y la suite completa al final.
+- Cuando termines, usa `/code-review` para revisar el trabajo.
+- Haz commit en la rama actual solo después de la revisión y las validaciones.
 
 Proceso obligatorio:
 1. Ejecuta `gh issue list --repo diego-valdettaro/gestor-planilla-patty --state open --limit 100` y lee con `gh issue view NUMERO --comments` el contenido completo de todos los issues abiertos. Examina también labels, dependencias y el estado del código.
@@ -94,7 +99,7 @@ while ($MaxIssues -eq 0 -or $completed -lt $MaxIssues) {
   $runId = Get-Date -Format "yyyyMMdd-HHmmss"
   $resultFile = Join-Path $logRoot "$runId-result.json"
   $eventFile = Join-Path $logRoot "$runId-events.jsonl"
-  $arguments = @("exec", "--output-schema", $schema, "--output-last-message", $resultFile, "--json", "--color", "never")
+  $arguments = @("exec", "--sandbox", "danger-full-access", "--ask-for-approval", "never", "--output-schema", $schema, "--output-last-message", $resultFile, "--json", "--color", "never")
   if ($Model) { $arguments += @("--model", $Model) }
   $arguments += $prompt
 
