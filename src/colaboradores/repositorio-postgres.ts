@@ -45,4 +45,18 @@ export class RepositorioPostgresDeColaboradores
       })
       .where(eq(colaboradores.idHuellero, colaborador.idHuellero));
   }
+
+  async listar(): Promise<Colaborador[]> {
+    return this.db.select({
+      idHuellero: colaboradores.idHuellero,
+      nombre: colaboradores.nombre,
+      sede: colaboradores.sede,
+      centroDeCosto: colaboradores.centroDeCosto,
+      activo: colaboradores.activo,
+    }).from(colaboradores).orderBy(colaboradores.nombre);
+  }
+
+  async eliminar(idHuellero: string): Promise<void> {
+    await this.db.delete(colaboradores).where(eq(colaboradores.idHuellero, idHuellero));
+  }
 }

@@ -1,11 +1,11 @@
 # Glosario del gestor de planillas
 
 - **Marca cruda:** registro original importado desde el huellero.
-- **Turno publicado:** horario semanal confirmado por Operaciones que fija sede, entrada y salida programadas.
+- **Horario semanal:** programación de una semana específica para un colaborador. Cada día fija sede, entrada y salida programadas.
 - **Asistencia confirmada:** registro diario revisado por Administración y Finanzas.
-- **Asistencia esperada:** registro diario creado desde un turno publicado, incluso sin marcas del huellero.
+- **Asistencia esperada:** registro diario creado desde un horario semanal, incluso sin marcas del huellero.
 - **Asistencia pendiente de revisión:** registro diario con marcas insuficientes o inconsistentes que no permite confirmar asistencia ni ausencia.
-- **Instantánea de turno:** copia del turno publicado aplicada a una asistencia confirmada.
+- **Instantánea de horario:** copia del horario semanal aplicada a una asistencia confirmada.
 - **Tardanza:** incidencia calculada cuando la entrada real supera en más de 10 minutos la entrada programada. No es un estado manual.
 - **Ajuste de asistencia:** corrección manual de una asistencia, con motivo y responsable.
 - **Política de penalización por tardanzas:** regla configurable por sede que convierte tardanzas acumuladas en horas penalizadas desde una fecha de vigencia.

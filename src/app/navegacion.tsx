@@ -16,9 +16,10 @@ export function Navegacion({ actor }: { actor?: Actor }) {
   return (
     <nav className="navegacion" aria-label="Navegación principal">
       <Link href="/">Planilla Patty</Link>
-      {(actor.rol === "operaciones" || actor.rol === "administracion") && <Link href="/turnos">Turnos</Link>}
+      {(actor.rol === "operaciones" || actor.rol === "administracion") && <Link href="/turnos">Horarios</Link>}
       {(actor.rol === "administracion" || actor.rol === "finanzas") && <Link href="/asistencias">Asistencias</Link>}
       {(actor.rol === "administracion" || actor.rol === "finanzas") && <Link href="/periodos">Períodos</Link>}
+      {actor.rol === "administracion" && <Link href="/configuracion">Configuración</Link>}
       <span className="actor-actual">{etiquetasDeRol[actor.rol]}</span>
       <form action={cerrarSesionDesdeFormulario}><button type="submit">Cerrar sesión</button></form>
     </nav>

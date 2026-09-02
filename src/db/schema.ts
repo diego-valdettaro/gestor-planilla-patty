@@ -22,6 +22,13 @@ export const colaboradores = pgTable("colaboradores", {
   actualizadoEn: timestamp("actualizado_en", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const sedes = pgTable("sedes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  nombre: text("nombre").notNull().unique(),
+  activa: boolean("activa").notNull().default(true),
+  creadaEn: timestamp("creada_en", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const cuentasLocales = pgTable("cuentas_locales", {
   id: uuid("id").primaryKey().defaultRandom(),
   nombreUsuario: text("nombre_usuario").notNull().unique(),

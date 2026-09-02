@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
@@ -5,130 +6,41 @@ import { repositorioDeAsistencias } from "@/asistencias/servicio";
 import { repositorioDeImportaciones } from "@/importaciones/servicio";
 import { repositorioDeTurnos } from "@/turnos/servicio";
 
-import { ajustarAsistencia, aprobarHoraExtra, configurarPoliticaDeTardanzas, confirmarAsistencia, importarAsistencia, rechazarHoraExtra, registrarEstadoManual } from "./actions";
+import { ajustarAsistencia, confirmarAsistencia, importarAsistencia, registrarEstadoManual } from "./actions";
 
 export const dynamic = "force-dynamic";
 
-export default async function PaginaDeAsistencias() {
+interface PropiedadesDePagina { searchParams: Promise<{ colaborador?: string; mes?: string; fecha?: string }>; }
+
+export default async function PaginaDeAsistencias({ searchParams }: PropiedadesDePagina) {
   const actor = await obtenerActorActual().catch(() => undefined);
   if (!actor) redirect("/iniciar-sesion");
-  if (actor.rol !== "administracion" && actor.rol !== "finanzas") {
-    return <main className="centrado"><p>No tiene permiso para importar asistencias.</p></main>;
-  }
-  const [asistencias, incidencias, marcasSinTurno, sedes, confirmadas, estadosManuales, marcasCrudas, horasExtra] = await Promise.all([
-    repositorioDeImportaciones.listarAsistenciasPendientes(),
-    repositorioDeImportaciones.listarIncidencias(),
-    repositorioDeImportaciones.listarMarcasSinTurno(),
-    repositorioDeTurnos.listarSedesConColaboradoresActivos(),
-    repositorioDeImportaciones.listarAsistenciasConfirmadas(),
-    repositorioDeAsistencias.listarEstadosManuales(),
-    repositorioDeAsistencias.listarMarcasCrudasPorAsistencia(),
-    repositorioDeAsistencias.listarHorasExtra(),
-  ]);
-  const marcasPorAsistencia = new Map<string, string[]>();
-  for (const marca of marcasCrudas) {
-    const clave = `${marca.idHuellero}:${marca.fecha}`;
-    marcasPorAsistencia.set(clave, [...(marcasPorAsistencia.get(clave) ?? []), marca.instante]);
-  }
-  return (
-    <main className="contenido">
-      <header className="encabezado"><div><p className="eyebrow">Administración y Finanzas</p><h1>Cargar asistencia</h1></div></header>
-      <form action={importarAsistencia} className="filtros">
-        <label>Sede
-          <select name="sede" required>
-            {sedes.map((sede) => <option key={sede} value={sede}>{sede}</option>)}
-          </select>
-        </label>
-        <label>Semana<input name="semana" required type="date" /></label>
-        <label>Archivo del huellero<input accept=".xlsx,.xls,.csv" name="archivo" required type="file" /></label>
-        <button type="submit">Importar</button>
-      </form>
-      <p>El archivo debe incluir las columnas ID de huellero, fecha y marca (o fecha y hora).</p>
-      <section>
-        <h2>Política de penalización por tardanzas</h2>
-        <form action={configurarPoliticaDeTardanzas} className="filtros">
-          <label>Sede<select name="sede" required>{sedes.map((sede) => <option key={sede} value={sede}>{sede}</option>)}</select></label>
-          <label>Tolerancia en minutos<input name="toleranciaEnMinutos" required min="1" type="number" defaultValue="10" /></label>
-          <label>Tardanzas acumuladas<input name="tardanzasAcumuladas" required min="1" type="number" defaultValue="3" /></label>
-          <label>Horas penalizadas<input name="horasPenalizadas" required min="1" type="number" defaultValue="1" /></label>
-          <label>Versión<input name="version" required min="1" type="number" /></label>
-          <label>Vigente desde<input name="vigenteDesde" required type="date" /></label>
-          <button type="submit">Guardar política</button>
-        </form>
-      </section>
-      <section>
-        <h2>Asistencias pendientes de revisión</h2>
-        {asistencias.length ? <ul>{asistencias.map((asistencia) => <li key={`${asistencia.idHuellero}-${asistencia.fecha}`}>
-          {asistencia.idHuellero} · {asistencia.fecha} · entrada propuesta: {asistencia.entradaPropuesta ?? "sin propuesta"} · salida propuesta: {asistencia.salidaPropuesta ?? "sin propuesta"}
-          {asistencia.entradaPropuesta && asistencia.salidaPropuesta ? <form action={confirmarAsistencia} className="filtros">
-            <input name="idHuellero" type="hidden" value={asistencia.idHuellero} />
-            <input name="fecha" type="hidden" value={asistencia.fecha} />
-            <label>Entrada real<input name="entradaReal" required defaultValue={asistencia.entradaPropuesta} /></label>
-            <label>Salida real<input name="salidaReal" required defaultValue={asistencia.salidaPropuesta} /></label>
-            <button type="submit">Confirmar asistencia</button>
-          </form> : <p>Faltan marcas para confirmar esta asistencia.</p>}
-          <p>Marcas crudas: {marcasPorAsistencia.get(`${asistencia.idHuellero}:${asistencia.fecha}`)?.join(" · ") ?? "sin marcas"}</p>
-          <form action={registrarEstadoManual} className="filtros">
-            <input name="idHuellero" type="hidden" value={asistencia.idHuellero} />
-            <input name="fecha" type="hidden" value={asistencia.fecha} />
-            <label>Estado manual
-              <select name="tipo" required defaultValue="">
-                <option disabled value="">Seleccionar</option>
-                <option value="falta">Falta</option><option value="descanso">Descanso</option>
-                <option value="feriado">Feriado</option><option value="vacaciones">Vacaciones</option>
-                <option value="permiso">Permiso</option><option value="suspension">Suspensión</option>
-              </select>
-            </label>
-            <label>Comentario<input name="comentario" required /></label>
-            <button type="submit">Registrar estado manual</button>
-          </form>
-        </li>)}</ul> : <p>No hay asistencias pendientes.</p>}
-      </section>
-      <section>
-        <h2>Estados manuales</h2>
-        {estadosManuales.length ? <ul>{estadosManuales.map((estado) => <li key={`${estado.idHuellero}-${estado.fecha}`}>
-          {estado.idHuellero} · {estado.fecha} · {estado.tipo}: {estado.comentario} · responsable: {estado.responsableId}
-          <p>Marcas crudas: {marcasPorAsistencia.get(`${estado.idHuellero}:${estado.fecha}`)?.join(" · ") ?? "sin marcas"}</p>
-        </li>)}</ul> : <p>No hay estados manuales.</p>}
-      </section>
-      <section>
-        <h2>Horas extra</h2>
-        {horasExtra.length ? <ul>{horasExtra.map((horaExtra) => <li key={`${horaExtra.idHuellero}-${horaExtra.fecha}`}>
-          {horaExtra.idHuellero} Â· {horaExtra.fecha} Â· 25%: {horaExtra.minutosAl25 / 60} h Â· 35%: {horaExtra.minutosAl35 / 60} h Â· {horaExtra.estado}
-          {actor.rol === "finanzas" && horaExtra.estado === "pendiente" ? <form className="filtros">
-            <input name="idHuellero" type="hidden" value={horaExtra.idHuellero} />
-            <input name="fecha" type="hidden" value={horaExtra.fecha} />
-            <button formAction={aprobarHoraExtra}>Aprobar</button>
-            <button formAction={rechazarHoraExtra}>Rechazar</button>
-          </form> : null}
-        </li>)}</ul> : <p>No hay horas extra calculadas.</p>}
-      </section>
-      <section>
-        <h2>Asistencias confirmadas</h2>
-        {confirmadas.length ? <ul>{confirmadas.map((asistencia) => <li key={`${asistencia.idHuellero}-${asistencia.fecha}`}>
-          <p>{asistencia.idHuellero} - {asistencia.fecha}</p>
-          <form action={ajustarAsistencia} className="filtros">
-            <input name="idHuellero" type="hidden" value={asistencia.idHuellero} />
-            <input name="fecha" type="hidden" value={asistencia.fecha} />
-            <label>Entrada real<input name="entradaReal" required defaultValue={asistencia.entradaReal} /></label>
-            <label>Salida real<input name="salidaReal" required defaultValue={asistencia.salidaReal} /></label>
-            <label>Motivo<input name="motivo" required /></label>
-            <button type="submit">Guardar ajuste</button>
-          </form>
-        </li>)}</ul> : <p>No hay asistencias confirmadas.</p>}
-      </section>
-      <section>
-        <h2>Marcas sin turno publicado</h2>
-        {marcasSinTurno.length ? <ul>{marcasSinTurno.map((marca) => <li key={`${marca.importacionId}-${marca.idHuellero}-${marca.fecha}`}>
-          {marca.idHuellero} · {marca.fecha} · entrada propuesta: {marca.entradaPropuesta ?? "sin propuesta"} · salida propuesta: {marca.salidaPropuesta ?? "sin propuesta"}
-        </li>)}</ul> : <p>No hay marcas sin turno publicado.</p>}
-      </section>
-      <section>
-        <h2>Incidencias de importación</h2>
-        {incidencias.length ? <ul>{incidencias.map((incidencia, indice) => <li key={`${incidencia.idHuellero}-${incidencia.fecha}-${indice}`}>
-          {incidencia.idHuellero} · {incidencia.fecha} · {incidencia.motivo}
-        </li>)}</ul> : <p>No hay incidencias de importación.</p>}
-      </section>
-    </main>
-  );
+  if (actor.rol !== "administracion" && actor.rol !== "finanzas") return <main className="centrado"><p>No tiene permiso para revisar asistencias.</p></main>;
+
+  const parametros = await searchParams;
+  const [sedes, colaboradores] = await Promise.all([repositorioDeTurnos.listarSedesConColaboradoresActivos(), repositorioDeTurnos.listarColaboradoresActivos()]);
+  const colaborador = colaboradores.find((item) => item.idHuellero === parametros.colaborador) ?? colaboradores[0];
+  const mes = esMes(parametros.mes) ? parametros.mes : new Date().toISOString().slice(0, 7);
+  const { inicio, fin, dias } = diasDelMes(mes);
+  const asistencias = colaborador ? await repositorioDeAsistencias.listarResumenMensual(colaborador.idHuellero, inicio, fin) : [];
+  const porFecha = new Map(asistencias.map((asistencia) => [asistencia.fecha, asistencia]));
+  const fechaSeleccionada = parametros.fecha && porFecha.has(parametros.fecha) ? parametros.fecha : undefined;
+  const detalle = fechaSeleccionada ? porFecha.get(fechaSeleccionada) : undefined;
+
+  return <main className="contenido">
+    <header className="encabezado"><div><p className="eyebrow">Administración y Finanzas</p><h1>Asistencias</h1><p>Revise un colaborador y su mes de trabajo.</p></div></header>
+    <section className="tarjeta"><h2>Importar marcas</h2><form action={importarAsistencia} className="filtros"><label>Sede<select name="sede" required>{sedes.map((sede) => <option key={sede}>{sede}</option>)}</select></label><label>Semana<input name="semana" required type="date" /></label><label>Archivo del huellero<input accept=".xlsx,.xls,.csv" name="archivo" required type="file" /></label><button type="submit">Importar</button></form></section>
+    <form className="filtros selector-asistencia" method="get"><label>Colaborador<select defaultValue={colaborador?.idHuellero} name="colaborador">{colaboradores.map((item) => <option key={item.idHuellero} value={item.idHuellero}>{item.nombre} · {item.idHuellero}</option>)}</select></label><label>Mes<input defaultValue={mes} name="mes" type="month" /></label><button type="submit">Ver calendario</button></form>
+    {colaborador ? <section className="tarjeta"><header className="encabezado-seccion"><div><h2>{colaborador.nombre}</h2><p>{mes} · cada día muestra entrada, salida y estado.</p></div></header><div className="calendario"><div className="dias-semana">{["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"].map((dia) => <span key={dia}>{dia}</span>)}</div><div className="celdas-calendario">{Array.from({ length: desfaseLunes(inicio) }).map((_, indice) => <span className="celda-vacia" key={`vacia-${indice}`} />)}{dias.map((fecha) => {
+      const asistencia = porFecha.get(fecha);
+      const enlace = `/asistencias?colaborador=${encodeURIComponent(colaborador.idHuellero)}&mes=${mes}&fecha=${fecha}`;
+      return <Link className={`dia-calendario ${asistencia ? `estado-${asistencia.estado}` : "sin-asistencia"}`} href={enlace} key={fecha}><time>{Number(fecha.slice(-2))}</time>{asistencia ? <><strong>{etiquetaEstado(asistencia.estado, asistencia.estadoManual)}</strong><span>{asistencia.entrada ?? "sin entrada"}</span><span>{asistencia.salida ?? "sin salida"}</span></> : <span>Sin programación</span>}</Link>;
+    })}</div></div></section> : <p>No hay colaboradores activos.</p>}
+    {detalle && colaborador && fechaSeleccionada ? <section className="tarjeta detalle-asistencia"><h2>Detalle del {fechaSeleccionada}</h2><p>Estado: {etiquetaEstado(detalle.estado, detalle.estadoManual)}. Entrada: {detalle.entrada ?? "sin registro"}. Salida: {detalle.salida ?? "sin registro"}.</p>{detalle.estado === "pendiente" ? <><form action={confirmarAsistencia} className="filtros"><input name="idHuellero" type="hidden" value={colaborador.idHuellero} /><input name="fecha" type="hidden" value={fechaSeleccionada} /><label>Entrada real<input name="entradaReal" required defaultValue={detalle.entrada ?? ""} /></label><label>Salida real<input name="salidaReal" required defaultValue={detalle.salida ?? ""} /></label><button type="submit">Confirmar asistencia</button></form><form action={registrarEstadoManual} className="filtros"><input name="idHuellero" type="hidden" value={colaborador.idHuellero} /><input name="fecha" type="hidden" value={fechaSeleccionada} /><label>Estado manual<select name="tipo" required defaultValue=""><option disabled value="">Seleccionar</option><option value="falta">Falta</option><option value="descanso">Descanso</option><option value="feriado">Feriado</option><option value="vacaciones">Vacaciones</option><option value="permiso">Permiso</option><option value="suspension">Suspensión</option></select></label><label>Comentario<input name="comentario" required /></label><button type="submit">Registrar estado</button></form></> : null}{detalle.estado === "confirmada" ? <form action={ajustarAsistencia} className="filtros"><input name="idHuellero" type="hidden" value={colaborador.idHuellero} /><input name="fecha" type="hidden" value={fechaSeleccionada} /><label>Entrada real<input name="entradaReal" required defaultValue={detalle.entrada ?? ""} /></label><label>Salida real<input name="salidaReal" required defaultValue={detalle.salida ?? ""} /></label><label>Motivo<input name="motivo" required /></label><button type="submit">Guardar ajuste</button></form> : null}</section> : null}
+  </main>;
 }
+
+function esMes(valor: string | undefined): valor is string { return Boolean(valor && /^\d{4}-\d{2}$/.test(valor)); }
+function diasDelMes(mes: string) { const [anio, numeroMes] = mes.split("-").map(Number); const ultimoDia = new Date(Date.UTC(anio, numeroMes, 0)).getUTCDate(); const inicio = `${mes}-01`; return { inicio, fin: `${mes}-${String(ultimoDia).padStart(2, "0")}`, dias: Array.from({ length: ultimoDia }, (_, indice) => `${mes}-${String(indice + 1).padStart(2, "0")}`) }; }
+function desfaseLunes(fecha: string) { return (new Date(`${fecha}T00:00:00Z`).getUTCDay() + 6) % 7; }
+function etiquetaEstado(estado: "pendiente" | "confirmada" | "manual", manual: string | null) { if (estado === "manual") return manual ?? "Estado manual"; return estado === "confirmada" ? "Confirmada" : "Pendiente"; }

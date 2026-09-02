@@ -1,0 +1,36 @@
+import { redirect } from "next/navigation";
+
+import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
+import { repositorioDeColaboradores } from "@/colaboradores/servicio";
+import { db } from "@/db/client";
+import { sedes } from "@/db/schema";
+
+import { eliminarColaborador, eliminarSede, guardarColaborador, guardarPoliticaDeTardanzas, guardarSede } from "./actions";
+
+export const dynamic = "force-dynamic";
+
+export default async function PaginaDeConfiguracion() {
+  const actor = await obtenerActorActual().catch(() => undefined);
+  if (!actor) redirect("/iniciar-sesion");
+  if (actor.rol !== "administracion") return <main className="centrado"><p>No tiene permiso para cambiar la configuración.</p></main>;
+
+  const [listaDeSedes, colaboradores] = await Promise.all([
+    db.select({ nombre: sedes.nombre }).from(sedes).orderBy(sedes.nombre),
+    repositorioDeColaboradores.listar(),
+  ]);
+
+  return <main className="contenido configuracion">
+    <header className="encabezado"><div><p className="eyebrow">Administración</p><h1>Configuración</h1><p>Administre sedes, colaboradores y la política de tardanzas.</p></div></header>
+    <section className="tarjeta"><h2>Sedes</h2>
+      <form action={guardarSede} className="filtros"><label>Nombre<input name="nombre" required /></label><button type="submit">Crear sede</button></form>
+      <ul className="lista-configuracion">{listaDeSedes.map((sede) => <li key={sede.nombre}><span>{sede.nombre}</span><form action={eliminarSede}><input name="nombre" type="hidden" value={sede.nombre} /><button type="submit" className="peligro">Eliminar</button></form></li>)}</ul>
+    </section>
+    <section className="tarjeta"><h2>Colaboradores</h2>
+      <form action={guardarColaborador} className="filtros"><label>ID de huellero<input name="idHuellero" required /></label><label>Nombre<input name="nombre" required /></label><label>Sede<select name="sede" required>{listaDeSedes.map((sede) => <option key={sede.nombre}>{sede.nombre}</option>)}</select></label><label>Centro de costo<input name="centroDeCosto" required /></label><button type="submit">Crear colaborador</button></form>
+      <ul className="lista-configuracion">{colaboradores.map((colaborador) => <li key={colaborador.idHuellero}><span>{colaborador.nombre} · {colaborador.idHuellero} · {colaborador.sede}</span><form action={eliminarColaborador}><input name="idHuellero" type="hidden" value={colaborador.idHuellero} /><button type="submit" className="peligro">Eliminar</button></form></li>)}</ul>
+    </section>
+    <section className="tarjeta"><h2>Política de penalización por tardanzas</h2>
+      <form action={guardarPoliticaDeTardanzas} className="filtros"><label>Sede<select name="sede" required>{listaDeSedes.map((sede) => <option key={sede.nombre}>{sede.nombre}</option>)}</select></label><label>Tolerancia en minutos<input name="toleranciaEnMinutos" required min="1" type="number" defaultValue="10" /></label><label>Tardanzas acumuladas<input name="tardanzasAcumuladas" required min="1" type="number" defaultValue="3" /></label><label>Horas penalizadas<input name="horasPenalizadas" required min="1" type="number" defaultValue="1" /></label><label>Versión<input name="version" required min="1" type="number" /></label><label>Vigente desde<input name="vigenteDesde" required type="date" /></label><button type="submit">Guardar política</button></form>
+    </section>
+  </main>;
+}

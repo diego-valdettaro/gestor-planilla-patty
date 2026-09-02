@@ -32,4 +32,29 @@ time { color: #475569; font-size: 0.8rem; }
 .checkbox input { width: auto; }
 table { background: white; border-collapse: collapse; width: 100%; }
 th, td { border: 1px solid #e2e8f0; padding: 0.6rem; text-align: left; }
+.tarjeta { margin-bottom: 1.5rem; }
+.tarjeta h2 { margin-top: 0; }
+.horario-semanal > header { display: grid; gap: 0.2rem; margin-bottom: 1rem; }
+.horario-semanal > header span { color: #475569; font-size: 0.9rem; }
+.lista-configuracion { display: grid; gap: 0.5rem; list-style: none; margin: 0; padding: 0; }
+.lista-configuracion li { align-items: center; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; padding-top: 0.5rem; }
+.peligro { background: #b91c1c; }
+.selector-asistencia { margin-top: 2rem; }
+.encabezado-seccion { margin-bottom: 1rem; }
+.encabezado-seccion h2 { margin-bottom: 0.25rem; }
+.encabezado-seccion p { color: #475569; margin: 0; }
+.calendario { overflow-x: auto; }
+.dias-semana, .celdas-calendario { display: grid; grid-template-columns: repeat(7, minmax(8rem, 1fr)); min-width: 56rem; }
+.dias-semana span { color: #475569; font-size: 0.8rem; font-weight: 700; padding: 0.5rem; text-align: center; }
+.dia-calendario, .celda-vacia { border: 1px solid #e2e8f0; display: grid; gap: 0.25rem; min-height: 8.5rem; padding: 0.65rem; text-decoration: none; }
+.dia-calendario { background: #fff; color: #1d2733; }
+.dia-calendario:hover { outline: 2px solid #0369a1; outline-offset: -2px; }
+.dia-calendario time { font-size: 1rem; font-weight: 700; }
+.dia-calendario strong { font-size: 0.82rem; }
+.dia-calendario span { color: #475569; font-size: 0.8rem; }
+.estado-confirmada { background: #ecfdf5; }
+.estado-pendiente { background: #fff7ed; }
+.estado-manual { background: #eff6ff; }
+.sin-asistencia { background: #f8fafc; }
+.detalle-asistencia { border-color: #7dd3fc; }
 @media (max-width: 700px) { .contenido { padding: 1rem; } .filtros { align-items: stretch; flex-direction: column; } }

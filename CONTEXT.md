@@ -8,9 +8,9 @@ Lenguaje compartido para registrar y revisar la asistencia antes de calcular pag
 Registro original importado desde el huellero.
 _Evitar_: marca editada, registro corregido
 
-**Turno publicado**:
-Horario semanal confirmado por Operaciones que fija sede, entrada y salida programadas de un colaborador.
-_Evitar_: horario tentativo, horario vigente
+**Horario semanal**:
+Programación de una semana específica para un colaborador. Cada día fija sede, entrada y salida programadas.
+_Evitar_: turno, horario tentativo, horario vigente
 
 **Asistencia confirmada**:
 Registro diario revisado que conserva las propuestas basadas en marcas crudas y cualquier corrección aplicada.
@@ -21,11 +21,11 @@ Registro diario cuya evidencia de marcas es insuficiente o inconsistente y que t
 _Evitar_: falta automática, ausencia inferida
 
 **Asistencia esperada**:
-Registro diario creado a partir de un turno publicado, aun cuando todavía no exista ninguna marca del huellero.
+Registro diario creado a partir de un horario semanal, aun cuando todavía no exista ninguna marca del huellero.
 _Evitar_: fila creada por importación, ausencia automática
 
-**Instantánea de turno**:
-Copia del turno publicado que se aplicó al confirmar una asistencia diaria.
+**Instantánea de horario**:
+Copia del horario semanal que se aplicó al confirmar una asistencia diaria.
 _Evitar_: horario actual, turno recalculado
 
 **Ajuste de asistencia**:

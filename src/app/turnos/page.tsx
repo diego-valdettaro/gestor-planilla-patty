@@ -8,89 +8,45 @@ import { publicarTurnoDesdeGrilla } from "./actions";
 
 export const dynamic = "force-dynamic";
 
-interface PropiedadesDePagina {
-  searchParams: Promise<{ semana?: string; sede?: string }>;
-}
+interface PropiedadesDePagina { searchParams: Promise<{ semana?: string; colaborador?: string }>; }
+
+const opcionesDeHorario = [
+  { valor: "09:00|18:00|60", etiqueta: "09:00 a 18:00, 60 min de almuerzo" },
+  { valor: "10:00|19:00|60", etiqueta: "10:00 a 19:00, 60 min de almuerzo" },
+  { valor: "08:00|17:00|60", etiqueta: "08:00 a 17:00, 60 min de almuerzo" },
+  { valor: "descanso", etiqueta: "Descanso" },
+];
 
 export default async function PaginaDeTurnos({ searchParams }: PropiedadesDePagina) {
   const actor = await obtenerActorActual().catch(() => undefined);
-
-  if (!actor) {
-    redirect("/iniciar-sesion");
-  }
-  if (actor.rol !== "operaciones" && actor.rol !== "administracion") {
-    return <main className="centrado"><p>No tiene permiso para administrar turnos.</p></main>;
-  }
+  if (!actor) redirect("/iniciar-sesion");
+  if (actor.rol !== "operaciones" && actor.rol !== "administracion") return <main className="centrado"><p>No tiene permiso para administrar horarios.</p></main>;
 
   const parametros = await searchParams;
-  const sedes = await repositorioDeTurnos.listarSedesConColaboradoresActivos();
-  const sede = parametros.sede && sedes.includes(parametros.sede) ? parametros.sede : sedes[0];
+  const [sedes, colaboradores] = await Promise.all([repositorioDeTurnos.listarSedesConColaboradoresActivos(), repositorioDeTurnos.listarColaboradoresActivos()]);
+  const colaborador = colaboradores.find((item) => item.idHuellero === parametros.colaborador) ?? colaboradores[0];
   const semana = inicioDeSemana(parametros.semana ?? new Date().toISOString().slice(0, 10));
   const dias = diasDeLaSemana(semana);
-  const colaboradores = sede ? await repositorioDeTurnos.listarColaboradoresActivosPorSede(sede) : [];
-  const turnos = sede
-    ? await repositorioDeTurnos.listarPublicadosPorSedeYSemana(sede, dias[0], dias.at(-1)!)
-    : [];
-  const turnosPorColaboradorYFecha = new Map(
-    turnos.map((turno) => [`${turno.idHuellero}:${turno.fecha}`, turno]),
-  );
+  const [turnos, fechasAbiertas] = await Promise.all([
+    colaborador
+      ? repositorioDeTurnos.listarPublicadosPorColaboradorYSemana(colaborador.idHuellero, dias[0], dias.at(-1)!)
+      : [],
+    Promise.all(dias.map((fecha) => repositorioDeTurnos.perteneceAPeriodoAbierto(fecha))),
+  ]);
+  const fechasHabilitadas = new Set(dias.filter((_, indice) => fechasAbiertas[indice]));
+  const turnosPorFecha = new Map(turnos.map((turno) => [turno.fecha, turno]));
 
-  return (
-    <main className="contenido">
-      <header className="encabezado">
-        <div>
-          <p className="eyebrow">{actor.rol === "administracion" ? "Administración" : "Operaciones"}</p>
-          <h1>Turnos semanales</h1>
-        </div>
-      </header>
-      <form className="filtros" method="get">
-        <label>
-          Semana
-          <input defaultValue={semana} name="semana" type="date" />
-        </label>
-        <label>
-          Sede
-          <select defaultValue={sede} name="sede">
-            {sedes.map((opcion) => <option key={opcion}>{opcion}</option>)}
-          </select>
-        </label>
-        <button type="submit">Ver semana</button>
-      </form>
-      {sede ? (
-        <section className="grilla">
-          {colaboradores.map((colaborador) => (
-            <article className="fila-colaborador" key={colaborador.idHuellero}>
-              <header>
-                <strong>{colaborador.nombre}</strong>
-                <span>{colaborador.idHuellero} · {colaborador.centroDeCosto}</span>
-              </header>
-              <div className="dias">
-                {dias.map((fecha) => {
-                  const turno = turnosPorColaboradorYFecha.get(`${colaborador.idHuellero}:${fecha}`);
-
-                  if (turno) {
-                    return <div className="turno-publicado" key={fecha}><time>{fecha.slice(5)}</time><strong>Publicado</strong><span>{turno.entradaProgramada}–{turno.salidaProgramada}</span></div>;
-                  }
-
-                  return (
-                    <form action={publicarTurnoDesdeGrilla} className="turno-borrador" key={fecha}>
-                      <time>{fecha.slice(5)}</time>
-                      <input name="idHuellero" type="hidden" value={colaborador.idHuellero} />
-                      <input name="fecha" type="hidden" value={fecha} />
-                      <input name="sede" type="hidden" value={sede} />
-                      <label>Entrada<input defaultValue="09:00" name="entradaProgramada" required type="time" /></label>
-                      <label>Salida<input defaultValue="18:00" name="salidaProgramada" required type="time" /></label>
-                      <label>Almuerzo<input defaultValue="60" min="0" name="minutosDeAlmuerzo" required type="number" /></label>
-                      <label className="checkbox"><input name="descanso" type="checkbox" />Descanso</label>
-                      <button type="submit">Publicar</button>
-                    </form>
-                  );
-                })}
-              </div>
-            </article>
-          ))}
-        </section>
-      ) : <p>No hay colaboradores activos para mostrar.</p>}
-    </main>
-  );
+  return <main className="contenido">
+    <header className="encabezado"><div><p className="eyebrow">{actor.rol === "administracion" ? "Administración" : "Operaciones"}</p><h1>Horarios semanales</h1><p>Programe una semana para cada colaborador.</p></div></header>
+    <form className="filtros" method="get"><label>Semana<input defaultValue={semana} name="semana" type="date" /></label><label>Colaborador<select defaultValue={colaborador?.idHuellero} name="colaborador">{colaboradores.map((opcion) => <option key={opcion.idHuellero} value={opcion.idHuellero}>{opcion.nombre} · {opcion.idHuellero}</option>)}</select></label><button type="submit">Ver semana</button></form>
+    {colaborador ? <section className="tarjeta horario-semanal">
+      <header><strong>{colaborador.nombre}</strong><span>{colaborador.idHuellero} · sede base: {colaborador.sede}</span></header>
+      <div className="dias">{dias.map((fecha) => {
+        const turno = turnosPorFecha.get(fecha);
+        if (turno) return <article className="turno-publicado" key={fecha}><time>{fecha}</time><strong>{turno.descanso ? "Descanso" : "Publicado"}</strong><span>{turno.sede}</span><span>{turno.descanso ? "" : `${turno.entradaProgramada} a ${turno.salidaProgramada}`}</span></article>;
+        if (!fechasHabilitadas.has(fecha)) return <article className="turno-publicado" key={fecha}><time>{fecha}</time><strong>No disponible</strong><span>La fecha no pertenece a un período de planilla abierto.</span></article>;
+        return <form action={publicarTurnoDesdeGrilla} className="turno-borrador" key={fecha}><time>{fecha}</time><input name="idHuellero" type="hidden" value={colaborador.idHuellero} /><input name="fecha" type="hidden" value={fecha} /><label>Sede<select name="sede" required defaultValue={colaborador.sede}>{sedes.map((sede) => <option key={sede}>{sede}</option>)}</select></label><label>Horario<select name="horario" required defaultValue={opcionesDeHorario[0].valor}>{opcionesDeHorario.map((opcion) => <option key={opcion.valor} value={opcion.valor}>{opcion.etiqueta}</option>)}</select></label><button type="submit">Publicar</button></form>;
+      })}</div>
+    </section> : <p>No hay colaboradores activos para programar.</p>}
+  </main>;
 }

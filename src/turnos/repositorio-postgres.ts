@@ -7,6 +7,7 @@ import {
   colaboradores,
   historialDeTurnosPublicados,
   periodosPlanilla,
+  sedes,
   turnosPublicados,
 } from "@/db/schema";
 
@@ -74,12 +75,27 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos {
   }
 
   async listarSedesConColaboradoresActivos(): Promise<string[]> {
-    const sedes = await this.db
-      .selectDistinct({ sede: colaboradores.sede })
-      .from(colaboradores)
-      .where(eq(colaboradores.activo, true));
+    const resultados = await this.db
+      .select({ sede: sedes.nombre })
+      .from(sedes)
+      .where(eq(sedes.activa, true));
 
-    return sedes.map(({ sede }) => sede).sort();
+    return resultados.map(({ sede }) => sede).sort();
+  }
+
+  async listarColaboradoresActivos(): Promise<
+    Array<{ idHuellero: string; nombre: string; sede: string; centroDeCosto: string }>
+  > {
+    return this.db
+      .select({
+        idHuellero: colaboradores.idHuellero,
+        nombre: colaboradores.nombre,
+        sede: colaboradores.sede,
+        centroDeCosto: colaboradores.centroDeCosto,
+      })
+      .from(colaboradores)
+      .where(eq(colaboradores.activo, true))
+      .orderBy(colaboradores.nombre);
   }
 
   async listarColaboradoresActivosPorSede(sede: string): Promise<
@@ -118,5 +134,25 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos {
           lte(turnosPublicados.fecha, fin),
         ),
       );
+  }
+
+  async listarPublicadosPorColaboradorYSemana(
+    idHuellero: string,
+    inicio: string,
+    fin: string,
+  ): Promise<TurnoPublicado[]> {
+    return this.db.select({
+      idHuellero: turnosPublicados.idHuellero,
+      fecha: turnosPublicados.fecha,
+      sede: turnosPublicados.sede,
+      entradaProgramada: turnosPublicados.entradaProgramada,
+      salidaProgramada: turnosPublicados.salidaProgramada,
+      minutosDeAlmuerzo: turnosPublicados.minutosDeAlmuerzo,
+      descanso: turnosPublicados.descanso,
+    }).from(turnosPublicados).where(and(
+      eq(turnosPublicados.idHuellero, idHuellero),
+      gte(turnosPublicados.fecha, inicio),
+      lte(turnosPublicados.fecha, fin),
+    ));
   }
 }

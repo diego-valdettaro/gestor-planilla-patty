@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, gte, lte } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import * as schema from "@/db/schema";
@@ -117,6 +117,20 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
     return this.db.select({
       idHuellero: marcasCrudas.idHuellero, fecha: marcasCrudas.fecha, instante: marcasCrudas.instante,
     }).from(marcasCrudas);
+  }
+
+  async listarResumenMensual(idHuellero: string, inicio: string, fin: string): Promise<Array<{
+    fecha: string; estado: "pendiente" | "confirmada" | "manual"; entrada: string | null; salida: string | null; estadoManual: string | null;
+  }>> {
+    return this.db.select({
+      fecha: asistenciasEsperadas.fecha,
+      estado: asistenciasEsperadas.estado,
+      entrada: asistenciasEsperadas.entradaReal,
+      salida: asistenciasEsperadas.salidaReal,
+      estadoManual: estadosManuales.tipo,
+    }).from(asistenciasEsperadas).leftJoin(estadosManuales, eq(estadosManuales.asistenciaId, asistenciasEsperadas.id))
+      .where(and(eq(asistenciasEsperadas.idHuellero, idHuellero), gte(asistenciasEsperadas.fecha, inicio), lte(asistenciasEsperadas.fecha, fin)))
+      .then((filas) => filas as Array<{ fecha: string; estado: "pendiente" | "confirmada" | "manual"; entrada: string | null; salida: string | null; estadoManual: string | null }>);
   }
 
   async buscarPoliticaVigente(sede: string, fecha: string) {
