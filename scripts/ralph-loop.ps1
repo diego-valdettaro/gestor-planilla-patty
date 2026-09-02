@@ -38,6 +38,12 @@ function Invoke-Pnpm {
   if ($LASTEXITCODE -ne 0) { throw "Falló: pnpm $($Arguments -join ' ')" }
 }
 
+function Write-LoopHeader {
+  param([string]$Title)
+  Write-Host ""
+  Write-Host "=== $Title ===" -ForegroundColor Cyan
+}
+
 $repoRoot = Get-GitText @("rev-parse", "--show-toplevel")
 Set-Location $repoRoot
 $schema = Join-Path $repoRoot "scripts/ralph-loop.schema.json"
@@ -48,7 +54,8 @@ foreach ($command in @("git", "gh", "codex")) {
   if (-not (Get-Command $command -ErrorAction SilentlyContinue)) { throw "No encuentro '$command' en PATH." }
 }
 
-Invoke-External gh @("auth", "status", "--hostname", "github.com")
+$ghAuthOutput = & gh auth status --hostname "github.com" 2>&1
+if ($LASTEXITCODE -ne 0) { throw "No se pudo autenticar GitHub: $($ghAuthOutput -join ' ')" }
 
 if (-not $SkipDatabaseCheck) {
   $databaseUrl = Get-Content ".env" | Where-Object { $_ -match "^DATABASE_URL=" } | Select-Object -First 1
@@ -87,6 +94,10 @@ Tu respuesta final debe ser exclusivamente un JSON válido con las propiedades i
 '@
 
 $completed = 0
+Write-LoopHeader "RALPH LOOP"
+Write-Host "Repo:       $(Split-Path -Leaf $repoRoot)"
+Write-Host "GitHub:     autenticado"
+Write-Host "Iteraciones: $(if ($MaxIssues -eq 0) { 'sin límite' } else { $MaxIssues })"
 while ($MaxIssues -eq 0 -or $completed -lt $MaxIssues) {
   $statusBefore = Get-GitText @("status", "--porcelain")
   if ($statusBefore) { throw "El árbol de trabajo no está limpio. Resuelva o haga commit de estos cambios antes del loop:`n$statusBefore" }
@@ -99,13 +110,33 @@ while ($MaxIssues -eq 0 -or $completed -lt $MaxIssues) {
   $runId = Get-Date -Format "yyyyMMdd-HHmmss"
   $resultFile = Join-Path $logRoot "$runId-result.json"
   $eventFile = Join-Path $logRoot "$runId-events.jsonl"
+  $iteration = $completed + 1
+  Write-LoopHeader "Iteración $iteration$(if ($MaxIssues -gt 0) { "/$MaxIssues" })"
+  Write-Host "Ejecutando agente..." -ForegroundColor Yellow
   $arguments = @("--sandbox", "danger-full-access", "--ask-for-approval", "never", "exec", "--output-schema", $schema, "--output-last-message", $resultFile, "--json", "--color", "never")
   if ($Model) { $arguments += @("--model", $Model) }
   $arguments += $prompt
 
   $previousErrorActionPreference = $ErrorActionPreference
   $ErrorActionPreference = "Continue"
-  & codex @arguments 2>&1 | Tee-Object -FilePath $eventFile
+  & codex @arguments 2>&1 | ForEach-Object {
+    $line = $_.ToString()
+    Add-Content -LiteralPath $eventFile -Value $line
+    try {
+      $event = $line | ConvertFrom-Json -ErrorAction Stop
+    } catch {
+      if ($line.Trim()) { Write-Host $line -ForegroundColor DarkYellow }
+      return
+    }
+
+    if ($event.type -eq "item.started" -and $event.item.type -eq "command_execution") {
+      Write-Host "  > Ejecutando comando..." -ForegroundColor DarkGray
+    }
+    if ($event.type -eq "item.completed" -and $event.item.type -eq "agent_message") {
+      $message = $event.item.text.Trim()
+      if ($message -and $message -notmatch '^\{') { Write-Host $message }
+    }
+  }
   $codexExitCode = $LASTEXITCODE
   $ErrorActionPreference = $previousErrorActionPreference
   if ($codexExitCode -ne 0) { throw "Codex terminó con error. Log: $eventFile" }
@@ -125,8 +156,11 @@ while ($MaxIssues -eq 0 -or $completed -lt $MaxIssues) {
   $statusAfter = Get-GitText @("status", "--porcelain")
   if ($statusAfter) { throw "El agente dejó cambios sin commitear:`n$statusAfter" }
 
+  Write-Host "Validando: pnpm test" -ForegroundColor Yellow
   Invoke-Pnpm @("test")
+  Write-Host "Validando: pnpm typecheck" -ForegroundColor Yellow
   Invoke-Pnpm @("typecheck")
+  Write-Host "Validando: pnpm build" -ForegroundColor Yellow
   Invoke-Pnpm @("build")
 
   Invoke-External gh @("issue", "comment", "$($result.issue)", "--repo", "diego-valdettaro/gestor-planilla-patty", "--body", "Implementado en $($result.commit). Validado con pnpm test, pnpm typecheck y pnpm build.")
