@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
 import { repositorioDeImportaciones } from "@/importaciones/servicio";
+import { repositorioDeTurnos } from "@/turnos/servicio";
 
 import { importarAsistencia } from "./actions";
 
@@ -13,16 +14,21 @@ export default async function PaginaDeAsistencias() {
   if (actor.rol !== "administracion" && actor.rol !== "finanzas") {
     return <main className="centrado"><p>No tiene permiso para importar asistencias.</p></main>;
   }
-  const [asistencias, incidencias, marcasSinTurno] = await Promise.all([
+  const [asistencias, incidencias, marcasSinTurno, sedes] = await Promise.all([
     repositorioDeImportaciones.listarAsistenciasPendientes(),
     repositorioDeImportaciones.listarIncidencias(),
     repositorioDeImportaciones.listarMarcasSinTurno(),
+    repositorioDeTurnos.listarSedesConColaboradoresActivos(),
   ]);
   return (
     <main className="contenido">
       <header className="encabezado"><div><p className="eyebrow">Administración y Finanzas</p><h1>Cargar asistencia</h1></div></header>
       <form action={importarAsistencia} className="filtros">
-        <label>Sede<input name="sede" required /></label>
+        <label>Sede
+          <select name="sede" required>
+            {sedes.map((sede) => <option key={sede} value={sede}>{sede}</option>)}
+          </select>
+        </label>
         <label>Semana<input name="semana" required type="date" /></label>
         <label>Archivo del huellero<input accept=".xlsx,.xls,.csv" name="archivo" required type="file" /></label>
         <button type="submit">Importar</button>
