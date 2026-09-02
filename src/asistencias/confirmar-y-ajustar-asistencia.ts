@@ -35,6 +35,20 @@ export interface SolicitudDeAjuste extends SolicitudDeConfirmacion {
   motivo: string;
 }
 
+export type TipoDeEstadoManual = "falta" | "descanso" | "feriado" | "vacaciones" | "permiso" | "suspension";
+
+export interface SolicitudDeEstadoManual {
+  idHuellero: string;
+  fecha: string;
+  tipo: TipoDeEstadoManual;
+  comentario: string;
+}
+
+export interface EstadoManual extends SolicitudDeEstadoManual {
+  responsableId: string;
+  registradoEn: Date;
+}
+
 export interface AjusteDeAsistencia extends SolicitudDeAjuste {
   minutosTrabajados: number;
 }
@@ -43,6 +57,7 @@ export interface RepositorioDeAsistencias {
   buscarTurnoPublicado(idHuellero: string, fecha: string): Promise<TurnoParaConfirmar | undefined>;
   confirmar(asistencia: AsistenciaConfirmada): Promise<void>;
   ajustar(solicitud: AjusteDeAsistencia, responsableId: string): Promise<void>;
+  registrarEstadoManual(estadoManual: EstadoManual): Promise<void>;
 }
 
 export async function confirmarAsistencia(
@@ -80,6 +95,17 @@ export async function ajustarAsistencia(
     motivo: solicitud.motivo.trim(),
     minutosTrabajados: calcularMinutosTrabajados(solicitud.entradaReal, solicitud.salidaReal),
   }, actor.id);
+}
+
+export async function registrarEstadoManual(
+  repositorio: RepositorioDeAsistencias,
+  actor: Actor,
+  solicitud: SolicitudDeEstadoManual,
+): Promise<void> {
+  autorizarRevision(actor);
+  const comentario = solicitud.comentario.trim();
+  if (!comentario) throw new Error("El estado manual requiere un comentario.");
+  await repositorio.registrarEstadoManual({ ...solicitud, comentario, responsableId: actor.id, registradoEn: new Date() });
 }
 
 function calcularMinutosTrabajados(entradaReal: string, salidaReal: string): number {

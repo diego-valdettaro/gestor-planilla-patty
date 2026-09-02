@@ -45,8 +45,25 @@ export async function ajustarAsistencia(formData: FormData): Promise<void> {
   revalidatePath("/asistencias");
 }
 
+export async function registrarEstadoManual(formData: FormData): Promise<void> {
+  const casosDeUso = crearCasosDeUsoDeAsistencias(repositorioDeAsistencias, { obtenerActorActual });
+  const tipo = obtenerTexto(formData, "tipo");
+  if (!esTipoDeEstadoManual(tipo)) throw new Error("El tipo de estado manual no es válido.");
+  await casosDeUso.registrarEstadoManual({
+    idHuellero: obtenerTexto(formData, "idHuellero"),
+    fecha: obtenerTexto(formData, "fecha"),
+    tipo,
+    comentario: obtenerTexto(formData, "comentario"),
+  });
+  revalidatePath("/asistencias");
+}
+
 function obtenerTexto(formData: FormData, nombre: string): string {
   const valor = formData.get(nombre);
   if (typeof valor !== "string" || !valor.trim()) throw new Error(`El campo ${nombre} es obligatorio.`);
   return valor.trim();
+}
+
+function esTipoDeEstadoManual(valor: string): valor is "falta" | "descanso" | "feriado" | "vacaciones" | "permiso" | "suspension" {
+  return ["falta", "descanso", "feriado", "vacaciones", "permiso", "suspension"].includes(valor);
 }

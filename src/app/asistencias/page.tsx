@@ -1,10 +1,11 @@
 import { redirect } from "next/navigation";
 
 import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
+import { repositorioDeAsistencias } from "@/asistencias/servicio";
 import { repositorioDeImportaciones } from "@/importaciones/servicio";
 import { repositorioDeTurnos } from "@/turnos/servicio";
 
-import { ajustarAsistencia, confirmarAsistencia, importarAsistencia } from "./actions";
+import { ajustarAsistencia, confirmarAsistencia, importarAsistencia, registrarEstadoManual } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -14,13 +15,20 @@ export default async function PaginaDeAsistencias() {
   if (actor.rol !== "administracion" && actor.rol !== "finanzas") {
     return <main className="centrado"><p>No tiene permiso para importar asistencias.</p></main>;
   }
-  const [asistencias, incidencias, marcasSinTurno, sedes, confirmadas] = await Promise.all([
+  const [asistencias, incidencias, marcasSinTurno, sedes, confirmadas, estadosManuales, marcasCrudas] = await Promise.all([
     repositorioDeImportaciones.listarAsistenciasPendientes(),
     repositorioDeImportaciones.listarIncidencias(),
     repositorioDeImportaciones.listarMarcasSinTurno(),
     repositorioDeTurnos.listarSedesConColaboradoresActivos(),
     repositorioDeImportaciones.listarAsistenciasConfirmadas(),
+    repositorioDeAsistencias.listarEstadosManuales(),
+    repositorioDeAsistencias.listarMarcasCrudasPorAsistencia(),
   ]);
+  const marcasPorAsistencia = new Map<string, string[]>();
+  for (const marca of marcasCrudas) {
+    const clave = `${marca.idHuellero}:${marca.fecha}`;
+    marcasPorAsistencia.set(clave, [...(marcasPorAsistencia.get(clave) ?? []), marca.instante]);
+  }
   return (
     <main className="contenido">
       <header className="encabezado"><div><p className="eyebrow">Administración y Finanzas</p><h1>Cargar asistencia</h1></div></header>
@@ -46,7 +54,29 @@ export default async function PaginaDeAsistencias() {
             <label>Salida real<input name="salidaReal" required defaultValue={asistencia.salidaPropuesta} /></label>
             <button type="submit">Confirmar asistencia</button>
           </form> : <p>Faltan marcas para confirmar esta asistencia.</p>}
+          <p>Marcas crudas: {marcasPorAsistencia.get(`${asistencia.idHuellero}:${asistencia.fecha}`)?.join(" · ") ?? "sin marcas"}</p>
+          <form action={registrarEstadoManual} className="filtros">
+            <input name="idHuellero" type="hidden" value={asistencia.idHuellero} />
+            <input name="fecha" type="hidden" value={asistencia.fecha} />
+            <label>Estado manual
+              <select name="tipo" required defaultValue="">
+                <option disabled value="">Seleccionar</option>
+                <option value="falta">Falta</option><option value="descanso">Descanso</option>
+                <option value="feriado">Feriado</option><option value="vacaciones">Vacaciones</option>
+                <option value="permiso">Permiso</option><option value="suspension">Suspensión</option>
+              </select>
+            </label>
+            <label>Comentario<input name="comentario" required /></label>
+            <button type="submit">Registrar estado manual</button>
+          </form>
         </li>)}</ul> : <p>No hay asistencias pendientes.</p>}
+      </section>
+      <section>
+        <h2>Estados manuales</h2>
+        {estadosManuales.length ? <ul>{estadosManuales.map((estado) => <li key={`${estado.idHuellero}-${estado.fecha}`}>
+          {estado.idHuellero} · {estado.fecha} · {estado.tipo}: {estado.comentario} · responsable: {estado.responsableId}
+          <p>Marcas crudas: {marcasPorAsistencia.get(`${estado.idHuellero}:${estado.fecha}`)?.join(" · ") ?? "sin marcas"}</p>
+        </li>)}</ul> : <p>No hay estados manuales.</p>}
       </section>
       <section>
         <h2>Asistencias confirmadas</h2>

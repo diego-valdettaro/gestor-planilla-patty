@@ -85,7 +85,7 @@ export const asistenciasEsperadas = pgTable(
       .notNull()
       .references(() => colaboradores.idHuellero),
     fecha: date("fecha", { mode: "string" }).notNull(),
-    estado: text("estado", { enum: ["pendiente", "confirmada"] }).notNull().default("pendiente"),
+    estado: text("estado", { enum: ["pendiente", "confirmada", "manual"] }).notNull().default("pendiente"),
     entradaPropuesta: text("entrada_propuesta"),
     salidaPropuesta: text("salida_propuesta"),
     entradaReal: text("entrada_real"),
@@ -119,6 +119,19 @@ export const ajustesDeAsistencia = pgTable(
     ajustadoEn: timestamp("ajustado_en", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index("ajustes_asistencia_id").on(table.asistenciaId)],
+);
+
+export const estadosManuales = pgTable(
+  "estados_manuales",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    asistenciaId: uuid("asistencia_id").notNull().references(() => asistenciasEsperadas.id),
+    tipo: text("tipo", { enum: ["falta", "descanso", "feriado", "vacaciones", "permiso", "suspension"] }).notNull(),
+    comentario: text("comentario").notNull(),
+    responsableId: uuid("responsable_id").notNull().references(() => cuentasLocales.id),
+    registradoEn: timestamp("registrado_en", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("estados_manuales_asistencia_id").on(table.asistenciaId)],
 );
 
 export const importacionesSemanales = pgTable("importaciones_semanales", {
