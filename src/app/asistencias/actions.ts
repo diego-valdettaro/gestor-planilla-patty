@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 
 import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
+import { crearCasosDeUsoDeAsistencias } from "@/asistencias/casos-de-uso-servidor";
+import { repositorioDeAsistencias } from "@/asistencias/servicio";
 import { conservarArchivoFuente } from "@/importaciones/almacenamiento-local";
 import { crearCasosDeUsoDeImportaciones } from "@/importaciones/casos-de-uso-servidor";
 import { parsearArchivoHuellero } from "@/importaciones/parsear-archivo-huellero";
@@ -17,6 +19,29 @@ export async function importarAsistencia(formData: FormData): Promise<void> {
   const archivoFuente = await conservarArchivoFuente(archivo);
   const casosDeUso = crearCasosDeUsoDeImportaciones(repositorioDeImportaciones, { obtenerActorActual });
   await casosDeUso.importar({ sede, semana, archivo: archivoFuente, marcasCrudas });
+  revalidatePath("/asistencias");
+}
+
+export async function confirmarAsistencia(formData: FormData): Promise<void> {
+  const casosDeUso = crearCasosDeUsoDeAsistencias(repositorioDeAsistencias, { obtenerActorActual });
+  await casosDeUso.confirmar({
+    idHuellero: obtenerTexto(formData, "idHuellero"),
+    fecha: obtenerTexto(formData, "fecha"),
+    entradaReal: obtenerTexto(formData, "entradaReal"),
+    salidaReal: obtenerTexto(formData, "salidaReal"),
+  });
+  revalidatePath("/asistencias");
+}
+
+export async function ajustarAsistencia(formData: FormData): Promise<void> {
+  const casosDeUso = crearCasosDeUsoDeAsistencias(repositorioDeAsistencias, { obtenerActorActual });
+  await casosDeUso.ajustar({
+    idHuellero: obtenerTexto(formData, "idHuellero"),
+    fecha: obtenerTexto(formData, "fecha"),
+    entradaReal: obtenerTexto(formData, "entradaReal"),
+    salidaReal: obtenerTexto(formData, "salidaReal"),
+    motivo: obtenerTexto(formData, "motivo"),
+  });
   revalidatePath("/asistencias");
 }
 

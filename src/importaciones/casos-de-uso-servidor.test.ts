@@ -8,7 +8,7 @@ import type {
 } from "./importar-semana-por-sede";
 
 function crearRepositorioEnMemoria(): {
-  asistencias: AsistenciaPendiente[];
+  asistencias: Array<AsistenciaPendiente | { idHuellero: string; fecha: string; estado: "confirmada"; entradaReal: string; salidaReal: string }>;
   importaciones: ImportacionSemanal[];
   repositorio: RepositorioDeImportaciones;
 } {
@@ -158,5 +158,30 @@ describe("casos de uso de importaciones en el servidor", () => {
 
     expect(importaciones[0].propuestas).toEqual([]);
     expect(asistencias).toEqual([{ idHuellero: "HU-1024", fecha: "2026-09-01", estado: "pendiente" }]);
+  });
+
+  it("no sobrescribe una asistencia confirmada durante una nueva importación", async () => {
+    const { asistencias, repositorio } = crearRepositorioEnMemoria();
+    asistencias[0] = {
+      idHuellero: "HU-1024", fecha: "2026-09-01", estado: "confirmada",
+      entradaReal: "2026-09-01T09:03:00-05:00", salidaReal: "2026-09-01T18:01:00-05:00",
+    };
+    const casosDeUso = crearCasosDeUsoDeImportaciones(repositorio, {
+      obtenerActorActual: async () => ({ id: "administracion-1", rol: "administracion" }),
+    });
+
+    await casosDeUso.importar({
+      sede: "Lima", semana: "2026-08-31",
+      archivo: { nombre: "huellero.csv", ubicacion: "importaciones/archivo.csv", hashSha256: "abc123" },
+      marcasCrudas: [
+        { idHuellero: "HU-1024", fecha: "2026-09-01", instante: "2026-09-01T09:10:00-05:00" },
+        { idHuellero: "HU-1024", fecha: "2026-09-01", instante: "2026-09-01T18:10:00-05:00" },
+      ],
+    });
+
+    expect(asistencias).toEqual([{
+      idHuellero: "HU-1024", fecha: "2026-09-01", estado: "confirmada",
+      entradaReal: "2026-09-01T09:03:00-05:00", salidaReal: "2026-09-01T18:01:00-05:00",
+    }]);
   });
 });

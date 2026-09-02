@@ -72,6 +72,24 @@ export class RepositorioPostgresDeImportaciones implements RepositorioDeImportac
     }).from(asistenciasEsperadas).where(eq(asistenciasEsperadas.estado, "pendiente"));
   }
 
+  async listarAsistenciasConfirmadas(): Promise<Array<{
+    idHuellero: string;
+    fecha: string;
+    entradaReal: string;
+    salidaReal: string;
+  }>> {
+    return this.db.select({
+      idHuellero: asistenciasEsperadas.idHuellero,
+      fecha: asistenciasEsperadas.fecha,
+      entradaReal: asistenciasEsperadas.entradaReal,
+      salidaReal: asistenciasEsperadas.salidaReal,
+    }).from(asistenciasEsperadas).where(eq(asistenciasEsperadas.estado, "confirmada")).then((asistencias) =>
+      asistencias.filter((asistencia): asistencia is { idHuellero: string; fecha: string; entradaReal: string; salidaReal: string } =>
+        asistencia.entradaReal !== null && asistencia.salidaReal !== null,
+      ),
+    );
+  }
+
   async listarIncidencias(): Promise<Array<{ idHuellero: string; fecha: string; motivo: string }>> {
     return this.db.select({ idHuellero: incidenciasDeImportacion.idHuellero, fecha: incidenciasDeImportacion.fecha, motivo: incidenciasDeImportacion.motivo })
       .from(incidenciasDeImportacion);

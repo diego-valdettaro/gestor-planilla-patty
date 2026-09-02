@@ -3,6 +3,7 @@ import {
   date,
   integer,
   index,
+  jsonb,
   pgTable,
   text,
   timestamp,
@@ -84,14 +85,40 @@ export const asistenciasEsperadas = pgTable(
       .notNull()
       .references(() => colaboradores.idHuellero),
     fecha: date("fecha", { mode: "string" }).notNull(),
-    estado: text("estado", { enum: ["pendiente"] }).notNull().default("pendiente"),
+    estado: text("estado", { enum: ["pendiente", "confirmada"] }).notNull().default("pendiente"),
     entradaPropuesta: text("entrada_propuesta"),
     salidaPropuesta: text("salida_propuesta"),
+    entradaReal: text("entrada_real"),
+    salidaReal: text("salida_real"),
+    minutosTrabajados: integer("minutos_trabajados"),
+    instantaneaDeTurno: jsonb("instantanea_de_turno").$type<{
+      sede: string;
+      entradaProgramada: string;
+      salidaProgramada: string;
+      minutosDeAlmuerzo: number;
+      descanso: boolean;
+    }>(),
+    confirmadoPorId: uuid("confirmado_por_id").references(() => cuentasLocales.id),
+    confirmadoEn: timestamp("confirmado_en", { withTimezone: true }),
     creadaEn: timestamp("creada_en", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     uniqueIndex("asistencias_esperadas_colaborador_fecha").on(table.idHuellero, table.fecha),
   ],
+);
+
+export const ajustesDeAsistencia = pgTable(
+  "ajustes_de_asistencia",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    asistenciaId: uuid("asistencia_id").notNull().references(() => asistenciasEsperadas.id),
+    entradaReal: text("entrada_real").notNull(),
+    salidaReal: text("salida_real").notNull(),
+    motivo: text("motivo").notNull(),
+    responsableId: uuid("responsable_id").notNull().references(() => cuentasLocales.id),
+    ajustadoEn: timestamp("ajustado_en", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("ajustes_asistencia_id").on(table.asistenciaId)],
 );
 
 export const importacionesSemanales = pgTable("importaciones_semanales", {
