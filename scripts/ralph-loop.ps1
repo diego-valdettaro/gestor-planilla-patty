@@ -1,12 +1,18 @@
 [CmdletBinding()]
 param(
-  [int]$MaxIssues = 0,
+  [ValidateRange(1, 50)]
+  [int]$MaxIssues = 1,
+  [switch]$Afk,
   [string]$Model,
   [switch]$DryRun,
   [switch]$SkipDatabaseCheck
 )
 
 $ErrorActionPreference = "Stop"
+
+if ($MaxIssues -gt 1 -and -not $Afk) {
+  throw "Para más de una vuelta, confirme el modo autónomo con -Afk."
+}
 
 function Invoke-External {
   param([string]$File, [string[]]$Arguments)
@@ -63,11 +69,18 @@ function Get-AgentStatus {
   return "Trabajando..."
 }
 
+function Write-RunState {
+  param([hashtable]$State)
+  $State | ConvertTo-Json | Set-Content -LiteralPath $stateFile -Encoding utf8
+}
+
 $repoRoot = Get-GitText @("rev-parse", "--show-toplevel")
 Set-Location $repoRoot
 $schema = Join-Path $repoRoot "scripts/ralph-loop.schema.json"
 $logRoot = Join-Path $env:LOCALAPPDATA "gestor-planilla-patty/ralph"
 New-Item -ItemType Directory -Force -Path $logRoot | Out-Null
+$stateFile = Join-Path $logRoot "current-run.json"
+$progressFile = Join-Path $repoRoot "docs/ralph-progress.md"
 
 foreach ($command in @("git", "gh", "codex")) {
   if (-not (Get-Command $command -ErrorAction SilentlyContinue)) { throw "No encuentro '$command' en PATH." }
@@ -89,6 +102,8 @@ Trabajas en el repositorio gestor-planilla-patty dentro de un Ralph loop.
 
 Tu única tarea en esta ejecución es completar como máximo UN issue elegible. No cierres issues ni escribas comentarios en GitHub: el orquestador lo hará después de verificar tu trabajo.
 
+Para informar progreso legible, llama a `./scripts/ralph-status.ps1 "mensaje corto"` después de elegir el issue, al encontrar un bloqueo o fallo relevante, después de las validaciones y antes de terminar. No informes cada comando.
+
 Sigue este flujo de implementación, basado en la skill `implement` del usuario:
 - Implementa el trabajo descrito por el issue seleccionado.
 - Usa `/tdd` donde sea posible, en seams ya acordados.
@@ -97,12 +112,12 @@ Sigue este flujo de implementación, basado en la skill `implement` del usuario:
 - Haz commit en la rama actual solo después de la revisión y las validaciones.
 
 Proceso obligatorio:
-1. Ejecuta `gh issue list --repo diego-valdettaro/gestor-planilla-patty --state open --limit 100` y lee con `gh issue view NUMERO --comments` el contenido completo de todos los issues abiertos. Examina también labels, dependencias y el estado del código.
-2. Selecciona el siguiente issue con label `ready-for-agent` que sea implementable. No elijas el épico #1. Respeta dependencias de dominio. Si ninguno es implementable, devuelve outcome `no-issue` o `blocked`, sin modificar archivos.
+1. Lee `docs/ralph-progress.md`. Ejecuta `gh issue list --repo diego-valdettaro/gestor-planilla-patty --state open --limit 100` y lee con `gh issue view NUMERO --comments` el contenido completo de todos los issues abiertos. Examina también labels, dependencias y el estado del código.
+2. Selecciona el siguiente issue con label `ready-for-agent` que sea implementable. No elijas el épico #1. Prioriza dependencias, decisiones arquitectónicas, integraciones y riesgos antes de mejoras cosméticas. Si ninguno es implementable, devuelve outcome `no-issue` o `blocked`, sin modificar archivos.
 3. Antes de cambiar código, lee AGENTS.md, CONTEXT.md y los ADRs relevantes. Usa el vocabulario canónico.
 4. Implementa solo el alcance del issue elegido. Añade o ajusta tests cuando haga falta. No descartes ni modifiques cambios ajenos.
 5. Ejecuta obligatoriamente `pnpm test`, `pnpm typecheck` y `pnpm build` después de la revisión. Corrige los fallos provocados por tu cambio.
-6. Si y solo si los tres comandos pasan, crea un commit único y descriptivo que incluya `(#NUMERO)`.
+6. Si y solo si los tres comandos pasan, añade una entrada concisa a `docs/ralph-progress.md` con issue, decisión relevante, archivos afectados y bloqueos pendientes. Crea un commit único y descriptivo que incluya `(#NUMERO)`.
 
 Condiciones de salida:
 - `completed`: el issue se implementó, los tres comandos pasaron, existe un commit nuevo y el árbol de trabajo está limpio.
@@ -116,8 +131,9 @@ $completed = 0
 Write-LoopHeader "RALPH LOOP"
 Write-Host "Repo:       $(Split-Path -Leaf $repoRoot)"
 Write-Host "GitHub:     autenticado"
-Write-Host "Iteraciones: $(if ($MaxIssues -eq 0) { 'sin límite' } else { $MaxIssues })"
-while ($MaxIssues -eq 0 -or $completed -lt $MaxIssues) {
+Write-Host "Modo:       $(if ($Afk) { 'AFK' } else { 'HITL' })"
+Write-Host "Iteraciones: $MaxIssues"
+while ($completed -lt $MaxIssues) {
   $statusBefore = Get-GitText @("status", "--porcelain")
   if ($statusBefore) { throw "El árbol de trabajo no está limpio. Resuelva o haga commit de estos cambios antes del loop:`n$statusBefore" }
 
@@ -130,6 +146,8 @@ while ($MaxIssues -eq 0 -or $completed -lt $MaxIssues) {
   $resultFile = Join-Path $logRoot "$runId-result.json"
   $eventFile = Join-Path $logRoot "$runId-events.jsonl"
   $iteration = $completed + 1
+  $baseCommit = Get-GitText @("rev-parse", "HEAD")
+  Write-RunState @{ status = "running"; iteration = $iteration; baseCommit = $baseCommit; startedAt = (Get-Date).ToString("o") }
   Write-LoopHeader "Iteración $iteration$(if ($MaxIssues -gt 0) { "/$MaxIssues" })"
   Write-Host "Ejecutando agente..." -ForegroundColor Yellow
   $arguments = @("--sandbox", "danger-full-access", "--ask-for-approval", "never", "exec", "--output-schema", $schema, "--output-last-message", $resultFile, "--json", "--color", "never")
@@ -153,6 +171,11 @@ while ($MaxIssues -eq 0 -or $completed -lt $MaxIssues) {
     if ($event.type -eq "item.completed" -and $event.item.type -eq "command_execution" -and $event.item.exit_code -ne 0) {
       Write-Host "  ! Un comando falló. El agente está revisando y corrigiendo el problema..." -ForegroundColor DarkYellow
     }
+    if ($event.type -eq "item.completed" -and $event.item.type -eq "command_execution" -and $event.item.aggregated_output) {
+      foreach ($status in ([regex]::Matches($event.item.aggregated_output, '(?m)^\[RALPH\]\s*(.+)$'))) {
+        Write-Host "  $($status.Groups[1].Value)" -ForegroundColor White
+      }
+    }
     if ($event.type -eq "item.completed" -and $event.item.type -eq "agent_message") {
       $message = $event.item.text.Trim()
       if ($message -and $message -notmatch '^\{') { Write-Host $message }
@@ -166,6 +189,7 @@ while ($MaxIssues -eq 0 -or $completed -lt $MaxIssues) {
   try { $result = Get-Content -Raw $resultFile | ConvertFrom-Json } catch { throw "El resultado de Codex no es JSON válido. Archivo: $resultFile" }
 
   if ($result.outcome -ne "completed") {
+    Write-RunState @{ status = $result.outcome; iteration = $iteration; baseCommit = $baseCommit; summary = $result.summary; finishedAt = (Get-Date).ToString("o") }
     Write-Host "Loop detenido: $($result.outcome). $($result.summary)"
     break
   }
@@ -187,5 +211,10 @@ while ($MaxIssues -eq 0 -or $completed -lt $MaxIssues) {
   Invoke-External gh @("issue", "comment", "$($result.issue)", "--repo", "diego-valdettaro/gestor-planilla-patty", "--body", "Implementado en $($result.commit). Validado con pnpm test, pnpm typecheck y pnpm build.")
   Invoke-External gh @("issue", "close", "$($result.issue)", "--repo", "diego-valdettaro/gestor-planilla-patty", "--reason", "completed")
   $completed++
+  Write-RunState @{ status = "completed"; iteration = $iteration; baseCommit = $baseCommit; issue = $result.issue; commit = $result.commit; finishedAt = (Get-Date).ToString("o") }
   Write-Host "Issue #$($result.issue) completado en $($result.commit)."
 }
+
+Write-LoopHeader "RESUMEN"
+Write-Host "Vueltas completadas: $completed"
+Write-Host "Estado y logs: $logRoot"
