@@ -1,0 +1,14 @@
+import { redirect } from "next/navigation";
+import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
+import { repositorioDePeriodos } from "@/periodos/servicio";
+import { cerrarPeriodoDesdeFormulario, reabrirPeriodoDesdeFormulario } from "./actions";
+export const dynamic = "force-dynamic";
+export default async function PaginaDePeriodos({ searchParams }: { searchParams: Promise<{ periodoId?: string; sede?: string; idHuellero?: string }> }) {
+  const actor = await obtenerActorActual().catch(() => undefined); if (!actor) redirect("/iniciar-sesion");
+  if (actor.rol !== "administracion" && actor.rol !== "finanzas") return <main className="centrado"><p>No tiene permiso para consultar períodos.</p></main>;
+  const query = await searchParams; const periodos = await repositorioDePeriodos.listar(); const periodo = periodos.find((item) => item.id === query.periodoId) ?? periodos.find((item) => item.estado === "abierto") ?? periodos[0];
+  const resumen = periodo ? await repositorioDePeriodos.listarResumen({ periodoId: periodo.id, sede: query.sede, idHuellero: query.idHuellero }) : [];
+  return <main className="contenido"><header className="encabezado"><div><p className="eyebrow">Administración y Finanzas</p><h1>Resumen del período</h1></div></header>
+    <form className="filtros" method="get"><label>Período<select name="periodoId" defaultValue={periodo?.id}>{periodos.map((item) => <option key={item.id} value={item.id}>{item.inicio} a {item.fin} ({item.estado})</option>)}</select></label><label>Sede<input name="sede" defaultValue={query.sede} /></label><label>Colaborador<input name="idHuellero" defaultValue={query.idHuellero} /></label><button>Filtrar</button>{periodo && <a href={`/api/periodos/${periodo.id}/exportar?sede=${encodeURIComponent(query.sede ?? "")}&idHuellero=${encodeURIComponent(query.idHuellero ?? "")}`}>Exportar XLSX</a>}</form>
+    {periodo ? <section><p>Estado: <strong>{periodo.estado}</strong></p>{periodo.estado === "abierto" ? <form action={cerrarPeriodoDesdeFormulario}><input type="hidden" name="periodoId" value={periodo.id}/><button>Cerrar período</button></form> : <form action={reabrirPeriodoDesdeFormulario} className="filtros"><input type="hidden" name="periodoId" value={periodo.id}/><label>Motivo de reapertura<input name="motivo" required /></label><button>Reabrir período</button></form>}<table><thead><tr><th>Colaborador</th><th>Sede</th><th>Horas trabajadas</th><th>Tardanzas</th><th>Saldo penalizado</th><th>Extras 25%</th><th>Extras 35%</th></tr></thead><tbody>{resumen.map((fila) => <tr key={fila.idHuellero}><td>{fila.nombre} ({fila.idHuellero})</td><td>{fila.sede}</td><td>{(fila.minutosTrabajados / 60).toFixed(2)}</td><td>{fila.cantidadTardanzas}</td><td>{(fila.minutosPenalizados / 60).toFixed(2)}</td><td>{(fila.minutosAl25 / 60).toFixed(2)}</td><td>{(fila.minutosAl35 / 60).toFixed(2)}</td></tr>)}</tbody></table></section> : <p>No hay períodos de planilla.</p>}</main>;
+}

@@ -49,6 +49,17 @@ export const periodosPlanilla = pgTable("periodos_planilla", {
   inicio: date("inicio", { mode: "string" }).notNull(),
   fin: date("fin", { mode: "string" }).notNull(),
   estado: text("estado", { enum: ["abierto", "cerrado"] }).notNull(),
+  cerradoPorId: uuid("cerrado_por_id").references(() => cuentasLocales.id),
+  cerradoEn: timestamp("cerrado_en", { withTimezone: true }),
+});
+
+export const auditoriaPeriodosPlanilla = pgTable("auditoria_periodos_planilla", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  periodoId: uuid("periodo_id").notNull().references(() => periodosPlanilla.id),
+  accion: text("accion", { enum: ["cierre", "reapertura"] }).notNull(),
+  responsableId: uuid("responsable_id").notNull().references(() => cuentasLocales.id),
+  motivo: text("motivo"),
+  registradoEn: timestamp("registrado_en", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const turnosPublicados = pgTable(

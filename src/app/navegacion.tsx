@@ -18,6 +18,7 @@ export function Navegacion({ actor }: { actor?: Actor }) {
       <Link href="/">Planilla Patty</Link>
       {(actor.rol === "operaciones" || actor.rol === "administracion") && <Link href="/turnos">Turnos</Link>}
       {(actor.rol === "administracion" || actor.rol === "finanzas") && <Link href="/asistencias">Asistencias</Link>}
+      {(actor.rol === "administracion" || actor.rol === "finanzas") && <Link href="/periodos">Períodos</Link>}
       <span className="actor-actual">{etiquetasDeRol[actor.rol]}</span>
       <form action={cerrarSesionDesdeFormulario}><button type="submit">Cerrar sesión</button></form>
     </nav>

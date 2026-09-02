@@ -30,4 +30,6 @@ time { color: #475569; font-size: 0.8rem; }
 .turno-borrador input { min-width: 0; padding: 0.25rem; width: 100%; }
 .checkbox { align-items: center; display: flex; gap: 0.35rem; }
 .checkbox input { width: auto; }
+table { background: white; border-collapse: collapse; width: 100%; }
+th, td { border: 1px solid #e2e8f0; padding: 0.6rem; text-align: left; }
 @media (max-width: 700px) { .contenido { padding: 1rem; } .filtros { align-items: stretch; flex-direction: column; } }
