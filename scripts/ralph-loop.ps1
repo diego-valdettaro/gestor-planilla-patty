@@ -99,7 +99,7 @@ while ($MaxIssues -eq 0 -or $completed -lt $MaxIssues) {
   $runId = Get-Date -Format "yyyyMMdd-HHmmss"
   $resultFile = Join-Path $logRoot "$runId-result.json"
   $eventFile = Join-Path $logRoot "$runId-events.jsonl"
-  $arguments = @("exec", "--sandbox", "danger-full-access", "--ask-for-approval", "never", "--output-schema", $schema, "--output-last-message", $resultFile, "--json", "--color", "never")
+  $arguments = @("--sandbox", "danger-full-access", "--ask-for-approval", "never", "exec", "--output-schema", $schema, "--output-last-message", $resultFile, "--json", "--color", "never")
   if ($Model) { $arguments += @("--model", $Model) }
   $arguments += $prompt
 
