@@ -72,6 +72,36 @@ export const auditoriaPeriodosPlanilla = pgTable("auditoria_periodos_planilla", 
   registradoEn: timestamp("registrado_en", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const modelosDeHorario = pgTable(
+  "modelos_de_horario",
+  {
+    id: uuid("id").primaryKey(),
+    sede: text("sede").notNull().references(() => sedes.nombre),
+    nombre: text("nombre").notNull(),
+    entrada: text("entrada").notNull(),
+    salida: text("salida").notNull(),
+    activo: boolean("activo").notNull().default(true),
+    creadoEn: timestamp("creado_en", { withTimezone: true }).notNull().defaultNow(),
+    actualizadoEn: timestamp("actualizado_en", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("modelos_horario_sede_nombre").on(table.sede, table.nombre)],
+);
+
+export const auditoriaDeModelosDeHorario = pgTable("auditoria_modelos_de_horario", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  modeloId: uuid("modelo_id").notNull(),
+  accion: text("accion", { enum: ["creacion", "edicion", "activacion", "desactivacion", "eliminacion"] }).notNull(),
+  modelo: jsonb("modelo").$type<{
+    sede: string;
+    nombre: string;
+    entrada: string;
+    salida: string;
+    activo: boolean;
+  }>().notNull(),
+  responsableId: uuid("responsable_id").notNull().references(() => cuentasLocales.id),
+  registradoEn: timestamp("registrado_en", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const turnosPublicados = pgTable(
   "turnos_publicados",
   {
@@ -81,6 +111,7 @@ export const turnosPublicados = pgTable(
       .references(() => colaboradores.idHuellero),
     fecha: date("fecha", { mode: "string" }).notNull(),
     sede: text("sede").notNull(),
+    modeloHorarioId: uuid("modelo_horario_id").references(() => modelosDeHorario.id),
     entradaProgramada: text("entrada_programada"),
     salidaProgramada: text("salida_programada"),
     descanso: boolean("descanso").notNull(),
@@ -120,6 +151,7 @@ export const celdasDePlanesSemanalesEnBorrador = pgTable(
     idHuellero: text("id_huellero").notNull().references(() => colaboradores.idHuellero),
     fecha: date("fecha", { mode: "string" }).notNull(),
     sede: text("sede").notNull(),
+    modeloHorarioId: uuid("modelo_horario_id").references(() => modelosDeHorario.id),
     entradaProgramada: text("entrada_programada"),
     salidaProgramada: text("salida_programada"),
     descanso: boolean("descanso").notNull(),

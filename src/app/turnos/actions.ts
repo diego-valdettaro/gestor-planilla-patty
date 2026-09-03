@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { crearCasosDeUsoDeTurnos } from "@/turnos/casos-de-uso-servidor";
 import { crearCasosDeUsoDePlanesSemanales } from "@/turnos/casos-de-uso-planes-semanales";
 import { publicarPlanSemanal } from "@/turnos/publicar-plan-semanal";
-import { repositorioDeTurnos } from "@/turnos/servicio";
+import { repositorioDeModelosDeHorario, repositorioDeTurnos } from "@/turnos/servicio";
 import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
 
 export async function publicarTurnoDesdeGrilla(formData: FormData): Promise<void> {
@@ -28,10 +28,12 @@ export async function publicarTurnoDesdeGrilla(formData: FormData): Promise<void
 }
 
 export async function guardarCeldaDelBorrador(formData: FormData): Promise<void> {
-  const datosDelHorario = interpretarHorario(obtenerTexto(formData, "horario"));
+  const sede = obtenerTexto(formData, "sede");
+  const datosDelHorario = await interpretarHorarioParaSede(obtenerTexto(formData, "horario"), sede);
   if (!datosDelHorario) throw new Error("El horario seleccionado no es válido.");
   await casosDeUsoDePlanesSemanales().guardarCelda(obtenerTexto(formData, "planId"), {
-    idHuellero: obtenerTexto(formData, "idHuellero"), fecha: obtenerTexto(formData, "fecha"), sede: obtenerTexto(formData, "sede"),
+    idHuellero: obtenerTexto(formData, "idHuellero"), fecha: obtenerTexto(formData, "fecha"), sede,
+    modeloHorarioId: datosDelHorario.modeloHorarioId,
     entradaProgramada: datosDelHorario.entrada, salidaProgramada: datosDelHorario.salida,
     descanso: datosDelHorario.descanso,
   });
@@ -80,6 +82,16 @@ export async function publicarPlanSemanalDesdeGrilla(formData: FormData): Promis
 
 function casosDeUsoDePlanesSemanales() {
   return crearCasosDeUsoDePlanesSemanales(repositorioDeTurnos, { obtenerActorActual });
+}
+
+async function interpretarHorarioParaSede(valor: string, sede: string): Promise<{ entrada: string | null; salida: string | null; descanso: boolean; modeloHorarioId?: string } | undefined> {
+  if (valor === "descanso") return { entrada: null, salida: null, descanso: true };
+  if (valor.startsWith("modelo:")) {
+    const modelo = await repositorioDeModelosDeHorario.buscarPorId(valor.slice("modelo:".length));
+    if (!modelo || !modelo.activo || modelo.sede !== sede) throw new Error("El modelo de horario seleccionado no es válido.");
+    return { entrada: modelo.entrada, salida: modelo.salida, descanso: false, modeloHorarioId: modelo.id };
+  }
+  return interpretarHorario(valor);
 }
 
 function interpretarHorario(valor: string): { entrada: string | null; salida: string | null; descanso: boolean } | undefined {

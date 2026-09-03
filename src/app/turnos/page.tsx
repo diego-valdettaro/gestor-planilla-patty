@@ -5,7 +5,7 @@ import { crearCasosDeUsoDePlanesSemanales } from "@/turnos/casos-de-uso-planes-s
 import { crearConsultaSemanalPorEquipo } from "@/turnos/consulta-semanal-por-equipo";
 import { revisarPlanSemanal } from "@/turnos/publicar-plan-semanal";
 import { diasDeLaSemana, desplazarFecha, inicioDeSemana } from "@/turnos/semana";
-import { repositorioDeTurnos } from "@/turnos/servicio";
+import { repositorioDeModelosDeHorario, repositorioDeTurnos } from "@/turnos/servicio";
 
 import {
   aplicarHorarioEnLoteAlBorrador,
@@ -48,6 +48,10 @@ export default async function PaginaDeTurnos({ searchParams }: PropiedadesDePagi
     dias.at(-1)!,
   );
   const grupos = crearConsultaSemanalPorEquipo({ dias, colaboradores, turnos });
+  const modelosPorSede = new Map(await Promise.all(grupos.map(async (grupo) => [
+    grupo.sede,
+    await repositorioDeModelosDeHorario.listarPorSede(grupo.sede),
+  ] as const)));
   const plan = equipo
     ? await crearCasosDeUsoDePlanesSemanales(repositorioDeTurnos, { obtenerActorActual }).obtenerOCrear(semana, equipo)
     : undefined;
@@ -100,7 +104,7 @@ export default async function PaginaDeTurnos({ searchParams }: PropiedadesDePagi
                 {dias.map((fecha) => {
                   const celdaDelBorrador = celdas.get(`${colaborador.idHuellero}:${fecha}`);
                   const turnoPublicado = turnos.find((turno) => turno.idHuellero === colaborador.idHuellero && turno.fecha === fecha);
-                  const horario = celdaDelBorrador?.descanso ? "descanso" : celdaDelBorrador ? `${celdaDelBorrador.entradaProgramada}|${celdaDelBorrador.salidaProgramada}` : "";
+                  const horario = celdaDelBorrador?.descanso ? "descanso" : celdaDelBorrador?.modeloHorarioId ? `modelo:${celdaDelBorrador.modeloHorarioId}` : celdaDelBorrador ? `${celdaDelBorrador.entradaProgramada}|${celdaDelBorrador.salidaProgramada}` : "";
                   const estado = turnoPublicado ? "publicado" : celdaDelBorrador?.descanso ? "descanso" : celdaDelBorrador ? "borrador" : "sin-definir";
                   const errores = erroresPorCelda.get(`${colaborador.idHuellero}:${fecha}`) ?? [];
 
@@ -113,7 +117,7 @@ export default async function PaginaDeTurnos({ searchParams }: PropiedadesDePagi
                       <input name="fecha" type="hidden" value={fecha} />
                       <input name="sede" type="hidden" value={grupo.sede} />
                       <label className="seleccionar-celda"><input form="aplicar-horario-en-lote" name="celda" type="checkbox" value={JSON.stringify({ idHuellero: colaborador.idHuellero, fecha, sede: grupo.sede })} /><span className="sr-only">Seleccionar {colaborador.nombre}, {fecha}</span></label>
-                      <select aria-label={`Horario de ${colaborador.nombre} para ${fecha}`} defaultValue={horario} name="horario"><option value="">Sin definir</option>{opcionesDeHorario.map((opcion) => <option key={opcion.valor} value={opcion.valor}>{opcion.etiqueta}</option>)}</select>
+                      <select aria-label={`Horario de ${colaborador.nombre} para ${fecha}`} defaultValue={horario} name="horario"><option value="">Sin definir</option>{modelosPorSede.get(grupo.sede)?.filter((modelo) => modelo.activo).map((modelo) => <option key={modelo.id} value={`modelo:${modelo.id}`}>{modelo.nombre} · {modelo.entrada} a {modelo.salida}</option>)}{opcionesDeHorario.map((opcion) => <option key={opcion.valor} value={opcion.valor}>{opcion.etiqueta}</option>)}</select>
                       <button className="guardar-celda" type="submit">Guardar</button>
                       {celdaDelBorrador && <button className="borrar-celda" formAction={borrarCeldaDelBorrador} type="submit">Borrar</button>}
                       {errores.map(({ mensaje }) => <small key={mensaje} role="alert">{mensaje}</small>)}

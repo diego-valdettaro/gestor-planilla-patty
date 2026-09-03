@@ -11,7 +11,8 @@ import { sedes } from "@/db/schema";
 import { crearCasosDeUsoDeTardanzas } from "@/tardanzas/casos-de-uso-servidor";
 import { repositorioDeTardanzas } from "@/tardanzas/servicio";
 import { asignarEquipoOperativo } from "@/turnos/configurar-equipos-operativos";
-import { repositorioDeTurnos } from "@/turnos/servicio";
+import { crearModeloDeHorario, eliminarModeloDeHorario, guardarModeloDeHorario } from "@/turnos/gestionar-modelos-de-horario";
+import { repositorioDeModelosDeHorario, repositorioDeTurnos } from "@/turnos/servicio";
 
 export async function guardarSede(formData: FormData): Promise<void> {
   await exigirAdministracion();
@@ -83,6 +84,37 @@ export async function guardarPoliticaDeTardanzas(formData: FormData): Promise<vo
     vigenteDesde: texto(formData, "vigenteDesde"),
   });
   revalidatePath("/configuracion");
+}
+
+export async function crearModeloHorario(formData: FormData): Promise<void> {
+  await crearModeloDeHorario(repositorioDeModelosDeHorario, await obtenerActorActual(), {
+    id: crypto.randomUUID(),
+    sede: texto(formData, "sede"),
+    nombre: texto(formData, "nombre"),
+    entrada: texto(formData, "entrada"),
+    salida: texto(formData, "salida"),
+  });
+  revalidatePath("/configuracion");
+  revalidatePath("/turnos");
+}
+
+export async function guardarModeloHorario(formData: FormData): Promise<void> {
+  await guardarModeloDeHorario(repositorioDeModelosDeHorario, await obtenerActorActual(), {
+    id: texto(formData, "id"),
+    sede: texto(formData, "sede"),
+    nombre: texto(formData, "nombre"),
+    entrada: texto(formData, "entrada"),
+    salida: texto(formData, "salida"),
+    activo: formData.get("activo") === "true",
+  });
+  revalidatePath("/configuracion");
+  revalidatePath("/turnos");
+}
+
+export async function eliminarModeloHorario(formData: FormData): Promise<void> {
+  await eliminarModeloDeHorario(repositorioDeModelosDeHorario, await obtenerActorActual(), texto(formData, "id"));
+  revalidatePath("/configuracion");
+  revalidatePath("/turnos");
 }
 
 async function exigirAdministracion(): Promise<void> {

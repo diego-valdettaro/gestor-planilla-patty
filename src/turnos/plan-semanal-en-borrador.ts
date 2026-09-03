@@ -5,6 +5,7 @@ export interface CeldaDePlanSemanalEnBorrador {
   idHuellero: string;
   fecha: string;
   sede: string;
+  modeloHorarioId?: string | null;
   entradaProgramada: string | null;
   salidaProgramada: string | null;
   descanso: boolean;
@@ -21,6 +22,7 @@ export interface HorarioSemanalParaCopiar {
   idHuellero: string;
   fecha: string;
   sede: string;
+  modeloHorarioId?: string | null;
   entradaProgramada: string | null;
   salidaProgramada: string | null;
   descanso: boolean;
@@ -33,6 +35,7 @@ export interface RepositorioDePlanesSemanales {
   guardarCeldas(celdas: CeldaDePlanSemanalEnBorrador[]): Promise<void>;
   borrarCelda(planId: string, idHuellero: string, fecha: string): Promise<void>;
   colaboradorPerteneceAEquipo(idHuellero: string, equipo: EquipoOperativo): Promise<boolean>;
+  obtenerSedeDelColaborador(idHuellero: string): Promise<string | undefined>;
   buscarPublicado(idHuellero: string, fecha: string): Promise<HorarioSemanalParaCopiar | undefined>;
   listarHorariosPublicadosDelEquipoEnSemana(semana: string, equipo: EquipoOperativo): Promise<HorarioSemanalParaCopiar[]>;
 }

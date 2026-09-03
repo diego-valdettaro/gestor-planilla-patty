@@ -1,5 +1,7 @@
 # Progreso de Ralph
 
+- #17: modelos de horario por sede administrables por Operaciones y Administración, auditados en PostgreSQL y seleccionables solo para la sede real del colaborador; añade esquema, migración, configuración y persistencia en planes/horarios. Afecta `src/turnos`, Configuración y migración 0013; las pruebas de integración PostgreSQL siguen condicionadas a `TEST_DATABASE_URL`.
+
 - #16: elimina minutos de almuerzo de contratos, UI, persistencia e instantáneas; la migración 0012 limpia instantáneas y normaliza descansos a horarios sin horas. Afecta `src/turnos`, `src/asistencias`, esquema y migraciones; las pruebas de integración PostgreSQL siguen condicionadas a `TEST_DATABASE_URL`.
 
 - #10: las jornadas con Horario semanal publicado se muestran solo en consulta y el servidor rechaza guardar, borrar, aplicar en lote o copiar sobre sus celdas de borrador. Afecta `src/turnos` y la grilla de horarios; las pruebas de integración PostgreSQL siguen condicionadas a `TEST_DATABASE_URL`.

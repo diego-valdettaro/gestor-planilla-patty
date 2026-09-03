@@ -13,6 +13,7 @@ function crearRepositorio(plan: PlanSemanalEnBorrador) {
     guardarCeldas: async () => undefined,
     borrarCelda: async () => undefined,
     colaboradorPerteneceAEquipo: async (id) => id === "HU-1" || id === "HU-2",
+    obtenerSedeDelColaborador: async (id) => id === "HU-1" || id === "HU-2" ? "Lima" : undefined,
     listarHorariosPublicadosDelEquipoEnSemana: async () => [],
     buscarPublicado: async (id, fecha) => publicados.find((turno) => turno.idHuellero === id && turno.fecha === fecha),
     publicar: async (turno) => { publicados.push(turno); },

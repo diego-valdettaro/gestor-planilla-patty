@@ -31,6 +31,7 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
         idHuellero: turnosPublicados.idHuellero,
         fecha: turnosPublicados.fecha,
         sede: turnosPublicados.sede,
+        modeloHorarioId: turnosPublicados.modeloHorarioId,
         entradaProgramada: turnosPublicados.entradaProgramada,
         salidaProgramada: turnosPublicados.salidaProgramada,
         descanso: turnosPublicados.descanso,
@@ -137,6 +138,7 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
         idHuellero: turnosPublicados.idHuellero,
         fecha: turnosPublicados.fecha,
         sede: turnosPublicados.sede,
+        modeloHorarioId: turnosPublicados.modeloHorarioId,
         entradaProgramada: turnosPublicados.entradaProgramada,
         salidaProgramada: turnosPublicados.salidaProgramada,
         descanso: turnosPublicados.descanso,
@@ -183,6 +185,7 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
         idHuellero: turnosPublicados.idHuellero,
         fecha: turnosPublicados.fecha,
         sede: turnosPublicados.sede,
+        modeloHorarioId: turnosPublicados.modeloHorarioId,
         entradaProgramada: turnosPublicados.entradaProgramada,
         salidaProgramada: turnosPublicados.salidaProgramada,
         descanso: turnosPublicados.descanso,
@@ -206,6 +209,7 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
       idHuellero: turnosPublicados.idHuellero,
       fecha: turnosPublicados.fecha,
       sede: turnosPublicados.sede,
+      modeloHorarioId: turnosPublicados.modeloHorarioId,
       entradaProgramada: turnosPublicados.entradaProgramada,
       salidaProgramada: turnosPublicados.salidaProgramada,
       descanso: turnosPublicados.descanso,
@@ -244,6 +248,7 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
           ],
           set: {
             sede: celda.sede,
+            modeloHorarioId: celda.modeloHorarioId,
             entradaProgramada: celda.entradaProgramada,
             salidaProgramada: celda.salidaProgramada,
             descanso: celda.descanso,
@@ -268,6 +273,12 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
     return Boolean(colaborador);
   }
 
+  async obtenerSedeDelColaborador(idHuellero: string): Promise<string | undefined> {
+    const [colaborador] = await this.db.select({ sede: colaboradores.sede }).from(colaboradores)
+      .where(eq(colaboradores.idHuellero, idHuellero));
+    return colaborador?.sede;
+  }
+
   async listarHorariosPublicadosDelEquipoEnSemana(semana: string, equipo: EquipoOperativo): Promise<
     Array<Omit<CeldaDePlanSemanalEnBorrador, "planId">>
   > {
@@ -275,6 +286,7 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
       idHuellero: turnosPublicados.idHuellero,
       fecha: turnosPublicados.fecha,
       sede: turnosPublicados.sede,
+      modeloHorarioId: turnosPublicados.modeloHorarioId,
       entradaProgramada: turnosPublicados.entradaProgramada,
       salidaProgramada: turnosPublicados.salidaProgramada,
       descanso: turnosPublicados.descanso,
@@ -296,6 +308,7 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
       idHuellero: celdasDePlanesSemanalesEnBorrador.idHuellero,
       fecha: celdasDePlanesSemanalesEnBorrador.fecha,
       sede: celdasDePlanesSemanalesEnBorrador.sede,
+      modeloHorarioId: celdasDePlanesSemanalesEnBorrador.modeloHorarioId,
       entradaProgramada: celdasDePlanesSemanalesEnBorrador.entradaProgramada,
       salidaProgramada: celdasDePlanesSemanalesEnBorrador.salidaProgramada,
       descanso: celdasDePlanesSemanalesEnBorrador.descanso,
