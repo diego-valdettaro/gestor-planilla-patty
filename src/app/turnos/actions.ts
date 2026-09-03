@@ -11,11 +11,6 @@ import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
 export async function publicarTurnoDesdeGrilla(formData: FormData): Promise<void> {
   const horario = formData.get("horario");
   const datosDelHorario = typeof horario === "string" ? interpretarHorario(horario) : undefined;
-  const minutosDeAlmuerzo = datosDelHorario?.minutosDeAlmuerzo ?? Number(obtenerTexto(formData, "minutosDeAlmuerzo"));
-
-  if (!Number.isInteger(minutosDeAlmuerzo) || minutosDeAlmuerzo < 0) {
-    throw new Error("Los minutos de almuerzo deben ser un número entero mayor o igual que cero.");
-  }
 
   const casosDeUso = crearCasosDeUsoDeTurnos(repositorioDeTurnos, {
     obtenerActorActual,
@@ -26,7 +21,6 @@ export async function publicarTurnoDesdeGrilla(formData: FormData): Promise<void
     sede: obtenerTexto(formData, "sede"),
     entradaProgramada: datosDelHorario?.entrada ?? obtenerTexto(formData, "entradaProgramada"),
     salidaProgramada: datosDelHorario?.salida ?? obtenerTexto(formData, "salidaProgramada"),
-    minutosDeAlmuerzo,
     descanso: datosDelHorario?.descanso ?? formData.get("descanso") === "on",
   });
 
@@ -39,7 +33,7 @@ export async function guardarCeldaDelBorrador(formData: FormData): Promise<void>
   await casosDeUsoDePlanesSemanales().guardarCelda(obtenerTexto(formData, "planId"), {
     idHuellero: obtenerTexto(formData, "idHuellero"), fecha: obtenerTexto(formData, "fecha"), sede: obtenerTexto(formData, "sede"),
     entradaProgramada: datosDelHorario.entrada, salidaProgramada: datosDelHorario.salida,
-    minutosDeAlmuerzo: datosDelHorario.minutosDeAlmuerzo, descanso: datosDelHorario.descanso,
+    descanso: datosDelHorario.descanso,
   });
   revalidatePath("/turnos");
 }
@@ -71,7 +65,6 @@ export async function aplicarHorarioEnLoteAlBorrador(formData: FormData): Promis
   await casosDeUsoDePlanesSemanales().aplicarHorarioACeldas(obtenerTexto(formData, "planId"), seleccion, {
     entradaProgramada: datosDelHorario.entrada,
     salidaProgramada: datosDelHorario.salida,
-    minutosDeAlmuerzo: datosDelHorario.minutosDeAlmuerzo,
     descanso: datosDelHorario.descanso,
   });
   revalidatePath("/turnos");
@@ -89,13 +82,11 @@ function casosDeUsoDePlanesSemanales() {
   return crearCasosDeUsoDePlanesSemanales(repositorioDeTurnos, { obtenerActorActual });
 }
 
-function interpretarHorario(valor: string): { entrada: string; salida: string; minutosDeAlmuerzo: number; descanso: boolean } | undefined {
-  if (valor === "descanso") return { entrada: "00:00", salida: "00:00", minutosDeAlmuerzo: 0, descanso: true };
-  const [entrada, salida, minutos] = valor.split("|");
-  if (!entrada || !salida || !minutos || !/^\d{2}:\d{2}$/.test(entrada) || !/^\d{2}:\d{2}$/.test(salida)) throw new Error("El horario seleccionado no es válido.");
-  const minutosDeAlmuerzo = Number(minutos);
-  if (!Number.isInteger(minutosDeAlmuerzo) || minutosDeAlmuerzo < 0) throw new Error("El horario seleccionado no es válido.");
-  return { entrada, salida, minutosDeAlmuerzo, descanso: false };
+function interpretarHorario(valor: string): { entrada: string | null; salida: string | null; descanso: boolean } | undefined {
+  if (valor === "descanso") return { entrada: null, salida: null, descanso: true };
+  const [entrada, salida] = valor.split("|");
+  if (!entrada || !salida || !/^\d{2}:\d{2}$/.test(entrada) || !/^\d{2}:\d{2}$/.test(salida)) throw new Error("El horario seleccionado no es válido.");
+  return { entrada, salida, descanso: false };
 }
 
 function obtenerTexto(formData: FormData, nombre: string): string {

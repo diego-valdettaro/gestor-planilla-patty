@@ -81,9 +81,8 @@ export const turnosPublicados = pgTable(
       .references(() => colaboradores.idHuellero),
     fecha: date("fecha", { mode: "string" }).notNull(),
     sede: text("sede").notNull(),
-    entradaProgramada: text("entrada_programada").notNull(),
-    salidaProgramada: text("salida_programada").notNull(),
-    minutosDeAlmuerzo: integer("minutos_de_almuerzo").notNull(),
+    entradaProgramada: text("entrada_programada"),
+    salidaProgramada: text("salida_programada"),
     descanso: boolean("descanso").notNull(),
     publicadoEn: timestamp("publicado_en", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -121,9 +120,8 @@ export const celdasDePlanesSemanalesEnBorrador = pgTable(
     idHuellero: text("id_huellero").notNull().references(() => colaboradores.idHuellero),
     fecha: date("fecha", { mode: "string" }).notNull(),
     sede: text("sede").notNull(),
-    entradaProgramada: text("entrada_programada").notNull(),
-    salidaProgramada: text("salida_programada").notNull(),
-    minutosDeAlmuerzo: integer("minutos_de_almuerzo").notNull(),
+    entradaProgramada: text("entrada_programada"),
+    salidaProgramada: text("salida_programada"),
     descanso: boolean("descanso").notNull(),
   },
   (table) => [uniqueIndex("celdas_borrador_plan_colaborador_fecha").on(table.planId, table.idHuellero, table.fecha)],
@@ -145,9 +143,8 @@ export const asistenciasEsperadas = pgTable(
     minutosTrabajados: integer("minutos_trabajados"),
     instantaneaDeTurno: jsonb("instantanea_de_turno").$type<{
       sede: string;
-      entradaProgramada: string;
-      salidaProgramada: string;
-      minutosDeAlmuerzo: number;
+      entradaProgramada: string | null;
+      salidaProgramada: string | null;
       descanso: boolean;
     }>(),
     confirmadoPorId: uuid("confirmado_por_id").references(() => cuentasLocales.id),

@@ -33,7 +33,7 @@ function crearRepositorioEnMemoria(): {
       colaboradorPerteneceAEquipo: async (idHuellero, equipo) => idHuellero === "HU-1024" && equipo === "tiendas",
       listarHorariosPublicadosDelEquipoEnSemana: async () => [{
         idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima",
-        entradaProgramada: "09:00", salidaProgramada: "18:00", minutosDeAlmuerzo: 60, descanso: false,
+        entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false,
       }],
     },
   };
@@ -49,7 +49,7 @@ describe("casos de uso de planes semanales en borrador", () => {
     const plan = await casosDeUso.obtenerOCrear("2026-08-31", "tiendas");
     await casosDeUso.guardarCelda(plan.id, {
       idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima",
-      entradaProgramada: "09:00", salidaProgramada: "18:00", minutosDeAlmuerzo: 60, descanso: false,
+      entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false,
     });
 
     const recuperado = await casosDeUso.obtenerOCrear("2026-08-31", "tiendas");
@@ -67,7 +67,7 @@ describe("casos de uso de planes semanales en borrador", () => {
 
     await casosDeUso.guardarCelda(plan.id, {
       idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima",
-      entradaProgramada: "00:00", salidaProgramada: "00:00", minutosDeAlmuerzo: 0, descanso: true,
+      entradaProgramada: null, salidaProgramada: null, descanso: true,
     });
     await casosDeUso.borrarCelda(plan.id, "HU-1024", "2026-09-01");
 
@@ -100,7 +100,7 @@ describe("casos de uso de planes semanales en borrador", () => {
     await casosDeUso.aplicarHorarioACeldas(plan.id, [
       { idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima" },
       { idHuellero: "HU-1024", fecha: "2026-09-02", sede: "Lima" },
-    ], { entradaProgramada: "00:00", salidaProgramada: "00:00", minutosDeAlmuerzo: 0, descanso: true });
+    ], { entradaProgramada: null, salidaProgramada: null, descanso: true });
 
     expect((await casosDeUso.obtenerOCrear("2026-08-31", "tiendas")).celdas).toEqual([
       expect.objectContaining({ fecha: "2026-09-01", descanso: true }),
@@ -123,7 +123,7 @@ describe("casos de uso de planes semanales en borrador", () => {
       obtenerActorActual: async () => ({ id: "administracion-1", rol: "administracion" }),
     });
     const plan = await administracion.obtenerOCrear("2026-08-31", "tiendas");
-    const celda = { idHuellero: "HU-1024", fecha: "2026-09-07", sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", minutosDeAlmuerzo: 60, descanso: false };
+    const celda = { idHuellero: "HU-1024", fecha: "2026-09-07", sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false };
 
     await expect(administracion.guardarCelda(plan.id, celda)).rejects.toThrow("La fecha no pertenece a la semana del plan.");
     await expect(administracion.guardarCelda(plan.id, { ...celda, fecha: "2026-09-01", idHuellero: "HU-9999" })).rejects.toThrow("El colaborador no pertenece al equipo operativo del plan.");
@@ -134,13 +134,13 @@ describe("casos de uso de planes semanales en borrador", () => {
   it("impide modificar en el borrador una jornada que ya tiene un horario semanal publicado", async () => {
     const { repositorio } = crearRepositorioEnMemoria();
     repositorio.buscarPublicado = async (idHuellero, fecha) => idHuellero === "HU-1024" && fecha === "2026-09-01"
-      ? { idHuellero, fecha, sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", minutosDeAlmuerzo: 60, descanso: false }
+      ? { idHuellero, fecha, sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false }
       : undefined;
     const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio, {
       obtenerActorActual: async () => ({ id: "operaciones-1", rol: "operaciones" }),
     });
     const plan = await casosDeUso.obtenerOCrear("2026-08-31", "tiendas");
-    const celda = { idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima", entradaProgramada: "10:00", salidaProgramada: "19:00", minutosDeAlmuerzo: 60, descanso: false };
+    const celda = { idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima", entradaProgramada: "10:00", salidaProgramada: "19:00", descanso: false };
 
     await expect(casosDeUso.guardarCelda(plan.id, celda)).rejects.toThrow("El horario semanal ya fue publicado y no se puede editar desde el borrador.");
     await expect(casosDeUso.aplicarHorarioACeldas(plan.id, [celda], celda)).rejects.toThrow("El horario semanal ya fue publicado y no se puede editar desde el borrador.");
@@ -150,7 +150,7 @@ describe("casos de uso de planes semanales en borrador", () => {
   it("no copia la semana anterior sobre una jornada ya publicada", async () => {
     const { repositorio } = crearRepositorioEnMemoria();
     repositorio.buscarPublicado = async (idHuellero, fecha) => idHuellero === "HU-1024" && fecha === "2026-09-08"
-      ? { idHuellero, fecha, sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", minutosDeAlmuerzo: 60, descanso: false }
+      ? { idHuellero, fecha, sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false }
       : undefined;
     const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio, {
       obtenerActorActual: async () => ({ id: "operaciones-1", rol: "operaciones" }),

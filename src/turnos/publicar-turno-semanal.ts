@@ -4,9 +4,8 @@ export interface TurnoPublicado {
   idHuellero: string;
   fecha: string;
   sede: string;
-  entradaProgramada: string;
-  salidaProgramada: string;
-  minutosDeAlmuerzo: number;
+  entradaProgramada: string | null;
+  salidaProgramada: string | null;
   descanso: boolean;
 }
 

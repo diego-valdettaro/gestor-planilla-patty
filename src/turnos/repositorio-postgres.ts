@@ -33,7 +33,6 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
         sede: turnosPublicados.sede,
         entradaProgramada: turnosPublicados.entradaProgramada,
         salidaProgramada: turnosPublicados.salidaProgramada,
-        minutosDeAlmuerzo: turnosPublicados.minutosDeAlmuerzo,
         descanso: turnosPublicados.descanso,
       })
       .from(turnosPublicados)
@@ -140,7 +139,6 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
         sede: turnosPublicados.sede,
         entradaProgramada: turnosPublicados.entradaProgramada,
         salidaProgramada: turnosPublicados.salidaProgramada,
-        minutosDeAlmuerzo: turnosPublicados.minutosDeAlmuerzo,
         descanso: turnosPublicados.descanso,
       })
       .from(turnosPublicados)
@@ -187,7 +185,6 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
         sede: turnosPublicados.sede,
         entradaProgramada: turnosPublicados.entradaProgramada,
         salidaProgramada: turnosPublicados.salidaProgramada,
-        minutosDeAlmuerzo: turnosPublicados.minutosDeAlmuerzo,
         descanso: turnosPublicados.descanso,
       })
       .from(turnosPublicados)
@@ -211,7 +208,6 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
       sede: turnosPublicados.sede,
       entradaProgramada: turnosPublicados.entradaProgramada,
       salidaProgramada: turnosPublicados.salidaProgramada,
-      minutosDeAlmuerzo: turnosPublicados.minutosDeAlmuerzo,
       descanso: turnosPublicados.descanso,
     }).from(turnosPublicados).where(and(
       eq(turnosPublicados.idHuellero, idHuellero),
@@ -250,7 +246,6 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
             sede: celda.sede,
             entradaProgramada: celda.entradaProgramada,
             salidaProgramada: celda.salidaProgramada,
-            minutosDeAlmuerzo: celda.minutosDeAlmuerzo,
             descanso: celda.descanso,
           },
         });
@@ -282,7 +277,6 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
       sede: turnosPublicados.sede,
       entradaProgramada: turnosPublicados.entradaProgramada,
       salidaProgramada: turnosPublicados.salidaProgramada,
-      minutosDeAlmuerzo: turnosPublicados.minutosDeAlmuerzo,
       descanso: turnosPublicados.descanso,
     }).from(turnosPublicados)
       .innerJoin(colaboradores, eq(turnosPublicados.idHuellero, colaboradores.idHuellero))
@@ -304,7 +298,6 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
       sede: celdasDePlanesSemanalesEnBorrador.sede,
       entradaProgramada: celdasDePlanesSemanalesEnBorrador.entradaProgramada,
       salidaProgramada: celdasDePlanesSemanalesEnBorrador.salidaProgramada,
-      minutosDeAlmuerzo: celdasDePlanesSemanalesEnBorrador.minutosDeAlmuerzo,
       descanso: celdasDePlanesSemanalesEnBorrador.descanso,
     }).from(celdasDePlanesSemanalesEnBorrador).where(eq(celdasDePlanesSemanalesEnBorrador.planId, plan.id));
     return { ...plan, celdas };

@@ -1,5 +1,7 @@
 # Progreso de Ralph
 
+- #16: elimina minutos de almuerzo de contratos, UI, persistencia e instantáneas; la migración 0012 limpia instantáneas y normaliza descansos a horarios sin horas. Afecta `src/turnos`, `src/asistencias`, esquema y migraciones; las pruebas de integración PostgreSQL siguen condicionadas a `TEST_DATABASE_URL`.
+
 - #10: las jornadas con Horario semanal publicado se muestran solo en consulta y el servidor rechaza guardar, borrar, aplicar en lote o copiar sobre sus celdas de borrador. Afecta `src/turnos` y la grilla de horarios; las pruebas de integración PostgreSQL siguen condicionadas a `TEST_DATABASE_URL`.
 
 - #13: copia los horarios semanales publicados de la semana previa al plan semanal en borrador y aplica horario o descanso solo a celdas seleccionadas; las escrituras en lote son atómicas en PostgreSQL. Afecta `src/turnos` y la grilla de horarios; las pruebas de integración PostgreSQL siguen condicionadas a `TEST_DATABASE_URL`.

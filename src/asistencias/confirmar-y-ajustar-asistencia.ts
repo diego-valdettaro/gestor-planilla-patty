@@ -5,9 +5,8 @@ import { calcularHoraExtra, type EstadoDeHoraExtra, type HoraExtraCalculada } fr
 
 export interface InstantaneaDeTurno {
   sede: string;
-  entradaProgramada: string;
-  salidaProgramada: string;
-  minutosDeAlmuerzo: number;
+  entradaProgramada: string | null;
+  salidaProgramada: string | null;
   descanso: boolean;
 }
 
@@ -82,6 +81,7 @@ export async function confirmarAsistencia(
   autorizarRevision(actor);
   const turno = await repositorio.buscarTurnoPublicado(solicitud.idHuellero, solicitud.fecha);
   if (!turno) throw new Error("No existe un turno publicado para confirmar esta asistencia.");
+  if (turno.descanso || !turno.entradaProgramada || !turno.salidaProgramada) throw new Error("Un descanso no puede confirmarse como asistencia.");
   const tardanza = await calcularTardanza(repositorio, {
     idHuellero: solicitud.idHuellero, sede: turno.sede, fecha: solicitud.fecha,
     entradaProgramada: turno.entradaProgramada, entradaReal: solicitud.entradaReal,
@@ -93,7 +93,6 @@ export async function confirmarAsistencia(
       sede: turno.sede,
       entradaProgramada: turno.entradaProgramada,
       salidaProgramada: turno.salidaProgramada,
-      minutosDeAlmuerzo: turno.minutosDeAlmuerzo,
       descanso: turno.descanso,
     },
     confirmadoPorId: actor.id,
@@ -112,6 +111,7 @@ export async function ajustarAsistencia(
   if (!solicitud.motivo.trim()) throw new Error("El ajuste de asistencia requiere un motivo.");
   const instantaneaDeTurno = await repositorio.buscarInstantaneaDeTurno(solicitud.idHuellero, solicitud.fecha);
   if (!instantaneaDeTurno) throw new Error("La asistencia debe estar confirmada para ajustarla.");
+  if (instantaneaDeTurno.descanso || !instantaneaDeTurno.salidaProgramada) throw new Error("Un descanso no puede ajustarse como asistencia.");
   await repositorio.ajustar({
     ...solicitud,
     motivo: solicitud.motivo.trim(),

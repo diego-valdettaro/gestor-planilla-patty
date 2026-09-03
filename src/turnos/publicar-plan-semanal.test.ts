@@ -25,7 +25,7 @@ function crearRepositorio(plan: PlanSemanalEnBorrador) {
 function celdasDeSemana(idHuellero: string): CeldaDePlanSemanalEnBorrador[] {
   return Array.from({ length: 7 }, (_, indice) => ({
     planId: "plan-1", idHuellero, fecha: new Date(Date.UTC(2026, 7, 31 + indice)).toISOString().slice(0, 10),
-    sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", minutosDeAlmuerzo: 60, descanso: false,
+    sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false,
   }));
 }
 

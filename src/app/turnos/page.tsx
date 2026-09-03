@@ -23,9 +23,9 @@ interface PropiedadesDePagina {
 
 const etiquetasDeEquipo = { tiendas: "Tiendas", taller: "Taller" };
 const opcionesDeHorario = [
-  { valor: "09:00|18:00|60", etiqueta: "09:00 a 18:00, 60 min de almuerzo" },
-  { valor: "10:00|19:00|60", etiqueta: "10:00 a 19:00, 60 min de almuerzo" },
-  { valor: "08:00|17:00|60", etiqueta: "08:00 a 17:00, 60 min de almuerzo" },
+  { valor: "09:00|18:00", etiqueta: "09:00 a 18:00" },
+  { valor: "10:00|19:00", etiqueta: "10:00 a 19:00" },
+  { valor: "08:00|17:00", etiqueta: "08:00 a 17:00" },
   { valor: "descanso", etiqueta: "Descanso" },
 ];
 
@@ -100,7 +100,7 @@ export default async function PaginaDeTurnos({ searchParams }: PropiedadesDePagi
                 {dias.map((fecha) => {
                   const celdaDelBorrador = celdas.get(`${colaborador.idHuellero}:${fecha}`);
                   const turnoPublicado = turnos.find((turno) => turno.idHuellero === colaborador.idHuellero && turno.fecha === fecha);
-                  const horario = celdaDelBorrador?.descanso ? "descanso" : celdaDelBorrador ? `${celdaDelBorrador.entradaProgramada}|${celdaDelBorrador.salidaProgramada}|${celdaDelBorrador.minutosDeAlmuerzo}` : "";
+                  const horario = celdaDelBorrador?.descanso ? "descanso" : celdaDelBorrador ? `${celdaDelBorrador.entradaProgramada}|${celdaDelBorrador.salidaProgramada}` : "";
                   const estado = turnoPublicado ? "publicado" : celdaDelBorrador?.descanso ? "descanso" : celdaDelBorrador ? "borrador" : "sin-definir";
                   const errores = erroresPorCelda.get(`${colaborador.idHuellero}:${fecha}`) ?? [];
 

@@ -80,12 +80,13 @@ async function validarPersona(
 }
 
 function esHorarioValido(turno: TurnoPublicado): boolean {
+  if (turno.descanso) return turno.entradaProgramada === null && turno.salidaProgramada === null;
   return Boolean(turno.sede.trim())
-    && Number.isInteger(turno.minutosDeAlmuerzo) && turno.minutosDeAlmuerzo >= 0
     && esHoraValida(turno.entradaProgramada) && esHoraValida(turno.salidaProgramada);
 }
 
-function esHoraValida(hora: string): boolean {
+function esHoraValida(hora: string | null): boolean {
+  if (!hora) return false;
   const partes = /^(\d{2}):(\d{2})$/.exec(hora);
   return Boolean(partes && Number(partes[1]) < 24 && Number(partes[2]) < 60);
 }

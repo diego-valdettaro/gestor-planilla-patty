@@ -5,7 +5,7 @@ import type { CeldaDePlanSemanalEnBorrador, PlanSemanalEnBorrador, RepositorioDe
 import { desplazarFecha } from "./semana";
 
 type SeleccionDeCelda = Pick<CeldaDePlanSemanalEnBorrador, "idHuellero" | "fecha" | "sede">;
-type HorarioParaAplicar = Pick<CeldaDePlanSemanalEnBorrador, "entradaProgramada" | "salidaProgramada" | "minutosDeAlmuerzo" | "descanso">;
+type HorarioParaAplicar = Pick<CeldaDePlanSemanalEnBorrador, "entradaProgramada" | "salidaProgramada" | "descanso">;
 
 export function crearCasosDeUsoDePlanesSemanales(
   repositorio: RepositorioDePlanesSemanales,
@@ -91,8 +91,11 @@ async function obtenerPlan(repositorio: RepositorioDePlanesSemanales, id: string
 function validarCelda(plan: PlanSemanalEnBorrador, celda: Omit<CeldaDePlanSemanalEnBorrador, "planId">): void {
   if (!fechaPerteneceALaSemana(celda.fecha, plan.semana)) throw new Error("La fecha no pertenece a la semana del plan.");
   if (!celda.sede.trim()) throw new Error("La sede es obligatoria.");
-  if (!Number.isInteger(celda.minutosDeAlmuerzo) || celda.minutosDeAlmuerzo < 0) throw new Error("Los minutos de almuerzo no son válidos.");
-  if (!/^\d{2}:\d{2}$/.test(celda.entradaProgramada) || !/^\d{2}:\d{2}$/.test(celda.salidaProgramada)) throw new Error("Las horas programadas no son válidas.");
+  if (celda.descanso) {
+    if (celda.entradaProgramada !== null || celda.salidaProgramada !== null) throw new Error("Un descanso no tiene horas programadas.");
+    return;
+  }
+  if (!celda.entradaProgramada || !celda.salidaProgramada || !/^\d{2}:\d{2}$/.test(celda.entradaProgramada) || !/^\d{2}:\d{2}$/.test(celda.salidaProgramada)) throw new Error("Las horas programadas no son válidas.");
 }
 
 function fechaPerteneceALaSemana(fecha: string, semana: string): boolean {

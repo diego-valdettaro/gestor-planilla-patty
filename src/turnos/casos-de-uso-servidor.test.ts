@@ -55,7 +55,6 @@ describe("casos de uso de turnos en el servidor", () => {
       sede: "Lima",
       entradaProgramada: "09:00",
       salidaProgramada: "18:00",
-      minutosDeAlmuerzo: 60,
       descanso: false,
     });
 
@@ -66,7 +65,6 @@ describe("casos de uso de turnos en el servidor", () => {
         sede: "Lima",
         entradaProgramada: "09:00",
         salidaProgramada: "18:00",
-        minutosDeAlmuerzo: 60,
         descanso: false,
       }),
     ]);
@@ -90,7 +88,6 @@ describe("casos de uso de turnos en el servidor", () => {
       sede: "Lima",
       entradaProgramada: "09:00",
       salidaProgramada: "18:00",
-      minutosDeAlmuerzo: 60,
       descanso: false,
     };
 
@@ -115,7 +112,6 @@ describe("casos de uso de turnos en el servidor", () => {
         sede: "Lima",
         entradaProgramada: "09:00",
         salidaProgramada: "18:00",
-        minutosDeAlmuerzo: 60,
         descanso: false,
       }),
     ).rejects.toThrow("La fecha no pertenece a un período de planilla abierto.");
@@ -136,7 +132,6 @@ describe("casos de uso de turnos en el servidor", () => {
       sede: "Lima",
       entradaProgramada: "09:00",
       salidaProgramada: "18:00",
-      minutosDeAlmuerzo: 60,
       descanso: false,
     });
 
@@ -157,7 +152,6 @@ describe("casos de uso de turnos en el servidor", () => {
         sede: "Lima",
         entradaProgramada: "09:00",
         salidaProgramada: "18:00",
-        minutosDeAlmuerzo: 60,
         descanso: false,
       }),
     ).rejects.toThrow("No tiene permiso para publicar turnos.");

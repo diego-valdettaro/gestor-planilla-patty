@@ -50,6 +50,7 @@ export function crearConsultaSemanalPorEquipo({
 function convertirTurnoEnCelda(turno: TurnoPublicado | undefined): CeldaDeConsultaSemanal {
   if (!turno) return { estado: "sin-publicacion" };
   if (turno.descanso) return { estado: "descanso", sede: turno.sede };
+  if (!turno.entradaProgramada || !turno.salidaProgramada) return { estado: "sin-publicacion" };
   return {
     estado: "publicado",
     sede: turno.sede,

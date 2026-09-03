@@ -13,11 +13,11 @@ describe("consulta semanal por equipo", () => {
       turnos: [
         {
           idHuellero: "HU-1", fecha: "2026-09-01", sede: "Tienda Centro",
-          entradaProgramada: "09:00", salidaProgramada: "18:00", minutosDeAlmuerzo: 60, descanso: false,
+          entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false,
         },
         {
           idHuellero: "HU-2", fecha: "2026-09-02", sede: "Tienda Norte",
-          entradaProgramada: "00:00", salidaProgramada: "00:00", minutosDeAlmuerzo: 0, descanso: true,
+          entradaProgramada: null, salidaProgramada: null, descanso: true,
         },
       ],
     });

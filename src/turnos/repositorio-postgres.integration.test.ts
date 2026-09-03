@@ -71,7 +71,6 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeTurnos", () => {
       sede: "Lima",
       entradaProgramada: "09:00",
       salidaProgramada: "18:00",
-      minutosDeAlmuerzo: 60,
       descanso: false,
     });
 
@@ -99,7 +98,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeTurnos", () => {
   });
 
   it("revierte toda la publicación en lote cuando un horario semanal está duplicado", async () => {
-    const turno = { idHuellero, fecha: fechaParaAtomicidad, sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", minutosDeAlmuerzo: 60, descanso: false };
+    const turno = { idHuellero, fecha: fechaParaAtomicidad, sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false };
 
     await expect(repositorio.publicarEnLote([turno, turno])).rejects.toThrow();
     await expect(repositorio.buscarPublicado(idHuellero, fechaParaAtomicidad)).resolves.toBeUndefined();
