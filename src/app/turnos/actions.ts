@@ -40,6 +40,29 @@ export async function guardarCeldaDelBorrador(formData: FormData): Promise<void>
   revalidatePath("/turnos");
 }
 
+export async function guardarBorradorDesdeGrilla(planId: string, celdasJson: string): Promise<void> {
+  let celdas: Array<{ idHuellero: string; fecha: string; sede: string; modeloHorarioId?: string; entradaProgramada: string | null; salidaProgramada: string | null; descanso: boolean }>;
+  try {
+    celdas = JSON.parse(celdasJson);
+  } catch {
+    throw new Error("El borrador contiene datos inv\u00e1lidos.");
+  }
+  if (!Array.isArray(celdas)) throw new Error("El borrador contiene datos inv\u00e1lidos.");
+  for (const celda of celdas) {
+    if (!celda || typeof celda.idHuellero !== "string" || typeof celda.fecha !== "string" || typeof celda.sede !== "string"
+      || typeof celda.descanso !== "boolean" || (celda.entradaProgramada !== null && typeof celda.entradaProgramada !== "string")
+      || (celda.salidaProgramada !== null && typeof celda.salidaProgramada !== "string")) throw new Error("El borrador contiene datos inv\u00e1lidos.");
+    if (celda.modeloHorarioId) {
+      const modelo = await repositorioDeModelosDeHorario.buscarPorId(celda.modeloHorarioId);
+      if (!modelo || !modelo.activo || modelo.sede !== celda.sede || modelo.entrada !== celda.entradaProgramada || modelo.salida !== celda.salidaProgramada) {
+        throw new Error("El modelo de horario seleccionado no es válido.");
+      }
+    }
+  }
+  await casosDeUsoDePlanesSemanales().guardarBorrador(planId, celdas);
+  revalidatePath("/turnos");
+}
+
 export async function borrarCeldaDelBorrador(formData: FormData): Promise<void> {
   await casosDeUsoDePlanesSemanales().borrarCelda(obtenerTexto(formData, "planId"), obtenerTexto(formData, "idHuellero"), obtenerTexto(formData, "fecha"));
   revalidatePath("/turnos");

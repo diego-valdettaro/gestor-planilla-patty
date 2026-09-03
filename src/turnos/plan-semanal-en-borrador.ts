@@ -33,6 +33,7 @@ export interface RepositorioDePlanesSemanales {
   buscarPorId(id: string): Promise<PlanSemanalEnBorrador | undefined>;
   guardarCelda(celda: CeldaDePlanSemanalEnBorrador): Promise<void>;
   guardarCeldas(celdas: CeldaDePlanSemanalEnBorrador[]): Promise<void>;
+  reemplazarCeldasDelPlan(planId: string, celdas: CeldaDePlanSemanalEnBorrador[]): Promise<void>;
   borrarCelda(planId: string, idHuellero: string, fecha: string): Promise<void>;
   colaboradorPerteneceAEquipo(idHuellero: string, equipo: EquipoOperativo): Promise<boolean>;
   obtenerSedeDelColaborador(idHuellero: string): Promise<string | undefined>;

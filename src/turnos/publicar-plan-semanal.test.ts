@@ -11,6 +11,7 @@ function crearRepositorio(plan: PlanSemanalEnBorrador) {
     obtenerOCrear: async () => plan,
     guardarCelda: async () => undefined,
     guardarCeldas: async () => undefined,
+    reemplazarCeldasDelPlan: async () => undefined,
     borrarCelda: async () => undefined,
     colaboradorPerteneceAEquipo: async (id) => id === "HU-1" || id === "HU-2",
     obtenerSedeDelColaborador: async (id) => id === "HU-1" || id === "HU-2" ? "Lima" : undefined,

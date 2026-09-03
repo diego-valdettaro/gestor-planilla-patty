@@ -258,6 +258,13 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
     });
   }
 
+  async reemplazarCeldasDelPlan(planId: string, celdas: CeldaDePlanSemanalEnBorrador[]): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      await tx.delete(celdasDePlanesSemanalesEnBorrador).where(eq(celdasDePlanesSemanalesEnBorrador.planId, planId));
+      if (celdas.length) await tx.insert(celdasDePlanesSemanalesEnBorrador).values(celdas);
+    });
+  }
+
   async borrarCelda(planId: string, idHuellero: string, fecha: string): Promise<void> {
     await this.db.delete(celdasDePlanesSemanalesEnBorrador).where(and(
       eq(celdasDePlanesSemanalesEnBorrador.planId, planId),

@@ -28,6 +28,10 @@ function crearRepositorioEnMemoria(): {
       },
       guardarCelda: async (celda) => { celdas.set(`${celda.planId}:${celda.idHuellero}:${celda.fecha}`, celda); },
       guardarCeldas: async (celdasParaGuardar) => { celdasParaGuardar.forEach((celda) => celdas.set(`${celda.planId}:${celda.idHuellero}:${celda.fecha}`, celda)); },
+      reemplazarCeldasDelPlan: async (planId, celdasParaGuardar) => {
+        [...celdas.keys()].filter((clave) => clave.startsWith(`${planId}:`)).forEach((clave) => celdas.delete(clave));
+        celdasParaGuardar.forEach((celda) => celdas.set(`${celda.planId}:${celda.idHuellero}:${celda.fecha}`, celda));
+      },
       borrarCelda: async (planId, idHuellero, fecha) => { celdas.delete(`${planId}:${idHuellero}:${fecha}`); },
       buscarPublicado: async () => undefined,
       colaboradorPerteneceAEquipo: async (idHuellero, equipo) => idHuellero === "HU-1024" && equipo === "tiendas",
@@ -72,6 +76,49 @@ describe("casos de uso de planes semanales en borrador", () => {
       entradaProgramada: null, salidaProgramada: null, descanso: true,
     });
     await casosDeUso.borrarCelda(plan.id, "HU-1024", "2026-09-01");
+
+    expect((await casosDeUso.obtenerOCrear("2026-08-31", "tiendas")).celdas).toEqual([]);
+  });
+
+  it("guarda el borrador completo en una sola operación después de validar todas sus celdas", async () => {
+    const { repositorio } = crearRepositorioEnMemoria();
+    const reemplazarCeldasDelPlan = repositorio.reemplazarCeldasDelPlan;
+    let guardados = 0;
+    repositorio.reemplazarCeldasDelPlan = async (planId, celdas) => {
+      guardados += 1;
+      await reemplazarCeldasDelPlan(planId, celdas);
+    };
+    const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio, {
+      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "operaciones" }),
+    });
+    const plan = await casosDeUso.obtenerOCrear("2026-08-31", "tiendas");
+
+    await casosDeUso.guardarBorrador(plan.id, [{
+      idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima",
+      entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false,
+    }, {
+      idHuellero: "HU-1024", fecha: "2026-09-02", sede: "Lima",
+      entradaProgramada: null, salidaProgramada: null, descanso: true,
+    }]);
+
+    expect(guardados).toBe(1);
+    expect((await casosDeUso.obtenerOCrear("2026-08-31", "tiendas")).celdas).toHaveLength(2);
+  });
+
+  it("no persiste ninguna celda si el borrador completo contiene una celda inválida", async () => {
+    const { repositorio } = crearRepositorioEnMemoria();
+    const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio, {
+      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "operaciones" }),
+    });
+    const plan = await casosDeUso.obtenerOCrear("2026-08-31", "tiendas");
+
+    await expect(casosDeUso.guardarBorrador(plan.id, [{
+      idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima",
+      entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false,
+    }, {
+      idHuellero: "HU-1024", fecha: "2026-09-07", sede: "Lima",
+      entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false,
+    }])).rejects.toThrow("La fecha no pertenece a la semana del plan.");
 
     expect((await casosDeUso.obtenerOCrear("2026-08-31", "tiendas")).celdas).toEqual([]);
   });

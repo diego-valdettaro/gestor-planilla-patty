@@ -39,6 +39,24 @@ export function crearCasosDeUsoDePlanesSemanales(
       await verificarQueNoEstePublicado(repositorio, celda.idHuellero, celda.fecha);
       await repositorio.guardarCelda({ planId, ...celda });
     },
+    async guardarBorrador(
+      planId: string,
+      celdas: Array<Omit<CeldaDePlanSemanalEnBorrador, "planId">>,
+    ): Promise<void> {
+      await autorizar();
+      const plan = await obtenerPlan(repositorio, planId);
+      for (const celda of celdas) {
+        validarCelda(plan, celda);
+        if (!(await repositorio.colaboradorPerteneceAEquipo(celda.idHuellero, plan.equipo))) {
+          throw new Error("El colaborador no pertenece al equipo operativo del plan.");
+        }
+        if ((await repositorio.obtenerSedeDelColaborador(celda.idHuellero)) !== celda.sede) {
+          throw new Error("La sede de la celda no corresponde al colaborador.");
+        }
+        await verificarQueNoEstePublicado(repositorio, celda.idHuellero, celda.fecha);
+      }
+      await repositorio.reemplazarCeldasDelPlan(planId, celdas.map((celda) => ({ planId, ...celda })));
+    },
     async borrarCelda(planId: string, idHuellero: string, fecha: string): Promise<void> {
       await autorizar();
       const plan = await obtenerPlan(repositorio, planId);
