@@ -6,7 +6,7 @@ import { db } from "@/db/client";
 import { sedes } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
-import { asignarEquipoOperativoASede, eliminarColaborador, eliminarSede, guardarColaborador, guardarPoliticaDeTardanzas, guardarSede } from "./actions";
+import { asignarEquipoOperativoASede, desactivarColaborador, eliminarSede, guardarColaborador, guardarPoliticaDeTardanzas, guardarSede } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +28,7 @@ export default async function PaginaDeConfiguracion() {
     </section>
     <section className="tarjeta"><h2>Colaboradores</h2>
       <form action={guardarColaborador} className="filtros"><label>ID de huellero<input name="idHuellero" required /></label><label>Nombre<input name="nombre" required /></label><label>Sede<select name="sede" required>{listaDeSedes.map((sede) => <option key={sede.nombre}>{sede.nombre}</option>)}</select></label><label>Centro de costo<input name="centroDeCosto" required /></label><button type="submit">Crear colaborador</button></form>
-      <ul className="lista-configuracion">{colaboradores.map((colaborador) => <li key={colaborador.idHuellero}><span>{colaborador.nombre} · {colaborador.idHuellero} · {colaborador.sede}</span><form action={eliminarColaborador}><input name="idHuellero" type="hidden" value={colaborador.idHuellero} /><button type="submit" className="peligro">Eliminar</button></form></li>)}</ul>
+      <ul className="lista-configuracion">{colaboradores.map((colaborador) => <li key={colaborador.idHuellero}><span>{colaborador.nombre} · {colaborador.idHuellero} · {colaborador.sede}{!colaborador.activo && <small className="estado-inactivo">Inactivo</small>}</span>{colaborador.activo && <form action={desactivarColaborador}><input name="idHuellero" type="hidden" value={colaborador.idHuellero} /><button type="submit" className="peligro">Desactivar</button></form>}</li>)}</ul>
     </section>
     <section className="tarjeta"><h2>Política de penalización por tardanzas</h2>
       <form action={guardarPoliticaDeTardanzas} className="filtros"><label>Sede<select name="sede" required>{listaDeSedes.map((sede) => <option key={sede.nombre}>{sede.nombre}</option>)}</select></label><label>Tolerancia en minutos<input name="toleranciaEnMinutos" required min="1" type="number" defaultValue="10" /></label><label>Tardanzas acumuladas<input name="tardanzasAcumuladas" required min="1" type="number" defaultValue="3" /></label><label>Horas penalizadas<input name="horasPenalizadas" required min="1" type="number" defaultValue="1" /></label><label>Versión<input name="version" required min="1" type="number" /></label><label>Vigente desde<input name="vigenteDesde" required type="date" /></label><button type="submit">Guardar política</button></form>

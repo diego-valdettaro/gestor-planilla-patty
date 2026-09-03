@@ -60,9 +60,13 @@ export async function guardarColaborador(formData: FormData): Promise<void> {
   revalidatePath("/asistencias");
 }
 
-export async function eliminarColaborador(formData: FormData): Promise<void> {
+export async function desactivarColaborador(formData: FormData): Promise<void> {
   await exigirAdministracion();
-  await repositorioDeColaboradores.eliminar(texto(formData, "idHuellero"));
+  const casos = crearCasosDeUsoDeColaboradores(repositorioDeColaboradores, { obtenerActorActual });
+  const idHuellero = texto(formData, "idHuellero");
+  const colaborador = await casos.consultar(idHuellero);
+  if (!colaborador) throw new Error("No existe un colaborador con ese ID de huellero.");
+  await casos.actualizar({ ...colaborador, activo: false });
   revalidatePath("/configuracion");
   revalidatePath("/turnos");
   revalidatePath("/asistencias");

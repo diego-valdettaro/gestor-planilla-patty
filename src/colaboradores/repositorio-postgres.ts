@@ -56,7 +56,4 @@ export class RepositorioPostgresDeColaboradores
     }).from(colaboradores).orderBy(colaboradores.nombre);
   }
 
-  async eliminar(idHuellero: string): Promise<void> {
-    await this.db.delete(colaboradores).where(eq(colaboradores.idHuellero, idHuellero));
-  }
 }
