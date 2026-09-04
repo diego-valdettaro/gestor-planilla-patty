@@ -11,6 +11,8 @@ import { RepositorioPostgresDeTurnos } from "./repositorio-postgres";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 
+if (!databaseUrl && process.env.CI) throw new Error("CI requiere TEST_DATABASE_URL para ejecutar las pruebas de integración PostgreSQL.");
+
 describe.skipIf(!databaseUrl)("RepositorioPostgresDeTurnos", () => {
   const pool = new Pool({ connectionString: databaseUrl });
   const db = drizzle({ client: pool, schema });
@@ -18,6 +20,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeTurnos", () => {
   const idHuellero = `TEST-${randomUUID()}`;
   const fecha = "2030-09-02";
   const fechaParaAtomicidad = "2030-09-03";
+  const semanaDePlan = "2030-09-02";
 
   beforeAll(async () => {
     await db.insert(schema.colaboradores).values({
@@ -60,6 +63,10 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeTurnos", () => {
     await db
       .delete(schema.periodosPlanilla)
       .where(and(eq(schema.periodosPlanilla.inicio, "2030-08-26"), eq(schema.periodosPlanilla.fin, "2030-09-25")));
+    const planes = await db.select({ id: schema.planesSemanalesEnBorrador.id }).from(schema.planesSemanalesEnBorrador)
+      .where(and(eq(schema.planesSemanalesEnBorrador.semana, semanaDePlan), eq(schema.planesSemanalesEnBorrador.equipo, "tiendas")));
+    if (planes.length) await db.delete(schema.celdasDePlanesSemanalesEnBorrador).where(inArray(schema.celdasDePlanesSemanalesEnBorrador.planId, planes.map(({ id }) => id)));
+    await db.delete(schema.planesSemanalesEnBorrador).where(and(eq(schema.planesSemanalesEnBorrador.semana, semanaDePlan), eq(schema.planesSemanalesEnBorrador.equipo, "tiendas")));
     await db.delete(schema.colaboradores).where(eq(schema.colaboradores.idHuellero, idHuellero));
     await pool.end();
   });
@@ -102,5 +109,9 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeTurnos", () => {
 
     await expect(repositorio.publicarEnLote([turno, turno])).rejects.toThrow();
     await expect(repositorio.buscarPublicado(idHuellero, fechaParaAtomicidad)).resolves.toBeUndefined();
+  });
+
+  it("crea y lee un plan semanal en borrador", async () => {
+    await expect(repositorio.obtenerOCrear(semanaDePlan, "tiendas")).resolves.toMatchObject({ semana: semanaDePlan, equipo: "tiendas", celdas: [] });
   });
 });

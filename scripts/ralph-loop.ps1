@@ -4,8 +4,7 @@ param(
   [int]$MaxIssues = 1,
   [switch]$Afk,
   [string]$Model,
-  [switch]$DryRun,
-  [switch]$SkipDatabaseCheck
+  [switch]$DryRun
 )
 
 $ErrorActionPreference = "Stop"
@@ -35,15 +34,14 @@ $pathEntries = $env:PATH -split [regex]::Escape($pathSeparator) | Where-Object {
 }
 $env:PATH = $pathEntries -join $pathSeparator
 
-$pnpm = Get-Command "pnpm" -ErrorAction SilentlyContinue
-$pnpmPrefix = @()
-if (-not $pnpm) {
-  $corepack = Get-Command "corepack" -ErrorAction SilentlyContinue
-  if (-not $corepack) {
-    throw "No encuentro pnpm ni Corepack en PATH. Instale pnpm o instale Node.js con Corepack."
-  }
+$corepack = Get-Command "corepack" -ErrorAction SilentlyContinue
+if ($corepack) {
   $pnpm = $corepack
   $pnpmPrefix = @("pnpm")
+} else {
+  $pnpm = Get-Command "pnpm" -ErrorAction SilentlyContinue
+  $pnpmPrefix = @()
+  if (-not $pnpm) { throw "No encuentro pnpm ni Corepack en PATH. Instale pnpm o instale Node.js con Corepack." }
 }
 
 $pnpmShimDirectory = Join-Path $env:TEMP "ralph-loop-$PID"
@@ -69,6 +67,7 @@ function Get-AgentStatus {
   param([string]$Command)
   if ($Command -match "gh issue (list|view)") { return "Revisando issues de GitHub..." }
   if ($Command -match "CONTEXT\.md|docs[/\\]adr") { return "Leyendo contexto y ADRs..." }
+  if ($Command -match "pnpm.*validate") { return "Validando con PostgreSQL temporal..." }
   if ($Command -match "pnpm.*(test|vitest)") { return "Ejecutando tests..." }
   if ($Command -match "pnpm.*typecheck") { return "Ejecutando typecheck..." }
   if ($Command -match "pnpm.*build") { return "Generando build..." }
@@ -89,6 +88,7 @@ $logRoot = Join-Path $env:LOCALAPPDATA "gestor-planilla-patty/ralph"
 New-Item -ItemType Directory -Force -Path $logRoot | Out-Null
 $stateFile = Join-Path $logRoot "current-run.json"
 $progressFile = Join-Path $repoRoot "docs/ralph-progress.md"
+Invoke-Pnpm @("hooks:install")
 
 foreach ($command in @("git", "gh", "codex")) {
   if (-not (Get-Command $command -ErrorAction SilentlyContinue)) { throw "No encuentro '$command' en PATH." }
@@ -96,14 +96,6 @@ foreach ($command in @("git", "gh", "codex")) {
 
 $ghAuthOutput = & gh auth status --hostname "github.com" 2>&1
 if ($LASTEXITCODE -ne 0) { throw "No se pudo autenticar GitHub: $($ghAuthOutput -join ' ')" }
-
-if (-not $SkipDatabaseCheck) {
-  $databaseUrl = Get-Content ".env" | Where-Object { $_ -match "^DATABASE_URL=" } | Select-Object -First 1
-  if (-not $databaseUrl) { throw "Falta DATABASE_URL en .env. Use -SkipDatabaseCheck solo si los tests no requieren PostgreSQL." }
-  if (-not (Test-NetConnection -ComputerName "localhost" -Port 5432 -InformationLevel Quiet)) {
-    throw "PostgreSQL no responde en localhost:5432. Levante patty-postgres o use -SkipDatabaseCheck."
-  }
-}
 
 $prompt = @'
 Trabajas en el repositorio gestor-planilla-patty dentro de un Ralph loop.
@@ -115,7 +107,7 @@ Para informar progreso legible, llama a `./scripts/ralph-status.ps1 "mensaje cor
 Sigue este flujo de implementación, basado en la skill `implement` del usuario:
 - Implementa el trabajo descrito por el issue seleccionado.
 - Usa `/tdd` donde sea posible, en seams ya acordados.
-- Ejecuta typecheck regularmente, tests individuales regularmente y la suite completa al final.
+- Ejecuta typecheck regularmente y tests individuales regularmente. Al final ejecuta `pnpm validate`; el comando crea y elimina PostgreSQL temporal, aplica migraciones y ejecuta integración, typecheck y build.
 - Cuando termines, usa `/code-review` para revisar el trabajo.
 - Haz commit en la rama actual solo después de la revisión y las validaciones.
 
@@ -124,11 +116,11 @@ Proceso obligatorio:
 2. Selecciona el siguiente issue con label `ready-for-agent` que sea implementable. No elijas el épico #1. Prioriza dependencias, decisiones arquitectónicas, integraciones y riesgos antes de mejoras cosméticas. Si ninguno es implementable, devuelve outcome `no-issue` o `blocked`, sin modificar archivos.
 3. Antes de cambiar código, lee AGENTS.md, CONTEXT.md y los ADRs relevantes. Usa el vocabulario canónico.
 4. Implementa solo el alcance del issue elegido. Añade o ajusta tests cuando haga falta. No descartes ni modifiques cambios ajenos.
-5. Ejecuta obligatoriamente `pnpm test`, `pnpm typecheck` y `pnpm build` después de la revisión. Corrige los fallos provocados por tu cambio.
-6. Si y solo si los tres comandos pasan, añade una entrada concisa a `docs/ralph-progress.md` con issue, decisión relevante, archivos afectados y bloqueos pendientes. Crea un commit único y descriptivo que incluya `(#NUMERO)`.
+5. Ejecuta obligatoriamente `pnpm validate` después de la revisión. Corrige los fallos provocados por tu cambio. No se aceptan pruebas PostgreSQL omitidas.
+6. Si y solo si `pnpm validate` pasa, añade una entrada concisa a `docs/ralph-progress.md` con issue, decisión relevante, archivos afectados y bloqueos pendientes. Crea un commit único y descriptivo que incluya `(#NUMERO)`.
 
 Condiciones de salida:
-- `completed`: el issue se implementó, los tres comandos pasaron, existe un commit nuevo y el árbol de trabajo está limpio.
+- `completed`: el issue se implementó, `pnpm validate` pasó, existe un commit nuevo y el árbol de trabajo está limpio.
 - `blocked`: no puedes continuar sin una decisión humana, sin ocultar el problema ni hacer commit.
 - `no-issue`: no hay issue elegible; no hagas cambios.
 
@@ -211,14 +203,10 @@ while ($completed -lt $MaxIssues) {
   $statusAfter = Get-GitText @("status", "--porcelain")
   if ($statusAfter) { throw "El agente dejó cambios sin commitear:`n$statusAfter" }
 
-  Write-Host "Validando: pnpm test" -ForegroundColor Yellow
-  Invoke-Pnpm @("test")
-  Write-Host "Validando: pnpm typecheck" -ForegroundColor Yellow
-  Invoke-Pnpm @("typecheck")
-  Write-Host "Validando: pnpm build" -ForegroundColor Yellow
-  Invoke-Pnpm @("build")
+  Write-Host "Validando con PostgreSQL temporal: pnpm validate" -ForegroundColor Yellow
+  Invoke-Pnpm @("validate")
 
-  Invoke-External gh @("issue", "comment", "$($result.issue)", "--repo", "diego-valdettaro/gestor-planilla-patty", "--body", "Implementado en $($result.commit). Validado con pnpm test, pnpm typecheck y pnpm build.")
+  Invoke-External gh @("issue", "comment", "$($result.issue)", "--repo", "diego-valdettaro/gestor-planilla-patty", "--body", "Implementado en $($result.commit). Validado con pnpm validate y PostgreSQL temporal.")
   Invoke-External gh @("issue", "close", "$($result.issue)", "--repo", "diego-valdettaro/gestor-planilla-patty", "--reason", "completed")
   $completed++
   Write-RunState @{ status = "completed"; iteration = $iteration; baseCommit = $baseCommit; issue = $result.issue; commit = $result.commit; finishedAt = (Get-Date).ToString("o") }

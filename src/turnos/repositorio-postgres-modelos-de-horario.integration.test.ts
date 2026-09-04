@@ -11,6 +11,8 @@ import { RepositorioPostgresDeModelosDeHorario } from "./repositorio-postgres-mo
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 
+if (!databaseUrl && process.env.CI) throw new Error("CI requiere TEST_DATABASE_URL para ejecutar las pruebas de integración PostgreSQL.");
+
 describe.skipIf(!databaseUrl)("RepositorioPostgresDeModelosDeHorario", () => {
   const pool = new Pool({ connectionString: databaseUrl });
   const db = drizzle({ client: pool, schema });
