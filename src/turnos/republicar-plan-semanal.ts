@@ -18,6 +18,7 @@ export async function republicarPlanSemanal(
   const plan = await repositorio.buscarPorId(planId);
   if (!plan) throw new Error("El plan semanal en borrador no existe.");
   if (!(await repositorio.colaboradorPerteneceAEquipo(idHuellero, plan.equipo))) throw new Error("El colaborador no pertenece al equipo operativo del plan.");
+  if (await repositorio.horarioSemanalEstaProcesado?.(idHuellero, plan.semana)) throw new Error("No se puede corregir un horario semanal que ya fue procesado.");
 
   const turnos = await obtenerSemanaCorregida(repositorio, plan, idHuellero);
   for (const turno of turnos) {

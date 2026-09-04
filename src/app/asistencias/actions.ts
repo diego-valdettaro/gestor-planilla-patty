@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
 import { crearCasosDeUsoDeAsistencias } from "@/asistencias/casos-de-uso-servidor";
 import { repositorioDeAsistencias } from "@/asistencias/servicio";
+import { crearCasosDeUsoDeTurnos } from "@/turnos/casos-de-uso-servidor";
+import { repositorioDeTurnos } from "@/turnos/servicio";
 import { conservarArchivoFuente } from "@/importaciones/almacenamiento-local";
 import { crearCasosDeUsoDeImportaciones } from "@/importaciones/casos-de-uso-servidor";
 import { parsearArchivoHuellero } from "@/importaciones/parsear-archivo-huellero";
@@ -74,6 +76,15 @@ export async function registrarEstadoManual(formData: FormData): Promise<void> {
     comentario: obtenerTexto(formData, "comentario"),
   });
   revalidatePath("/asistencias");
+}
+
+export async function procesarHorarioSemanal(formData: FormData): Promise<void> {
+  const semana = obtenerTexto(formData, "semana");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(semana)) throw new Error("La semana no es válida.");
+  const casosDeUso = crearCasosDeUsoDeTurnos(repositorioDeTurnos, { obtenerActorActual });
+  await casosDeUso.procesar(obtenerTexto(formData, "idHuellero"), semana);
+  revalidatePath("/asistencias");
+  revalidatePath("/turnos");
 }
 
 

@@ -6,11 +6,12 @@ import type {
   RepositorioDeTurnos,
   TurnoPublicado,
 } from "./publicar-turno-semanal";
+import type { RepositorioParaProcesarHorarioSemanal } from "./procesar-horario-semanal";
 
 function crearRepositorioEnMemoria(): {
   asistenciasEsperadas: AsistenciaEsperada[];
   historial: TurnoPublicado[];
-  repositorio: RepositorioDeTurnos;
+  repositorio: RepositorioDeTurnos & RepositorioParaProcesarHorarioSemanal;
 } {
   const turnos = new Map<string, TurnoPublicado>();
   const historial: TurnoPublicado[] = [];
@@ -40,6 +41,11 @@ function crearRepositorioEnMemoria(): {
       perteneceAPeriodoAbierto: async (fecha) => fecha >= "2026-08-26" && fecha <= "2026-09-25",
       asistenciaEstaProcesada: async () => false,
       reemplazarSemanaPublicada: async () => undefined,
+      listarSemanaPublicada: async (_idHuellero, semana) => ["2026-08-31", "2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04", "2026-09-05", "2026-09-06"]
+        .filter((fecha) => fecha >= semana).map((fecha) => ({ fecha, descanso: false })),
+      asistenciasLaboralesEstanProcesadas: async () => true,
+      obtenerEquipoOperativo: async () => "tiendas",
+      registrarProcesamiento: async () => undefined,
     },
   };
 }
@@ -160,5 +166,14 @@ describe("casos de uso de turnos en el servidor", () => {
 
     expect(historial).toHaveLength(0);
     expect(asistenciasEsperadas).toHaveLength(0);
+  });
+
+  it("permite a Finanzas procesar un horario semanal desde el servidor", async () => {
+    const { repositorio } = crearRepositorioEnMemoria();
+    const casosDeUso = crearCasosDeUsoDeTurnos(repositorio, {
+      obtenerActorActual: async () => ({ id: "finanzas-1", rol: "finanzas" }),
+    });
+
+    await expect(casosDeUso.procesar("HU-1024", "2026-08-31")).resolves.toBeUndefined();
   });
 });

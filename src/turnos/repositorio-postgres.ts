@@ -8,6 +8,7 @@ import {
   celdasDePlanesSemanalesEnBorrador,
   colaboradores,
   historialDeTurnosPublicados,
+  horariosSemanalesProcesados,
   estadosManuales,
   horasExtra,
   periodosPlanilla,
@@ -21,8 +22,9 @@ import type { RepositorioDeEquiposOperativos } from "./configurar-equipos-operat
 import type { EquipoOperativo } from "./configurar-equipos-operativos";
 import type { CeldaDePlanSemanalEnBorrador, PlanSemanalEnBorrador, RepositorioDePlanesSemanales } from "./plan-semanal-en-borrador";
 import type { RepositorioDeTurnos, TurnoPublicado } from "./publicar-turno-semanal";
+import type { ProcesamientoDeHorarioSemanal } from "./procesar-horario-semanal";
 import type { Actor } from "@/colaboradores/registrar-colaborador";
-import { desplazarFecha } from "./semana";
+import { desplazarFecha, diasDeLaSemana, inicioDeSemana } from "./semana";
 
 export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, RepositorioDeEquiposOperativos, RepositorioDePlanesSemanales {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}
@@ -59,6 +61,10 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
   async publicarEnLote(turnos: TurnoPublicado[], actor?: Actor): Promise<void> {
     await this.db.transaction(async (tx) => {
       for (const turno of turnos) {
+        const [procesado] = await tx.select({ id: horariosSemanalesProcesados.id }).from(horariosSemanalesProcesados).where(and(
+          eq(horariosSemanalesProcesados.idHuellero, turno.idHuellero), eq(horariosSemanalesProcesados.semana, inicioDeSemana(turno.fecha)),
+        ));
+        if (procesado) throw new Error("El horario semanal ya fue procesado y no se puede publicar.");
         const [periodo] = await tx.select({ id: periodosPlanilla.id }).from(periodosPlanilla).where(and(
           eq(periodosPlanilla.estado, "abierto"), lte(periodosPlanilla.inicio, turno.fecha), gte(periodosPlanilla.fin, turno.fecha),
         ));
@@ -84,14 +90,76 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
   }
 
   async asistenciaEstaProcesada(idHuellero: string, fecha: string): Promise<boolean> {
+    if (await this.horarioSemanalEstaProcesado(idHuellero, inicioDeSemana(fecha))) return true;
     const [asistencia] = await this.db.select({ estado: asistenciasEsperadas.estado }).from(asistenciasEsperadas).where(and(
       eq(asistenciasEsperadas.idHuellero, idHuellero), eq(asistenciasEsperadas.fecha, fecha),
     ));
     return asistencia?.estado === "confirmada" || asistencia?.estado === "manual";
   }
 
+  async horarioSemanalEstaProcesado(idHuellero: string, semana: string): Promise<boolean> {
+    const [procesamiento] = await this.db.select({ id: horariosSemanalesProcesados.id }).from(horariosSemanalesProcesados).where(and(
+      eq(horariosSemanalesProcesados.idHuellero, idHuellero), eq(horariosSemanalesProcesados.semana, semana),
+    ));
+    return Boolean(procesamiento);
+  }
+
+  async listarSemanaPublicada(idHuellero: string, semana: string): Promise<Array<{ fecha: string; descanso: boolean }>> {
+    const fechas = diasDeLaSemana(semana);
+    return this.db.select({ fecha: turnosPublicados.fecha, descanso: turnosPublicados.descanso }).from(turnosPublicados).where(and(
+      eq(turnosPublicados.idHuellero, idHuellero), gte(turnosPublicados.fecha, fechas[0]), lte(turnosPublicados.fecha, fechas.at(-1)!),
+    ));
+  }
+
+  async asistenciasLaboralesEstanProcesadas(idHuellero: string, semana: string): Promise<boolean> {
+    const fechas = diasDeLaSemana(semana);
+    const filas = await this.db.select({
+      descanso: turnosPublicados.descanso,
+      estado: asistenciasEsperadas.estado,
+    }).from(turnosPublicados).leftJoin(asistenciasEsperadas, and(
+      eq(asistenciasEsperadas.idHuellero, turnosPublicados.idHuellero), eq(asistenciasEsperadas.fecha, turnosPublicados.fecha),
+    )).where(and(
+      eq(turnosPublicados.idHuellero, idHuellero), gte(turnosPublicados.fecha, fechas[0]), lte(turnosPublicados.fecha, fechas.at(-1)!),
+    ));
+    return filas.filter(({ descanso }) => !descanso).every(({ estado }) => estado === "confirmada" || estado === "manual");
+  }
+
+  async obtenerEquipoOperativo(idHuellero: string): Promise<"tiendas" | "taller" | undefined> {
+    const [colaborador] = await this.db.select({ equipo: sedes.equipoOperativo }).from(colaboradores)
+      .innerJoin(sedes, eq(colaboradores.sede, sedes.nombre)).where(eq(colaboradores.idHuellero, idHuellero));
+    return colaborador?.equipo === "tiendas" || colaborador?.equipo === "taller" ? colaborador.equipo : undefined;
+  }
+
+  async registrarProcesamiento({ idHuellero, semana, equipo, responsableId }: ProcesamientoDeHorarioSemanal): Promise<void> {
+    const fechas = diasDeLaSemana(semana);
+    await this.db.transaction(async (tx) => {
+      const horarios = await tx.select({ fecha: turnosPublicados.fecha, descanso: turnosPublicados.descanso }).from(turnosPublicados).where(and(
+        eq(turnosPublicados.idHuellero, idHuellero), gte(turnosPublicados.fecha, fechas[0]), lte(turnosPublicados.fecha, fechas.at(-1)!),
+      ));
+      if (!fechas.every((fecha) => horarios.some((horario) => horario.fecha === fecha))) {
+        throw new Error("El horario semanal debe tener los siete días publicados para procesarlo.");
+      }
+      const asistencias = await tx.select({ fecha: turnosPublicados.fecha, descanso: turnosPublicados.descanso, estado: asistenciasEsperadas.estado })
+        .from(turnosPublicados).leftJoin(asistenciasEsperadas, and(
+          eq(asistenciasEsperadas.idHuellero, turnosPublicados.idHuellero), eq(asistenciasEsperadas.fecha, turnosPublicados.fecha),
+        )).where(and(
+          eq(turnosPublicados.idHuellero, idHuellero), gte(turnosPublicados.fecha, fechas[0]), lte(turnosPublicados.fecha, fechas.at(-1)!),
+        ));
+      if (asistencias.some(({ descanso, estado }) => !descanso && estado !== "confirmada" && estado !== "manual")) {
+        throw new Error("Todas las asistencias laborales de la semana deben estar confirmadas o tener un estado manual.");
+      }
+      await tx.insert(horariosSemanalesProcesados).values({ idHuellero, semana, equipo, responsableId });
+    });
+  }
+
   async reemplazarSemanaPublicada(turnos: TurnoPublicado[], actor: Actor, motivo: string): Promise<void> {
     await this.db.transaction(async (tx) => {
+      for (const { idHuellero, fecha } of turnos) {
+        const [procesado] = await tx.select({ id: horariosSemanalesProcesados.id }).from(horariosSemanalesProcesados).where(and(
+          eq(horariosSemanalesProcesados.idHuellero, idHuellero), eq(horariosSemanalesProcesados.semana, inicioDeSemana(fecha)),
+        ));
+        if (procesado) throw new Error("No se puede corregir un horario semanal que ya fue procesado.");
+      }
       for (const turno of turnos) {
         const [periodo] = await tx.select({ id: periodosPlanilla.id }).from(periodosPlanilla).where(and(
           eq(periodosPlanilla.estado, "abierto"), lte(periodosPlanilla.inicio, turno.fecha), gte(periodosPlanilla.fin, turno.fecha),
@@ -180,6 +248,28 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
       .innerJoin(sedes, eq(colaboradores.sede, sedes.nombre))
       .where(and(eq(colaboradores.activo, true), eq(sedes.activa, true), eq(sedes.equipoOperativo, equipo)))
       .orderBy(sedes.nombre, colaboradores.nombre);
+  }
+
+  async listarColaboradoresProcesadosPorSemanaYEquipo(semana: string, equipo: "tiendas" | "taller"): Promise<
+    Array<{ idHuellero: string; nombre: string; sede: string }>
+  > {
+    return this.db.select({ idHuellero: colaboradores.idHuellero, nombre: colaboradores.nombre, sede: colaboradores.sede })
+      .from(horariosSemanalesProcesados)
+      .innerJoin(colaboradores, eq(horariosSemanalesProcesados.idHuellero, colaboradores.idHuellero))
+      .where(and(eq(horariosSemanalesProcesados.semana, semana), eq(horariosSemanalesProcesados.equipo, equipo)))
+      .orderBy(colaboradores.sede, colaboradores.nombre);
+  }
+
+  async listarProcesamientosDeSemana(semana: string, equipo: "tiendas" | "taller"): Promise<string[]> {
+    const resultados = await this.db.select({ idHuellero: horariosSemanalesProcesados.idHuellero }).from(horariosSemanalesProcesados)
+      .where(and(eq(horariosSemanalesProcesados.semana, semana), eq(horariosSemanalesProcesados.equipo, equipo)));
+    return resultados.map(({ idHuellero }) => idHuellero);
+  }
+
+  async listarEquiposConProcesamientosDeSemana(semana: string): Promise<Array<"tiendas" | "taller">> {
+    const resultados = await this.db.selectDistinct({ equipo: horariosSemanalesProcesados.equipo }).from(horariosSemanalesProcesados)
+      .where(eq(horariosSemanalesProcesados.semana, semana));
+    return resultados.map(({ equipo }) => equipo).sort();
   }
 
   async listarPublicadosPorColaboradoresYSemana(

@@ -34,8 +34,8 @@ function crearRepositorioEnMemoria(): {
       },
       borrarCelda: async (planId, idHuellero, fecha) => { celdas.delete(`${planId}:${idHuellero}:${fecha}`); },
       buscarPublicado: async () => undefined,
-      colaboradorPerteneceAEquipo: async (idHuellero, equipo) => idHuellero === "HU-1024" && equipo === "tiendas",
-      obtenerSedeDelColaborador: async (idHuellero) => idHuellero === "HU-1024" ? "Lima" : undefined,
+      colaboradorPerteneceAEquipo: async (idHuellero, equipo) => (idHuellero === "HU-1024" || idHuellero === "HU-2048") && equipo === "tiendas",
+      obtenerSedeDelColaborador: async (idHuellero) => idHuellero === "HU-1024" || idHuellero === "HU-2048" ? "Lima" : undefined,
       listarHorariosPublicadosDelEquipoEnSemana: async () => [{
         idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima",
         entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false,
@@ -196,6 +196,37 @@ describe("casos de uso de planes semanales en borrador", () => {
     await expect(casosDeUso.guardarCelda(plan.id, celda)).rejects.toThrow("El horario semanal ya fue procesado y no se puede corregir.");
     await expect(casosDeUso.aplicarHorarioACeldas(plan.id, [celda], celda)).rejects.toThrow("El horario semanal ya fue procesado y no se puede corregir.");
     await expect(casosDeUso.borrarCelda(plan.id, celda.idHuellero, celda.fecha)).rejects.toThrow("El horario semanal ya fue publicado y no se puede editar desde el borrador.");
+  });
+
+  it("bloquea guardar el borrador completo cuando el horario semanal fue procesado", async () => {
+    const { repositorio } = crearRepositorioEnMemoria();
+    repositorio.horarioSemanalEstaProcesado = async () => true;
+    const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio, {
+      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "operaciones" }),
+    });
+    const plan = await casosDeUso.obtenerOCrear("2026-08-31", "tiendas");
+
+    await expect(casosDeUso.guardarBorrador(plan.id, [{
+      idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false,
+    }])).rejects.toThrow("El horario semanal ya fue procesado y no se puede editar.");
+  });
+
+  it("preserva la fila procesada al guardar cambios de otra persona", async () => {
+    const { repositorio } = crearRepositorioEnMemoria();
+    const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio, {
+      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "operaciones" }),
+    });
+    const plan = await casosDeUso.obtenerOCrear("2026-08-31", "tiendas");
+    const celdaProcesada = { planId: plan.id, idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false };
+    const celdaEditable = { planId: plan.id, idHuellero: "HU-2048", fecha: "2026-09-01", sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false };
+    await repositorio.guardarCeldas([celdaProcesada, celdaEditable]);
+    repositorio.horarioSemanalEstaProcesado = async (idHuellero) => idHuellero === "HU-1024";
+
+    await casosDeUso.guardarBorrador(plan.id, [celdaProcesada, { ...celdaEditable, entradaProgramada: "10:00", salidaProgramada: "19:00" }]);
+
+    await expect(casosDeUso.obtenerOCrear("2026-08-31", "tiendas")).resolves.toMatchObject({ celdas: expect.arrayContaining([
+      expect.objectContaining(celdaProcesada), expect.objectContaining({ ...celdaEditable, entradaProgramada: "10:00", salidaProgramada: "19:00" }),
+    ]) });
   });
 
   it("no copia la semana anterior sobre una jornada ya publicada", async () => {

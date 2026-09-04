@@ -201,6 +201,19 @@ export const asistenciasEsperadas = pgTable(
   ],
 );
 
+export const horariosSemanalesProcesados = pgTable(
+  "horarios_semanales_procesados",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    idHuellero: text("id_huellero").notNull().references(() => colaboradores.idHuellero),
+    semana: date("semana", { mode: "string" }).notNull(),
+    equipo: text("equipo", { enum: ["tiendas", "taller"] }).notNull(),
+    responsableId: uuid("responsable_id").notNull().references(() => cuentasLocales.id),
+    procesadoEn: timestamp("procesado_en", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("horarios_semanales_procesados_colaborador_semana").on(table.idHuellero, table.semana)],
+);
+
 export const ajustesDeAsistencia = pgTable(
   "ajustes_de_asistencia",
   {

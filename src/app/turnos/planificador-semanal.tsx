@@ -15,8 +15,8 @@ type Colaborador = { idHuellero: string; nombre: string; sede: string };
 type Modelo = ModeloDeHorario;
 type Publicado = HorarioSemanalParaCopiar;
 
-export function PlanificadorSemanal({ planId, semana, equipo, colaboradores, dias, celdasIniciales, publicados, modelos }: {
-  planId: string; semana: string; equipo: EquipoOperativo; colaboradores: Colaborador[]; dias: string[]; celdasIniciales: Celda[]; publicados: Publicado[]; modelos: Modelo[];
+export function PlanificadorSemanal({ planId, semana, equipo, colaboradores, dias, celdasIniciales, publicados, procesados, modelos }: {
+  planId: string; semana: string; equipo: EquipoOperativo; colaboradores: Colaborador[]; dias: string[]; celdasIniciales: Celda[]; publicados: Publicado[]; procesados: string[]; modelos: Modelo[];
 }) {
   const router = useRouter();
   const dialogo = useRef<HTMLDialogElement>(null);
@@ -29,8 +29,9 @@ export function PlanificadorSemanal({ planId, semana, equipo, colaboradores, dia
   const [personalizado, setPersonalizado] = useState<{ colaborador: Colaborador; fecha: string }>();
   const porClave = useMemo(() => new Map(celdas.map((celda) => [`${celda.idHuellero}:${celda.fecha}`, celda])), [celdas]);
   const publicadosPorClave = useMemo(() => new Map(publicados.map((celda) => [`${celda.idHuellero}:${celda.fecha}`, celda])), [publicados]);
+  const procesadosPorId = useMemo(() => new Set(procesados), [procesados]);
   const idsPublicables = colaboradores
-    .filter((colaborador) => !estaPublicadaLaSemana(colaborador.idHuellero, dias, publicadosPorClave))
+    .filter((colaborador) => !procesadosPorId.has(colaborador.idHuellero) && !estaPublicadaLaSemana(colaborador.idHuellero, dias, publicadosPorClave))
     .filter((colaborador) => estaListaParaPublicar(colaborador.idHuellero, dias, porClave))
     .map((colaborador) => colaborador.idHuellero);
   const todasLasPublicablesSeleccionadas = idsPublicables.length > 0 && idsPublicables.every((idHuellero) => personasSeleccionadas.includes(idHuellero));
@@ -107,14 +108,14 @@ export function PlanificadorSemanal({ planId, semana, equipo, colaboradores, dia
       {error && <p role="alert">{error}</p>}
     </div>
     <div className="tabla-plan-semanal"><table><thead><tr><th><label><input aria-label="Seleccionar todas las personas sin publicar" checked={todasLasPublicablesSeleccionadas} disabled={!idsPublicables.length} onChange={(evento) => setPersonasSeleccionadas(evento.target.checked ? idsPublicables : [])} type="checkbox" /> Persona · sede</label></th>{dias.map((fecha) => <th key={fecha}>{fecha.slice(8)}</th>)}</tr></thead><tbody>
-      {colaboradores.map((colaborador) => { const semanaPublicada = estaPublicadaLaSemana(colaborador.idHuellero, dias, publicadosPorClave); const tieneCambiosSinPublicar = semanaPublicada && hayCambiosSinPublicar(colaborador.idHuellero, dias, porClave, publicadosPorClave); return <tr key={colaborador.idHuellero}><th scope="row"><label><input aria-label={`Seleccionar ${colaborador.nombre} para publicar`} checked={personasSeleccionadas.includes(colaborador.idHuellero)} disabled={semanaPublicada} onChange={(evento) => alternarPersona(colaborador.idHuellero, evento.target.checked)} type="checkbox" /><strong>{colaborador.nombre}</strong><small>{colaborador.sede}{semanaPublicada ? tieneCambiosSinPublicar ? " · Cambios sin publicar" : " · Publicado" : ""}</small></label>{tieneCambiosSinPublicar && <button disabled={publicando} onClick={() => republicar(colaborador.idHuellero)} type="button">Republicar cambios</button>}</th>{dias.map((fecha) => {
+      {colaboradores.map((colaborador) => { const semanaProcesada = procesadosPorId.has(colaborador.idHuellero); const semanaPublicada = estaPublicadaLaSemana(colaborador.idHuellero, dias, publicadosPorClave); const tieneCambiosSinPublicar = semanaPublicada && hayCambiosSinPublicar(colaborador.idHuellero, dias, porClave, publicadosPorClave); return <tr key={colaborador.idHuellero}><th scope="row"><label><input aria-label={`Seleccionar ${colaborador.nombre} para publicar`} checked={personasSeleccionadas.includes(colaborador.idHuellero)} disabled={semanaPublicada || semanaProcesada} onChange={(evento) => alternarPersona(colaborador.idHuellero, evento.target.checked)} type="checkbox" /><strong>{colaborador.nombre}</strong><small>{colaborador.sede}{semanaProcesada ? " · Procesado" : semanaPublicada ? tieneCambiosSinPublicar ? " · Cambios sin publicar" : " · Publicado" : ""}</small></label>{tieneCambiosSinPublicar && !semanaProcesada && <button disabled={publicando} onClick={() => republicar(colaborador.idHuellero)} type="button">Republicar cambios</button>}</th>{dias.map((fecha) => {
         const clave = `${colaborador.idHuellero}:${fecha}`; const publicado = publicadosPorClave.get(clave); const celda = porClave.get(clave);
-        if (publicado) return <td className="celda-plan-semanal publicado" key={fecha}><select aria-label={`Horario de ${colaborador.nombre} para ${fecha}`} onChange={(evento) => actualizar(celda, colaborador, fecha, evento.target.value)} value={valorDe(celda ?? publicado)}>
+        if (publicado) return <td className="celda-plan-semanal publicado" key={fecha}><select aria-label={`Horario de ${colaborador.nombre} para ${fecha}`} disabled={semanaProcesada} onChange={(evento) => actualizar(celda, colaborador, fecha, evento.target.value)} value={valorDe(celda ?? publicado)}>
           <option value="">Sin definir</option><option value="descanso">Descanso libre</option>
           {modelos.filter((modelo) => modelo.activo && modelo.sede === colaborador.sede).map((modelo) => <option key={modelo.id} value={modelo.id}>{modelo.nombre} · {modelo.entrada} a {modelo.salida}</option>)}
           <option value="personalizado">Horario personalizado…</option>
         </select><span className="horario-visible">{etiqueta(celda ?? publicado)}</span></td>;
-        return <td className="celda-plan-semanal" key={fecha}><select aria-label={`Horario de ${colaborador.nombre} para ${fecha}`} onChange={(evento) => actualizar(celda, colaborador, fecha, evento.target.value)} value={valorDe(celda)}>
+        return <td className="celda-plan-semanal" key={fecha}><select aria-label={`Horario de ${colaborador.nombre} para ${fecha}`} disabled={semanaProcesada} onChange={(evento) => actualizar(celda, colaborador, fecha, evento.target.value)} value={valorDe(celda)}>
           <option value="">Sin definir</option><option value="descanso">Descanso libre</option>
           {modelos.filter((modelo) => modelo.activo && modelo.sede === colaborador.sede).map((modelo) => <option key={modelo.id} value={modelo.id}>{modelo.nombre} · {modelo.entrada} a {modelo.salida}</option>)}
           <option value="personalizado">Horario personalizado…</option>

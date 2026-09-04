@@ -40,4 +40,5 @@ export interface RepositorioDePlanesSemanales {
   buscarPublicado(idHuellero: string, fecha: string): Promise<HorarioSemanalParaCopiar | undefined>;
   listarHorariosPublicadosDelEquipoEnSemana(semana: string, equipo: EquipoOperativo): Promise<HorarioSemanalParaCopiar[]>;
   asistenciaEstaProcesada?(idHuellero: string, fecha: string): Promise<boolean>;
+  horarioSemanalEstaProcesado?(idHuellero: string, semana: string): Promise<boolean>;
 }
