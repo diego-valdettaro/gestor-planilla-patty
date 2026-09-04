@@ -88,14 +88,22 @@ export function crearCasosDeUsoDePlanesSemanales(
       const plan = await obtenerPlan(repositorio, planId);
       const semanaAnterior = desplazarFecha(plan.semana, -7);
       const horarios = await repositorio.listarHorariosPublicadosDelEquipoEnSemana(semanaAnterior, plan.equipo);
-      const celdas = horarios.map((horario) => ({
+      const celdasCopia = horarios.map((horario) => ({
         ...horario,
         planId,
         fecha: desplazarFecha(horario.fecha, 7),
       }));
-      await Promise.all([...new Set(celdas.map(({ idHuellero }) => idHuellero))].map((idHuellero) => verificarQueNoEsteProcesado(repositorio, idHuellero, plan.semana)));
+      const idsProcesados = new Set<string>();
+      for (const { idHuellero } of celdasCopia) {
+        if (await repositorio.horarioSemanalEstaProcesado?.(idHuellero, plan.semana)) idsProcesados.add(idHuellero);
+      }
+      const celdas = celdasCopia.filter(({ idHuellero }) => !idsProcesados.has(idHuellero));
       await Promise.all(celdas.map((celda) => verificarQueNoEstePublicado(repositorio, celda.idHuellero, celda.fecha)));
-      await repositorio.guardarCeldas(celdas);
+      const celdasProcesadas = [] as CeldaDePlanSemanalEnBorrador[];
+      for (const celda of plan.celdas) {
+        if (idsProcesados.has(celda.idHuellero) || await repositorio.horarioSemanalEstaProcesado?.(celda.idHuellero, plan.semana)) celdasProcesadas.push(celda);
+      }
+      await repositorio.reemplazarCeldasDelPlan(planId, [...celdasProcesadas, ...celdas]);
     },
     async aplicarHorarioACeldas(planId: string, seleccion: SeleccionDeCelda[], horario: HorarioParaAplicar): Promise<void> {
       await autorizar();

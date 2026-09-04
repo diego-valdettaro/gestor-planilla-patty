@@ -407,6 +407,7 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
     await this.db.transaction(async (tx) => {
       await tx.delete(celdasDePlanesSemanalesEnBorrador).where(eq(celdasDePlanesSemanalesEnBorrador.planId, planId));
       if (celdas.length) await tx.insert(celdasDePlanesSemanalesEnBorrador).values(celdas);
+      await tx.update(planesSemanalesEnBorrador).set({ actualizadoEn: new Date() }).where(eq(planesSemanalesEnBorrador.id, planId));
     });
   }
 

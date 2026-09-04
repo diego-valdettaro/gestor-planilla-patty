@@ -36,6 +36,7 @@ function crearRepositorioEnMemoria(): {
       buscarPublicado: async () => undefined,
       colaboradorPerteneceAEquipo: async (idHuellero, equipo) => (idHuellero === "HU-1024" || idHuellero === "HU-2048") && equipo === "tiendas",
       obtenerSedeDelColaborador: async (idHuellero) => idHuellero === "HU-1024" || idHuellero === "HU-2048" ? "Lima" : undefined,
+      listarColaboradoresActivosPorEquipo: async () => [],
       listarHorariosPublicadosDelEquipoEnSemana: async () => [{
         idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima",
         entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false,
@@ -137,6 +138,44 @@ describe("casos de uso de planes semanales en borrador", () => {
     ]);
     expect(turnosPublicados).toEqual([]);
     expect(asistenciasEsperadas).toEqual([]);
+  });
+
+  it("reemplaza las celdas editables del borrador al copiar la semana anterior", async () => {
+    const { repositorio } = crearRepositorioEnMemoria();
+    const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio, {
+      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "operaciones" }),
+    });
+    const plan = await casosDeUso.obtenerOCrear("2026-09-07", "tiendas");
+    await repositorio.guardarCelda({
+      planId: plan.id, idHuellero: "HU-2048", fecha: "2026-09-08", sede: "Lima",
+      entradaProgramada: "10:00", salidaProgramada: "19:00", descanso: false,
+    });
+
+    await casosDeUso.copiarSemanaAnterior(plan.id);
+
+    expect((await casosDeUso.obtenerOCrear("2026-09-07", "tiendas")).celdas).toEqual([
+      expect.objectContaining({ idHuellero: "HU-1024", fecha: "2026-09-08", entradaProgramada: "09:00", salidaProgramada: "18:00" }),
+    ]);
+  });
+
+  it("conserva las celdas de una persona procesada y no copia sus horarios", async () => {
+    const { repositorio } = crearRepositorioEnMemoria();
+    const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio, {
+      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "operaciones" }),
+    });
+    const plan = await casosDeUso.obtenerOCrear("2026-09-07", "tiendas");
+    const celdaProcesada = {
+      planId: plan.id, idHuellero: "HU-1024", fecha: "2026-09-08", sede: "Lima",
+      entradaProgramada: "10:00", salidaProgramada: "19:00", descanso: false,
+    };
+    await repositorio.guardarCelda(celdaProcesada);
+    repositorio.horarioSemanalEstaProcesado = async (idHuellero) => idHuellero === "HU-1024";
+
+    await casosDeUso.copiarSemanaAnterior(plan.id);
+
+    await expect(casosDeUso.obtenerOCrear("2026-09-07", "tiendas")).resolves.toMatchObject({
+      celdas: [expect.objectContaining(celdaProcesada)],
+    });
   });
 
   it("aplica un descanso solo a las celdas seleccionadas del borrador", async () => {

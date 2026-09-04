@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { publicarPlanSemanal } from "./publicar-plan-semanal";
+import { publicarPlanSemanal, publicarPlanSemanalCompleto } from "./publicar-plan-semanal";
 import type { CeldaDePlanSemanalEnBorrador, PlanSemanalEnBorrador, RepositorioDePlanesSemanales } from "./plan-semanal-en-borrador";
 import type { RepositorioDeTurnos, TurnoPublicado } from "./publicar-turno-semanal";
 
@@ -15,6 +15,10 @@ function crearRepositorio(plan: PlanSemanalEnBorrador) {
     borrarCelda: async () => undefined,
     colaboradorPerteneceAEquipo: async (id) => id === "HU-1" || id === "HU-2",
     obtenerSedeDelColaborador: async (id) => id === "HU-1" || id === "HU-2" ? "Lima" : undefined,
+    listarColaboradoresActivosPorEquipo: async () => [
+      { idHuellero: "HU-1", nombre: "Ana", sede: "Lima" },
+      { idHuellero: "HU-2", nombre: "Bea", sede: "Lima" },
+    ],
     listarHorariosPublicadosDelEquipoEnSemana: async () => [],
     buscarPublicado: async (id, fecha) => publicados.find((turno) => turno.idHuellero === id && turno.fecha === fecha),
     publicar: async (turno) => { publicados.push(turno); },
@@ -34,6 +38,23 @@ function celdasDeSemana(idHuellero: string): CeldaDePlanSemanalEnBorrador[] {
 }
 
 describe("publicar plan semanal", () => {
+  it("obtiene todas las personas activas del equipo en el servidor y publica el grupo completo", async () => {
+    const plan = {
+      id: "plan-1", semana: "2026-08-31", equipo: "tiendas" as const,
+      celdas: [...celdasDeSemana("HU-1"), ...celdasDeSemana("HU-2")],
+    };
+    const { publicados, repositorio } = crearRepositorio(plan);
+
+    const resultado = await publicarPlanSemanalCompleto(
+      repositorio,
+      { id: "operaciones-1", rol: "operaciones" },
+      plan.id,
+    );
+
+    expect(resultado).toEqual({ publicados: 2, errores: [] });
+    expect(publicados).toHaveLength(14);
+  });
+
   it("publica todas las personas seleccionadas que tienen sus siete días definidos, incluido un descanso", async () => {
     const celdasDeHu1 = celdasDeSemana("HU-1");
     celdasDeHu1[6] = { ...celdasDeHu1[6], entradaProgramada: null, salidaProgramada: null, descanso: true };
@@ -58,6 +79,21 @@ describe("publicar plan semanal", () => {
 
     expect(resultado.publicados).toBe(0);
     expect(resultado.errores).toContainEqual({ idHuellero: "HU-1", fecha: "2026-09-06", mensaje: "La fecha no pertenece a un período de planilla abierto." });
+    expect(publicados).toEqual([]);
+  });
+
+  it("no publica ninguna parte del equipo si falta una jornada de una persona activa", async () => {
+    const plan = { id: "plan-1", semana: "2026-08-31", equipo: "tiendas" as const, celdas: celdasDeSemana("HU-1") };
+    const { publicados, repositorio } = crearRepositorio(plan);
+
+    const resultado = await publicarPlanSemanalCompleto(
+      repositorio,
+      { id: "administracion-1", rol: "administracion" },
+      plan.id,
+    );
+
+    expect(resultado).toMatchObject({ publicados: 0 });
+    expect(resultado.errores).toContainEqual(expect.objectContaining({ idHuellero: "HU-2", mensaje: "La celda está sin definir." }));
     expect(publicados).toEqual([]);
   });
 

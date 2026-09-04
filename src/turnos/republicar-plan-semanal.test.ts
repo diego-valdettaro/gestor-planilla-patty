@@ -23,6 +23,7 @@ function crearRepositorio(procesada = false) {
     borrarCelda: async () => undefined,
     colaboradorPerteneceAEquipo: async () => true,
     obtenerSedeDelColaborador: async () => "Lima",
+    listarColaboradoresActivosPorEquipo: async () => [],
     listarHorariosPublicadosDelEquipoEnSemana: async () => [],
     buscarPublicado: async (_idHuellero, fecha) => publicados.get(fecha),
     publicar: async () => undefined,

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 
 import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
 import { crearCasosDeUsoDePlanesSemanales } from "@/turnos/casos-de-uso-planes-semanales";
@@ -30,7 +31,7 @@ export default async function PaginaDeTurnos({ searchParams }: { searchParams: P
   const procesados = await repositorioDeTurnos.listarProcesamientosDeSemana(semana, equipo);
   const sedes = [...new Set(colaboradores.map(({ sede }) => sede))];
   const modelos = (await Promise.all(sedes.map((sede) => repositorioDeModelosDeHorario.listarPorSede(sede)))).flat();
-  return <main className="contenido contenido-turnos"><section className="plan-semanal"><header className="barra-plan-semanal"><div><p className="eyebrow">{actor.rol === "administracion" ? "Administración" : "Operaciones"}</p><h1>Plan semanal</h1></div><p className="rango-semana">{dias[0]} al {dias.at(-1)}</p></header>
-    <PlanificadorSemanal planId={plan.id} semana={semana} equipo={equipo} colaboradores={colaboradores} dias={dias} celdasIniciales={plan.celdas} publicados={publicados} procesados={procesados} modelos={modelos} />
+  return <main className="contenido contenido-turnos"><section className="plan-semanal"><header className="barra-plan-semanal"><div><p className="breadcrumb">Horarios / Planificación semanal</p><h1>Horarios</h1><p>Organice la semana de cada equipo antes de publicarla.</p></div><Link className="boton-secundario" href="/turnos">+ Crear horario</Link></header>
+    <PlanificadorSemanal actualizadoEn={plan.actualizadoEn?.toISOString()} equipos={equipos} planId={plan.id} semana={semana} equipo={equipo} colaboradores={colaboradores} dias={dias} celdasIniciales={plan.celdas} publicados={publicados} procesados={procesados} modelos={modelos} />
   </section></main>;
 }

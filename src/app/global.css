@@ -81,11 +81,13 @@ th, td { border: 1px solid #e2e8f0; padding: 0.6rem; text-align: left; }
 .sin-asistencia { background: #f8fafc; }
 .detalle-asistencia { border-color: #7dd3fc; }
 
-.contenido-turnos { max-width: 96rem; }
-.plan-semanal { background: #fff; border: 1px solid #d1d5db; border-radius: 0.75rem; overflow: hidden; }
+.contenido-turnos { background: #f5f1ea; max-width: 96rem; }
+.plan-semanal { background: #fff; border: 1px solid #d9d5cf; border-radius: 0.75rem; box-shadow: 0 0.25rem 0.8rem rgb(15 23 42 / 8%); overflow: hidden; }
 .barra-plan-semanal, .herramientas-plan-semanal, .pie-plan-semanal { align-items: center; display: flex; flex-wrap: wrap; gap: 0.75rem; padding: 0.85rem 1rem; }
 .barra-plan-semanal { border-bottom: 1px solid #e5e7eb; }
 .barra-plan-semanal h1 { font-size: 1.125rem; margin: 0.1rem 0 0; }
+.barra-plan-semanal p { color: #475569; margin: 0.35rem 0 0; }
+.breadcrumb { color: #64748b !important; font-size: 0.8rem; margin: 0 !important; }
 .rango-semana { color: #6b7280; font-size: 0.85rem; margin: 0 auto 0 0; }
 .navegacion-semana { display: flex; gap: 0.5rem; }
 .navegacion-semana a, .boton-secundario { background: #fff; border: 1px solid #9ca3af; border-radius: 0.4rem; color: #1d2733; font-size: 0.85rem; padding: 0.45rem 0.6rem; text-decoration: none; }
@@ -100,15 +102,18 @@ th, td { border: 1px solid #e2e8f0; padding: 0.6rem; text-align: left; }
 .tabla-plan-semanal { overflow-x: auto; }
 .tabla-plan-semanal table { font-size: 0.82rem; min-width: 72rem; }
 .tabla-plan-semanal th, .tabla-plan-semanal td { border: 0; border-bottom: 1px solid #e5e7eb; padding: 0.6rem 0.5rem; vertical-align: middle; }
-.tabla-plan-semanal thead th { background: #f8fafc; font-weight: 700; white-space: nowrap; }
+.tabla-plan-semanal thead th { background: #f8fafc; font-weight: 700; position: sticky; top: 0; white-space: nowrap; z-index: 2; }
 .tabla-plan-semanal thead th:first-child, .tabla-plan-semanal tbody > tr:not(.grupo-sede) > th { background: #fff; left: 0; min-width: 10rem; position: sticky; z-index: 1; }
-.tabla-plan-semanal thead th:first-child { background: #f8fafc; z-index: 2; }
+.tabla-plan-semanal thead th:first-child { background: #f8fafc; z-index: 3; }
 .grupo-sede th { background: #f1f5f9; color: #475569; font-size: 0.75rem; letter-spacing: 0.04em; padding: 0.45rem 0.5rem; text-transform: uppercase; }
 .selector-publicacion { align-items: center; display: flex; gap: 0.45rem; }
 .selector-publicacion input { margin: 0; }
 .selector-publicacion span { display: grid; gap: 0.1rem; }
 .selector-publicacion small { color: #6b7280; font-weight: 400; }
 .celda-plan-semanal { min-width: 8.5rem; }
+.celda-plan-semanal select { background: #eff6ff; border-color: #bfdbfe; color: #172554; }
+.celda-plan-semanal select:has(option[value=""]:checked) { background: #fffbeb; border-color: #fde68a; }
+.celda-plan-semanal select:has(option[value="descanso"]:checked) { background: #f0fdf4; border-color: #bbf7d0; }
 .horario-visible, .editor-celda-plan select { border-radius: 0.32rem; display: block; font-size: 0.8rem; min-height: 2rem; padding: 0.4rem 0.45rem; width: 100%; }
 .celda-plan-semanal.publicado .horario-visible { background: #e0f2fe; color: #0c4a6e; }
 .celda-plan-semanal.descanso .horario-visible { background: #f3f4f6; color: #374151; text-align: center; }
@@ -123,6 +128,7 @@ th, td { border: 1px solid #e2e8f0; padding: 0.6rem; text-align: left; }
 .celda-plan-semanal.borrador .editor-celda-plan select { background: #e0f2fe; border-color: #7dd3fc; color: #0c4a6e; }
 .pie-plan-semanal { border-top: 1px solid #e5e7eb; justify-content: space-between; }
 .pie-plan-semanal p { color: #6b7280; font-size: 0.85rem; margin: 0; }
+.pie-plan-semanal div { display: flex; gap: 0.5rem; }
 .sr-only { height: 1px; margin: -1px; overflow: hidden; padding: 0; position: absolute; width: 1px; clip: rect(0, 0, 0, 0); white-space: nowrap; }
 @media (max-width: 700px) { .contenido { padding: 1rem; } .filtros { align-items: stretch; flex-direction: column; } }
 @media (max-width: 700px) { .barra-plan-semanal, .herramientas-plan-semanal, .pie-plan-semanal { align-items: stretch; flex-direction: column; } .rango-semana, .resumen-plan { margin-left: 0; } .selector-plan-semanal, .aplicar-horario { align-items: stretch; flex-direction: column; } .navegacion-semana { justify-content: stretch; } .navegacion-semana a { flex: 1; text-align: center; } }

@@ -17,6 +17,17 @@ export interface ResultadoDePublicacionDePlan {
 
 type RepositorioParaPublicarPlan = RepositorioDePlanesSemanales & RepositorioDeTurnos;
 
+export async function publicarPlanSemanalCompleto(
+  repositorio: RepositorioParaPublicarPlan,
+  actor: Actor,
+  planId: string,
+): Promise<ResultadoDePublicacionDePlan> {
+  const plan = await repositorio.buscarPorId(planId);
+  if (!plan) throw new Error("El plan semanal en borrador no existe.");
+  const colaboradores = await repositorio.listarColaboradoresActivosPorEquipo(plan.equipo);
+  return publicarPlanSemanal(repositorio, actor, planId, colaboradores.map(({ idHuellero }) => idHuellero));
+}
+
 export async function publicarPlanSemanal(
   repositorio: RepositorioParaPublicarPlan,
   actor: Actor,
