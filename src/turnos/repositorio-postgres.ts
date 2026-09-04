@@ -66,7 +66,9 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
       for (const turno of turnos) {
         const [turnoPublicado] = await tx.insert(turnosPublicados).values(turno).returning({ id: turnosPublicados.id });
         await tx.insert(historialDeTurnosPublicados).values({ turnoPublicadoId: turnoPublicado.id });
-        await tx.insert(asistenciasEsperadas).values({ idHuellero: turno.idHuellero, fecha: turno.fecha, estado: "pendiente" });
+        if (!turno.descanso) {
+          await tx.insert(asistenciasEsperadas).values({ idHuellero: turno.idHuellero, fecha: turno.fecha, estado: "pendiente" });
+        }
       }
     });
   }

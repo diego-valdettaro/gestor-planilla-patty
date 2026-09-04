@@ -32,15 +32,18 @@ function celdasDeSemana(idHuellero: string): CeldaDePlanSemanalEnBorrador[] {
 }
 
 describe("publicar plan semanal", () => {
-  it("publica solamente personas completas y crea todos sus horarios, historial y asistencias esperadas", async () => {
-    const plan = { id: "plan-1", semana: "2026-08-31", equipo: "tiendas" as const, celdas: [...celdasDeSemana("HU-1"), ...celdasDeSemana("HU-2").slice(0, 6)] };
+  it("publica todas las personas seleccionadas que tienen sus siete días definidos, incluido un descanso", async () => {
+    const celdasDeHu1 = celdasDeSemana("HU-1");
+    celdasDeHu1[6] = { ...celdasDeHu1[6], entradaProgramada: null, salidaProgramada: null, descanso: true };
+    const plan = { id: "plan-1", semana: "2026-08-31", equipo: "tiendas" as const, celdas: [...celdasDeHu1, ...celdasDeSemana("HU-2")] };
     const { publicados, repositorio } = crearRepositorio(plan);
 
-    const resultado = await publicarPlanSemanal(repositorio, { id: "operaciones-1", rol: "operaciones" }, plan.id, ["HU-1"]);
+    const resultado = await publicarPlanSemanal(repositorio, { id: "operaciones-1", rol: "operaciones" }, plan.id, ["HU-1", "HU-2"]);
 
-    expect(resultado).toEqual({ publicados: 1, errores: [] });
-    expect(publicados).toHaveLength(7);
-    expect(publicados.every((turno) => turno.idHuellero === "HU-1")).toBe(true);
+    expect(resultado).toEqual({ publicados: 2, errores: [] });
+    expect(publicados).toHaveLength(14);
+    expect(publicados.filter((turno) => turno.idHuellero === "HU-1")).toHaveLength(7);
+    expect(publicados.find((turno) => turno.idHuellero === "HU-1" && turno.fecha === "2026-09-06")).toMatchObject({ descanso: true });
   });
 
   it("no publica ninguna persona seleccionada y devuelve el error por celda si una es inválida o queda fuera de un período abierto", async () => {
