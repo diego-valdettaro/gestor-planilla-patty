@@ -20,6 +20,8 @@ function crearRepositorio(plan: PlanSemanalEnBorrador) {
     publicar: async (turno) => { publicados.push(turno); },
     publicarEnLote: async (turnos) => { publicados.push(...turnos); },
     perteneceAPeriodoAbierto: async (fecha) => fecha <= "2026-09-06",
+    asistenciaEstaProcesada: async () => false,
+    reemplazarSemanaPublicada: async () => undefined,
   };
   return { publicados, repositorio };
 }

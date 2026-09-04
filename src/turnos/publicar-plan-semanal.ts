@@ -30,7 +30,7 @@ export async function publicarPlanSemanal(
     .filter((celda) => idsSeleccionados.includes(celda.idHuellero))
     .map(({ planId: _planId, ...turno }) => turno);
   try {
-    await repositorio.publicarEnLote(turnos);
+    await repositorio.publicarEnLote(turnos, actor);
   } catch (error) {
     const revisionPosterior = (await Promise.all(idsSeleccionados.map((idHuellero) => validarPersona(repositorio, plan, idHuellero)))).flat();
     if (revisionPosterior.length) return { publicados: 0, errores: revisionPosterior };

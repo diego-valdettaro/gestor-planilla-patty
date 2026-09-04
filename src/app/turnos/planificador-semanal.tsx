@@ -8,7 +8,7 @@ import type { ModeloDeHorario } from "@/turnos/gestionar-modelos-de-horario";
 import type { CeldaDePlanSemanalEnBorrador, HorarioSemanalParaCopiar } from "@/turnos/plan-semanal-en-borrador";
 import { inicioDeSemana } from "@/turnos/semana";
 
-import { copiarSemanaAnteriorEnBorrador, guardarBorradorDesdeGrilla, publicarPlanSemanalDesdeGrilla } from "./actions";
+import { copiarSemanaAnteriorEnBorrador, guardarBorradorDesdeGrilla, publicarPlanSemanalDesdeGrilla, republicarPlanSemanalDesdeGrilla } from "./actions";
 
 type Celda = Omit<CeldaDePlanSemanalEnBorrador, "planId">;
 type Colaborador = { idHuellero: string; nombre: string; sede: string };
@@ -76,6 +76,17 @@ export function PlanificadorSemanal({ planId, semana, equipo, colaboradores, dia
     catch (causa) { setError(causa instanceof Error ? causa.message : "No se pudo publicar el horario semanal."); }
     finally { setPublicando(false); }
   }
+  async function republicar(idHuellero: string) {
+    if (cambios) { setError("Guarde el borrador antes de republicar."); return; }
+    const motivo = window.prompt("Motivo breve de la republicación:");
+    if (!motivo?.trim()) return;
+    setPublicando(true); setError(undefined);
+    const datos = new FormData();
+    datos.set("planId", planId); datos.set("idHuellero", idHuellero); datos.set("motivo", motivo);
+    try { await republicarPlanSemanalDesdeGrilla(datos); router.refresh(); }
+    catch (causa) { setError(causa instanceof Error ? causa.message : "No se pudo republicar el horario semanal."); }
+    finally { setPublicando(false); }
+  }
   function alternarPersona(idHuellero: string, seleccionada: boolean) {
     setPersonasSeleccionadas((actuales) => seleccionada ? [...new Set([...actuales, idHuellero])] : actuales.filter((id) => id !== idHuellero));
   }
@@ -96,9 +107,13 @@ export function PlanificadorSemanal({ planId, semana, equipo, colaboradores, dia
       {error && <p role="alert">{error}</p>}
     </div>
     <div className="tabla-plan-semanal"><table><thead><tr><th><label><input aria-label="Seleccionar todas las personas sin publicar" checked={todasLasPublicablesSeleccionadas} disabled={!idsPublicables.length} onChange={(evento) => setPersonasSeleccionadas(evento.target.checked ? idsPublicables : [])} type="checkbox" /> Persona · sede</label></th>{dias.map((fecha) => <th key={fecha}>{fecha.slice(8)}</th>)}</tr></thead><tbody>
-      {colaboradores.map((colaborador) => { const semanaPublicada = estaPublicadaLaSemana(colaborador.idHuellero, dias, publicadosPorClave); return <tr key={colaborador.idHuellero}><th scope="row"><label><input aria-label={`Seleccionar ${colaborador.nombre} para publicar`} checked={personasSeleccionadas.includes(colaborador.idHuellero)} disabled={semanaPublicada} onChange={(evento) => alternarPersona(colaborador.idHuellero, evento.target.checked)} type="checkbox" /><strong>{colaborador.nombre}</strong><small>{colaborador.sede}{semanaPublicada ? " · Publicado" : ""}</small></label></th>{dias.map((fecha) => {
+      {colaboradores.map((colaborador) => { const semanaPublicada = estaPublicadaLaSemana(colaborador.idHuellero, dias, publicadosPorClave); const tieneCambiosSinPublicar = semanaPublicada && hayCambiosSinPublicar(colaborador.idHuellero, dias, porClave, publicadosPorClave); return <tr key={colaborador.idHuellero}><th scope="row"><label><input aria-label={`Seleccionar ${colaborador.nombre} para publicar`} checked={personasSeleccionadas.includes(colaborador.idHuellero)} disabled={semanaPublicada} onChange={(evento) => alternarPersona(colaborador.idHuellero, evento.target.checked)} type="checkbox" /><strong>{colaborador.nombre}</strong><small>{colaborador.sede}{semanaPublicada ? tieneCambiosSinPublicar ? " · Cambios sin publicar" : " · Publicado" : ""}</small></label>{tieneCambiosSinPublicar && <button disabled={publicando} onClick={() => republicar(colaborador.idHuellero)} type="button">Republicar cambios</button>}</th>{dias.map((fecha) => {
         const clave = `${colaborador.idHuellero}:${fecha}`; const publicado = publicadosPorClave.get(clave); const celda = porClave.get(clave);
-        if (publicado) return <td className="celda-plan-semanal publicado" key={fecha}>{etiqueta(publicado)}</td>;
+        if (publicado) return <td className="celda-plan-semanal publicado" key={fecha}><select aria-label={`Horario de ${colaborador.nombre} para ${fecha}`} onChange={(evento) => actualizar(celda, colaborador, fecha, evento.target.value)} value={valorDe(celda ?? publicado)}>
+          <option value="">Sin definir</option><option value="descanso">Descanso libre</option>
+          {modelos.filter((modelo) => modelo.activo && modelo.sede === colaborador.sede).map((modelo) => <option key={modelo.id} value={modelo.id}>{modelo.nombre} · {modelo.entrada} a {modelo.salida}</option>)}
+          <option value="personalizado">Horario personalizado…</option>
+        </select><span className="horario-visible">{etiqueta(celda ?? publicado)}</span></td>;
         return <td className="celda-plan-semanal" key={fecha}><select aria-label={`Horario de ${colaborador.nombre} para ${fecha}`} onChange={(evento) => actualizar(celda, colaborador, fecha, evento.target.value)} value={valorDe(celda)}>
           <option value="">Sin definir</option><option value="descanso">Descanso libre</option>
           {modelos.filter((modelo) => modelo.activo && modelo.sede === colaborador.sede).map((modelo) => <option key={modelo.id} value={modelo.id}>{modelo.nombre} · {modelo.entrada} a {modelo.salida}</option>)}
@@ -126,5 +141,11 @@ function estaListaParaPublicar(idHuellero: string, dias: string[], celdas: Map<s
   return dias.every((fecha) => {
     const celda = celdas.get(`${idHuellero}:${fecha}`);
     return Boolean(celda && (celda.descanso || (celda.sede.trim() && celda.entradaProgramada && celda.salidaProgramada)));
+  });
+}
+function hayCambiosSinPublicar(idHuellero: string, dias: string[], celdas: Map<string, Celda>, publicados: Map<string, Publicado>) {
+  return dias.some((fecha) => {
+    const clave = `${idHuellero}:${fecha}`; const celda = celdas.get(clave); const publicado = publicados.get(clave);
+    return Boolean(celda && publicado && (celda.sede !== publicado.sede || celda.modeloHorarioId !== publicado.modeloHorarioId || celda.entradaProgramada !== publicado.entradaProgramada || celda.salidaProgramada !== publicado.salidaProgramada || celda.descanso !== publicado.descanso));
   });
 }

@@ -21,8 +21,10 @@ export interface RepositorioDeTurnos {
     idHuellero: string,
     fecha: string,
   ): Promise<TurnoPublicado | undefined>;
-  publicar(turno: TurnoPublicado): Promise<void>;
-  publicarEnLote(turnos: TurnoPublicado[]): Promise<void>;
+  publicar(turno: TurnoPublicado, actor?: Actor): Promise<void>;
+  publicarEnLote(turnos: TurnoPublicado[], actor?: Actor): Promise<void>;
+  asistenciaEstaProcesada(idHuellero: string, fecha: string): Promise<boolean>;
+  reemplazarSemanaPublicada(turnos: TurnoPublicado[], actor: Actor, motivo: string): Promise<void>;
   perteneceAPeriodoAbierto(fecha: string): Promise<boolean>;
 }
 
@@ -43,5 +45,5 @@ export async function publicarTurnoSemanal(
     throw new Error("Ya existe un turno publicado para este colaborador y fecha.");
   }
 
-  await repositorio.publicar(turno);
+  await repositorio.publicar(turno, actor);
 }

@@ -126,7 +126,20 @@ export const historialDeTurnosPublicados = pgTable("historial_turnos_publicados"
     .notNull()
     .references(() => turnosPublicados.id),
   publicadoEn: timestamp("publicado_en", { withTimezone: true }).notNull().defaultNow(),
-});
+  horario: jsonb("horario").$type<{
+    idHuellero: string;
+    fecha: string;
+    sede: string;
+    modeloHorarioId: string | null;
+    entradaProgramada: string | null;
+    salidaProgramada: string | null;
+    descanso: boolean;
+  }>().notNull(),
+  responsableId: uuid("responsable_id").references(() => cuentasLocales.id),
+  motivo: text("motivo"),
+}, (table) => [
+  check("historial_republicacion_auditada", sql`${table.motivo} IS NULL OR (${table.responsableId} IS NOT NULL AND char_length(btrim(${table.motivo})) BETWEEN 1 AND 250)`),
+]);
 
 export const planesSemanalesEnBorrador = pgTable(
   "planes_semanales_en_borrador",

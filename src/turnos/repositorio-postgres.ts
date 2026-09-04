@@ -4,19 +4,24 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "@/db/schema";
 import {
   asistenciasEsperadas,
+  ajustesDeAsistencia,
   celdasDePlanesSemanalesEnBorrador,
   colaboradores,
   historialDeTurnosPublicados,
+  estadosManuales,
+  horasExtra,
   periodosPlanilla,
   planesSemanalesEnBorrador,
   sedes,
   turnosPublicados,
+  tardanzas,
 } from "@/db/schema";
 
 import type { RepositorioDeEquiposOperativos } from "./configurar-equipos-operativos";
 import type { EquipoOperativo } from "./configurar-equipos-operativos";
 import type { CeldaDePlanSemanalEnBorrador, PlanSemanalEnBorrador, RepositorioDePlanesSemanales } from "./plan-semanal-en-borrador";
 import type { RepositorioDeTurnos, TurnoPublicado } from "./publicar-turno-semanal";
+import type { Actor } from "@/colaboradores/registrar-colaborador";
 import { desplazarFecha } from "./semana";
 
 export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, RepositorioDeEquiposOperativos, RepositorioDePlanesSemanales {
@@ -47,11 +52,11 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
     return turno;
   }
 
-  async publicar(turno: TurnoPublicado): Promise<void> {
-    await this.publicarEnLote([turno]);
+  async publicar(turno: TurnoPublicado, actor?: Actor): Promise<void> {
+    await this.publicarEnLote([turno], actor);
   }
 
-  async publicarEnLote(turnos: TurnoPublicado[]): Promise<void> {
+  async publicarEnLote(turnos: TurnoPublicado[], actor?: Actor): Promise<void> {
     await this.db.transaction(async (tx) => {
       for (const turno of turnos) {
         const [periodo] = await tx.select({ id: periodosPlanilla.id }).from(periodosPlanilla).where(and(
@@ -65,10 +70,58 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
       }
       for (const turno of turnos) {
         const [turnoPublicado] = await tx.insert(turnosPublicados).values(turno).returning({ id: turnosPublicados.id });
-        await tx.insert(historialDeTurnosPublicados).values({ turnoPublicadoId: turnoPublicado.id });
+        await tx.insert(historialDeTurnosPublicados).values({
+          turnoPublicadoId: turnoPublicado.id,
+          horario: contenidoDe(turno),
+          responsableId: actor?.id,
+          motivo: actor ? "Publicación inicial" : null,
+        });
         if (!turno.descanso) {
           await tx.insert(asistenciasEsperadas).values({ idHuellero: turno.idHuellero, fecha: turno.fecha, estado: "pendiente" });
         }
+      }
+    });
+  }
+
+  async asistenciaEstaProcesada(idHuellero: string, fecha: string): Promise<boolean> {
+    const [asistencia] = await this.db.select({ estado: asistenciasEsperadas.estado }).from(asistenciasEsperadas).where(and(
+      eq(asistenciasEsperadas.idHuellero, idHuellero), eq(asistenciasEsperadas.fecha, fecha),
+    ));
+    return asistencia?.estado === "confirmada" || asistencia?.estado === "manual";
+  }
+
+  async reemplazarSemanaPublicada(turnos: TurnoPublicado[], actor: Actor, motivo: string): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      for (const turno of turnos) {
+        const [periodo] = await tx.select({ id: periodosPlanilla.id }).from(periodosPlanilla).where(and(
+          eq(periodosPlanilla.estado, "abierto"), lte(periodosPlanilla.inicio, turno.fecha), gte(periodosPlanilla.fin, turno.fecha),
+        ));
+        if (!periodo) throw new Error("La fecha no pertenece a un período de planilla abierto.");
+        const [existente] = await tx.select({ id: turnosPublicados.id }).from(turnosPublicados).where(and(
+          eq(turnosPublicados.idHuellero, turno.idHuellero), eq(turnosPublicados.fecha, turno.fecha),
+        ));
+        if (!existente) throw new Error("La corrección debe incluir horarios semanales publicados.");
+        const [asistencia] = await tx.select({ id: asistenciasEsperadas.id, estado: asistenciasEsperadas.estado }).from(asistenciasEsperadas).where(and(
+          eq(asistenciasEsperadas.idHuellero, turno.idHuellero), eq(asistenciasEsperadas.fecha, turno.fecha),
+        )).for("update");
+        if (asistencia?.estado === "confirmada" || asistencia?.estado === "manual") throw new Error("No se puede corregir un horario semanal que ya fue procesado.");
+        if (asistencia) {
+          await tx.delete(ajustesDeAsistencia).where(eq(ajustesDeAsistencia.asistenciaId, asistencia.id));
+          await tx.delete(estadosManuales).where(eq(estadosManuales.asistenciaId, asistencia.id));
+          await tx.delete(tardanzas).where(eq(tardanzas.asistenciaId, asistencia.id));
+          await tx.delete(horasExtra).where(eq(horasExtra.asistenciaId, asistencia.id));
+          if (turno.descanso) await tx.delete(asistenciasEsperadas).where(eq(asistenciasEsperadas.id, asistencia.id));
+          else await tx.update(asistenciasEsperadas).set({ estado: "pendiente", entradaPropuesta: null, salidaPropuesta: null, entradaReal: null, salidaReal: null, minutosTrabajados: null, instantaneaDeTurno: null, confirmadoPorId: null, confirmadoEn: null }).where(eq(asistenciasEsperadas.id, asistencia.id));
+        } else if (!turno.descanso) {
+          await tx.insert(asistenciasEsperadas).values({ idHuellero: turno.idHuellero, fecha: turno.fecha, estado: "pendiente" });
+        }
+        await tx.update(turnosPublicados).set({
+          sede: turno.sede, modeloHorarioId: turno.modeloHorarioId ?? null, entradaProgramada: turno.entradaProgramada,
+          salidaProgramada: turno.salidaProgramada, descanso: turno.descanso, publicadoEn: new Date(),
+        }).where(eq(turnosPublicados.id, existente.id));
+        await tx.insert(historialDeTurnosPublicados).values({
+          turnoPublicadoId: existente.id, horario: contenidoDe(turno), responsableId: actor.id, motivo,
+        });
       }
     });
   }
@@ -324,4 +377,16 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
     }).from(celdasDePlanesSemanalesEnBorrador).where(eq(celdasDePlanesSemanalesEnBorrador.planId, plan.id));
     return { ...plan, celdas };
   }
+}
+
+function contenidoDe(turno: TurnoPublicado) {
+  return {
+    idHuellero: turno.idHuellero,
+    fecha: turno.fecha,
+    sede: turno.sede,
+    modeloHorarioId: turno.modeloHorarioId ?? null,
+    entradaProgramada: turno.entradaProgramada,
+    salidaProgramada: turno.salidaProgramada,
+    descanso: turno.descanso,
+  };
 }

@@ -38,6 +38,8 @@ function crearRepositorioEnMemoria(): {
         }
       },
       perteneceAPeriodoAbierto: async (fecha) => fecha >= "2026-08-26" && fecha <= "2026-09-25",
+      asistenciaEstaProcesada: async () => false,
+      reemplazarSemanaPublicada: async () => undefined,
     },
   };
 }

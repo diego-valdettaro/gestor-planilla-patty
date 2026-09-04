@@ -181,19 +181,20 @@ describe("casos de uso de planes semanales en borrador", () => {
     await expect(finanzas.borrarCelda(plan.id, "HU-1024", "2026-09-01")).rejects.toThrow("No tiene permiso para editar planes semanales en borrador.");
   });
 
-  it("impide modificar en el borrador una jornada que ya tiene un horario semanal publicado", async () => {
+  it("impide corregir en el borrador una jornada publicada que ya fue procesada", async () => {
     const { repositorio } = crearRepositorioEnMemoria();
     repositorio.buscarPublicado = async (idHuellero, fecha) => idHuellero === "HU-1024" && fecha === "2026-09-01"
       ? { idHuellero, fecha, sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false }
       : undefined;
+    repositorio.asistenciaEstaProcesada = async () => true;
     const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio, {
       obtenerActorActual: async () => ({ id: "operaciones-1", rol: "operaciones" }),
     });
     const plan = await casosDeUso.obtenerOCrear("2026-08-31", "tiendas");
     const celda = { idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima", entradaProgramada: "10:00", salidaProgramada: "19:00", descanso: false };
 
-    await expect(casosDeUso.guardarCelda(plan.id, celda)).rejects.toThrow("El horario semanal ya fue publicado y no se puede editar desde el borrador.");
-    await expect(casosDeUso.aplicarHorarioACeldas(plan.id, [celda], celda)).rejects.toThrow("El horario semanal ya fue publicado y no se puede editar desde el borrador.");
+    await expect(casosDeUso.guardarCelda(plan.id, celda)).rejects.toThrow("El horario semanal ya fue procesado y no se puede corregir.");
+    await expect(casosDeUso.aplicarHorarioACeldas(plan.id, [celda], celda)).rejects.toThrow("El horario semanal ya fue procesado y no se puede corregir.");
     await expect(casosDeUso.borrarCelda(plan.id, celda.idHuellero, celda.fecha)).rejects.toThrow("El horario semanal ya fue publicado y no se puede editar desde el borrador.");
   });
 

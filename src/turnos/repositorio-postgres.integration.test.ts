@@ -21,6 +21,8 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeTurnos", () => {
   const fecha = "2030-09-02";
   const fechaParaAtomicidad = "2030-09-03";
   const semanaDePlan = "2030-09-02";
+  const fechasDeCorreccion = Array.from({ length: 7 }, (_, indice) => new Date(Date.UTC(2030, 8, 10 + indice)).toISOString().slice(0, 10));
+  const cuentaId = randomUUID();
 
   beforeAll(async () => {
     await db.insert(schema.colaboradores).values({
@@ -35,20 +37,25 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeTurnos", () => {
       fin: "2030-09-25",
       estado: "abierto",
     });
+    await db.insert(schema.cuentasLocales).values({ id: cuentaId, nombreUsuario: `turnos-${cuentaId}`, hashContrasena: "prueba", rol: "operaciones" });
   });
 
   afterAll(async () => {
     const turnos = await db
       .select({ id: schema.turnosPublicados.id })
       .from(schema.turnosPublicados)
-      .where(and(eq(schema.turnosPublicados.idHuellero, idHuellero), inArray(schema.turnosPublicados.fecha, [fecha, fechaParaAtomicidad])));
+      .where(and(eq(schema.turnosPublicados.idHuellero, idHuellero), inArray(schema.turnosPublicados.fecha, [fecha, fechaParaAtomicidad, ...fechasDeCorreccion])));
+
+    const asistencias = await db.select({ id: schema.asistenciasEsperadas.id }).from(schema.asistenciasEsperadas)
+      .where(and(eq(schema.asistenciasEsperadas.idHuellero, idHuellero), inArray(schema.asistenciasEsperadas.fecha, [fecha, fechaParaAtomicidad, ...fechasDeCorreccion])));
+    if (asistencias.length) {
+      await db.delete(schema.tardanzas).where(inArray(schema.tardanzas.asistenciaId, asistencias.map(({ id }) => id)));
+      await db.delete(schema.horasExtra).where(inArray(schema.horasExtra.asistenciaId, asistencias.map(({ id }) => id)));
+    }
 
     await db
       .delete(schema.asistenciasEsperadas)
-      .where(and(eq(schema.asistenciasEsperadas.idHuellero, idHuellero), eq(schema.asistenciasEsperadas.fecha, fecha)));
-    await db
-      .delete(schema.asistenciasEsperadas)
-      .where(and(eq(schema.asistenciasEsperadas.idHuellero, idHuellero), eq(schema.asistenciasEsperadas.fecha, fechaParaAtomicidad)));
+      .where(and(eq(schema.asistenciasEsperadas.idHuellero, idHuellero), inArray(schema.asistenciasEsperadas.fecha, [fecha, fechaParaAtomicidad, ...fechasDeCorreccion])));
     if (turnos.length) {
       await db
         .delete(schema.historialDeTurnosPublicados)
@@ -56,10 +63,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeTurnos", () => {
     }
     await db
       .delete(schema.turnosPublicados)
-      .where(and(eq(schema.turnosPublicados.idHuellero, idHuellero), eq(schema.turnosPublicados.fecha, fecha)));
-    await db
-      .delete(schema.turnosPublicados)
-      .where(and(eq(schema.turnosPublicados.idHuellero, idHuellero), eq(schema.turnosPublicados.fecha, fechaParaAtomicidad)));
+      .where(and(eq(schema.turnosPublicados.idHuellero, idHuellero), inArray(schema.turnosPublicados.fecha, [fecha, fechaParaAtomicidad, ...fechasDeCorreccion])));
     await db
       .delete(schema.periodosPlanilla)
       .where(and(eq(schema.periodosPlanilla.inicio, "2030-08-26"), eq(schema.periodosPlanilla.fin, "2030-09-25")));
@@ -68,6 +72,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeTurnos", () => {
     if (planes.length) await db.delete(schema.celdasDePlanesSemanalesEnBorrador).where(inArray(schema.celdasDePlanesSemanalesEnBorrador.planId, planes.map(({ id }) => id)));
     await db.delete(schema.planesSemanalesEnBorrador).where(and(eq(schema.planesSemanalesEnBorrador.semana, semanaDePlan), eq(schema.planesSemanalesEnBorrador.equipo, "tiendas")));
     await db.delete(schema.colaboradores).where(eq(schema.colaboradores.idHuellero, idHuellero));
+    await db.delete(schema.cuentasLocales).where(eq(schema.cuentasLocales.id, cuentaId));
     await pool.end();
   });
 
@@ -113,5 +118,28 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeTurnos", () => {
 
   it("crea y lee un plan semanal en borrador", async () => {
     await expect(repositorio.obtenerOCrear(semanaDePlan, "tiendas")).resolves.toMatchObject({ semana: semanaDePlan, equipo: "tiendas", celdas: [] });
+  });
+
+  it("republica los siete días, conserva la auditoría y reinicia cálculos pendientes", async () => {
+    const actor = { id: cuentaId, rol: "operaciones" as const };
+    const originales = fechasDeCorreccion.map((fechaDeCorreccion) => ({ idHuellero, fecha: fechaDeCorreccion, sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false }));
+    await repositorio.publicarEnLote(originales, actor);
+    const [asistencia] = await db.select({ id: schema.asistenciasEsperadas.id }).from(schema.asistenciasEsperadas)
+      .where(and(eq(schema.asistenciasEsperadas.idHuellero, idHuellero), eq(schema.asistenciasEsperadas.fecha, fechasDeCorreccion[0])));
+    await db.update(schema.asistenciasEsperadas).set({ entradaPropuesta: "09:05", salidaPropuesta: "18:10" }).where(eq(schema.asistenciasEsperadas.id, asistencia.id));
+    await db.insert(schema.tardanzas).values({ asistenciaId: asistencia.id, minutosDeTardanza: 5, minutosPenalizados: 0, politicaVersion: 1 });
+    await db.insert(schema.horasExtra).values({ asistenciaId: asistencia.id, minutosAl25: 10, minutosAl35: 0, estado: "pendiente" });
+
+    await repositorio.reemplazarSemanaPublicada(originales.map((turno, indice) => indice === 0 ? { ...turno, entradaProgramada: "10:00", salidaProgramada: "19:00" } : turno), actor, "Corrige entrada pactada");
+
+    await expect(db.select({ estado: schema.asistenciasEsperadas.estado, entrada: schema.asistenciasEsperadas.entradaPropuesta, salida: schema.asistenciasEsperadas.salidaPropuesta }).from(schema.asistenciasEsperadas)
+      .where(eq(schema.asistenciasEsperadas.id, asistencia.id))).resolves.toEqual([{ estado: "pendiente", entrada: null, salida: null }]);
+    await expect(db.select().from(schema.tardanzas).where(eq(schema.tardanzas.asistenciaId, asistencia.id))).resolves.toEqual([]);
+    await expect(db.select().from(schema.horasExtra).where(eq(schema.horasExtra.asistenciaId, asistencia.id))).resolves.toEqual([]);
+    await expect(db.select({ horario: schema.historialDeTurnosPublicados.horario, responsableId: schema.historialDeTurnosPublicados.responsableId, motivo: schema.historialDeTurnosPublicados.motivo }).from(schema.historialDeTurnosPublicados)
+      .innerJoin(schema.turnosPublicados, eq(schema.historialDeTurnosPublicados.turnoPublicadoId, schema.turnosPublicados.id))
+      .where(and(eq(schema.turnosPublicados.idHuellero, idHuellero), eq(schema.turnosPublicados.fecha, fechasDeCorreccion[0])))).resolves.toEqual(expect.arrayContaining([
+      expect.objectContaining({ responsableId: cuentaId, motivo: "Corrige entrada pactada", horario: expect.objectContaining({ entradaProgramada: "10:00" }) }),
+    ]));
   });
 });

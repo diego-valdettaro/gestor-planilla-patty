@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { crearCasosDeUsoDeTurnos } from "@/turnos/casos-de-uso-servidor";
 import { crearCasosDeUsoDePlanesSemanales } from "@/turnos/casos-de-uso-planes-semanales";
 import { publicarPlanSemanal } from "@/turnos/publicar-plan-semanal";
+import { republicarPlanSemanal } from "@/turnos/republicar-plan-semanal";
 import { repositorioDeModelosDeHorario, repositorioDeTurnos } from "@/turnos/servicio";
 import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
 
@@ -100,6 +101,17 @@ export async function publicarPlanSemanalDesdeGrilla(formData: FormData): Promis
   if (!personasSeleccionadas.length) throw new Error("Seleccione al menos una persona para publicar.");
   const resultado = await publicarPlanSemanal(repositorioDeTurnos, await obtenerActorActual(), obtenerTexto(formData, "planId"), personasSeleccionadas);
   if (resultado.errores.length) throw new Error(resultado.errores.map(({ idHuellero, fecha, mensaje }) => `${idHuellero} ${fecha}: ${mensaje}`).join(" "));
+  revalidatePath("/turnos");
+}
+
+export async function republicarPlanSemanalDesdeGrilla(formData: FormData): Promise<void> {
+  await republicarPlanSemanal(
+    repositorioDeTurnos,
+    await obtenerActorActual(),
+    obtenerTexto(formData, "planId"),
+    obtenerTexto(formData, "idHuellero"),
+    obtenerTexto(formData, "motivo"),
+  );
   revalidatePath("/turnos");
 }
 

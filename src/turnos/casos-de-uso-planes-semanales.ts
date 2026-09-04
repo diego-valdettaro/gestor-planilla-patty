@@ -36,7 +36,7 @@ export function crearCasosDeUsoDePlanesSemanales(
       if ((await repositorio.obtenerSedeDelColaborador(celda.idHuellero)) !== celda.sede) {
         throw new Error("La sede de la celda no corresponde al colaborador.");
       }
-      await verificarQueNoEstePublicado(repositorio, celda.idHuellero, celda.fecha);
+      await verificarQueNoSeaPublicadoProcesado(repositorio, celda);
       await repositorio.guardarCelda({ planId, ...celda });
     },
     async guardarBorrador(
@@ -53,7 +53,7 @@ export function crearCasosDeUsoDePlanesSemanales(
         if ((await repositorio.obtenerSedeDelColaborador(celda.idHuellero)) !== celda.sede) {
           throw new Error("La sede de la celda no corresponde al colaborador.");
         }
-        await verificarQueNoEstePublicado(repositorio, celda.idHuellero, celda.fecha);
+        await verificarQueNoSeaPublicadoProcesado(repositorio, celda);
       }
       await repositorio.reemplazarCeldasDelPlan(planId, celdas.map((celda) => ({ planId, ...celda })));
     },
@@ -93,17 +93,33 @@ export function crearCasosDeUsoDePlanesSemanales(
         if ((await repositorio.obtenerSedeDelColaborador(celda.idHuellero)) !== celda.sede) {
           throw new Error("La sede de la celda no corresponde al colaborador.");
         }
-        await verificarQueNoEstePublicado(repositorio, celda.idHuellero, celda.fecha);
+        await verificarQueNoSeaPublicadoProcesado(repositorio, celda);
       }
       await repositorio.guardarCeldas(celdas);
     },
   };
 }
 
+async function verificarQueNoSeaPublicadoProcesado(
+  repositorio: RepositorioDePlanesSemanales,
+  celda: Omit<CeldaDePlanSemanalEnBorrador, "planId">,
+): Promise<void> {
+  const publicado = await repositorio.buscarPublicado(celda.idHuellero, celda.fecha);
+  if (publicado && !sonIguales(celda, publicado)) {
+    const procesada = await repositorio.asistenciaEstaProcesada?.(celda.idHuellero, celda.fecha);
+    if (procesada) throw new Error("El horario semanal ya fue procesado y no se puede corregir.");
+  }
+}
+
 async function verificarQueNoEstePublicado(repositorio: RepositorioDePlanesSemanales, idHuellero: string, fecha: string): Promise<void> {
   if (await repositorio.buscarPublicado(idHuellero, fecha)) {
     throw new Error("El horario semanal ya fue publicado y no se puede editar desde el borrador.");
   }
+}
+
+function sonIguales(a: Omit<CeldaDePlanSemanalEnBorrador, "planId">, b: Omit<CeldaDePlanSemanalEnBorrador, "planId">): boolean {
+  return a.sede === b.sede && a.modeloHorarioId === b.modeloHorarioId && a.entradaProgramada === b.entradaProgramada
+    && a.salidaProgramada === b.salidaProgramada && a.descanso === b.descanso;
 }
 
 async function obtenerPlan(repositorio: RepositorioDePlanesSemanales, id: string): Promise<PlanSemanalEnBorrador> {
