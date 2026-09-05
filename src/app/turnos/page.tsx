@@ -31,7 +31,7 @@ export default async function PaginaDeTurnos({ searchParams }: { searchParams: P
   const procesados = await repositorioDeTurnos.listarProcesamientosDeSemana(semana, equipo);
   const sedes = [...new Set(colaboradores.map(({ sede }) => sede))];
   const modelos = (await Promise.all(sedes.map((sede) => repositorioDeModelosDeHorario.listarPorSede(sede)))).flat();
-  return <main className="contenido contenido-turnos"><section className="plan-semanal"><header className="barra-plan-semanal"><div><p className="breadcrumb">Horarios / Planificación semanal</p><h1>Horarios</h1><p>Organice la semana de cada equipo antes de publicarla.</p></div><Link className="boton-secundario" href="/turnos">+ Crear horario</Link></header>
+  return <main className="contenido contenido-turnos"><section className="plan-semanal"><header className="barra-plan-semanal"><div><p className="breadcrumb"><span>Operaciones</span> / Horarios</p><h1>Planificación de horarios</h1><p>Asigna sede y turno para cada persona del grupo.</p></div><Link className="crear-horario" href="/turnos"><span>＋</span> Crear horario</Link></header>
     <PlanificadorSemanal actualizadoEn={plan.actualizadoEn?.toISOString()} equipos={equipos} planId={plan.id} semana={semana} equipo={equipo} colaboradores={colaboradores} dias={dias} celdasIniciales={plan.celdas} publicados={publicados} procesados={procesados} modelos={modelos} />
   </section></main>;
 }

@@ -4,11 +4,23 @@ import { redirect } from "next/navigation";
 
 import { iniciarSesionDelServidor } from "@/autenticacion/sesion-del-servidor";
 
-export async function iniciarSesionDesdeFormulario(formData: FormData): Promise<void> {
-  const nombreUsuario = obtenerTexto(formData, "nombreUsuario");
-  const contrasena = obtenerTexto(formData, "contrasena");
+export interface EstadoDeInicioSesion {
+  error?: string;
+}
 
-  await iniciarSesionDelServidor({ nombreUsuario, contrasena });
+export async function iniciarSesionDesdeFormulario(
+  _estadoAnterior: EstadoDeInicioSesion,
+  formData: FormData,
+): Promise<EstadoDeInicioSesion> {
+  try {
+    const nombreUsuario = obtenerTexto(formData, "nombreUsuario");
+    const contrasena = obtenerTexto(formData, "contrasena");
+
+    await iniciarSesionDelServidor({ nombreUsuario, contrasena });
+  } catch (error) {
+    return { error: mensajeParaElFormulario(error) };
+  }
+
   redirect("/");
 }
 
@@ -20,4 +32,12 @@ function obtenerTexto(formData: FormData, nombre: string): string {
   }
 
   return valor.trim();
+}
+
+function mensajeParaElFormulario(error: unknown): string {
+  if (error instanceof Error && error.message === "Las credenciales no son válidas.") {
+    return error.message;
+  }
+
+  return "No se pudo iniciar sesión. Inténtelo de nuevo.";
 }

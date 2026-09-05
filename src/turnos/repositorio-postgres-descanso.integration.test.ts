@@ -19,7 +19,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeTurnos al publicar un descan
   const fecha = "2031-09-04";
 
   beforeAll(async () => {
-    await db.insert(schema.colaboradores).values({ idHuellero, nombre: "Ana Rojas", sede: "Lima", centroDeCosto: "Operaciones", activo: true });
+    await db.insert(schema.colaboradores).values({ idHuellero, nombre: "Ana Rojas", sede: "Lima", activo: true });
     await db.insert(schema.periodosPlanilla).values({ inicio: "2031-08-26", fin: "2031-09-25", estado: "abierto" });
   });
 

@@ -20,7 +20,6 @@ export class RepositorioPostgresDeColaboradores
         idHuellero: colaboradores.idHuellero,
         nombre: colaboradores.nombre,
         sede: colaboradores.sede,
-        centroDeCosto: colaboradores.centroDeCosto,
         activo: colaboradores.activo,
       })
       .from(colaboradores)
@@ -39,7 +38,6 @@ export class RepositorioPostgresDeColaboradores
       .set({
         nombre: colaborador.nombre,
         sede: colaborador.sede,
-        centroDeCosto: colaborador.centroDeCosto,
         activo: colaborador.activo,
         actualizadoEn: new Date(),
       })
@@ -51,7 +49,6 @@ export class RepositorioPostgresDeColaboradores
       idHuellero: colaboradores.idHuellero,
       nombre: colaboradores.nombre,
       sede: colaboradores.sede,
-      centroDeCosto: colaboradores.centroDeCosto,
       activo: colaboradores.activo,
     }).from(colaboradores).orderBy(colaboradores.nombre);
   }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { publicarPlanSemanal, publicarPlanSemanalCompleto } from "./publicar-plan-semanal";
+import { publicarPlanSemanal, publicarPlanSemanalCompleto, reemplazarPlanSemanalCompleto } from "./publicar-plan-semanal";
 import type { CeldaDePlanSemanalEnBorrador, PlanSemanalEnBorrador, RepositorioDePlanesSemanales } from "./plan-semanal-en-borrador";
 import type { RepositorioDeTurnos, TurnoPublicado } from "./publicar-turno-semanal";
 
@@ -95,6 +95,27 @@ describe("publicar plan semanal", () => {
     expect(resultado).toMatchObject({ publicados: 0 });
     expect(resultado.errores).toContainEqual(expect.objectContaining({ idHuellero: "HU-2", mensaje: "La celda está sin definir." }));
     expect(publicados).toEqual([]);
+  });
+
+  it("reemplaza todos los horarios del grupo en una sola operación cuando la semana ya está publicada", async () => {
+    const plan = {
+      id: "plan-1", semana: "2026-08-31", equipo: "tiendas" as const,
+      celdas: [...celdasDeSemana("HU-1"), ...celdasDeSemana("HU-2")],
+    };
+    const { publicados, repositorio } = crearRepositorio(plan);
+    publicados.push(...plan.celdas.map(({ planId: _planId, ...turno }) => turno));
+    const reemplazos: TurnoPublicado[][] = [];
+    repositorio.reemplazarSemanaPublicada = async (turnos) => { reemplazos.push(turnos); };
+
+    const resultado = await reemplazarPlanSemanalCompleto(
+      repositorio,
+      { id: "operaciones-1", rol: "operaciones" },
+      plan.id,
+    );
+
+    expect(resultado).toEqual({ publicados: 2, errores: [] });
+    expect(reemplazos).toHaveLength(1);
+    expect(reemplazos[0]).toHaveLength(14);
   });
 
   it("rechaza a Finanzas antes de publicar", async () => {

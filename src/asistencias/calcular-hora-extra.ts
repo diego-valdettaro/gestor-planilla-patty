@@ -7,7 +7,7 @@ export interface HoraExtraCalculada {
 export type EstadoDeHoraExtra = "pendiente" | "aprobada" | "rechazada";
 
 export function calcularHoraExtra(salidaProgramada: string, salidaReal: string): HoraExtraCalculada | undefined {
-  const minutosTrabajadosDespuesDelTurno = (new Date(salidaReal).getTime() - horaDelDia(salidaReal, salidaProgramada).getTime()) / 60_000;
+  const minutosTrabajadosDespuesDelTurno = minutosDelDia(salidaReal) - minutosDelDia(salidaProgramada);
   const minutosRedondeados = redondearMinutosDeHoraExtra(minutosTrabajadosDespuesDelTurno);
   if (minutosRedondeados === 0) return undefined;
   return {
@@ -25,7 +25,11 @@ function redondearMinutosDeHoraExtra(minutos: number): number {
   return (Math.floor((minutos - 111) / 30) + 4) * 30;
 }
 
-function horaDelDia(fecha: string, hora: string): Date {
-  const zonaHoraria = fecha.slice(-6);
-  return new Date(`${fecha.slice(0, 10)}T${hora}:00${zonaHoraria}`);
+function minutosDelDia(valor: string): number {
+  const coincidencia = /T(\d{2}):(\d{2})/.exec(valor) ?? /^(\d{2}):(\d{2})$/.exec(valor);
+  if (!coincidencia) throw new Error("La hora debe usar el formato HH:MM.");
+  const horas = Number(coincidencia[1]);
+  const minutos = Number(coincidencia[2]);
+  if (horas > 23 || minutos > 59) throw new Error("La hora no es válida.");
+  return horas * 60 + minutos;
 }

@@ -28,6 +28,30 @@ export async function publicarPlanSemanalCompleto(
   return publicarPlanSemanal(repositorio, actor, planId, colaboradores.map(({ idHuellero }) => idHuellero));
 }
 
+export async function reemplazarPlanSemanalCompleto(
+  repositorio: RepositorioParaPublicarPlan,
+  actor: Actor,
+  planId: string,
+): Promise<ResultadoDePublicacionDePlan> {
+  const plan = await repositorio.buscarPorId(planId);
+  if (!plan) throw new Error("El plan semanal en borrador no existe.");
+  const colaboradores = await repositorio.listarColaboradoresActivosPorEquipo(plan.equipo);
+  const { idsSeleccionados, errores } = await revisarPlanSemanal(repositorio, actor, planId, colaboradores.map(({ idHuellero }) => idHuellero), true);
+  if (errores.length) return { publicados: 0, errores };
+
+  const turnos = plan.celdas
+    .filter((celda) => idsSeleccionados.includes(celda.idHuellero))
+    .map(({ planId: _planId, ...turno }) => turno);
+
+  const faltanPublicados = await Promise.all(turnos.map(async ({ idHuellero, fecha }) => !(await repositorio.buscarPublicado(idHuellero, fecha))));
+  if (faltanPublicados.some(Boolean)) {
+    throw new Error("La planificación publicada está incompleta y no se puede reemplazar.");
+  }
+
+  await repositorio.reemplazarSemanaPublicada(turnos, actor, "Reemplazo completo de la planificación semanal.");
+  return { publicados: idsSeleccionados.length, errores: [] };
+}
+
 export async function publicarPlanSemanal(
   repositorio: RepositorioParaPublicarPlan,
   actor: Actor,
@@ -55,12 +79,13 @@ export async function revisarPlanSemanal(
   actor: Actor,
   planId: string,
   personasSeleccionadas: string[],
+  permitePublicados = false,
 ): Promise<{ idsSeleccionados: string[]; plan: PlanSemanalEnBorrador; errores: ErrorDePublicacionDePlan[] }> {
   if (actor.rol !== "operaciones" && actor.rol !== "administracion") throw new Error("No tiene permiso para publicar planes semanales.");
   const plan = await repositorio.buscarPorId(planId);
   if (!plan) throw new Error("El plan semanal en borrador no existe.");
   const idsSeleccionados = [...new Set(personasSeleccionadas)];
-  const errores = (await Promise.all(idsSeleccionados.map((idHuellero) => validarPersona(repositorio, plan, idHuellero)))).flat();
+  const errores = (await Promise.all(idsSeleccionados.map((idHuellero) => validarPersona(repositorio, plan, idHuellero, permitePublicados)))).flat();
   return { idsSeleccionados, plan, errores };
 }
 
@@ -68,6 +93,7 @@ async function validarPersona(
   repositorio: RepositorioParaPublicarPlan,
   plan: PlanSemanalEnBorrador,
   idHuellero: string,
+  permitePublicados = false,
 ): Promise<ErrorDePublicacionDePlan[]> {
   const errores: ErrorDePublicacionDePlan[] = [];
   const fechas = diasDeLaSemana(plan.semana);
@@ -85,7 +111,7 @@ async function validarPersona(
     }
     if (!esHorarioValido(celda)) errores.push({ idHuellero, fecha, mensaje: "El horario semanal no es válido." });
     if (!(await repositorio.perteneceAPeriodoAbierto(fecha))) errores.push({ idHuellero, fecha, mensaje: "La fecha no pertenece a un período de planilla abierto." });
-    if (await repositorio.buscarPublicado(idHuellero, fecha)) errores.push({ idHuellero, fecha, mensaje: "Ya existe un horario semanal publicado para este colaborador y fecha." });
+    if (!permitePublicados && await repositorio.buscarPublicado(idHuellero, fecha)) errores.push({ idHuellero, fecha, mensaje: "Ya existe un horario semanal publicado para este colaborador y fecha." });
   }
   return errores;
 }

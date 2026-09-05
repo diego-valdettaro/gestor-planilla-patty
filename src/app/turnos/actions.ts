@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { crearCasosDeUsoDeTurnos } from "@/turnos/casos-de-uso-servidor";
 import { crearCasosDeUsoDePlanesSemanales } from "@/turnos/casos-de-uso-planes-semanales";
-import { publicarPlanSemanalCompleto } from "@/turnos/publicar-plan-semanal";
+import { publicarPlanSemanalCompleto, reemplazarPlanSemanalCompleto } from "@/turnos/publicar-plan-semanal";
 import { republicarPlanSemanal } from "@/turnos/republicar-plan-semanal";
 import { repositorioDeModelosDeHorario, repositorioDeTurnos } from "@/turnos/servicio";
 import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
@@ -99,6 +99,12 @@ export async function aplicarHorarioEnLoteAlBorrador(formData: FormData): Promis
 export async function publicarPlanSemanalDesdeGrilla(formData: FormData): Promise<void> {
   const resultado = await publicarPlanSemanalCompleto(repositorioDeTurnos, await obtenerActorActual(), obtenerTexto(formData, "planId"));
   if (resultado.errores.length) throw new Error(resultado.errores.map(({ idHuellero, fecha, mensaje }) => `${idHuellero} ${fecha}: ${mensaje}`).join(" "));
+  revalidatePath("/turnos");
+}
+
+export async function reemplazarPlanificacionSemanalDesdeGrilla(formData: FormData): Promise<void> {
+  const resultado = await reemplazarPlanSemanalCompleto(repositorioDeTurnos, await obtenerActorActual(), obtenerTexto(formData, "planId"));
+  if (resultado.errores.length) throw new Error("No se pudo reemplazar la planificación semanal.");
   revalidatePath("/turnos");
 }
 

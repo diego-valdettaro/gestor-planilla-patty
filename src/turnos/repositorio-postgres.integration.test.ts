@@ -30,9 +30,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeTurnos", () => {
     await db.insert(schema.colaboradores).values({
       idHuellero,
       nombre: "Ana Rojas",
-      sede: "Lima",
-      centroDeCosto: "Operaciones",
-      activo: true,
+      sede: "Lima",      activo: true,
     });
     await db.insert(schema.periodosPlanilla).values({
       inicio: "2030-08-26",

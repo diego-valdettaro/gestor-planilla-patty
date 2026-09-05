@@ -27,7 +27,6 @@ describe("casos de uso de colaboradores en el servidor", () => {
         idHuellero: "HU-1024",
         nombre: "Ana Rojas",
         sede: "Lima",
-        centroDeCosto: "Operaciones",
         activo: true,
       }),
     ).rejects.toThrow("No tiene permiso para administrar colaboradores.");

@@ -293,14 +293,13 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
   }
 
   async listarColaboradoresActivos(): Promise<
-    Array<{ idHuellero: string; nombre: string; sede: string; centroDeCosto: string }>
+    Array<{ idHuellero: string; nombre: string; sede: string }>
   > {
     return this.db
       .select({
         idHuellero: colaboradores.idHuellero,
         nombre: colaboradores.nombre,
         sede: colaboradores.sede,
-        centroDeCosto: colaboradores.centroDeCosto,
       })
       .from(colaboradores)
       .where(eq(colaboradores.activo, true))
@@ -308,13 +307,12 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
   }
 
   async listarColaboradoresActivosPorSede(sede: string): Promise<
-    Array<{ idHuellero: string; nombre: string; centroDeCosto: string }>
+    Array<{ idHuellero: string; nombre: string }>
   > {
     return this.db
       .select({
         idHuellero: colaboradores.idHuellero,
         nombre: colaboradores.nombre,
-        centroDeCosto: colaboradores.centroDeCosto,
       })
       .from(colaboradores)
       .where(and(eq(colaboradores.sede, sede), eq(colaboradores.activo, true)));

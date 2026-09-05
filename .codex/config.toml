@@ -1,0 +1,6 @@
+# planilla â€” override local de Codex
+approval_policy = "never"
+sandbox_mode = "workspace-write"
+
+[sandbox_workspace_write]
+network_access = true

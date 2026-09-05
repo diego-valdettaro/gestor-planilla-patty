@@ -23,9 +23,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeColaboradores", () => {
     await repositorio.guardar({
       idHuellero,
       nombre: "Ana Rojas",
-      sede: "Lima",
-      centroDeCosto: "Operaciones",
-      activo: true,
+      sede: "Lima",      activo: true,
     });
   });
 
@@ -40,9 +38,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeColaboradores", () => {
     await expect(repositorio.buscarPorIdHuellero(idHuellero)).resolves.toMatchObject({
       idHuellero,
       nombre: "Ana Rojas",
-      sede: "Lima",
-      centroDeCosto: "Operaciones",
-      activo: true,
+      sede: "Lima",      activo: true,
     });
   });
 
@@ -51,9 +47,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeColaboradores", () => {
       repositorio.guardar({
         idHuellero,
         nombre: "Brenda Soto",
-        sede: "Lima",
-        centroDeCosto: "Operaciones",
-        activo: true,
+        sede: "Lima",        activo: true,
       }),
     ).rejects.toThrow();
   });

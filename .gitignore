@@ -4,3 +4,11 @@ node_modules/
 *.tsbuildinfo
 data/
 outputs/
+docs/propuesta-visual/
+
+# ruido de agentes
+.worktrees/
+.pytest-*
+*.sqlite-wal
+.claude/settings.local.json
+.claude/skills/
