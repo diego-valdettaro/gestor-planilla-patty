@@ -39,9 +39,7 @@ describe("registrarColaborador", () => {
       {
         idHuellero: "HU-1024",
         nombre: "Ana Rojas",
-        sede: "Lima",
-        centroDeCosto: "Operaciones",
-        activo: true,
+        sede: "Lima",        activo: true,
       },
     );
 
@@ -50,9 +48,7 @@ describe("registrarColaborador", () => {
     ).resolves.toMatchObject({
       idHuellero: "HU-1024",
       nombre: "Ana Rojas",
-      sede: "Lima",
-      centroDeCosto: "Operaciones",
-      activo: true,
+      sede: "Lima",      activo: true,
     });
   });
 
@@ -66,9 +62,7 @@ describe("registrarColaborador", () => {
         {
           idHuellero: "HU-1024",
           nombre: "Ana Rojas",
-          sede: "Lima",
-          centroDeCosto: "Operaciones",
-          activo: true,
+          sede: "Lima",          activo: true,
         },
       ),
     ).rejects.toThrow("No tiene permiso para administrar colaboradores.");
@@ -89,9 +83,7 @@ describe("registrarColaborador", () => {
         {
           idHuellero: "HU-1024",
           nombre: "Ana Rojas",
-          sede: "Lima",
-          centroDeCosto: "Operaciones",
-          activo: true,
+          sede: "Lima",          activo: true,
         },
       ),
     ).rejects.toThrow("No tiene permiso para administrar colaboradores.");
@@ -103,9 +95,7 @@ describe("registrarColaborador", () => {
     const primeraColaboradora = {
       idHuellero: "HU-1024",
       nombre: "Ana Rojas",
-      sede: "Lima",
-      centroDeCosto: "Operaciones",
-      activo: true,
+      sede: "Lima",      activo: true,
     };
 
     await registrarColaborador(repositorio, actor, primeraColaboradora);
@@ -125,25 +115,19 @@ describe("registrarColaborador", () => {
     await registrarColaborador(repositorio, actor, {
       idHuellero: "HU-1024",
       nombre: "Ana Rojas",
-      sede: "Lima",
-      centroDeCosto: "Operaciones",
-      activo: true,
+      sede: "Lima",      activo: true,
     });
 
     await actualizarColaborador(repositorio, actor, {
       idHuellero: "HU-1024",
       nombre: "Ana Rojas",
-      sede: "Callao",
-      centroDeCosto: "Logística",
-      activo: false,
+      sede: "Callao",      activo: false,
     });
 
     await expect(
       consultarColaborador(repositorio, actor, "HU-1024"),
     ).resolves.toMatchObject({
-      sede: "Callao",
-      centroDeCosto: "Logística",
-      activo: false,
+      sede: "Callao",      activo: false,
     });
   });
 });

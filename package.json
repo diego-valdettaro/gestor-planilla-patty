@@ -3,13 +3,19 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
-    "dev": "next dev",
+    "dev": "pnpm db:check && next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "pnpm db:check && next start",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "validate": "tsx scripts/validar-con-base.ts",
+    "hooks:install": "git config core.hooksPath .githooks",
+    "prepare": "git config core.hooksPath .githooks",
     "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx scripts/migrar-base.ts migrate",
+    "db:check": "tsx scripts/migrar-base.ts check",
+    "db:baseline": "tsx scripts/migrar-base.ts baseline",
     "provisionar:administracion": "tsx scripts/provisionar-administracion.ts",
     "provisionar:cuenta": "tsx scripts/provisionar-cuenta.ts"
   },
@@ -34,5 +40,6 @@
   },
   "onlyBuiltDependencies": [
     "esbuild"
-  ]
+  ],
+  "packageManager": "pnpm@10.34.5+sha512.a4ee05f2f73658255bd6a89859c065a45c28a57daefae2c893a168ee2b73168c37b91e83e57ea67654ad03f03031746430e8bce38e362e042605fb8abc80192e"
 }

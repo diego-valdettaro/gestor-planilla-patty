@@ -42,6 +42,13 @@ export interface ImportacionSemanal {
   incidencias: IncidenciaDeImportacion[];
 }
 
+export interface ResultadoDeImportacion {
+  marcasCrudas: number;
+  asistenciasPendientes: number;
+  marcasSinHorario: number;
+  incidencias: number;
+}
+
 export interface RepositorioDeImportaciones {
   buscarColaborador(idHuellero: string): Promise<{ idHuellero: string; sede: string } | undefined>;
   buscarTurnoPublicado(idHuellero: string, fecha: string): Promise<{ idHuellero: string; fecha: string } | undefined>;
@@ -60,7 +67,7 @@ export async function importarSemanaPorSede(
   repositorio: RepositorioDeImportaciones,
   actor: Actor,
   solicitud: SolicitudDeImportacion,
-): Promise<void> {
+): Promise<ResultadoDeImportacion> {
   if (actor.rol !== "administracion" && actor.rol !== "finanzas") {
     throw new Error("No tiene permiso para importar asistencias.");
   }
@@ -106,6 +113,12 @@ export async function importarSemanaPorSede(
     marcasPendientesSinTurno,
     incidencias,
   });
+  return {
+    marcasCrudas: solicitud.marcasCrudas.length,
+    asistenciasPendientes: propuestas.length,
+    marcasSinHorario: marcasPendientesSinTurno.length,
+    incidencias: incidencias.length,
+  };
 }
 
 function crearPropuesta(idHuellero: string, fecha: string, marcas: MarcaCruda[]): MarcaPendienteSinTurno {

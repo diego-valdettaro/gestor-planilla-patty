@@ -34,7 +34,7 @@ export class RepositorioPostgresDeCuentas implements RepositorioDeCuentas {
 
   async buscarActorPorTokenHash(tokenHash: string, ahora: Date): Promise<Actor | undefined> {
     const [sesion] = await this.db
-      .select({ id: cuentasLocales.id, rol: cuentasLocales.rol })
+      .select({ id: cuentasLocales.id, rol: cuentasLocales.rol, nombreUsuario: cuentasLocales.nombreUsuario })
       .from(sesiones)
       .innerJoin(cuentasLocales, eq(sesiones.cuentaId, cuentasLocales.id))
       .where(and(eq(sesiones.tokenHash, tokenHash), gt(sesiones.venceEn, ahora)));

@@ -11,6 +11,8 @@ import { RepositorioPostgresDeColaboradores } from "./repositorio-postgres";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 
+if (!databaseUrl && process.env.CI) throw new Error("CI requiere TEST_DATABASE_URL para ejecutar las pruebas de integración PostgreSQL.");
+
 describe.skipIf(!databaseUrl)("RepositorioPostgresDeColaboradores", () => {
   const pool = new Pool({ connectionString: databaseUrl });
   const db = drizzle({ client: pool, schema });
@@ -21,9 +23,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeColaboradores", () => {
     await repositorio.guardar({
       idHuellero,
       nombre: "Ana Rojas",
-      sede: "Lima",
-      centroDeCosto: "Operaciones",
-      activo: true,
+      sede: "Lima",      activo: true,
     });
   });
 
@@ -38,9 +38,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeColaboradores", () => {
     await expect(repositorio.buscarPorIdHuellero(idHuellero)).resolves.toMatchObject({
       idHuellero,
       nombre: "Ana Rojas",
-      sede: "Lima",
-      centroDeCosto: "Operaciones",
-      activo: true,
+      sede: "Lima",      activo: true,
     });
   });
 
@@ -49,9 +47,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeColaboradores", () => {
       repositorio.guardar({
         idHuellero,
         nombre: "Brenda Soto",
-        sede: "Lima",
-        centroDeCosto: "Operaciones",
-        activo: true,
+        sede: "Lima",        activo: true,
       }),
     ).rejects.toThrow();
   });

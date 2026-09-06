@@ -3,13 +3,13 @@ export type Rol = "operaciones" | "administracion" | "finanzas";
 export interface Actor {
   id: string;
   rol: Rol;
+  nombreUsuario?: string;
 }
 
 export interface Colaborador {
   idHuellero: string;
   nombre: string;
   sede: string;
-  centroDeCosto: string;
   activo: boolean;
 }
 

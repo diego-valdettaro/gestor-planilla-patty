@@ -15,3 +15,9 @@ export function diasDeLaSemana(inicio: string): string[] {
     return fecha.toISOString().slice(0, 10);
   });
 }
+
+export function desplazarFecha(fecha: string, dias: number): string {
+  const fechaDesplazada = new Date(`${fecha}T00:00:00.000Z`);
+  fechaDesplazada.setUTCDate(fechaDesplazada.getUTCDate() + dias);
+  return fechaDesplazada.toISOString().slice(0, 10);
+}

@@ -22,7 +22,7 @@ function crearRepositorioEnMemoria(): {
   const turnos = new Map<string, TurnoParaConfirmar>([
     ["HU-1024:2026-09-01", {
       idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima", entradaProgramada: "09:00",
-      salidaProgramada: "18:00", minutosDeAlmuerzo: 60, descanso: false,
+      salidaProgramada: "18:00", descanso: false,
     }],
   ]);
   return {
@@ -70,7 +70,7 @@ describe("casos de uso de asistencias en el servidor", () => {
       minutosTrabajados: 538,
       instantaneaDeTurno: {
         sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00",
-        minutosDeAlmuerzo: 60, descanso: false,
+        descanso: false,
       },
     })]);
   });

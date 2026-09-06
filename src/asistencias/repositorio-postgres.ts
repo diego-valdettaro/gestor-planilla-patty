@@ -26,7 +26,7 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
     const [turno] = await this.db.select({
       idHuellero: turnosPublicados.idHuellero, fecha: turnosPublicados.fecha, sede: turnosPublicados.sede,
       entradaProgramada: turnosPublicados.entradaProgramada, salidaProgramada: turnosPublicados.salidaProgramada,
-      minutosDeAlmuerzo: turnosPublicados.minutosDeAlmuerzo, descanso: turnosPublicados.descanso,
+      descanso: turnosPublicados.descanso,
     }).from(turnosPublicados).where(and(eq(turnosPublicados.idHuellero, idHuellero), eq(turnosPublicados.fecha, fecha)));
     return turno;
   }

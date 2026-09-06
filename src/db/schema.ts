@@ -1,5 +1,6 @@
 import {
   boolean,
+  check,
   date,
   integer,
   index,
@@ -10,13 +11,13 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 export const colaboradores = pgTable("colaboradores", {
   id: uuid("id").primaryKey().defaultRandom(),
   idHuellero: text("id_huellero").notNull().unique(),
   nombre: text("nombre").notNull(),
   sede: text("sede").notNull(),
-  centroDeCosto: text("centro_de_costo").notNull(),
   activo: boolean("activo").notNull().default(true),
   creadoEn: timestamp("creado_en", { withTimezone: true }).notNull().defaultNow(),
   actualizadoEn: timestamp("actualizado_en", { withTimezone: true }).notNull().defaultNow(),
@@ -26,6 +27,7 @@ export const sedes = pgTable("sedes", {
   id: uuid("id").primaryKey().defaultRandom(),
   nombre: text("nombre").notNull().unique(),
   activa: boolean("activa").notNull().default(true),
+  equipoOperativo: text("equipo_operativo", { enum: ["tiendas", "taller"] }),
   creadaEn: timestamp("creada_en", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -69,6 +71,36 @@ export const auditoriaPeriodosPlanilla = pgTable("auditoria_periodos_planilla", 
   registradoEn: timestamp("registrado_en", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const modelosDeHorario = pgTable(
+  "modelos_de_horario",
+  {
+    id: uuid("id").primaryKey(),
+    sede: text("sede").notNull().references(() => sedes.nombre),
+    nombre: text("nombre").notNull(),
+    entrada: text("entrada").notNull(),
+    salida: text("salida").notNull(),
+    activo: boolean("activo").notNull().default(true),
+    creadoEn: timestamp("creado_en", { withTimezone: true }).notNull().defaultNow(),
+    actualizadoEn: timestamp("actualizado_en", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("modelos_horario_sede_nombre").on(table.sede, table.nombre)],
+);
+
+export const auditoriaDeModelosDeHorario = pgTable("auditoria_modelos_de_horario", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  modeloId: uuid("modelo_id").notNull(),
+  accion: text("accion", { enum: ["creacion", "edicion", "activacion", "desactivacion", "eliminacion"] }).notNull(),
+  modelo: jsonb("modelo").$type<{
+    sede: string;
+    nombre: string;
+    entrada: string;
+    salida: string;
+    activo: boolean;
+  }>().notNull(),
+  responsableId: uuid("responsable_id").notNull().references(() => cuentasLocales.id),
+  registradoEn: timestamp("registrado_en", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const turnosPublicados = pgTable(
   "turnos_publicados",
   {
@@ -78,9 +110,9 @@ export const turnosPublicados = pgTable(
       .references(() => colaboradores.idHuellero),
     fecha: date("fecha", { mode: "string" }).notNull(),
     sede: text("sede").notNull(),
-    entradaProgramada: text("entrada_programada").notNull(),
-    salidaProgramada: text("salida_programada").notNull(),
-    minutosDeAlmuerzo: integer("minutos_de_almuerzo").notNull(),
+    modeloHorarioId: uuid("modelo_horario_id").references(() => modelosDeHorario.id),
+    entradaProgramada: text("entrada_programada"),
+    salidaProgramada: text("salida_programada"),
     descanso: boolean("descanso").notNull(),
     publicadoEn: timestamp("publicado_en", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -93,7 +125,51 @@ export const historialDeTurnosPublicados = pgTable("historial_turnos_publicados"
     .notNull()
     .references(() => turnosPublicados.id),
   publicadoEn: timestamp("publicado_en", { withTimezone: true }).notNull().defaultNow(),
-});
+  horario: jsonb("horario").$type<{
+    idHuellero: string;
+    fecha: string;
+    sede: string;
+    modeloHorarioId: string | null;
+    entradaProgramada: string | null;
+    salidaProgramada: string | null;
+    descanso: boolean;
+  }>().notNull(),
+  responsableId: uuid("responsable_id").references(() => cuentasLocales.id),
+  motivo: text("motivo"),
+}, (table) => [
+  check("historial_republicacion_auditada", sql`${table.motivo} IS NULL OR (${table.responsableId} IS NOT NULL AND char_length(btrim(${table.motivo})) BETWEEN 1 AND 250)`),
+]);
+
+export const planesSemanalesEnBorrador = pgTable(
+  "planes_semanales_en_borrador",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    semana: date("semana", { mode: "string" }).notNull(),
+    equipo: text("equipo", { enum: ["tiendas", "taller"] }).notNull(),
+    creadoEn: timestamp("creado_en", { withTimezone: true }).notNull().defaultNow(),
+    actualizadoEn: timestamp("actualizado_en", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    check("planes_borrador_equipo_valido", sql`${table.equipo} IN ('tiendas', 'taller')`),
+    uniqueIndex("planes_borrador_semana_equipo").on(table.semana, table.equipo),
+  ],
+);
+
+export const celdasDePlanesSemanalesEnBorrador = pgTable(
+  "celdas_planes_semanales_en_borrador",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    planId: uuid("plan_id").notNull().references(() => planesSemanalesEnBorrador.id),
+    idHuellero: text("id_huellero").notNull().references(() => colaboradores.idHuellero),
+    fecha: date("fecha", { mode: "string" }).notNull(),
+    sede: text("sede").notNull(),
+    modeloHorarioId: uuid("modelo_horario_id").references(() => modelosDeHorario.id),
+    entradaProgramada: text("entrada_programada"),
+    salidaProgramada: text("salida_programada"),
+    descanso: boolean("descanso").notNull(),
+  },
+  (table) => [uniqueIndex("celdas_borrador_plan_colaborador_fecha").on(table.planId, table.idHuellero, table.fecha)],
+);
 
 export const asistenciasEsperadas = pgTable(
   "asistencias_esperadas",
@@ -111,9 +187,8 @@ export const asistenciasEsperadas = pgTable(
     minutosTrabajados: integer("minutos_trabajados"),
     instantaneaDeTurno: jsonb("instantanea_de_turno").$type<{
       sede: string;
-      entradaProgramada: string;
-      salidaProgramada: string;
-      minutosDeAlmuerzo: number;
+      entradaProgramada: string | null;
+      salidaProgramada: string | null;
       descanso: boolean;
     }>(),
     confirmadoPorId: uuid("confirmado_por_id").references(() => cuentasLocales.id),
@@ -123,6 +198,19 @@ export const asistenciasEsperadas = pgTable(
   (table) => [
     uniqueIndex("asistencias_esperadas_colaborador_fecha").on(table.idHuellero, table.fecha),
   ],
+);
+
+export const horariosSemanalesProcesados = pgTable(
+  "horarios_semanales_procesados",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    idHuellero: text("id_huellero").notNull().references(() => colaboradores.idHuellero),
+    semana: date("semana", { mode: "string" }).notNull(),
+    equipo: text("equipo", { enum: ["tiendas", "taller"] }).notNull(),
+    responsableId: uuid("responsable_id").notNull().references(() => cuentasLocales.id),
+    procesadoEn: timestamp("procesado_en", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("horarios_semanales_procesados_colaborador_semana").on(table.idHuellero, table.semana)],
 );
 
 export const ajustesDeAsistencia = pgTable(
