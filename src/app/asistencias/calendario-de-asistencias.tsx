@@ -45,7 +45,7 @@ export function CalendarioDeAsistencias({
   return <>
     <div className="calendario"><div className="dias-semana">{["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"].map((dia) => <span key={dia}>{dia}</span>)}</div><div className="celdas-calendario">{Array.from({ length: desfase }).map((_, indice) => <span className="celda-vacia" key={`vacia-${indice}`} />)}{dias.map((fecha) => {
       const item = porFecha.get(fecha);
-      return <button aria-label={`Editar asistencia del ${fecha}`} className={`dia-calendario ${item ? `estado-${item.estado}` : "sin-asistencia"}`} key={fecha} onClick={() => abrir(fecha)} type="button"><time>{Number(fecha.slice(-2))}</time>{item ? <><strong>{etiquetaEstado(item.estado, item.estadoManual)}</strong><span>{hora(item.entrada) ?? "sin entrada"}</span><span>{hora(item.salida) ?? "sin salida"}</span></> : <span>Sin programación</span>}</button>;
+      return <button aria-label={`Editar asistencia del ${fecha}`} className={`dia-calendario estado-color-${item?.estado ?? "sin-programacion"}`} key={fecha} onClick={() => abrir(fecha)} type="button"><time>{Number(fecha.slice(-2))}</time>{item ? <><strong>{etiquetaEstado(item.estado, item.estadoManual)}</strong><span>{hora(item.entrada) ?? "sin entrada"}</span><span>{hora(item.salida) ?? "sin salida"}</span></> : <span>Sin programación</span>}</button>;
     })}</div></div>
     <dialog aria-labelledby="titulo-asistencia" className="dialogo-confirmacion" ref={dialogo}>
       {fechaSeleccionada && asistencia?.estado !== "manual" ? <form action={accion}>
