@@ -12,6 +12,16 @@ Before committing an issue, run `pnpm validate`. It creates a disposable Postgre
 
 Issues and specs for this project live in GitHub Issues at `diego-valdettaro/gestor-planilla-patty`. See `docs/agents/issue-tracker.md`.
 
+### Agent workflow
+
+Use the isolated issue workflow in `docs/agents/agent-workflow.md`.
+
 ### Domain docs
 
 The Planilla web app has one domain context. See `docs/agents/domain.md`.
+
+### Design contract
+
+Before changing a user-facing interface, read `docs/agents/diseno.md`. Reuse its
+tokens and interaction patterns. Do not add a route, workflow, role, or product
+capability unless the current issue or approved product documentation requires it.
