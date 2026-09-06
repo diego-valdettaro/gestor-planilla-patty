@@ -12,6 +12,13 @@ y pedirla.
 - No desarrollar sobre `master` ni en un checkout que contenga cambios ajenos.
 - Crear un worktree y una rama por issue. Usar
   `agent/issue-<numero>-<descripcion-corta>`.
+- Crear los worktrees junto al repositorio, por ejemplo
+  `../planilla-worktrees/issue-<numero>-<descripcion-corta>`, no dentro del
+  repositorio. Así las herramientas no confunden los archivos de configuración
+  del worktree con los del proyecto principal.
+- En un worktree nuevo, ejecutar `pnpm install --frozen-lockfile` antes de
+  probar, validar o crear un commit. El worktree no comparte `node_modules`
+  con el checkout principal.
 - Coordinar antes de tocar migraciones, dependencias, rutas, navegación o
   `src/app/global.css`. Son áreas compartidas.
 - Una tarea no incluye refactors, migraciones o dependencias no requeridos por
