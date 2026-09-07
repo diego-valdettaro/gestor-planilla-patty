@@ -6,6 +6,7 @@ import { repositorioDeTurnos } from "@/turnos/servicio";
 
 import { procesarHorarioSemanal } from "./actions";
 import { CalendarioDeAsistencias } from "./calendario-de-asistencias";
+import { ESTADOS_DE_CELDA_ASISTENCIA, NOMBRE_DEL_ESTADO_DE_CELDA_ASISTENCIA } from "./estado-de-celda";
 import { FiltrosDeAsistencia } from "./filtros-de-asistencia";
 
 export const dynamic = "force-dynamic";
@@ -26,8 +27,8 @@ export default async function PaginaDeAsistencias({ searchParams }: PropiedadesD
 
   return <main className="contenido">
     <header className="encabezado"><div><p className="eyebrow">Administración y Finanzas</p><h1>Asistencias</h1><p>Revise un colaborador y su mes de trabajo.</p></div></header>
-    <FiltrosDeAsistencia colaborador={colaborador?.idHuellero} colaboradores={colaboradores} mes={mes} />
-    {colaborador ? <section className="tarjeta"><header className="encabezado-seccion"><div><h2>{colaborador.nombre}</h2><p>Haga clic en un día para registrar o ajustar su asistencia.</p></div></header><ul aria-label="Estados de asistencia" className="leyenda-estados"><li className="estado-color-confirmada">Confirmada</li><li className="estado-color-pendiente">Pendiente de revisión</li><li className="estado-color-manual">Estado manual</li><li className="estado-color-sin-programacion">Sin programación</li></ul>{actor.rol === "finanzas" ? <form action={procesarHorarioSemanal} className="filtros"><input name="idHuellero" type="hidden" value={colaborador.idHuellero} /><label>Semana a procesar<input defaultValue={inicioDeSemanaDelMes(mes)} name="semana" required type="date" /></label><button type="submit">Procesar horario semanal</button></form> : null}<CalendarioDeAsistencias asistencias={asistencias} desfase={desfaseLunes(inicio)} dias={dias} idHuellero={colaborador.idHuellero} /></section> : <section className="estado-vacio"><h2>No hay colaboradores activos</h2><p>Registre un colaborador activo desde Configuración antes de revisar asistencias.</p></section>}
+<FiltrosDeAsistencia colaborador={colaborador?.idHuellero} colaboradores={colaboradores} mes={mes} />
+    {colaborador ? <section className="tarjeta"><header className="encabezado-seccion"><div><h2>{colaborador.nombre}</h2><p>Haga clic en un día para registrar o ajustar su asistencia.</p></div></header><ul aria-label="Estados de asistencia" className="leyenda-estados">{ESTADOS_DE_CELDA_ASISTENCIA.map((estadoDeCelda) => <li className={`estado-color-${estadoDeCelda}`} key={estadoDeCelda}>{NOMBRE_DEL_ESTADO_DE_CELDA_ASISTENCIA[estadoDeCelda]}</li>)}</ul>{actor.rol === "finanzas" ? <form action={procesarHorarioSemanal} className="filtros"><input name="idHuellero" type="hidden" value={colaborador.idHuellero} /><label>Semana a procesar<input defaultValue={inicioDeSemanaDelMes(mes)} name="semana" required type="date" /></label><button type="submit">Procesar horario semanal</button></form> : null}<CalendarioDeAsistencias asistencias={asistencias} desfase={desfaseLunes(inicio)} dias={dias} idHuellero={colaborador.idHuellero} /></section> : <section className="estado-vacio"><h2>No hay colaboradores activos</h2><p>Registre un colaborador activo desde Configuración antes de revisar asistencias.</p></section>}
   </main>;
 }
 
