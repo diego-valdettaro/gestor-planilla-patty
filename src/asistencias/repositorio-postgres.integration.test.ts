@@ -5,28 +5,14 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import {
-  estadoDeCeldaAsistencia,
-  etiquetaDeCeldaAsistencia,
-  type DiaDeAsistencia,
-} from "@/app/asistencias/estado-de-celda";
+import { estadoDeCeldaAsistencia, etiquetaDeCeldaAsistencia } from "@/app/asistencias/estado-de-celda";
 import * as schema from "@/db/schema";
 
-import { RepositorioPostgresDeAsistencias, type FilaDeResumenMensual } from "./repositorio-postgres";
+import { RepositorioPostgresDeAsistencias } from "./repositorio-postgres";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 
 if (!databaseUrl && process.env.CI) throw new Error("CI requiere TEST_DATABASE_URL para ejecutar las pruebas de integración PostgreSQL.");
-
-function diaDeFila(fila: FilaDeResumenMensual): DiaDeAsistencia {
-  return {
-    estado: fila.estado,
-    designacionManual: fila.estadoManual,
-    hayMarcasCrudas: fila.hayMarcasCrudas,
-    propuestaCompleta: Boolean(fila.entradaPropuesta && fila.salidaPropuesta),
-    enPeriodoCerrado: fila.enPeriodoCerrado,
-  };
-}
 
 describe.skipIf(!databaseUrl)("RepositorioPostgresDeAsistencias · resumen mensual y estado de celda", () => {
   const pool = new Pool({ connectionString: databaseUrl });
@@ -96,7 +82,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeAsistencias · resumen mensu
     const fila = filas.find(({ fecha }) => fecha === fechaEsperada)!;
     expect(fila.hayMarcasCrudas).toBe(false);
     expect(fila.enPeriodoCerrado).toBe(false);
-    expect(estadoDeCeldaAsistencia(diaDeFila(fila))).toBe("esperada");
+    expect(estadoDeCeldaAsistencia(fila)).toBe("esperada");
   });
 
   it("un día pendiente con marcas que no permiten proponer entrada/salida se deriva como 'pendiente-de-revision'", async () => {
@@ -104,19 +90,19 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeAsistencias · resumen mensu
     const fila = filas.find(({ fecha }) => fecha === fechaPendienteDeRevision)!;
     expect(fila.hayMarcasCrudas).toBe(true);
     expect(Boolean(fila.entradaPropuesta && fila.salidaPropuesta)).toBe(false);
-    expect(estadoDeCeldaAsistencia(diaDeFila(fila))).toBe("pendiente-de-revision");
+    expect(estadoDeCeldaAsistencia(fila)).toBe("pendiente-de-revision");
   });
 
   it("un día confirmado se deriva como 'registrada'", async () => {
     const filas = await repositorio.listarResumenMensual(idHuellero, "2031-03-01", "2031-03-31");
     const fila = filas.find(({ fecha }) => fecha === fechaConfirmada)!;
-    expect(estadoDeCeldaAsistencia(diaDeFila(fila))).toBe("registrada");
+    expect(estadoDeCeldaAsistencia(fila)).toBe("registrada");
   });
 
   it("un día con designación manual se deriva como 'registrada' y se etiqueta con el tipo", async () => {
     const filas = await repositorio.listarResumenMensual(idHuellero, "2031-03-01", "2031-03-31");
     const fila = filas.find(({ fecha }) => fecha === fechaManual)!;
-    const estado = estadoDeCeldaAsistencia(diaDeFila(fila));
+    const estado = estadoDeCeldaAsistencia(fila);
     expect(estado).toBe("registrada");
     expect(etiquetaDeCeldaAsistencia(estado, fila.estadoManual)).toBe("Feriado");
   });
@@ -125,6 +111,6 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeAsistencias · resumen mensu
     const filas = await repositorio.listarResumenMensual(idHuellero, "2031-02-01", "2031-02-28");
     const fila = filas.find(({ fecha }) => fecha === fechaLiquidada)!;
     expect(fila.enPeriodoCerrado).toBe(true);
-    expect(estadoDeCeldaAsistencia(diaDeFila(fila))).toBe("liquidado");
+    expect(estadoDeCeldaAsistencia(fila)).toBe("liquidado");
   });
 });

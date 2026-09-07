@@ -121,8 +121,8 @@ async function limpiar(pool: Pool): Promise<void> {
     DELETE FROM estados_manuales WHERE asistencia_id IN (SELECT id FROM asistencias_esperadas WHERE id_huellero LIKE 'DEMO-%');
     DELETE FROM ajustes_de_asistencia WHERE asistencia_id IN (SELECT id FROM asistencias_esperadas WHERE id_huellero LIKE 'DEMO-%');
     DELETE FROM asistencias_esperadas WHERE id_huellero LIKE 'DEMO-%';
-    DELETE FROM incidencias_de_importacion WHERE importacion_id IN (SELECT id FROM importaciones_semanales WHERE sede IN (${sedes}));
-    DELETE FROM marcas_crudas WHERE importacion_id IN (SELECT id FROM importaciones_semanales WHERE sede IN (${sedes}));
+    DELETE FROM incidencias_de_importacion WHERE id_huellero LIKE 'DEMO-%';
+    DELETE FROM marcas_crudas WHERE id_huellero LIKE 'DEMO-%';
     DELETE FROM importaciones_semanales WHERE sede IN (${sedes});
     DELETE FROM historial_turnos_publicados WHERE turno_publicado_id IN (SELECT id FROM turnos_publicados WHERE id_huellero LIKE 'DEMO-%');
     DELETE FROM turnos_publicados WHERE id_huellero LIKE 'DEMO-%';

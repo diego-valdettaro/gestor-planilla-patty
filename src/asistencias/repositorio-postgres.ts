@@ -1,6 +1,7 @@
 import { and, eq, gte, lte, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
+import type { EvidenciaDeCeldaAsistencia } from "@/app/asistencias/estado-de-celda";
 import * as schema from "@/db/schema";
 import { ajustesDeAsistencia, asistenciasEsperadas, estadosManuales, horasExtra, marcasCrudas, periodosPlanilla, tardanzas, turnosPublicados } from "@/db/schema";
 import { RepositorioPostgresDeTardanzas } from "@/tardanzas/repositorio-postgres";
@@ -16,18 +17,12 @@ import type {
 import type { EstadoDeHoraExtra, HoraExtraCalculada } from "./calcular-hora-extra";
 
 // Una fila del resumen mensual de asistencias, por (colaborador, día) con horario
-// publicado. Además del estado guardado expone la evidencia que necesita el
-// calendario de `/asistencias` para derivar el estado de la celda.
-export interface FilaDeResumenMensual {
+// publicado: la evidencia que deriva el estado de la celda más los campos de
+// presentación del calendario de `/asistencias`.
+export interface FilaDeResumenMensual extends EvidenciaDeCeldaAsistencia {
   fecha: string;
-  estado: "pendiente" | "confirmada" | "manual";
   entrada: string | null;
   salida: string | null;
-  estadoManual: string | null;
-  entradaPropuesta: string | null;
-  salidaPropuesta: string | null;
-  hayMarcasCrudas: boolean;
-  enPeriodoCerrado: boolean;
 }
 
 export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencias {
