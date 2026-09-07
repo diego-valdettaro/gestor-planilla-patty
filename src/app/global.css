@@ -88,6 +88,7 @@ th, td { border: 1px solid #e2e8f0; padding: 0.6rem; text-align: left; }
 .estado-color-sin-programacion { --estado-fondo: #f8fafc; --estado-borde: #e2e8f0; --estado-texto: #475569; }
 .leyenda-estados .estado-color-borrador-editable, .leyenda-estados .estado-color-publicado, .leyenda-estados .estado-color-cambios-sin-publicar, .leyenda-estados .estado-color-liquidado, .leyenda-estados .estado-color-confirmada, .leyenda-estados .estado-color-pendiente, .leyenda-estados .estado-color-manual, .leyenda-estados .estado-color-sin-programacion, .dia-calendario.estado-color-confirmada, .dia-calendario.estado-color-pendiente, .dia-calendario.estado-color-manual, .dia-calendario.estado-color-sin-programacion { background: var(--estado-fondo); border-color: var(--estado-borde); color: var(--estado-texto); }
 .selector-asistencia { margin-top: 2rem; }
+.selector-asistencia .importar-archivo { align-self: end; margin-left: auto; }
 .encabezado-seccion { margin-bottom: 1rem; }
 .encabezado-seccion h2 { margin-bottom: 0.25rem; }
 .encabezado-seccion p { color: #475569; margin: 0; }
