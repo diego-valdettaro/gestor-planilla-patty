@@ -5,6 +5,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { estadoDeCelda } from "@/app/turnos/estado-de-celda";
 import * as schema from "@/db/schema";
 
 import { RepositorioPostgresDeTurnos } from "./repositorio-postgres";
@@ -163,5 +164,21 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeTurnos", () => {
       fechasProcesadas.map((fechaDeProcesamiento) => ({ idHuellero, fecha: fechaDeProcesamiento, sede: "Lima", entradaProgramada: "10:00", salidaProgramada: "19:00", descanso: false })),
       { id: cuentaId, rol: "operaciones" }, "Cambio posterior",
     )).rejects.toThrow("No se puede corregir un horario semanal que ya fue procesado.");
+  });
+
+  it("deriva el estado de celda de Horarios desde las consultas de turnos publicados y procesamientos de semana", async () => {
+    const publicados = await repositorio.listarPublicadosPorColaboradoresYSemana([idHuellero], fechasProcesadas[0], fechasProcesadas.at(-1)!);
+    expect(publicados).toHaveLength(7);
+    const procesados = await repositorio.listarProcesamientosDeSemana(semanaProcesada, "tiendas");
+    expect(procesados).toContain(idHuellero);
+
+    const publicadoDelDia = publicados.find(({ fecha }) => fecha === fechasProcesadas[0])!;
+    expect(estadoDeCelda(publicadoDelDia, publicadoDelDia, procesados.includes(idHuellero))).toBe("liquidado");
+    expect(estadoDeCelda(publicadoDelDia, publicadoDelDia, false)).toBe("publicado");
+    expect(estadoDeCelda({ ...publicadoDelDia, salidaProgramada: "20:00" }, publicadoDelDia, false)).toBe("cambios-sin-publicar");
+
+    const semanaSinPublicar = "2030-09-02";
+    const sinPublicar = await repositorio.listarProcesamientosDeSemana(semanaSinPublicar, "tiendas");
+    expect(estadoDeCelda(undefined, undefined, sinPublicar.includes(idHuellero))).toBe("borrador-editable");
   });
 });

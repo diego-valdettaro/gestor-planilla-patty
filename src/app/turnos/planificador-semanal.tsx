@@ -9,6 +9,7 @@ import type { CeldaDePlanSemanalEnBorrador, HorarioSemanalParaCopiar } from "@/t
 import { inicioDeSemana } from "@/turnos/semana";
 
 import { guardarBorradorDesdeGrilla, publicarPlanSemanalDesdeGrilla, reemplazarPlanificacionSemanalDesdeGrilla, republicarPlanSemanalDesdeGrilla } from "./actions";
+import { type EstadoDeCelda, NOMBRE_DEL_ESTADO_DE_CELDA, difiereDelPublicado, estadoDeCelda, estadoDeSemana } from "./estado-de-celda";
 import { resumirPlanSemanal } from "./resumen-plan-semanal";
 
 type Celda = Omit<CeldaDePlanSemanalEnBorrador, "planId">;
@@ -42,6 +43,20 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
   const publicadosCompletos = useMemo(() => colaboradores.filter(({ idHuellero }) => estaPublicadaLaSemana(idHuellero, dias, publicadosPorClave)).length, [colaboradores, dias, publicadosPorClave]);
   const planificacionPublicada = publicadosCompletos === colaboradores.length && colaboradores.length > 0;
   const nuevosAlPublicar = colaboradores.length - publicadosCompletos;
+  const estadoSemanalDe = (idHuellero: string): EstadoDeCelda => {
+    const semanaPublicada = estaPublicadaLaSemana(idHuellero, dias, publicadosPorClave);
+    return estadoDeSemana({
+      semanaPublicada,
+      semanaLiquidada: procesadosPorId.has(idHuellero),
+      hayCambiosSinPublicar: semanaPublicada && hayCambiosSinPublicar(idHuellero, dias, porClave, publicadosPorClave),
+    });
+  };
+  const estadoDeLaPlanificacion = useMemo<EstadoDeCelda>(() => {
+    if (!colaboradores.length) return "borrador-editable";
+    const estados = new Set(colaboradores.map(({ idHuellero }) => estadoSemanalDe(idHuellero)));
+    return (["cambios-sin-publicar", "borrador-editable", "publicado", "liquidado"] as const).find((estado) => estados.has(estado)) ?? "liquidado";
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [colaboradores, dias, publicadosPorClave, procesadosPorId, porClave]);
 
   const modelosDeSede = (sede: string) => modelos.filter((modelo) => modelo.activo && modelo.sede === sede);
   function opcionesDeCelda(colaborador: Colaborador) {
@@ -158,24 +173,27 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
     if (actual.tipo === "republicar") void republicar(actual.idHuellero, String(formData.get("motivo") ?? "").trim());
   }
 
-  function contenidoDeChip(celda: Celda | Publicado | undefined) {
+  function contenidoDeChip(celda: Celda | Publicado | undefined, editable: boolean) {
     if (!celda) return <span className="chip-vacio">＋ Asignar</span>;
     if (celda.descanso) return <b>Descanso</b>;
     const nombre = modelos.find((modelo) => modelo.id === celda.modeloHorarioId)?.nombre ?? "Personalizado";
-    return <><b>{celda.entradaProgramada}–{celda.salidaProgramada}</b><small>{nombre}</small><span aria-hidden="true" className="marca-edit">✎</span></>;
+    return <><b>{celda.entradaProgramada}–{celda.salidaProgramada}</b><small>{nombre}</small>{editable && <span aria-hidden="true" className="marca-edit">✎</span>}</>;
   }
   function renderCelda(colaborador: Colaborador, fecha: string, semanaProcesada: boolean) {
     const clave = `${colaborador.idHuellero}:${fecha}`;
     const publicado = publicadosPorClave.get(clave);
     const celda = porClave.get(clave);
     const mostrado = celda ?? publicado;
-    const estadoDeColor = semanaProcesada ? "procesado" : publicado ? "publicado" : mostrado ? "borrador" : "sin-publicar";
+    const estado = estadoDeCelda(celda, publicado, semanaProcesada);
     const clases = ["celda-plan-semanal"];
     if (publicado) clases.push("publicado");
     if (mostrado?.descanso) clases.push("descanso");
     if (!mostrado) clases.push("vacia");
     return <td className={clases.join(" ")} key={fecha}>
-      <button aria-haspopup="dialog" aria-label={`Horario de ${colaborador.nombre} para ${fecha}`} className={`chip-turno estado-color-${estadoDeColor}`} disabled={semanaProcesada} onClick={() => abrirDialogoCelda(colaborador, fecha)} type="button">{contenidoDeChip(mostrado)}</button>
+      <button aria-haspopup="dialog" aria-label={`Horario de ${colaborador.nombre} para ${fecha}: ${NOMBRE_DEL_ESTADO_DE_CELDA[estado]}`} className={`chip-turno estado-color-${estado}`} disabled={estado === "liquidado"} onClick={() => abrirDialogoCelda(colaborador, fecha)} type="button">
+        <span className="etiqueta-estado-celda">{estado === "liquidado" && <IconoCandado />}{NOMBRE_DEL_ESTADO_DE_CELDA[estado]}</span>
+        {contenidoDeChip(mostrado, estado !== "liquidado")}
+      </button>
     </td>;
   }
 
@@ -185,13 +203,13 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
         <label className="selector-equipo"><span>Grupo</span><select aria-label="Equipo" onChange={(evento) => router.push(`/turnos?semana=${semana}&equipo=${evento.target.value}`)} value={equipo}>{equipos.map((item) => <option key={item} value={item}>{item === "tiendas" ? "Tiendas" : "Taller"}</option>)}</select></label>
         <SelectorSemanal semana={semana} alSeleccionar={cambiarSemana} />
       </div>
-      <div className={`estado-doble ${cambios ? "con-cambios" : ""}`}>
-        <strong>{cambios ? "Cambios sin guardar" : "Borrador guardado"}</strong>
-        <span>{guardadoEn ? `Guardado ${formatearFecha(guardadoEn)}` : "Sin guardar todavía"}</span>
+      <div className={`estado-doble ${cambios ? "sin-guardar" : ""}`}>
+        <strong>Borrador</strong>
+        <span>{cambios ? "Edición sin guardar" : guardadoEn ? `Guardado ${formatearFecha(guardadoEn)}` : "Aún no guardado"}</span>
       </div>
-      <div className={`estado-doble ${publicadosCompletos ? "es-publicado" : ""}`}>
-        <strong>{publicadosCompletos === 0 ? "Sin publicar" : planificacionPublicada ? "Publicado" : "Publicado parcialmente"}</strong>
-        <span>{planificacionPublicada ? "todos los colaboradores" : `${publicadosCompletos} de ${colaboradores.length} colaboradores`}</span>
+      <div className="estado-doble">
+        <strong>Planificación</strong>
+        <span className={`chip-estado-plan estado-color-${estadoDeLaPlanificacion}`}>{NOMBRE_DEL_ESTADO_DE_CELDA[estadoDeLaPlanificacion]}{planificacionPublicada || estadoDeLaPlanificacion === "liquidado" ? "" : ` · ${publicadosCompletos}/${colaboradores.length}`}</span>
       </div>
       <div className="medidor">
         <div className="cabeza"><span>Cobertura de la semana</span><span>{resumen.asignadas} / {resumen.total} días</span></div>
@@ -200,14 +218,14 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
       <div className="acciones-plan"><button className="boton-secundario" disabled={!cambios || guardando} onClick={guardar} type="button">{guardando ? "Guardando…" : "Guardar borrador"}</button><button className="boton-principal" disabled={publicando || Boolean(resumen.faltantesPorColaborador.length)} onClick={solicitarPublicacion} type="button">{publicando ? "Publicando…" : "Publicar planificación"}</button></div>
       {error && <p role="alert">{error}</p>}
     </div>
-    <div className="titulo-grilla"><h2>Grupo {equipo === "tiendas" ? "Tiendas" : "Taller"}</h2><span>{colaboradores.length} colaboradores · {sedes.length} {sedes.length === 1 ? "sede" : "sedes"}</span><span className="aviso-desplazamiento">Desplácese horizontalmente para ver la semana completa.</span></div><ul aria-label="Estado de las asignaciones" className="leyenda-estados leyenda-plan"><li className="estado-color-borrador">Borrador editable</li><li className="estado-color-publicado">Publicado</li><li className="estado-color-sin-publicar">Sin publicar</li><li className="estado-color-procesado">Procesado</li></ul><div className="tabla-plan-semanal"><table><thead><tr><th>Colaborador</th>{dias.map((fecha) => <th key={fecha}>{new Intl.DateTimeFormat("es-PE", { weekday: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${fecha}T00:00:00Z`))}</th>)}</tr></thead><tbody>
+    <div className="titulo-grilla"><h2>Grupo {equipo === "tiendas" ? "Tiendas" : "Taller"}</h2><span>{colaboradores.length} colaboradores · {sedes.length} {sedes.length === 1 ? "sede" : "sedes"}</span><span className="aviso-desplazamiento">Desplácese horizontalmente para ver la semana completa.</span></div><ul aria-label="Estados de la planificación" className="leyenda-estados leyenda-plan"><li className="estado-color-borrador-editable">Borrador editable</li><li className="estado-color-publicado">Publicado</li><li className="estado-color-cambios-sin-publicar">Cambios sin publicar</li><li className="estado-color-liquidado">Liquidado</li></ul><div className="tabla-plan-semanal"><table><thead><tr><th>Colaborador</th>{dias.map((fecha) => <th key={fecha}>{new Intl.DateTimeFormat("es-PE", { weekday: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${fecha}T00:00:00Z`))}</th>)}</tr></thead><tbody>
       {colaboradores.map((colaborador, indice) => { const semanaProcesada = procesadosPorId.has(colaborador.idHuellero); const semanaPublicada = estaPublicadaLaSemana(colaborador.idHuellero, dias, publicadosPorClave); const tieneCambiosSinPublicar = semanaPublicada && hayCambiosSinPublicar(colaborador.idHuellero, dias, porClave, publicadosPorClave); return <Fragment key={colaborador.idHuellero}>
         {colaborador.sede !== colaboradores[indice - 1]?.sede && <tr className="grupo-sede"><th colSpan={dias.length + 1}>{colaborador.sede}</th></tr>}
-        <tr><th scope="row"><div className="persona"><span className="ini">{iniciales(colaborador.nombre)}</span><span>{colaborador.nombre}<small>{colaborador.sede} · {semanaProcesada ? "Procesado" : semanaPublicada ? tieneCambiosSinPublicar ? "Cambios sin publicar" : "Publicado" : "Borrador"}</small>{tieneCambiosSinPublicar && !semanaProcesada && <button disabled={publicando} onClick={() => pedirConfirmacion({ tipo: "republicar", idHuellero: colaborador.idHuellero, nombre: colaborador.nombre })} type="button">Republicar cambios</button>}</span></div></th>{dias.map((fecha) => renderCelda(colaborador, fecha, semanaProcesada))}</tr>
+        <tr><th scope="row"><div className="persona"><span className="ini">{iniciales(colaborador.nombre)}</span><span>{colaborador.nombre}<small>{colaborador.sede} · {NOMBRE_DEL_ESTADO_DE_CELDA[estadoDeSemana({ semanaPublicada, semanaLiquidada: semanaProcesada, hayCambiosSinPublicar: tieneCambiosSinPublicar })]}</small>{tieneCambiosSinPublicar && !semanaProcesada && <button disabled={publicando} onClick={() => pedirConfirmacion({ tipo: "republicar", idHuellero: colaborador.idHuellero, nombre: colaborador.nombre })} type="button">Republicar cambios</button>}</span></div></th>{dias.map((fecha) => renderCelda(colaborador, fecha, semanaProcesada))}</tr>
       </Fragment>; })}
     </tbody></table></div>
     <footer className="pie-plan-semanal"><p><strong>{resumen.asignadas} de {resumen.total} días asignados</strong><span>{resumen.faltantesPorColaborador.length ? `Faltan asignaciones para ${resumen.faltantesPorColaborador.length} colaboradores.` : "La semana está completa y lista para publicar."}</span></p><div><button className="boton-secundario" disabled={!cambios || guardando} onClick={guardar} type="button">Guardar borrador</button><button className="boton-principal" disabled={publicando || Boolean(resumen.faltantesPorColaborador.length)} onClick={solicitarPublicacion} type="button">Publicar planificación</button></div></footer>
-    <dialog className="dialogo-confirmacion" ref={dialogoConfirmacion}><form action={confirmarOperacion}><h2>{tituloDeConfirmacion(confirmacion)}</h2><p>{descripcionDeConfirmacion(confirmacion, resumen.faltantesPorColaborador.length)}</p>{(confirmacion?.tipo === "publicar" || confirmacion?.tipo === "reemplazar-planificacion") && <ul className="leyenda-estados">{publicadosCompletos > 0 && <li className="publicado">{publicadosCompletos} {publicadosCompletos === 1 ? "colaborador se republica" : "colaboradores se republican"}</li>}{nuevosAlPublicar > 0 && <li className="manual">{nuevosAlPublicar} {nuevosAlPublicar === 1 ? "colaborador se publica por primera vez" : "colaboradores se publican por primera vez"}</li>}</ul>}{confirmacion?.tipo === "republicar" && <label>Motivo de la republicación<input name="motivo" maxLength={250} required /></label>}<div className="acciones-dialogo"><button className="boton-secundario" onClick={() => dialogoConfirmacion.current?.close()} type="button">Cancelar</button><button className={confirmacion?.tipo === "publicar" || confirmacion?.tipo === "reemplazar-planificacion" ? "boton-principal" : "boton-secundario"} type="submit">{etiquetaDeConfirmacion(confirmacion)}</button></div></form></dialog>
+    <dialog className="dialogo-confirmacion" ref={dialogoConfirmacion}><form action={confirmarOperacion}><h2>{tituloDeConfirmacion(confirmacion)}</h2><p>{descripcionDeConfirmacion(confirmacion, resumen.faltantesPorColaborador.length)}</p>{(confirmacion?.tipo === "publicar" || confirmacion?.tipo === "reemplazar-planificacion") && <ul className="resumen-publicacion">{publicadosCompletos > 0 && <li>{publicadosCompletos} {publicadosCompletos === 1 ? "colaborador se republica" : "colaboradores se republican"}</li>}{nuevosAlPublicar > 0 && <li>{nuevosAlPublicar} {nuevosAlPublicar === 1 ? "colaborador se publica por primera vez" : "colaboradores se publican por primera vez"}</li>}</ul>}{confirmacion?.tipo === "republicar" && <label>Motivo de la republicación<input name="motivo" maxLength={250} required /></label>}<div className="acciones-dialogo"><button className="boton-secundario" onClick={() => dialogoConfirmacion.current?.close()} type="button">Cancelar</button><button className={confirmacion?.tipo === "publicar" || confirmacion?.tipo === "reemplazar-planificacion" ? "boton-principal" : "boton-secundario"} type="submit">{etiquetaDeConfirmacion(confirmacion)}</button></div></form></dialog>
     <dialog className="dialogo-confirmacion" ref={dialogoCelda}><form action={elegirEnDialogoCelda} key={celdaEnEdicion ? `${celdaEnEdicion.colaborador.idHuellero}:${celdaEnEdicion.fecha}` : "sin-celda"}><h2>Turno de {celdaEnEdicion?.colaborador.nombre ?? ""}</h2><p>{celdaEnEdicion ? formatearDiaLargo(celdaEnEdicion.fecha) : ""}</p><div className="opciones-celda">{celdaEnEdicion && opcionesDeCelda(celdaEnEdicion.colaborador).map((opcion) => <label key={opcion.value}><input defaultChecked={opcion.value === valorDe(porClave.get(`${celdaEnEdicion.colaborador.idHuellero}:${celdaEnEdicion.fecha}`) ?? publicadosPorClave.get(`${celdaEnEdicion.colaborador.idHuellero}:${celdaEnEdicion.fecha}`))} name="opcion" type="radio" value={opcion.value} />{opcion.label}</label>)}</div><div className="acciones-dialogo"><button className="boton-secundario" onClick={() => dialogoCelda.current?.close()} type="button">Cancelar</button><button className="boton-principal" type="submit">Usar</button></div></form></dialog>
     <dialog ref={dialogoPersonalizado}><form action={guardarPersonalizado}><h2>Horario personalizado</h2><label>Entrada<input defaultValue="09:00" name="entrada" type="time" required /></label><label>Salida<input defaultValue="18:00" name="salida" type="time" required /></label><button type="submit">Usar horario</button><button className="boton-secundario" onClick={() => dialogoPersonalizado.current?.close()} type="button">Cancelar</button></form></dialog>
   </>;
@@ -264,6 +282,10 @@ function estaPublicadaLaSemana(idHuellero: string, dias: string[], publicados: M
 function hayCambiosSinPublicar(idHuellero: string, dias: string[], celdas: Map<string, Celda>, publicados: Map<string, Publicado>) {
   return dias.some((fecha) => {
     const clave = `${idHuellero}:${fecha}`; const celda = celdas.get(clave); const publicado = publicados.get(clave);
-    return Boolean(celda && publicado && (celda.sede !== publicado.sede || celda.modeloHorarioId !== publicado.modeloHorarioId || celda.entradaProgramada !== publicado.entradaProgramada || celda.salidaProgramada !== publicado.salidaProgramada || celda.descanso !== publicado.descanso));
+    return Boolean(celda && publicado && difiereDelPublicado(celda, publicado));
   });
+}
+
+function IconoCandado() {
+  return <svg aria-hidden="true" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><rect x="3.25" y="7" width="9.5" height="6.5" rx="1.4" fill="currentColor" /><path d="M5.25 7V5.25a2.75 2.75 0 0 1 5.5 0V7" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>;
 }
