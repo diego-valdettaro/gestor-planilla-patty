@@ -161,9 +161,9 @@ th, td { border: 1px solid #e2e8f0; padding: 0.6rem; text-align: left; }
 .celda-plan-semanal .chip-turno b { font-weight: 600; }
 .celda-plan-semanal .chip-turno small { color: #5b6b83; }
 .celda-plan-semanal .chip-turno .marca-edit { color: #7c93b4; font-size: .7rem; position: absolute; right: .4rem; top: .35rem; }
-.celda-plan-semanal .chip-turno .etiqueta-estado-celda { align-items: center; display: inline-flex; font-size: .6rem; font-weight: 700; gap: .2rem; letter-spacing: .02em; opacity: .85; text-transform: uppercase; }
-.celda-plan-semanal .chip-turno .etiqueta-estado-celda svg { flex: 0 0 auto; height: .72rem; width: .72rem; }
+.celda-plan-semanal .chip-turno .etiqueta-estado-celda { align-items: center; display: inline-flex; font-size: .7rem; font-weight: 700; gap: .2rem; letter-spacing: .02em; opacity: .85; text-transform: uppercase; }
 .celda-plan-semanal.descanso .chip-turno .etiqueta-estado-celda, .celda-plan-semanal.vacia .chip-turno .etiqueta-estado-celda { position: absolute; left: .5rem; top: .35rem; }
+.icono-candado { flex: 0 0 auto; height: .8em; vertical-align: -.12em; width: .8em; }
 .celda-plan-semanal .chip-turno:hover:not(:disabled), .celda-plan-semanal .chip-turno:focus-visible { outline: 2px solid #079557; outline-offset: -2px; }
 .celda-plan-semanal .chip-turno:disabled { cursor: default; opacity: .7; }
 .celda-plan-semanal.descanso .chip-turno, .celda-plan-semanal.vacia .chip-turno { align-items: center; justify-content: center; padding-right: .5rem; }

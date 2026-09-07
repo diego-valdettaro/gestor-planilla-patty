@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { ESTADOS_DE_CELDA, difiereDelPublicado, estadoDeCelda, estadoDeSemana } from "./estado-de-celda";
+import { ESTADOS_DE_HORARIO, difiereDelPublicado, estadoDeCelda, estadoDeSemana } from "./estado-de-celda";
 
 const turno = {
   sede: "Taller",
@@ -46,10 +46,17 @@ describe("estadoDeCelda", () => {
       for (const publicado of publicados) {
         for (const semanaLiquidada of [false, true]) {
           const estado = estadoDeCelda(celda, publicado, semanaLiquidada);
-          expect(ESTADOS_DE_CELDA).toContain(estado);
+          expect(ESTADOS_DE_HORARIO).toContain(estado);
         }
       }
     }
+  });
+
+  it("una celda 'Cambios sin publicar' pasa a 'Publicado' cuando se republica el turno", () => {
+    const editada = { ...turno, entradaProgramada: "08:00" };
+    expect(estadoDeCelda(editada, turno, false)).toBe("cambios-sin-publicar");
+    // Al republicar, el turno publicado queda igual a la celda del borrador.
+    expect(estadoDeCelda(editada, editada, false)).toBe("publicado");
   });
 });
 
