@@ -1,0 +1,99 @@
+name: Sincronizar frontera de issues
+
+on:
+  issues:
+    types: [opened, edited, closed, reopened, labeled, unlabeled]
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  sincronizar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v9
+        with:
+          script: |
+            if (context.payload.issue?.pull_request) return;
+
+            const openTasks = await github.paginate(
+              github.rest.issues.listForRepo,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                labels: 'type:task',
+                per_page: 100,
+              },
+            );
+
+            const blockersFor = (body) => {
+              const section = body?.match(
+                /(?:^|\n)## Blocked by\n([\s\S]*?)(?=\n## |\s*$)/,
+              );
+              if (!section) return undefined;
+
+              const content = section[1].trim();
+              if (content === 'None (can start immediately)') return [];
+
+              const lines = content.split('\n');
+              if (lines.length === 0 || !lines.every((line) => /^- #(\d+)$/.test(line))) {
+                return undefined;
+              }
+
+              return lines.map((line) => Number(line.match(/^- #(\d+)$/)[1]));
+            };
+
+            const changedIssue = context.payload.issue?.number;
+            const candidates = openTasks.filter((issue) => {
+              const blockers = blockersFor(issue.body);
+              return blockers !== undefined && (
+                changedIssue === undefined ||
+                issue.number === changedIssue ||
+                blockers.includes(changedIssue)
+              );
+            });
+
+            const closed = new Map();
+            const isClosed = async (number) => {
+              if (!closed.has(number)) {
+                const { data: issue } = await github.rest.issues.get({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: number,
+                });
+                closed.set(number, issue.state === 'closed');
+              }
+              return closed.get(number);
+            };
+
+            for (const issue of candidates) {
+              const blockers = blockersFor(issue.body);
+              const isReady = await Promise.all(blockers.map(isClosed));
+              const shouldBeReady = isReady.every(Boolean);
+              const labels = issue.labels.map((label) =>
+                typeof label === 'string' ? label : label.name,
+              );
+              const hasReadyLabel = labels.includes('ready-for-agent');
+
+              if (shouldBeReady && !hasReadyLabel) {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  labels: ['ready-for-agent'],
+                });
+                core.info(`Issue #${issue.number} is ready.`);
+              }
+
+              if (!shouldBeReady && hasReadyLabel) {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  name: 'ready-for-agent',
+                });
+                core.info(`Issue #${issue.number} is blocked.`);
+              }
+            }
