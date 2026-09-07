@@ -121,6 +121,9 @@ async function limpiar(pool: Pool): Promise<void> {
     DELETE FROM estados_manuales WHERE asistencia_id IN (SELECT id FROM asistencias_esperadas WHERE id_huellero LIKE 'DEMO-%');
     DELETE FROM ajustes_de_asistencia WHERE asistencia_id IN (SELECT id FROM asistencias_esperadas WHERE id_huellero LIKE 'DEMO-%');
     DELETE FROM asistencias_esperadas WHERE id_huellero LIKE 'DEMO-%';
+    DELETE FROM incidencias_de_importacion WHERE importacion_id IN (SELECT id FROM importaciones_semanales WHERE sede IN (${sedes}));
+    DELETE FROM marcas_crudas WHERE importacion_id IN (SELECT id FROM importaciones_semanales WHERE sede IN (${sedes}));
+    DELETE FROM importaciones_semanales WHERE sede IN (${sedes});
     DELETE FROM historial_turnos_publicados WHERE turno_publicado_id IN (SELECT id FROM turnos_publicados WHERE id_huellero LIKE 'DEMO-%');
     DELETE FROM turnos_publicados WHERE id_huellero LIKE 'DEMO-%';
     DELETE FROM horarios_semanales_procesados WHERE id_huellero LIKE 'DEMO-%';
@@ -193,6 +196,17 @@ async function marcarManual(
   await db.insert(schema.estadosManuales).values({ asistenciaId: fila.id, tipo, comentario: "Sembrado por sembrar-base", responsableId });
 }
 
+// Marcas del huellero incompletas para un día que sigue `pendiente`: en el calendario
+// de asistencias se ve como "Pendiente de revisión" (hay marcas, pero no permiten
+// proponer entrada y salida completas).
+async function marcarPendienteDeRevision(db: Db, idHuellero: string, fecha: string, sede: string, usuarioId: string): Promise<void> {
+  const [importacion] = await db.insert(schema.importacionesSemanales).values({
+    sede, semana: SEMANA_ACTUAL, archivoNombre: "demo-huellero.xlsx",
+    archivoUbicacion: "demo/demo-huellero.xlsx", archivoHashSha256: "0".repeat(64), usuarioId,
+  }).returning({ id: schema.importacionesSemanales.id });
+  await db.insert(schema.marcasCrudas).values({ importacionId: importacion.id, idHuellero, fecha, instante: `${fecha}T08:57:00` });
+}
+
 async function verificarInvariantes(pool: Pool): Promise<void> {
   const fallos: string[] = [];
   const ultimoDiaSemana = diasDeLaSemana(SEMANA_ACTUAL).at(-1);
@@ -244,6 +258,10 @@ function resumen(): string {
     "  Darío Liquidado  -> Liquidado",
     `Período ${PERIODO_ANTERIOR.inicio}..${PERIODO_ANTERIOR.fin}: cerrado (Elena publicada + procesada)`,
     `Período ${PERIODO_ACTUAL.inicio}..${PERIODO_ACTUAL.fin}: abierto`,
+    "",
+    "Calendario de asistencias de Beto Publicado (mes actual):",
+    "  lun/mar -> Registrada ; mié -> Registrada (Feriado) ; jue -> Pendiente de revisión ; vie/sáb -> Esperada",
+    "  Elena Sotelo, mes anterior -> Liquidado (período cerrado)",
   ].join("\n");
 }
 
@@ -346,7 +364,9 @@ async function main(): Promise<void> {
     await marcarConfirmada(db, "DEMO-BETO", mar, aperturaBenavides, { horaExtra: "aprobada" });
     await marcarConfirmada(db, "DEMO-CARLA", lun, aperturaBenavides, { horaExtra: "pendiente" });
     await marcarManual(db, "DEMO-BETO", mie, "feriado", finanzas.id);
-    // Beto jue/vie/sáb quedan en `pendiente` a propósito; Darío ya quedó todo confirmado (semana liquidada).
+    await marcarPendienteDeRevision(db, "DEMO-BETO", diasActual[3], SEDES.benavides, finanzas.id);
+    // Beto: lun/mar Registrada, mié Registrada (feriado), jue Pendiente de revisión, vie/sáb Esperada.
+    // Darío ya quedó todo confirmado (semana liquidada).
 
     await verificarInvariantes(pool);
     console.log(resumen());
