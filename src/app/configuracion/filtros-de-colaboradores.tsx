@@ -1,0 +1,34 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+
+import type { EquipoOperativo } from "@/turnos/configurar-equipos-operativos";
+
+import type { FiltroDeColaboradores } from "./visibilidad-de-colaboradores";
+
+// Filtros de la lista de Colaboradores. Aplican al cambiar de valor, sin botón de
+// envío (mismo patrón que el selector de equipo de Horarios). El filtrado real lo
+// resuelve el servidor a partir de estos parámetros de la URL.
+export function FiltrosDeColaboradores({ grupo, mostrarInactivos }: FiltroDeColaboradores) {
+  const router = useRouter();
+
+  const navegar = (proximo: FiltroDeColaboradores) => {
+    const parametros = new URLSearchParams();
+    if (proximo.grupo) parametros.set("grupo", proximo.grupo);
+    if (proximo.mostrarInactivos) parametros.set("inactivos", "1");
+    const consulta = parametros.toString();
+    router.push(consulta ? `/configuracion?${consulta}` : "/configuracion");
+  };
+
+  return <div className="filtros filtros-configuracion">
+    <label>Grupo<select
+      onChange={(evento) => navegar({ grupo: (evento.target.value || undefined) as EquipoOperativo | undefined, mostrarInactivos })}
+      value={grupo ?? ""}
+    ><option value="">Todos los grupos</option><option value="tiendas">Tiendas</option><option value="taller">Taller</option></select></label>
+    <label className="checkbox"><input
+      checked={mostrarInactivos}
+      onChange={(evento) => navegar({ grupo, mostrarInactivos: evento.target.checked })}
+      type="checkbox"
+    />Mostrar inactivos</label>
+  </div>;
+}
