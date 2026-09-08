@@ -35,18 +35,31 @@ export async function eliminarSede(formData: FormData): Promise<void> {
   revalidatePath("/asistencias");
 }
 
-export async function asignarEquipoOperativoASede(formData: FormData): Promise<void> {
-  await exigirAdministracion();
-  const equipoOperativo = texto(formData, "equipoOperativo");
-  if (equipoOperativo !== "tiendas" && equipoOperativo !== "taller") throw new Error("El equipo operativo no es válido.");
-  await asignarEquipoOperativo(
-    repositorioDeTurnos,
-    await obtenerActorActual(),
-    texto(formData, "nombre"),
-    equipoOperativo,
-  );
-  revalidatePath("/configuracion");
-  revalidatePath("/turnos");
+export interface EstadoDeAsignacionDeGrupo {
+  error?: string;
+  listo?: number;
+}
+
+export async function asignarEquipoOperativoASede(
+  _estadoAnterior: EstadoDeAsignacionDeGrupo,
+  formData: FormData,
+): Promise<EstadoDeAsignacionDeGrupo> {
+  try {
+    await exigirAdministracion();
+    const equipoOperativo = texto(formData, "equipoOperativo");
+    if (equipoOperativo !== "tiendas" && equipoOperativo !== "taller") throw new Error("El grupo no es válido.");
+    await asignarEquipoOperativo(
+      repositorioDeTurnos,
+      await obtenerActorActual(),
+      texto(formData, "nombre"),
+      equipoOperativo,
+    );
+    revalidatePath("/configuracion");
+    revalidatePath("/turnos");
+    return { listo: (_estadoAnterior.listo ?? 0) + 1 };
+  } catch (causa) {
+    return { error: causa instanceof Error ? causa.message : "No se pudo guardar el grupo de la sede." };
+  }
 }
 
 export async function guardarColaborador(formData: FormData): Promise<void> {
