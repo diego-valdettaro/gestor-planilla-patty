@@ -8,7 +8,7 @@ import { db } from "@/db/client";
 import { politicasDePenalizacionPorTardanzas, sedes } from "@/db/schema";
 import { repositorioDeModelosDeHorario } from "@/turnos/servicio";
 
-import { asignarEquipoOperativoASede, crearModeloHorario, desactivarColaborador, desactivarModeloHorario, eliminarModeloHorario, eliminarSede, guardarColaborador, guardarModeloHorario, guardarPolitica } from "./acciones";
+import { asignarEquipoOperativoASede, crearModeloHorario, desactivarColaborador, desactivarModeloHorario, eliminarModeloHorario, eliminarSede, guardarColaborador, guardarModeloHorario, guardarPoliticaDeTardanzas, guardarSede, reactivarColaborador, reactivarModeloHorario } from "./actions";
 import { FiltrosDeColaboradores } from "./filtros-de-colaboradores";
 import { filtrarColaboradores } from "./visibilidad-de-colaboradores";
 import { EditorDeGrupoDeSede } from "./editor-de-grupo-de-sede";
