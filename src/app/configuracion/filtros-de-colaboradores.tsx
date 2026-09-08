@@ -4,20 +4,18 @@ import { useRouter } from "next/navigation";
 
 import type { EquipoOperativo } from "@/turnos/configurar-equipos-operativos";
 
+import { NAVEGACION_SIN_SALTO, rutaDeFiltros } from "./navegacion-de-filtros";
 import type { FiltroDeColaboradores } from "./visibilidad-de-colaboradores";
 
 // Filtros de la lista de Colaboradores. Aplican al cambiar de valor, sin botón de
 // envío (mismo patrón que el selector de equipo de Horarios). El filtrado real lo
-// resuelve el servidor a partir de estos parámetros de la URL.
+// resuelve el servidor a partir de estos parámetros de la URL; al navegar no se
+// mueve el scroll, solo se refresca la tabla.
 export function FiltrosDeColaboradores({ grupo, mostrarInactivos }: FiltroDeColaboradores) {
   const router = useRouter();
 
   const navegar = (proximo: FiltroDeColaboradores) => {
-    const parametros = new URLSearchParams();
-    if (proximo.grupo) parametros.set("grupo", proximo.grupo);
-    if (proximo.mostrarInactivos) parametros.set("inactivos", "1");
-    const consulta = parametros.toString();
-    router.push(consulta ? `/configuracion?${consulta}` : "/configuracion");
+    router.push(rutaDeFiltros(proximo), NAVEGACION_SIN_SALTO);
   };
 
   return <div className="filtros filtros-configuracion">
