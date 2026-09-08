@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { IconoCandado } from "@/app/icono-candado";
 import type { EquipoOperativo } from "@/turnos/configurar-equipos-operativos";
 import type { ModeloDeHorario } from "@/turnos/gestionar-modelos-de-horario";
 import type { CeldaDePlanSemanalEnBorrador, HorarioSemanalParaCopiar } from "@/turnos/plan-semanal-en-borrador";
@@ -295,8 +296,4 @@ const PRIORIDAD_ESTADO_PLANIFICACION: EstadoDeHorario[] = ["cambios-sin-publicar
 function EtiquetaEstado({ estado, className }: { estado: EstadoDeHorario; className?: string }) {
   const contenido = <>{estado === "liquidado" && <IconoCandado />}{NOMBRE_DEL_ESTADO_DE_HORARIO[estado]}</>;
   return className ? <span className={className}>{contenido}</span> : contenido;
-}
-
-function IconoCandado() {
-  return <svg aria-hidden="true" className="icono-candado" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><rect x="3.25" y="7" width="9.5" height="6.5" rx="1.4" fill="currentColor" /><path d="M5.25 7V5.25a2.75 2.75 0 0 1 5.5 0V7" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>;
 }
