@@ -37,7 +37,7 @@ export async function eliminarSede(formData: FormData): Promise<void> {
 
 export interface EstadoDeAsignacionDeGrupo {
   error?: string;
-  listo?: true;
+  listo?: number;
 }
 
 export async function asignarEquipoOperativoASede(
@@ -56,7 +56,7 @@ export async function asignarEquipoOperativoASede(
     );
     revalidatePath("/configuracion");
     revalidatePath("/turnos");
-    return { listo: true };
+    return { listo: (_estadoAnterior.listo ?? 0) + 1 };
   } catch (causa) {
     return { error: causa instanceof Error ? causa.message : "No se pudo guardar el grupo de la sede." };
   }

@@ -22,15 +22,18 @@ describe("asignar grupo de una sede desde Configuración", () => {
     vi.clearAllMocks();
   });
 
-  it("confirma el guardado para que el editor pueda cerrarse", async () => {
+  it("emite una confirmación distinta en cada guardado para que el editor se cierre también al reabrirlo", async () => {
     const actor = { id: "admin-1", rol: "administracion" as const };
     simulacro.actor.mockResolvedValue(actor);
     simulacro.asignar.mockResolvedValue(undefined);
 
-    const estado = await asignarEquipoOperativoASede({}, formulario({ nombre: "Tienda Centro", equipoOperativo: "taller" }));
+    const primerEstado = await asignarEquipoOperativoASede({}, formulario({ nombre: "Tienda Centro", equipoOperativo: "taller" }));
+    const segundoEstado = await asignarEquipoOperativoASede(primerEstado, formulario({ nombre: "Tienda Centro", equipoOperativo: "tiendas" }));
 
-    expect(estado).toEqual({ listo: true });
-    expect(simulacro.asignar).toHaveBeenCalledWith(simulacro.repositorioDeTurnos, actor, "Tienda Centro", "taller");
+    expect(primerEstado).toEqual({ listo: 1 });
+    expect(segundoEstado).toEqual({ listo: 2 });
+    expect(simulacro.asignar).toHaveBeenNthCalledWith(1, simulacro.repositorioDeTurnos, actor, "Tienda Centro", "taller");
+    expect(simulacro.asignar).toHaveBeenNthCalledWith(2, simulacro.repositorioDeTurnos, actor, "Tienda Centro", "tiendas");
     expect(simulacro.revalidar).toHaveBeenCalledWith("/configuracion");
     expect(simulacro.revalidar).toHaveBeenCalledWith("/turnos");
   });
