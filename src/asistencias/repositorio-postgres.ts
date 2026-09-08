@@ -1,8 +1,9 @@
-import { and, eq, gte, lte } from "drizzle-orm";
+import { and, eq, gte, lte, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
+import type { EvidenciaDeCeldaAsistencia } from "@/app/asistencias/estado-de-celda";
 import * as schema from "@/db/schema";
-import { ajustesDeAsistencia, asistenciasEsperadas, estadosManuales, horasExtra, marcasCrudas, tardanzas, turnosPublicados } from "@/db/schema";
+import { ajustesDeAsistencia, asistenciasEsperadas, estadosManuales, horasExtra, marcasCrudas, periodosPlanilla, tardanzas, turnosPublicados } from "@/db/schema";
 import { RepositorioPostgresDeTardanzas } from "@/tardanzas/repositorio-postgres";
 
 import type {
@@ -14,6 +15,15 @@ import type {
   TurnoParaConfirmar,
 } from "./confirmar-y-ajustar-asistencia";
 import type { EstadoDeHoraExtra, HoraExtraCalculada } from "./calcular-hora-extra";
+
+// Una fila del resumen mensual de asistencias, por (colaborador, día) con horario
+// publicado: la evidencia que deriva el estado de la celda más los campos de
+// presentación del calendario de `/asistencias`.
+export interface FilaDeResumenMensual extends EvidenciaDeCeldaAsistencia {
+  fecha: string;
+  entrada: string | null;
+  salida: string | null;
+}
 
 export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencias {
   private readonly repositorioDeTardanzas: RepositorioPostgresDeTardanzas;
@@ -119,18 +129,20 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
     }).from(marcasCrudas);
   }
 
-  async listarResumenMensual(idHuellero: string, inicio: string, fin: string): Promise<Array<{
-    fecha: string; estado: "pendiente" | "confirmada" | "manual"; entrada: string | null; salida: string | null; estadoManual: string | null;
-  }>> {
+  async listarResumenMensual(idHuellero: string, inicio: string, fin: string): Promise<FilaDeResumenMensual[]> {
     return this.db.select({
       fecha: asistenciasEsperadas.fecha,
       estado: asistenciasEsperadas.estado,
       entrada: asistenciasEsperadas.entradaReal,
       salida: asistenciasEsperadas.salidaReal,
       estadoManual: estadosManuales.tipo,
+      entradaPropuesta: asistenciasEsperadas.entradaPropuesta,
+      salidaPropuesta: asistenciasEsperadas.salidaPropuesta,
+      hayMarcasCrudas: sql<boolean>`exists (select 1 from ${marcasCrudas} where ${marcasCrudas.idHuellero} = ${asistenciasEsperadas.idHuellero} and ${marcasCrudas.fecha} = ${asistenciasEsperadas.fecha})`,
+      enPeriodoCerrado: sql<boolean>`exists (select 1 from ${periodosPlanilla} where ${periodosPlanilla.estado} = 'cerrado' and ${asistenciasEsperadas.fecha} between ${periodosPlanilla.inicio} and ${periodosPlanilla.fin})`,
     }).from(asistenciasEsperadas).leftJoin(estadosManuales, eq(estadosManuales.asistenciaId, asistenciasEsperadas.id))
       .where(and(eq(asistenciasEsperadas.idHuellero, idHuellero), gte(asistenciasEsperadas.fecha, inicio), lte(asistenciasEsperadas.fecha, fin)))
-      .then((filas) => filas as Array<{ fecha: string; estado: "pendiente" | "confirmada" | "manual"; entrada: string | null; salida: string | null; estadoManual: string | null }>);
+      .then((filas) => filas as FilaDeResumenMensual[]);
   }
 
   async buscarPoliticaVigente(sede: string, fecha: string) {

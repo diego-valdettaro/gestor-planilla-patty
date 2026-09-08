@@ -75,3 +75,27 @@ _Evitar_: mes calendario, registro mensual
 **Período cerrado**:
 Período de planilla cuyo resumen y reglas aplicadas quedaron fijados para auditoría; solo Administración y Finanzas puede reabrirlo dejando un motivo.
 _Evitar_: mes bloqueado, período definitivo sin trazabilidad
+
+## Estados de celda del calendario de asistencias
+
+El calendario mensual de `/asistencias` deriva por día uno de cinco estados a partir de datos existentes. No son valores del enum `asistencias_esperadas.estado`, que sigue siendo `pendiente` / `confirmada` / `manual`.
+
+**Sin planificación**:
+No hay horario publicado para ese día, así que no hay nada que registrar.
+_Evitar_: sin programación, día vacío
+
+**Esperada**:
+Hay horario publicado, la asistencia sigue pendiente y no hay marcas del huellero para ese día. Comunica "falta llenar esto"; no importa si el día ya pasó.
+_Evitar_: pendiente, sin confirmar
+
+**Pendiente de revisión**:
+Hay marcas del huellero pero no permiten proponer una entrada y salida completas, y alguien debe revisarlas antes de registrar la jornada.
+_Evitar_: falta automática, marcas incompletas
+
+**Registrada**:
+El día quedó resuelto: asistencia confirmada con entrada y salida reales, o una designación manual (falta, descanso, feriado, vacaciones, permiso, suspensión), que se muestra como etiqueta de la celda. Es el nombre visible de la "asistencia confirmada" y del "estado manual" en esta pantalla.
+_Evitar_: confirmada, cerrada
+
+**Liquidado**:
+La asistencia cae en un período de planilla cerrado y quedó congelada; la celda no es editable.
+_Evitar_: bloqueada, procesada
