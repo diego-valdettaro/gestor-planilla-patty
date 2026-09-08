@@ -189,7 +189,8 @@ th, td { border: 1px solid #e2e8f0; padding: 0.6rem; text-align: left; }
 .encabezado-seccion-configuracion p, .pista-configuracion { color: #66758c; font-size: .85rem; margin: 0; }
 .filtros-configuracion { background: #f8fafc; border: 1px solid #e4e9f0; border-radius: .5rem; display: grid; gap: .75rem; grid-template-columns: repeat(4, minmax(0, 1fr)) auto; margin: 0 0 1rem; padding: .85rem; }
 .filtros-configuracion label, .formulario-politica label, .formulario-edicion label { color: #526174; display: grid; font-size: .74rem; font-weight: 700; gap: .35rem; }
-.filtros-configuracion input, .filtros-configuracion select, .formulario-politica input, .formulario-politica select, .formulario-edicion input, .formulario-edicion select { background: #fff; border: 1px solid #cfd8e4; border-radius: .35rem; color: #1d2733; min-height: 2.3rem; padding: .45rem .55rem; width: 100%; }
+.filtros-configuracion input:not([type="checkbox"]), .filtros-configuracion select, .formulario-politica input, .formulario-politica select, .formulario-edicion input, .formulario-edicion select { background: #fff; border: 1px solid #cfd8e4; border-radius: .35rem; color: #1d2733; min-height: 2.3rem; padding: .45rem .55rem; width: 100%; }
+.filtros-configuracion .checkbox { align-items: center; align-self: end; display: flex; font-size: .8rem; font-weight: 700; min-height: 2.3rem; }
 .filtros-configuracion button { align-self: end; min-height: 2.3rem; white-space: nowrap; }
 .lista-con-estado li { grid-template-columns: minmax(13rem, 1fr) auto auto; }
 .lista-sedes li { grid-template-columns: minmax(10rem, 1fr) auto; }
