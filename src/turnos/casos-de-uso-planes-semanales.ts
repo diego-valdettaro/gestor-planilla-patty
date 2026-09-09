@@ -1,6 +1,6 @@
 import type { SesionDelServidor } from "@/colaboradores/casos-de-uso-servidor";
 
-import type { EquipoOperativo } from "./configurar-equipos-operativos";
+import type { Grupo } from "./configurar-equipos-operativos";
 import type { CeldaDePlanSemanalEnBorrador, PlanSemanalEnBorrador, RepositorioDePlanesSemanales } from "./plan-semanal-en-borrador";
 import { desplazarFecha } from "./semana";
 
@@ -19,7 +19,7 @@ export function crearCasosDeUsoDePlanesSemanales(
   }
 
   return {
-    async obtenerOCrear(semana: string, equipo: EquipoOperativo): Promise<PlanSemanalEnBorrador> {
+    async obtenerOCrear(semana: string, equipo: Grupo): Promise<PlanSemanalEnBorrador> {
       await autorizar();
       return repositorio.obtenerOCrear(semana, equipo);
     },

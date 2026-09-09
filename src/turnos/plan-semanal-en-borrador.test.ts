@@ -10,7 +10,7 @@ function crearRepositorioEnMemoria(): {
 } {
   const planes = new Map<string, PlanSemanalEnBorrador>();
   const celdas = new Map<string, PlanSemanalEnBorrador["celdas"][number]>();
-  const plan = (semana: string, equipo: "tiendas" | "taller") => `${semana}:${equipo}`;
+  const plan = (semana: string, equipo: string) => `${semana}:${equipo}`;
 
   return {
     asistenciasEsperadas: [],

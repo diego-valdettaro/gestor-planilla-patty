@@ -13,6 +13,13 @@ const personas = [
 const ids = (lista: { idHuellero: string }[]) => lista.map((persona) => persona.idHuellero);
 
 describe("filtrarColaboradores", () => {
+  it("filtra por un grupo creado durante la operación", () => {
+    expect(ids(filtrarColaboradores([
+      { idHuellero: "L-1", grupo: "Logística", activo: true },
+      { idHuellero: "T-1", grupo: "Tiendas", activo: true },
+    ], { grupo: "Logística", mostrarInactivos: false }))).toEqual(["L-1"]);
+  });
+
   it("sin grupo y con inactivos apagado deja solo los activos de todos los grupos", () => {
     expect(ids(filtrarColaboradores(personas, { mostrarInactivos: false }))).toEqual(["T-1", "W-1", "S-1"]);
   });

@@ -27,8 +27,13 @@ export const sedes = pgTable("sedes", {
   id: uuid("id").primaryKey().defaultRandom(),
   nombre: text("nombre").notNull().unique(),
   activa: boolean("activa").notNull().default(true),
-  equipoOperativo: text("equipo_operativo", { enum: ["tiendas", "taller"] }),
+  grupo: text("grupo").references(() => grupos.nombre),
   creadaEn: timestamp("creada_en", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const grupos = pgTable("grupos", {
+  nombre: text("nombre").primaryKey(),
+  creadoEn: timestamp("creado_en", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const cuentasLocales = pgTable("cuentas_locales", {
@@ -145,12 +150,11 @@ export const planesSemanalesEnBorrador = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     semana: date("semana", { mode: "string" }).notNull(),
-    equipo: text("equipo", { enum: ["tiendas", "taller"] }).notNull(),
+    equipo: text("equipo").notNull(),
     creadoEn: timestamp("creado_en", { withTimezone: true }).notNull().defaultNow(),
     actualizadoEn: timestamp("actualizado_en", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    check("planes_borrador_equipo_valido", sql`${table.equipo} IN ('tiendas', 'taller')`),
     uniqueIndex("planes_borrador_semana_equipo").on(table.semana, table.equipo),
   ],
 );
@@ -206,7 +210,7 @@ export const horariosSemanalesProcesados = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     idHuellero: text("id_huellero").notNull().references(() => colaboradores.idHuellero),
     semana: date("semana", { mode: "string" }).notNull(),
-    equipo: text("equipo", { enum: ["tiendas", "taller"] }).notNull(),
+    equipo: text("equipo").notNull(),
     responsableId: uuid("responsable_id").notNull().references(() => cuentasLocales.id),
     procesadoEn: timestamp("procesado_en", { withTimezone: true }).notNull().defaultNow(),
   },

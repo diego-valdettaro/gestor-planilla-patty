@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, lte } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import * as schema from "@/db/schema";
@@ -18,15 +18,14 @@ import {
   tardanzas,
 } from "@/db/schema";
 
-import type { RepositorioDeEquiposOperativos } from "./configurar-equipos-operativos";
-import type { EquipoOperativo } from "./configurar-equipos-operativos";
+import type { RepositorioDeGruposDeSedes, Grupo } from "./configurar-equipos-operativos";
 import type { CeldaDePlanSemanalEnBorrador, PlanSemanalEnBorrador, RepositorioDePlanesSemanales } from "./plan-semanal-en-borrador";
 import type { RepositorioDeTurnos, TurnoPublicado } from "./publicar-turno-semanal";
 import type { ProcesamientoDeHorarioSemanal } from "./procesar-horario-semanal";
 import type { Actor } from "@/colaboradores/registrar-colaborador";
 import { desplazarFecha, diasDeLaSemana, inicioDeSemana } from "./semana";
 
-export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, RepositorioDeEquiposOperativos, RepositorioDePlanesSemanales {
+export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, RepositorioDeGruposDeSedes, RepositorioDePlanesSemanales {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}
 
   async buscarPublicado(
@@ -124,10 +123,10 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
     return filas.filter(({ descanso }) => !descanso).every(({ estado }) => estado === "confirmada" || estado === "manual");
   }
 
-  async obtenerEquipoOperativo(idHuellero: string): Promise<"tiendas" | "taller" | undefined> {
-    const [colaborador] = await this.db.select({ equipo: sedes.equipoOperativo }).from(colaboradores)
+  async obtenerEquipoOperativo(idHuellero: string): Promise<string | undefined> {
+    const [colaborador] = await this.db.select({ equipo: sedes.grupo }).from(colaboradores)
       .innerJoin(sedes, eq(colaboradores.sede, sedes.nombre)).where(eq(colaboradores.idHuellero, idHuellero));
-    return colaborador?.equipo === "tiendas" || colaborador?.equipo === "taller" ? colaborador.equipo : undefined;
+    return colaborador?.equipo ?? undefined;
   }
 
   async registrarProcesamiento({ idHuellero, semana, equipo, responsableId }: ProcesamientoDeHorarioSemanal): Promise<void> {
@@ -218,24 +217,24 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
     return resultados.map(({ sede }) => sede).sort();
   }
 
-  async listarEquiposOperativos(): Promise<Array<"tiendas" | "taller">> {
+  async listarEquiposOperativos(): Promise<string[]> {
     const resultados = await this.db
-      .selectDistinct({ equipo: sedes.equipoOperativo })
+      .selectDistinct({ equipo: sedes.grupo })
       .from(sedes)
-      .where(and(eq(sedes.activa, true), inArray(sedes.equipoOperativo, ["tiendas", "taller"])));
+      .where(and(eq(sedes.activa, true), sql`${sedes.grupo} IS NOT NULL`));
 
     return resultados.flatMap(({ equipo }) => equipo ? [equipo] : []).sort();
   }
 
-  async asignar(sede: string, equipo: "tiendas" | "taller"): Promise<void> {
-    const actualizadas = await this.db.update(sedes).set({ equipoOperativo: equipo }).where(and(
+  async asignar(sede: string, equipo: string): Promise<void> {
+    const actualizadas = await this.db.update(sedes).set({ grupo: equipo }).where(and(
       eq(sedes.nombre, sede),
       eq(sedes.activa, true),
     )).returning({ nombre: sedes.nombre });
     if (!actualizadas.length) throw new Error("La sede activa no existe.");
   }
 
-  async listarColaboradoresActivosPorEquipo(equipo: "tiendas" | "taller"): Promise<
+  async listarColaboradoresActivosPorEquipo(equipo: string): Promise<
     Array<{ idHuellero: string; nombre: string; sede: string }>
   > {
     return this.db
@@ -246,11 +245,11 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
       })
       .from(colaboradores)
       .innerJoin(sedes, eq(colaboradores.sede, sedes.nombre))
-      .where(and(eq(colaboradores.activo, true), eq(sedes.activa, true), eq(sedes.equipoOperativo, equipo)))
+      .where(and(eq(colaboradores.activo, true), eq(sedes.activa, true), eq(sedes.grupo, equipo)))
       .orderBy(sedes.nombre, colaboradores.nombre);
   }
 
-  async listarColaboradoresProcesadosPorSemanaYEquipo(semana: string, equipo: "tiendas" | "taller"): Promise<
+  async listarColaboradoresProcesadosPorSemanaYEquipo(semana: string, equipo: string): Promise<
     Array<{ idHuellero: string; nombre: string; sede: string }>
   > {
     return this.db.select({ idHuellero: colaboradores.idHuellero, nombre: colaboradores.nombre, sede: colaboradores.sede })
@@ -260,13 +259,13 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
       .orderBy(colaboradores.sede, colaboradores.nombre);
   }
 
-  async listarProcesamientosDeSemana(semana: string, equipo: "tiendas" | "taller"): Promise<string[]> {
+  async listarProcesamientosDeSemana(semana: string, equipo: string): Promise<string[]> {
     const resultados = await this.db.select({ idHuellero: horariosSemanalesProcesados.idHuellero }).from(horariosSemanalesProcesados)
       .where(and(eq(horariosSemanalesProcesados.semana, semana), eq(horariosSemanalesProcesados.equipo, equipo)));
     return resultados.map(({ idHuellero }) => idHuellero);
   }
 
-  async listarEquiposConProcesamientosDeSemana(semana: string): Promise<Array<"tiendas" | "taller">> {
+  async listarEquiposConProcesamientosDeSemana(semana: string): Promise<string[]> {
     const resultados = await this.db.selectDistinct({ equipo: horariosSemanalesProcesados.equipo }).from(horariosSemanalesProcesados)
       .where(eq(horariosSemanalesProcesados.semana, semana));
     return resultados.map(({ equipo }) => equipo).sort();
@@ -363,7 +362,7 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
     ));
   }
 
-  async obtenerOCrear(semana: string, equipo: EquipoOperativo): Promise<PlanSemanalEnBorrador> {
+  async obtenerOCrear(semana: string, equipo: Grupo): Promise<PlanSemanalEnBorrador> {
     await this.db.insert(planesSemanalesEnBorrador).values({ semana, equipo }).onConflictDoNothing();
     const [plan] = await this.db.select().from(planesSemanalesEnBorrador).where(and(
       eq(planesSemanalesEnBorrador.semana, semana), eq(planesSemanalesEnBorrador.equipo, equipo),
@@ -417,10 +416,10 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
     ));
   }
 
-  async colaboradorPerteneceAEquipo(idHuellero: string, equipo: EquipoOperativo): Promise<boolean> {
+  async colaboradorPerteneceAEquipo(idHuellero: string, equipo: Grupo): Promise<boolean> {
     const [colaborador] = await this.db.select({ id: colaboradores.idHuellero }).from(colaboradores)
       .innerJoin(sedes, eq(colaboradores.sede, sedes.nombre))
-      .where(and(eq(colaboradores.idHuellero, idHuellero), eq(colaboradores.activo, true), eq(sedes.activa, true), eq(sedes.equipoOperativo, equipo)));
+      .where(and(eq(colaboradores.idHuellero, idHuellero), eq(colaboradores.activo, true), eq(sedes.activa, true), eq(sedes.grupo, equipo)));
     return Boolean(colaborador);
   }
 
@@ -430,7 +429,7 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
     return colaborador?.sede;
   }
 
-  async listarHorariosPublicadosDelEquipoEnSemana(semana: string, equipo: EquipoOperativo): Promise<
+  async listarHorariosPublicadosDelEquipoEnSemana(semana: string, equipo: Grupo): Promise<
     Array<Omit<CeldaDePlanSemanalEnBorrador, "planId">>
   > {
     return this.db.select({
@@ -447,13 +446,13 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
       .where(and(
         eq(colaboradores.activo, true),
         eq(sedes.activa, true),
-        eq(sedes.equipoOperativo, equipo),
+        eq(sedes.grupo, equipo),
         gte(turnosPublicados.fecha, semana),
         lte(turnosPublicados.fecha, desplazarFecha(semana, 6)),
       ));
   }
 
-  private async conCeldas(plan: { id: string; semana: string; equipo: EquipoOperativo }): Promise<PlanSemanalEnBorrador> {
+  private async conCeldas(plan: { id: string; semana: string; equipo: Grupo }): Promise<PlanSemanalEnBorrador> {
     const celdas = await this.db.select({
       planId: celdasDePlanesSemanalesEnBorrador.planId,
       idHuellero: celdasDePlanesSemanalesEnBorrador.idHuellero,

@@ -3,10 +3,10 @@ import { describe, expect, it } from "vitest";
 import { procesarHorarioSemanal, type RepositorioParaProcesarHorarioSemanal } from "./procesar-horario-semanal";
 
 function crearRepositorio(): {
-  procesamientos: Array<{ idHuellero: string; semana: string; equipo: "tiendas" | "taller"; responsableId: string }>;
+  procesamientos: Array<{ idHuellero: string; semana: string; equipo: string; responsableId: string }>;
   repositorio: RepositorioParaProcesarHorarioSemanal;
 } {
-  const procesamientos: Array<{ idHuellero: string; semana: string; equipo: "tiendas" | "taller"; responsableId: string }> = [];
+  const procesamientos: Array<{ idHuellero: string; semana: string; equipo: string; responsableId: string }> = [];
   return {
     procesamientos,
     repositorio: {
