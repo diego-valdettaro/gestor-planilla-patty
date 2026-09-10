@@ -23,7 +23,7 @@ export function FiltrosDeColaboradores({
   };
 
   return (
-    <div className="filtros filtros-configuracion">
+    <div className="filtros panel-filtros">
       <label>
         Grupo
         <select
