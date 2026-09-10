@@ -10,19 +10,32 @@ import { db } from "@/db/client";
 import { politicasDePenalizacionPorTardanzas, sedes } from "@/db/schema";
 import { crearCasosDeUsoDeTardanzas } from "@/tardanzas/casos-de-uso-servidor";
 import { repositorioDeTardanzas } from "@/tardanzas/servicio";
-import { asignarEquipoOperativo } from "@/turnos/configurar-equipos-operativos";
+import { asignarGrupoASede } from "@/turnos/configurar-equipos-operativos";
+import { crearGrupo } from "@/turnos/gestionar-grupos";
 import { crearModeloDeHorario, eliminarModeloDeHorario, guardarModeloDeHorario } from "@/turnos/gestionar-modelos-de-horario";
-import { repositorioDeModelosDeHorario, repositorioDeTurnos } from "@/turnos/servicio";
+import { repositorioDeGrupos, repositorioDeModelosDeHorario, repositorioDeTurnos } from "@/turnos/servicio";
 
 export async function guardarSede(formData: FormData): Promise<void> {
   await exigirAdministracion();
-  const equipoOperativo = texto(formData, "equipoOperativo");
-  if (equipoOperativo !== "tiendas" && equipoOperativo !== "taller") throw new Error("El grupo no es válido.");
-  await db.insert(sedes).values({ nombre: texto(formData, "nombre"), equipoOperativo }).onConflictDoNothing();
+  const grupo = texto(formData, "grupo");
+  await db.insert(sedes).values({ nombre: texto(formData, "nombre"), grupo }).onConflictDoNothing();
   revalidatePath("/configuracion");
   revalidatePath("/turnos");
   revalidatePath("/asistencias");
 }
+
+export async function crearGrupoDeConfiguracion(_estadoAnterior: EstadoDeCreacionDeGrupo, formData: FormData): Promise<EstadoDeCreacionDeGrupo> {
+  try {
+    await crearGrupo(repositorioDeGrupos, await obtenerActorActual(), texto(formData, "nombre"));
+    revalidatePath("/configuracion");
+    revalidatePath("/turnos");
+    return { listo: true };
+  } catch (causa) {
+    return { error: causa instanceof Error ? causa.message : "No se pudo crear el grupo." };
+  }
+}
+
+export interface EstadoDeCreacionDeGrupo { error?: string; listo?: boolean; }
 
 export async function eliminarSede(formData: FormData): Promise<void> {
   await exigirAdministracion();
@@ -46,13 +59,12 @@ export async function asignarEquipoOperativoASede(
 ): Promise<EstadoDeAsignacionDeGrupo> {
   try {
     await exigirAdministracion();
-    const equipoOperativo = texto(formData, "equipoOperativo");
-    if (equipoOperativo !== "tiendas" && equipoOperativo !== "taller") throw new Error("El grupo no es válido.");
-    await asignarEquipoOperativo(
+    const grupo = texto(formData, "grupo");
+    await asignarGrupoASede(
       repositorioDeTurnos,
       await obtenerActorActual(),
       texto(formData, "nombre"),
-      equipoOperativo,
+      grupo,
     );
     revalidatePath("/configuracion");
     revalidatePath("/turnos");

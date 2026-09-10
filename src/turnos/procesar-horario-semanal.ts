@@ -1,18 +1,19 @@
 import type { Actor } from "@/colaboradores/registrar-colaborador";
 
 import { diasDeLaSemana, inicioDeSemana } from "./semana";
+import type { Grupo } from "./configurar-equipos-operativos";
 
 export interface ProcesamientoDeHorarioSemanal {
   idHuellero: string;
   semana: string;
-  equipo: "tiendas" | "taller";
+  equipo: Grupo;
   responsableId: string;
 }
 
 export interface RepositorioParaProcesarHorarioSemanal {
   listarSemanaPublicada(idHuellero: string, semana: string): Promise<Array<{ fecha: string; descanso: boolean }>>;
   asistenciasLaboralesEstanProcesadas(idHuellero: string, semana: string): Promise<boolean>;
-  obtenerEquipoOperativo(idHuellero: string): Promise<"tiendas" | "taller" | undefined>;
+  obtenerEquipoOperativo(idHuellero: string): Promise<Grupo | undefined>;
   registrarProcesamiento(procesamiento: ProcesamientoDeHorarioSemanal): Promise<void>;
 }
 

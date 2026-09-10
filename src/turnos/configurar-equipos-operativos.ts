@@ -1,17 +1,17 @@
 import type { Actor } from "@/colaboradores/registrar-colaborador";
 
-export type EquipoOperativo = "tiendas" | "taller";
+export type Grupo = string;
 
-export interface RepositorioDeEquiposOperativos {
-  asignar(sede: string, equipo: EquipoOperativo): Promise<void>;
+export interface RepositorioDeGruposDeSedes {
+  asignar(sede: string, grupo: Grupo): Promise<void>;
 }
 
-export async function asignarEquipoOperativo(
-  repositorio: RepositorioDeEquiposOperativos,
+export async function asignarGrupoASede(
+  repositorio: RepositorioDeGruposDeSedes,
   actor: Actor,
   sede: string,
-  equipo: EquipoOperativo,
+  grupo: Grupo,
 ): Promise<void> {
   if (actor.rol !== "administracion") throw new Error("No tiene permiso para cambiar la configuración.");
-  await repositorio.asignar(sede, equipo);
+  await repositorio.asignar(sede, grupo);
 }

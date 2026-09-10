@@ -136,6 +136,7 @@ async function limpiar(pool: Pool): Promise<void> {
     DELETE FROM periodos_planilla WHERE inicio IN ('${PERIODO_ACTUAL.inicio}', '${PERIODO_ANTERIOR.inicio}');
     DELETE FROM colaboradores WHERE id_huellero LIKE 'DEMO-%';
     DELETE FROM sedes WHERE nombre IN (${sedes});
+    DELETE FROM grupos WHERE nombre IN ('Tiendas', 'Taller');
     DELETE FROM sesiones WHERE cuenta_id IN (SELECT id FROM cuentas_locales WHERE nombre_usuario IN (${usuarios}));
     DELETE FROM cuentas_locales WHERE nombre_usuario IN (${usuarios});
     COMMIT;
@@ -290,12 +291,13 @@ async function main(): Promise<void> {
     const actorOperaciones: Actor = { id: admin.id, rol: "operaciones" };
 
     // --- Sedes (mismo camino que `configuracion/actions.ts`: insert directo) ---
+    await db.insert(schema.grupos).values([{ nombre: "Tiendas" }, { nombre: "Taller" }]);
     await db.insert(schema.sedes).values([
-      { nombre: SEDES.benavides, activa: true, equipoOperativo: "tiendas" },
-      { nombre: SEDES.sanIsidro, activa: true, equipoOperativo: "tiendas" },
-      { nombre: SEDES.taller, activa: true, equipoOperativo: "taller" },
-      { nombre: SEDES.administracion, activa: true, equipoOperativo: null }, // sin grupo hasta #38/#40/#41
-      { nombre: SEDES.depositoInactivo, activa: false, equipoOperativo: null },
+      { nombre: SEDES.benavides, activa: true, grupo: "Tiendas" },
+      { nombre: SEDES.sanIsidro, activa: true, grupo: "Tiendas" },
+      { nombre: SEDES.taller, activa: true, grupo: "Taller" },
+      { nombre: SEDES.administracion, activa: true, grupo: null }, // sin grupo hasta #38/#40/#41
+      { nombre: SEDES.depositoInactivo, activa: false, grupo: null },
     ]);
 
     // --- Modelos de horario (caso de uso: valida las horas) ---
@@ -328,11 +330,11 @@ async function main(): Promise<void> {
     await turnos.publicarEnLote(turnosDeSemana("DEMO-DARIO", SEDES.sanIsidro, SEMANA_ACTUAL), actorOperaciones);
     // `registrarProcesamiento` exige la semana con las asistencias laborales resueltas.
     await confirmarSemanaLaboral(db, "DEMO-DARIO", modeloApertura(SEDES.sanIsidro), SEMANA_ACTUAL);
-    await turnos.registrarProcesamiento({ idHuellero: "DEMO-DARIO", semana: SEMANA_ACTUAL, equipo: "tiendas", responsableId: finanzas.id });
+    await turnos.registrarProcesamiento({ idHuellero: "DEMO-DARIO", semana: SEMANA_ACTUAL, equipo: "Tiendas", responsableId: finanzas.id });
 
     // Plan borrador del grupo tiendas: Ana (6 celdas, sin publicar -> Borrador editable) y
     // Carla (6 celdas = publicado salvo el miércoles con otro modelo -> Cambios sin publicar).
-    const plan = await turnos.obtenerOCrear(SEMANA_ACTUAL, "tiendas");
+    const plan = await turnos.obtenerOCrear(SEMANA_ACTUAL, "Tiendas");
     const diasActual = diasDeLaSemana(SEMANA_ACTUAL);
     const aperturaBenavides = modeloApertura(SEDES.benavides);
     const cierreBenavides = modeloCierre(SEDES.benavides);
@@ -352,7 +354,7 @@ async function main(): Promise<void> {
     // --- Mes anterior con período cerrado (Elena publicada + procesada, luego se cierra) ---
     await turnos.publicarEnLote(turnosDeSemana("DEMO-ELENA", SEDES.sanIsidro, SEMANA_ANTERIOR), actorOperaciones);
     await confirmarSemanaLaboral(db, "DEMO-ELENA", modeloApertura(SEDES.sanIsidro), SEMANA_ANTERIOR);
-    await turnos.registrarProcesamiento({ idHuellero: "DEMO-ELENA", semana: SEMANA_ANTERIOR, equipo: "tiendas", responsableId: finanzas.id });
+    await turnos.registrarProcesamiento({ idHuellero: "DEMO-ELENA", semana: SEMANA_ANTERIOR, equipo: "Tiendas", responsableId: finanzas.id });
     await db.update(schema.periodosPlanilla)
       .set({ estado: "cerrado", cerradoPorId: finanzas.id, cerradoEn: new Date() })
       .where(eq(schema.periodosPlanilla.inicio, PERIODO_ANTERIOR.inicio));

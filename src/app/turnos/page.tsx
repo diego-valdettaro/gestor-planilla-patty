@@ -4,7 +4,7 @@ import Link from "next/link";
 import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
 import { crearCasosDeUsoDePlanesSemanales } from "@/turnos/casos-de-uso-planes-semanales";
 import { diasDeLaSemana, inicioDeSemana } from "@/turnos/semana";
-import { repositorioDeModelosDeHorario, repositorioDeTurnos } from "@/turnos/servicio";
+import { repositorioDeGrupos, repositorioDeModelosDeHorario, repositorioDeTurnos } from "@/turnos/servicio";
 
 import { PlanificadorSemanal } from "./planificador-semanal";
 
@@ -16,10 +16,10 @@ export default async function PaginaDeTurnos({ searchParams }: { searchParams: P
   if (actor.rol !== "operaciones" && actor.rol !== "administracion") return <main className="centrado"><p>No tiene permiso para consultar horarios.</p></main>;
   const parametros = await searchParams;
   const semana = inicioDeSemana(parametros.semana ?? new Date().toISOString().slice(0, 10));
-  const equiposActivos = await repositorioDeTurnos.listarEquiposOperativos();
+  const grupos = await repositorioDeGrupos.listar();
   const equiposProcesados = await repositorioDeTurnos.listarEquiposConProcesamientosDeSemana(semana);
-  const equipos = [...new Set([...equiposActivos, ...equiposProcesados])].sort();
-  const equipo = parametros.equipo === "tiendas" || parametros.equipo === "taller" ? parametros.equipo : equipos[0];
+  const equipos = [...new Set([...grupos, ...equiposProcesados])].sort();
+  const equipo = equipos.includes(parametros.equipo ?? "") ? parametros.equipo! : equipos[0];
   if (!equipo) return <main className="contenido"><p>Asigne las sedes activas a un equipo operativo desde Configuración.</p></main>;
   const dias = diasDeLaSemana(semana);
   const colaboradoresActivos = await repositorioDeTurnos.listarColaboradoresActivosPorEquipo(equipo);
