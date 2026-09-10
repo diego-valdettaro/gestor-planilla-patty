@@ -18,7 +18,7 @@ export function FiltrosDeColaboradores({ grupo, mostrarInactivos }: FiltroDeCola
     router.push(rutaDeFiltros(proximo), NAVEGACION_SIN_SALTO);
   };
 
-  return <div className="filtros filtros-configuracion">
+  return <div className="filtros panel-filtros">
     <label>Grupo<select
       onChange={(evento) => navegar({ grupo: (evento.target.value || undefined) as EquipoOperativo | undefined, mostrarInactivos })}
       value={grupo ?? ""}

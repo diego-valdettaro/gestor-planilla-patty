@@ -64,9 +64,7 @@ th, td { border: 1px solid #e2e8f0; padding: 0.6rem; text-align: left; }
 .mensaje-feedback.listo a { color: #1d4ed8; font-weight: 700; }
 .fila-configuracion { align-items: flex-end; display: flex; gap: 0.5rem; }
 .grilla-consulta-semanal { display: grid; gap: 1.5rem; }
-.tabla-semanal { overflow-x: auto; }
-.tabla-semanal table { min-width: 60rem; }
-.tabla-semanal th small, .celda-turno small { color: #475569; display: block; font-weight: 400; margin-top: 0.2rem; }
+.celda-turno small { color: #475569; display: block; font-weight: 400; margin-top: 0.2rem; }
 .celda-turno { min-width: 8rem; }
 .celda-turno.publicado { background: #ecfdf5; color: #065f46; }
 .celda-turno.descanso { background: #eff6ff; color: #1e3a8a; }
@@ -178,20 +176,20 @@ th, td { border: 1px solid #e2e8f0; padding: 0.6rem; text-align: left; }
 @media (max-width: 700px) { .contenido { padding: 1rem; } .filtros { align-items: stretch; flex-direction: column; } }
 @media (max-width: 700px) { .barra-plan-semanal, .herramientas-plan-semanal, .pie-plan-semanal { align-items: stretch; flex-direction: column; } .contexto-plan { align-items: stretch; flex-direction: column; } .estado-borrador, .acciones-plan, .rango-semana, .resumen-plan { margin-left: 0; } .acciones-plan { justify-content: flex-end; } .selector-plan-semanal, .aplicar-horario { align-items: stretch; flex-direction: column; } .navegacion-semana { justify-content: stretch; } .navegacion-semana a { flex: 1; text-align: center; } }
 
-/* Configuracion */
-.configuracion { color: #1d2733; max-width: calc(100% - 13.85rem); padding: 2.4rem 3rem 3.5rem; }
-.encabezado-configuracion { margin: 0 auto 2rem; max-width: 75rem; }
-.encabezado-configuracion h1 { color: #0d2854; font-size: 2.55rem; letter-spacing: -.06em; line-height: 1.1; margin: .35rem 0 .6rem; }
-.encabezado-configuracion p:last-child { color: #66758c; margin: 0; max-width: 44rem; }
-.tarjeta-configuracion { background: #fff; border: 1px solid #dce2ea; border-radius: .7rem; box-shadow: 0 .12rem .45rem #10254b0b; margin: 0 auto 1.35rem; max-width: 75rem; padding: 1.25rem; }
-.encabezado-seccion-configuracion { align-items: flex-start; display: flex; gap: 1rem; justify-content: space-between; margin-bottom: 1.2rem; }
-.encabezado-seccion-configuracion h2 { color: #152f56; font-size: 1.1rem; letter-spacing: -.02em; margin: 0 0 .3rem; }
-.encabezado-seccion-configuracion p, .pista-configuracion { color: #66758c; font-size: .85rem; margin: 0; }
-.filtros-configuracion { background: #f8fafc; border: 1px solid #e4e9f0; border-radius: .5rem; display: grid; gap: .75rem; grid-template-columns: repeat(4, minmax(0, 1fr)) auto; margin: 0 0 1rem; padding: .85rem; }
-.filtros-configuracion label, .formulario-politica label, .formulario-edicion label { color: #526174; display: grid; font-size: .74rem; font-weight: 700; gap: .35rem; }
-.filtros-configuracion input:not([type="checkbox"]), .filtros-configuracion select, .formulario-politica input, .formulario-politica select, .formulario-edicion input, .formulario-edicion select { background: #fff; border: 1px solid #cfd8e4; border-radius: .35rem; color: #1d2733; min-height: 2.3rem; padding: .45rem .55rem; width: 100%; }
-.filtros-configuracion .checkbox { align-items: center; align-self: end; display: flex; font-size: .8rem; font-weight: 700; min-height: 2.3rem; }
-.filtros-configuracion button { align-self: end; min-height: 2.3rem; white-space: nowrap; }
+/* Layout de pagina (encabezado, paneles, filtros y tablas compartidos por Configuracion y Liquidaciones) */
+.pagina { color: #1d2733; max-width: calc(100% - 13.85rem); padding: 2.4rem 3rem 3.5rem; }
+.encabezado-pagina { margin: 0 auto 2rem; max-width: 75rem; }
+.encabezado-pagina h1 { color: #0d2854; font-size: 2.55rem; letter-spacing: -.06em; line-height: 1.1; margin: .35rem 0 .6rem; }
+.encabezado-pagina p:last-child { color: #66758c; margin: 0; max-width: 44rem; }
+.panel { background: #fff; border: 1px solid #dce2ea; border-radius: .7rem; box-shadow: 0 .12rem .45rem #10254b0b; margin: 0 auto 1.35rem; max-width: 75rem; padding: 1.25rem; }
+.panel-cabecera { align-items: flex-start; display: flex; gap: 1rem; justify-content: space-between; margin-bottom: 1.2rem; }
+.panel-cabecera h2 { color: #152f56; font-size: 1.1rem; letter-spacing: -.02em; margin: 0 0 .3rem; }
+.panel-cabecera p, .pista-configuracion { color: #66758c; font-size: .85rem; margin: 0; }
+.panel-filtros { background: #f8fafc; border: 1px solid #e4e9f0; border-radius: .5rem; display: grid; gap: .75rem; grid-template-columns: repeat(4, minmax(0, 1fr)) auto; margin: 0 0 1rem; padding: .85rem; }
+.panel-filtros label, .formulario-politica label, .formulario-edicion label { color: #526174; display: grid; font-size: .74rem; font-weight: 700; gap: .35rem; }
+.panel-filtros input:not([type="checkbox"]), .panel-filtros select, .formulario-politica input, .formulario-politica select, .formulario-edicion input, .formulario-edicion select { background: #fff; border: 1px solid #cfd8e4; border-radius: .35rem; color: #1d2733; min-height: 2.3rem; padding: .45rem .55rem; width: 100%; }
+.panel-filtros .checkbox { align-items: center; align-self: end; display: flex; font-size: .8rem; font-weight: 700; min-height: 2.3rem; }
+.panel-filtros button, .panel-filtros .boton-secundario { align-self: end; min-height: 2.3rem; white-space: nowrap; }
 .lista-con-estado li { grid-template-columns: minmax(13rem, 1fr) auto auto; }
 .lista-sedes li { grid-template-columns: minmax(10rem, 1fr) auto; }
 .lista-configuracion li { border-top: 1px solid #e6eaf0; display: grid; gap: 1rem; padding: .85rem .15rem; }
@@ -199,9 +197,9 @@ th, td { border: 1px solid #e2e8f0; padding: 0.6rem; text-align: left; }
 .principal-configuracion strong { color: #1d2733; font-size: .9rem; }
 .principal-configuracion small { color: #718096; font-size: .8rem; }
 .acciones-configuracion { align-items: center; display: flex; flex-wrap: wrap; gap: .45rem; justify-content: flex-end; }
-.acciones-configuracion form, .tabla-configuracion form { margin: 0; }
-.acciones-configuracion button, .tabla-configuracion button, .edicion-configuracion summary { background: #fff; border: 1px solid #cfd8e4; border-radius: .35rem; color: #243855; cursor: pointer; font-size: .78rem; padding: .42rem .6rem; }
-.acciones-configuracion .peligro, .tabla-configuracion .peligro { background: #fff; border-color: #dc2626; color: #b91c1c; }
+.acciones-configuracion form, .panel-tabla form { margin: 0; }
+.acciones-configuracion button, .panel-tabla button, .edicion-configuracion summary { background: #fff; border: 1px solid #cfd8e4; border-radius: .35rem; color: #243855; cursor: pointer; font-size: .78rem; padding: .42rem .6rem; }
+.acciones-configuracion .peligro, .panel-tabla .peligro { background: #fff; border-color: #dc2626; color: #b91c1c; }
 .insignia { border-radius: 999px; display: inline-flex; font-size: .73rem; font-weight: 700; justify-content: center; padding: .28rem .55rem; white-space: nowrap; }
 .insignia.ok { background: #dcfce7; color: #166534; }
 .insignia.neutro { background: #eef2f7; color: #526174; }
@@ -213,14 +211,19 @@ th, td { border: 1px solid #e2e8f0; padding: 0.6rem; text-align: left; }
 .formulario-edicion-corto { grid-template-columns: minmax(10rem, 1fr) auto; }
 .formulario-edicion-corto button { grid-column: auto; }
 .grilla-configuracion { display: grid; gap: 1.35rem; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0 auto; max-width: 75rem; }
-.grilla-configuracion .tarjeta-configuracion { margin: 0 0 1.35rem; width: 100%; }
+.grilla-configuracion .panel { margin: 0 0 1.35rem; width: 100%; }
 .formulario-politica { display: grid; gap: .85rem; }
 .campos-politica { display: grid; gap: .75rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .pie-politica { align-items: center; display: flex; gap: 1rem; justify-content: space-between; }
-.tabla-configuracion { border: 1px solid #dce2ea; border-radius: .5rem; overflow-x: auto; }
-.tabla-configuracion table { font-size: .85rem; min-width: 45rem; }
-.tabla-configuracion th { background: #f8fafc; color: #526174; font-size: .75rem; letter-spacing: .02em; }
-.tabla-configuracion th, .tabla-configuracion td { border: 0; border-bottom: 1px solid #e3e8ef; padding: .7rem .65rem; vertical-align: middle; }
-.tabla-configuracion tr:last-child td { border-bottom: 0; }
-@media (max-width: 900px) { .configuracion { padding: 1.5rem; } .grilla-configuracion { grid-template-columns: 1fr; } .filtros-configuracion { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 700px) { .configuracion { max-width: calc(100% - 13.85rem); padding: 1rem; } .encabezado-configuracion h1 { font-size: 2rem; } .encabezado-seccion-configuracion, .pie-politica { align-items: stretch; flex-direction: column; } .filtros-configuracion, .campos-politica { grid-template-columns: 1fr; } .lista-con-estado li, .lista-sedes li { grid-template-columns: 1fr; } .acciones-configuracion { justify-content: flex-start; } .formulario-edicion { left: 0; right: auto; width: min(27rem, calc(100vw - 3rem)); } }
+.panel-tabla { border: 1px solid #dce2ea; border-radius: .5rem; overflow-x: auto; }
+.panel-tabla table { font-size: .85rem; min-width: 45rem; }
+.panel-tabla th { background: #f8fafc; color: #526174; font-size: .75rem; letter-spacing: .02em; }
+.panel-tabla th, .panel-tabla td { border: 0; border-bottom: 1px solid #e3e8ef; padding: .7rem .65rem; vertical-align: middle; }
+.panel-tabla tr:last-child td { border-bottom: 0; }
+@media (max-width: 900px) { .pagina { padding: 1.5rem; } .grilla-configuracion { grid-template-columns: 1fr; } .panel-filtros { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .pagina { max-width: calc(100% - 13.85rem); padding: 1rem; } .encabezado-pagina h1 { font-size: 2rem; } .panel-cabecera, .pie-politica { align-items: stretch; flex-direction: column; } .panel-filtros, .campos-politica { grid-template-columns: 1fr; } .lista-con-estado li, .lista-sedes li { grid-template-columns: 1fr; } .acciones-configuracion { justify-content: flex-start; } .formulario-edicion { left: 0; right: auto; width: min(27rem, calc(100vw - 3rem)); } }
+
+/* Liquidaciones (/periodos) */
+.periodos-filtros { grid-template-columns: repeat(3, minmax(0, 1fr)) auto auto; }
+@media (max-width: 900px) { .periodos-filtros { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .periodos-filtros { grid-template-columns: 1fr; } }
