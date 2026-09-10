@@ -17,6 +17,12 @@ interface Asistencia extends EvidenciaDeCeldaAsistencia {
   fecha: string;
   entrada: string | null;
   salida: string | null;
+  entradaProgramada: string | null;
+  salidaProgramada: string | null;
+  minutosTrabajados: number | null;
+  minutosDeTardanza: number | null;
+  minutosAl25: number;
+  minutosAl35: number;
 }
 
 const estadoInicial: EstadoDeRegistroManual = {};
@@ -54,7 +60,9 @@ export function CalendarioDeAsistencias({
       const item = porFecha.get(fecha);
       const estadoDelDia = estadoDeCeldaAsistencia(item);
       const etiqueta = etiquetaDeCeldaAsistencia(estadoDelDia, item?.estadoManual ?? null);
-      return <button aria-label={`Asistencia del ${fecha}: ${etiqueta}`} className={`dia-calendario estado-color-${estadoDelDia}`} key={fecha} onClick={() => abrir(fecha)} type="button"><time>{Number(fecha.slice(-2))}</time><strong>{estadoDelDia === "liquidado" && <IconoCandado />}{etiqueta}</strong>{item ? <><span>{hora(item.entrada) ?? "sin entrada"}</span><span>{hora(item.salida) ?? "sin salida"}</span></> : <span>Sin planificación</span>}</button>;
+      const señales = [item?.minutosDeTardanza ? `Tardanza: ${item.minutosDeTardanza} min` : null, item && item.minutosAl25 ? `Extra 25%: ${item.minutosAl25} min` : null, item && item.minutosAl35 ? `Extra 35%: ${item.minutosAl35} min` : null].filter(Boolean);
+      const horario = `Programado: ${item?.entradaProgramada ?? "—"}–${item?.salidaProgramada ?? "—"} · Real: ${hora(item?.entrada ?? null) ?? "—"}–${hora(item?.salida ?? null) ?? "—"}`;
+      return <button aria-label={`Asistencia del ${fecha}: ${etiqueta}. ${horario}${señales.length ? `. ${señales.join(". ")}` : ""}`} className={`dia-calendario estado-color-${estadoDelDia}`} key={fecha} onClick={() => abrir(fecha)} type="button"><time>{Number(fecha.slice(-2))}</time><strong>{estadoDelDia === "liquidado" && <IconoCandado />}{etiqueta}</strong><span className="horario-dia">{horario}</span>{señales.map((señal) => <span className="senal-dia" key={señal}>{señal}</span>)}</button>;
     })}</div></div>
     <dialog aria-labelledby="titulo-asistencia" className="dialogo-confirmacion" ref={dialogo}>
       {fechaSeleccionada && editable && asistencia ? <form action={accion}>

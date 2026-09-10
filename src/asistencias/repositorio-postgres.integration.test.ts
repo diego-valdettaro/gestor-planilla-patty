@@ -42,6 +42,10 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeAsistencias · resumen mensu
       { inicio: periodoCerrado.inicio, fin: periodoCerrado.fin, estado: "cerrado", cerradoPorId: cuentaId, cerradoEn: new Date() },
     ]);
 
+    await db.insert(schema.turnosPublicados).values(todasLasFechas.map((fecha) => ({
+      idHuellero, fecha, sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false,
+    })));
+
     await db.insert(schema.asistenciasEsperadas).values([
       { idHuellero, fecha: fechaEsperada, estado: "pendiente" },
       { idHuellero, fecha: fechaPendienteDeRevision, estado: "pendiente" },
@@ -60,17 +64,24 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeAsistencias · resumen mensu
     });
     // Una sola marca del día: no permite proponer entrada y salida completas.
     await db.insert(schema.marcasCrudas).values({ importacionId, idHuellero, fecha: fechaPendienteDeRevision, instante: `${fechaPendienteDeRevision}T09:03` });
+    const [confirmada] = await db.select({ id: schema.asistenciasEsperadas.id }).from(schema.asistenciasEsperadas)
+      .where(and(eq(schema.asistenciasEsperadas.idHuellero, idHuellero), eq(schema.asistenciasEsperadas.fecha, fechaConfirmada)));
+    await db.insert(schema.tardanzas).values({ asistenciaId: confirmada.id, minutosDeTardanza: 12, minutosPenalizados: 0, politicaVersion: 1 });
+    await db.insert(schema.horasExtra).values({ asistenciaId: confirmada.id, minutosAl25: 30, minutosAl35: 60, estado: "pendiente" });
   });
 
   afterAll(async () => {
     const asistencias = await db.select({ id: schema.asistenciasEsperadas.id }).from(schema.asistenciasEsperadas)
       .where(and(eq(schema.asistenciasEsperadas.idHuellero, idHuellero), inArray(schema.asistenciasEsperadas.fecha, todasLasFechas)));
     if (asistencias.length) {
+      await db.delete(schema.horasExtra).where(inArray(schema.horasExtra.asistenciaId, asistencias.map(({ id }) => id)));
+      await db.delete(schema.tardanzas).where(inArray(schema.tardanzas.asistenciaId, asistencias.map(({ id }) => id)));
       await db.delete(schema.estadosManuales).where(inArray(schema.estadosManuales.asistenciaId, asistencias.map(({ id }) => id)));
     }
     await db.delete(schema.marcasCrudas).where(eq(schema.marcasCrudas.importacionId, importacionId));
     await db.delete(schema.importacionesSemanales).where(eq(schema.importacionesSemanales.id, importacionId));
     await db.delete(schema.asistenciasEsperadas).where(and(eq(schema.asistenciasEsperadas.idHuellero, idHuellero), inArray(schema.asistenciasEsperadas.fecha, todasLasFechas)));
+    await db.delete(schema.turnosPublicados).where(and(eq(schema.turnosPublicados.idHuellero, idHuellero), inArray(schema.turnosPublicados.fecha, todasLasFechas)));
     await db.delete(schema.periodosPlanilla).where(inArray(schema.periodosPlanilla.inicio, [periodoAbierto.inicio, periodoCerrado.inicio]));
     await db.delete(schema.colaboradores).where(eq(schema.colaboradores.idHuellero, idHuellero));
     await db.delete(schema.cuentasLocales).where(eq(schema.cuentasLocales.id, cuentaId));
@@ -97,6 +108,11 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeAsistencias · resumen mensu
     const filas = await repositorio.listarResumenMensual(idHuellero, "2031-03-01", "2031-03-31");
     const fila = filas.find(({ fecha }) => fecha === fechaConfirmada)!;
     expect(estadoDeCeldaAsistencia(fila)).toBe("registrada");
+    expect(fila.entradaProgramada).toBe("09:00");
+    expect(fila.salidaProgramada).toBe("18:00");
+    expect(fila.minutosDeTardanza).toBe(12);
+    expect(fila.minutosAl25).toBe(30);
+    expect(fila.minutosAl35).toBe(60);
   });
 
   it("un día con designación manual se deriva como 'registrada' y se etiqueta con el tipo", async () => {
