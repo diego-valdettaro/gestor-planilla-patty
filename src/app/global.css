@@ -108,7 +108,6 @@ th, td { border: 1px solid #e2e8f0; padding: 0.6rem; text-align: left; }
 .barra-plan-semanal h1 { color: #0d2854; font-size: 2.55rem; letter-spacing: -.06em; line-height: 1.1; margin: 1.15rem 0 .45rem; }
 .barra-plan-semanal p { color: #758198; font-size: 1rem; margin: 0; }
 .breadcrumb { color: #758198 !important; font-size: .85rem; margin: 0 !important; }.breadcrumb span { color: #079557; font-weight: 700; }
-.crear-horario { align-items: center; background: #079557; border-radius: .45rem; box-shadow: 0 .3rem .55rem #0795572b; color: white; display: flex; font-size: .87rem; font-weight: 700; gap: .65rem; padding: .85rem 1.15rem; text-decoration: none; }.crear-horario span { font-size: 1.5rem; font-weight: 300; line-height: .7; }
 .rango-semana { color: #6b7280; font-size: 0.85rem; margin: 0 auto 0 0; }
 .navegacion-semana { display: flex; gap: 0.5rem; }
 .navegacion-semana a, .boton-secundario { background: #fff; border: 1px solid #9ca3af; border-radius: 0.4rem; color: #1d2733; font-size: 0.85rem; padding: 0.45rem 0.6rem; text-decoration: none; }
