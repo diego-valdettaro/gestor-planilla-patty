@@ -4,6 +4,8 @@ node_modules/
 *.tsbuildinfo
 data/
 outputs/
+playwright-report/
+test-results/
 docs/propuesta-visual/
 
 # ruido de agentes
