@@ -39,7 +39,9 @@ describe("registrarColaborador", () => {
       {
         idHuellero: "HU-1024",
         nombre: "Ana Rojas",
-        sede: "Lima",        activo: true,
+        sede: "Lima",
+        grupo: "Tiendas",
+        activo: true,
       },
     );
 
@@ -48,7 +50,9 @@ describe("registrarColaborador", () => {
     ).resolves.toMatchObject({
       idHuellero: "HU-1024",
       nombre: "Ana Rojas",
-      sede: "Lima",      activo: true,
+      sede: "Lima",
+      grupo: "Tiendas",
+      activo: true,
     });
   });
 
@@ -62,7 +66,9 @@ describe("registrarColaborador", () => {
         {
           idHuellero: "HU-1024",
           nombre: "Ana Rojas",
-          sede: "Lima",          activo: true,
+          sede: "Lima",
+          grupo: "Tiendas",
+          activo: true,
         },
       ),
     ).rejects.toThrow("No tiene permiso para administrar colaboradores.");
@@ -83,7 +89,9 @@ describe("registrarColaborador", () => {
         {
           idHuellero: "HU-1024",
           nombre: "Ana Rojas",
-          sede: "Lima",          activo: true,
+          sede: "Lima",
+          grupo: "Tiendas",
+          activo: true,
         },
       ),
     ).rejects.toThrow("No tiene permiso para administrar colaboradores.");
@@ -95,7 +103,9 @@ describe("registrarColaborador", () => {
     const primeraColaboradora = {
       idHuellero: "HU-1024",
       nombre: "Ana Rojas",
-      sede: "Lima",      activo: true,
+      sede: "Lima",
+      grupo: "Tiendas",
+      activo: true,
     };
 
     await registrarColaborador(repositorio, actor, primeraColaboradora);
@@ -115,19 +125,25 @@ describe("registrarColaborador", () => {
     await registrarColaborador(repositorio, actor, {
       idHuellero: "HU-1024",
       nombre: "Ana Rojas",
-      sede: "Lima",      activo: true,
+      sede: "Lima",
+      grupo: "Tiendas",
+      activo: true,
     });
 
     await actualizarColaborador(repositorio, actor, {
       idHuellero: "HU-1024",
       nombre: "Ana Rojas",
-      sede: "Callao",      activo: false,
+      sede: "Callao",
+      grupo: "Taller",
+      activo: false,
     });
 
     await expect(
       consultarColaborador(repositorio, actor, "HU-1024"),
     ).resolves.toMatchObject({
-      sede: "Callao",      activo: false,
+      sede: "Callao",
+      grupo: "Taller",
+      activo: false,
     });
   });
 });

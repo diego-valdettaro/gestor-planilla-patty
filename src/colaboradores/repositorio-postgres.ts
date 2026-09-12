@@ -1,16 +1,14 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import * as schema from "@/db/schema";
-import { colaboradores } from "@/db/schema";
+import { celdasDePlanesSemanalesEnBorrador, colaboradores, planesSemanalesEnBorrador } from "@/db/schema";
 
-import type {
-  Colaborador,
-  RepositorioDeColaboradores,
-} from "./registrar-colaborador";
+import type { RepositorioParaCambiarGrupo } from "./cambiar-grupo";
+import type { Colaborador } from "./registrar-colaborador";
 
 export class RepositorioPostgresDeColaboradores
-  implements RepositorioDeColaboradores
+  implements RepositorioParaCambiarGrupo
 {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}
 
@@ -20,6 +18,7 @@ export class RepositorioPostgresDeColaboradores
         idHuellero: colaboradores.idHuellero,
         nombre: colaboradores.nombre,
         sede: colaboradores.sede,
+        grupo: colaboradores.grupo,
         activo: colaboradores.activo,
       })
       .from(colaboradores)
@@ -38,6 +37,7 @@ export class RepositorioPostgresDeColaboradores
       .set({
         nombre: colaborador.nombre,
         sede: colaborador.sede,
+        grupo: colaborador.grupo,
         activo: colaborador.activo,
         actualizadoEn: new Date(),
       })
@@ -49,8 +49,21 @@ export class RepositorioPostgresDeColaboradores
       idHuellero: colaboradores.idHuellero,
       nombre: colaboradores.nombre,
       sede: colaboradores.sede,
+      grupo: colaboradores.grupo,
       activo: colaboradores.activo,
     }).from(colaboradores).orderBy(colaboradores.nombre);
+  }
+
+  async tieneBorradorAbiertoEnGrupo(idHuellero: string, grupo: string): Promise<boolean> {
+    const [celda] = await this.db
+      .select({ id: celdasDePlanesSemanalesEnBorrador.id })
+      .from(celdasDePlanesSemanalesEnBorrador)
+      .innerJoin(planesSemanalesEnBorrador, eq(celdasDePlanesSemanalesEnBorrador.planId, planesSemanalesEnBorrador.id))
+      .where(and(
+        eq(celdasDePlanesSemanalesEnBorrador.idHuellero, idHuellero),
+        eq(planesSemanalesEnBorrador.equipo, grupo),
+      ));
+    return Boolean(celda);
   }
 
 }

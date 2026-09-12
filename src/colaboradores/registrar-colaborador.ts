@@ -10,6 +10,7 @@ export interface Colaborador {
   idHuellero: string;
   nombre: string;
   sede: string;
+  grupo: string;
   activo: boolean;
 }
 
@@ -57,7 +58,7 @@ export async function actualizarColaborador(
   await repositorio.actualizar(colaborador);
 }
 
-function verificarPermiso(actor: Actor): void {
+export function verificarPermiso(actor: Actor): void {
   if (actor.rol !== "administracion" && actor.rol !== "finanzas") {
     throw new Error("No tiene permiso para administrar colaboradores.");
   }

@@ -124,8 +124,8 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
   }
 
   async obtenerEquipoOperativo(idHuellero: string): Promise<string | undefined> {
-    const [colaborador] = await this.db.select({ equipo: sedes.grupo }).from(colaboradores)
-      .innerJoin(sedes, eq(colaboradores.sede, sedes.nombre)).where(eq(colaboradores.idHuellero, idHuellero));
+    const [colaborador] = await this.db.select({ equipo: colaboradores.grupo }).from(colaboradores)
+      .where(eq(colaboradores.idHuellero, idHuellero));
     return colaborador?.equipo ?? undefined;
   }
 
@@ -244,9 +244,8 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
         sede: colaboradores.sede,
       })
       .from(colaboradores)
-      .innerJoin(sedes, eq(colaboradores.sede, sedes.nombre))
-      .where(and(eq(colaboradores.activo, true), eq(sedes.activa, true), eq(sedes.grupo, equipo)))
-      .orderBy(sedes.nombre, colaboradores.nombre);
+      .where(and(eq(colaboradores.activo, true), eq(colaboradores.grupo, equipo)))
+      .orderBy(colaboradores.sede, colaboradores.nombre);
   }
 
   async listarColaboradoresProcesadosPorSemanaYEquipo(semana: string, equipo: string): Promise<
@@ -418,8 +417,7 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
 
   async colaboradorPerteneceAEquipo(idHuellero: string, equipo: Grupo): Promise<boolean> {
     const [colaborador] = await this.db.select({ id: colaboradores.idHuellero }).from(colaboradores)
-      .innerJoin(sedes, eq(colaboradores.sede, sedes.nombre))
-      .where(and(eq(colaboradores.idHuellero, idHuellero), eq(colaboradores.activo, true), eq(sedes.activa, true), eq(sedes.grupo, equipo)));
+      .where(and(eq(colaboradores.idHuellero, idHuellero), eq(colaboradores.activo, true), eq(colaboradores.grupo, equipo)));
     return Boolean(colaborador);
   }
 
@@ -442,11 +440,9 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
       descanso: turnosPublicados.descanso,
     }).from(turnosPublicados)
       .innerJoin(colaboradores, eq(turnosPublicados.idHuellero, colaboradores.idHuellero))
-      .innerJoin(sedes, eq(colaboradores.sede, sedes.nombre))
       .where(and(
         eq(colaboradores.activo, true),
-        eq(sedes.activa, true),
-        eq(sedes.grupo, equipo),
+        eq(colaboradores.grupo, equipo),
         gte(turnosPublicados.fecha, semana),
         lte(turnosPublicados.fecha, desplazarFecha(semana, 6)),
       ));

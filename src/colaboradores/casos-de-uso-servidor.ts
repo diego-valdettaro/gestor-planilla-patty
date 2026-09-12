@@ -1,20 +1,18 @@
-import type {
-  Actor,
-  Colaborador,
-  RepositorioDeColaboradores,
-} from "./registrar-colaborador";
+import type { Actor, Colaborador } from "./registrar-colaborador";
 import {
   actualizarColaborador,
   consultarColaborador,
   registrarColaborador,
 } from "./registrar-colaborador";
+import type { RepositorioParaCambiarGrupo } from "./cambiar-grupo";
+import { cambiarGrupoDeColaborador } from "./cambiar-grupo";
 
 export interface SesionDelServidor {
   obtenerActorActual(): Promise<Actor>;
 }
 
 export function crearCasosDeUsoDeColaboradores(
-  repositorio: RepositorioDeColaboradores,
+  repositorio: RepositorioParaCambiarGrupo,
   sesion: SesionDelServidor,
 ) {
   return {
@@ -37,6 +35,14 @@ export function crearCasosDeUsoDeColaboradores(
         repositorio,
         await sesion.obtenerActorActual(),
         colaborador,
+      );
+    },
+    async cambiarGrupo(idHuellero: string, grupoNuevo: string): Promise<void> {
+      await cambiarGrupoDeColaborador(
+        repositorio,
+        await sesion.obtenerActorActual(),
+        idHuellero,
+        grupoNuevo,
       );
     },
   };
