@@ -20,6 +20,11 @@ vi.mock("@/app/boton-de-accion-confirmada", () => ({
 vi.mock("./actions", () => ({
   cerrarPeriodoDesdeFormulario: vi.fn(),
   reabrirPeriodoDesdeFormulario: vi.fn(),
+  crearPeriodoDesdeFormulario: vi.fn(),
+}));
+vi.mock("./creador-de-periodo", () => ({
+  CreadorDePeriodo: ({ sugerencia }: { sugerencia: { inicio: string; fin: string } }) =>
+    createElement("p", { "data-testid": "creador-de-periodo" }, `${sugerencia.inicio} a ${sugerencia.fin}`),
 }));
 
 async function render(searchParams: Record<string, string> = {}) {
@@ -77,5 +82,40 @@ describe("página de Liquidaciones (/periodos)", () => {
 
     expect(html).toContain('class="estado-vacio"');
     expect(html).toContain("No hay períodos de planilla");
+  });
+
+  it("muestra el formulario para crear un período, incluso sin períodos previos", async () => {
+    listar.mockResolvedValue([]);
+
+    const html = await render();
+
+    expect(html).toContain('data-testid="creador-de-periodo"');
+  });
+
+  it("oculta los controles de cierre y reapertura para Administración", async () => {
+    obtenerActorActual.mockResolvedValue({ rol: "administracion" });
+    listar.mockResolvedValue([{ id: "p1", inicio: "2026-01-01", fin: "2026-01-31", estado: "abierto" }]);
+
+    const html = await render();
+
+    expect(html).not.toContain("Cerrar período");
+  });
+
+  it("oculta el formulario de reapertura para Administración cuando el período está cerrado", async () => {
+    obtenerActorActual.mockResolvedValue({ rol: "administracion" });
+    listar.mockResolvedValue([{ id: "p1", inicio: "2026-01-01", fin: "2026-01-31", estado: "cerrado" }]);
+
+    const html = await render();
+
+    expect(html).not.toContain("Motivo de reapertura");
+    expect(html).not.toContain("Reabrir período");
+  });
+
+  it("niega el acceso a Operaciones", async () => {
+    obtenerActorActual.mockResolvedValue({ rol: "operaciones" });
+
+    const html = await render();
+
+    expect(html).toContain("Sin permiso");
   });
 });
