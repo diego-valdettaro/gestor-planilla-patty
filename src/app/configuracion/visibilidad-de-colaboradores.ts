@@ -6,9 +6,9 @@ export type FiltroDeColaboradores = {
 };
 
 // Qué colaboradores muestra la tabla de Configuración dado el grupo elegido y si
-// el control "Mostrar inactivos" está encendido. El grupo del colaborador sale de
-// la sede a la que pertenece; `null` cuando su sede no tiene grupo asignado.
-export function filtrarColaboradores<T extends { grupo: Grupo | null; activo: boolean }>(
+// el control "Mostrar inactivos" está encendido. El colaborador pertenece
+// directamente a un grupo operativo (no se deriva de su sede).
+export function filtrarColaboradores<T extends { grupo: Grupo; activo: boolean }>(
   colaboradores: T[],
   filtro: FiltroDeColaboradores,
 ): T[] {

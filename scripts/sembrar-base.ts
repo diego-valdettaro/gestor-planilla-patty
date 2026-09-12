@@ -35,6 +35,13 @@ const SEDES = {
 };
 const NOMBRES_DE_SEDE = Object.values(SEDES);
 
+const GRUPOS = {
+  tiendas: "Tiendas",
+  taller: "Taller",
+  administracion: "Administración",
+};
+const NOMBRES_DE_GRUPO = Object.values(GRUPOS);
+
 const CUENTAS = [
   { nombreUsuario: "operaciones", contrasena: "operaciones", rol: "operaciones" },
   { nombreUsuario: "admin", contrasena: "admin", rol: "administracion" },
@@ -42,16 +49,16 @@ const CUENTAS = [
 ] as const;
 
 const COLABORADORES = [
-  { idHuellero: "DEMO-ANA", nombre: "Ana Borrador", sede: SEDES.benavides, activo: true },
-  { idHuellero: "DEMO-BETO", nombre: "Beto Publicado", sede: SEDES.benavides, activo: true },
-  { idHuellero: "DEMO-CARLA", nombre: "Carla Cambios", sede: SEDES.benavides, activo: true },
-  { idHuellero: "DEMO-DARIO", nombre: "Darío Liquidado", sede: SEDES.sanIsidro, activo: true },
-  { idHuellero: "DEMO-ELENA", nombre: "Elena Sotelo", sede: SEDES.sanIsidro, activo: true },
-  { idHuellero: "DEMO-FRANCO", nombre: "Franco Díaz", sede: SEDES.taller, activo: true },
-  { idHuellero: "DEMO-GABI", nombre: "Gabriela Pérez", sede: SEDES.taller, activo: true },
-  { idHuellero: "DEMO-HUGO", nombre: "Hugo Marín", sede: SEDES.administracion, activo: true },
-  { idHuellero: "DEMO-INES", nombre: "Inés Quispe", sede: SEDES.administracion, activo: true },
-  { idHuellero: "DEMO-NICO", nombre: "Nico Inactivo", sede: SEDES.benavides, activo: false },
+  { idHuellero: "DEMO-ANA", nombre: "Ana Borrador", sede: SEDES.benavides, grupo: GRUPOS.tiendas, activo: true },
+  { idHuellero: "DEMO-BETO", nombre: "Beto Publicado", sede: SEDES.benavides, grupo: GRUPOS.tiendas, activo: true },
+  { idHuellero: "DEMO-CARLA", nombre: "Carla Cambios", sede: SEDES.benavides, grupo: GRUPOS.tiendas, activo: true },
+  { idHuellero: "DEMO-DARIO", nombre: "Darío Liquidado", sede: SEDES.sanIsidro, grupo: GRUPOS.tiendas, activo: true },
+  { idHuellero: "DEMO-ELENA", nombre: "Elena Sotelo", sede: SEDES.sanIsidro, grupo: GRUPOS.tiendas, activo: true },
+  { idHuellero: "DEMO-FRANCO", nombre: "Franco Díaz", sede: SEDES.taller, grupo: GRUPOS.taller, activo: true },
+  { idHuellero: "DEMO-GABI", nombre: "Gabriela Pérez", sede: SEDES.taller, grupo: GRUPOS.taller, activo: true },
+  { idHuellero: "DEMO-HUGO", nombre: "Hugo Marín", sede: SEDES.administracion, grupo: GRUPOS.administracion, activo: true },
+  { idHuellero: "DEMO-INES", nombre: "Inés Quispe", sede: SEDES.administracion, grupo: GRUPOS.administracion, activo: true },
+  { idHuellero: "DEMO-NICO", nombre: "Nico Inactivo", sede: SEDES.benavides, grupo: GRUPOS.tiendas, activo: false },
 ];
 
 const MODELOS = [
@@ -136,7 +143,7 @@ async function limpiar(pool: Pool): Promise<void> {
     DELETE FROM periodos_planilla WHERE inicio IN ('${PERIODO_ACTUAL.inicio}', '${PERIODO_ANTERIOR.inicio}');
     DELETE FROM colaboradores WHERE id_huellero LIKE 'DEMO-%';
     DELETE FROM sedes WHERE nombre IN (${sedes});
-    DELETE FROM grupos WHERE nombre IN ('Tiendas', 'Taller');
+    DELETE FROM grupos WHERE nombre IN (${NOMBRES_DE_GRUPO.map((nombre) => `'${nombre.replace(/'/g, "''")}'`).join(", ")});
     DELETE FROM sesiones WHERE cuenta_id IN (SELECT id FROM cuentas_locales WHERE nombre_usuario IN (${usuarios}));
     DELETE FROM cuentas_locales WHERE nombre_usuario IN (${usuarios});
     COMMIT;
@@ -291,13 +298,13 @@ async function main(): Promise<void> {
     const actorOperaciones: Actor = { id: admin.id, rol: "operaciones" };
 
     // --- Sedes (mismo camino que `configuracion/actions.ts`: insert directo) ---
-    await db.insert(schema.grupos).values([{ nombre: "Tiendas" }, { nombre: "Taller" }]);
+    await db.insert(schema.grupos).values(NOMBRES_DE_GRUPO.map((nombre) => ({ nombre })));
     await db.insert(schema.sedes).values([
-      { nombre: SEDES.benavides, activa: true, grupo: "Tiendas" },
-      { nombre: SEDES.sanIsidro, activa: true, grupo: "Tiendas" },
-      { nombre: SEDES.taller, activa: true, grupo: "Taller" },
-      { nombre: SEDES.administracion, activa: true, grupo: null }, // sin grupo hasta #38/#40/#41
-      { nombre: SEDES.depositoInactivo, activa: false, grupo: null },
+      { nombre: SEDES.benavides, activa: true, grupo: GRUPOS.tiendas },
+      { nombre: SEDES.sanIsidro, activa: true, grupo: GRUPOS.tiendas },
+      { nombre: SEDES.taller, activa: true, grupo: GRUPOS.taller },
+      { nombre: SEDES.administracion, activa: true, grupo: GRUPOS.administracion },
+      { nombre: SEDES.depositoInactivo, activa: false, grupo: null }, // sede inactiva, sin colaboradores: no necesita grupo
     ]);
 
     // --- Modelos de horario (caso de uso: valida las horas) ---

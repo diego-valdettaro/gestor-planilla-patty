@@ -51,7 +51,7 @@ describe.skipIf(!databaseUrl)("grupos persistidos", () => {
 
   it("asigna una sede a un grupo dinámico y permite planificar a su colaborador", async () => {
     await db.insert(schema.sedes).values({ nombre: sede, grupo });
-    await db.insert(schema.colaboradores).values({ idHuellero: colaborador, nombre: "Prueba grupo", sede, activo: true });
+    await db.insert(schema.colaboradores).values({ idHuellero: colaborador, nombre: "Prueba grupo", sede, grupo, activo: true });
 
     await expect(turnos.listarColaboradoresActivosPorEquipo(grupo)).resolves.toEqual([
       expect.objectContaining({ idHuellero: colaborador, sede }),

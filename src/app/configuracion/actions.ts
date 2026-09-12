@@ -80,11 +80,33 @@ export async function guardarColaborador(formData: FormData): Promise<void> {
     idHuellero: texto(formData, "idHuellero"),
     nombre: texto(formData, "nombre"),
     sede: texto(formData, "sede"),
+    grupo: texto(formData, "grupo"),
     activo: true,
   });
   revalidatePath("/configuracion");
   revalidatePath("/turnos");
   revalidatePath("/asistencias");
+}
+
+export interface EstadoDeCambioDeGrupoDeColaborador {
+  error?: string;
+  listo?: number;
+}
+
+export async function cambiarGrupoDeColaboradorDeConfiguracion(
+  _estadoAnterior: EstadoDeCambioDeGrupoDeColaborador,
+  formData: FormData,
+): Promise<EstadoDeCambioDeGrupoDeColaborador> {
+  try {
+    const casos = crearCasosDeUsoDeColaboradores(repositorioDeColaboradores, { obtenerActorActual });
+    await casos.cambiarGrupo(texto(formData, "idHuellero"), texto(formData, "grupo"));
+    revalidatePath("/configuracion");
+    revalidatePath("/turnos");
+    revalidatePath("/asistencias");
+    return { listo: (_estadoAnterior.listo ?? 0) + 1 };
+  } catch (causa) {
+    return { error: causa instanceof Error ? causa.message : "No se pudo cambiar el grupo del colaborador." };
+  }
 }
 
 export async function desactivarColaborador(formData: FormData): Promise<void> {
