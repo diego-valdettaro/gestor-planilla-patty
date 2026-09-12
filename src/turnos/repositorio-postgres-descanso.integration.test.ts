@@ -35,7 +35,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeTurnos al publicar un descan
   });
 
   it("no crea una asistencia esperada", async () => {
-    await repositorio.publicar({ idHuellero, fecha, sede: "Lima", entradaProgramada: null, salidaProgramada: null, descanso: true });
+    await repositorio.publicar({ idHuellero, fecha, sede: null, entradaProgramada: null, salidaProgramada: null, descanso: true, motivoNoAsistencia: "descanso" });
 
     await expect(db.select({ id: schema.asistenciasEsperadas.id }).from(schema.asistenciasEsperadas)
       .where(and(eq(schema.asistenciasEsperadas.idHuellero, idHuellero), eq(schema.asistenciasEsperadas.fecha, fecha)))).resolves.toEqual([]);

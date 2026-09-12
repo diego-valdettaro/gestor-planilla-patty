@@ -38,7 +38,7 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
       entradaProgramada: turnosPublicados.entradaProgramada, salidaProgramada: turnosPublicados.salidaProgramada,
       descanso: turnosPublicados.descanso,
     }).from(turnosPublicados).where(and(eq(turnosPublicados.idHuellero, idHuellero), eq(turnosPublicados.fecha, fecha)));
-    return turno;
+    return turno?.sede ? { ...turno, sede: turno.sede } : undefined;
   }
 
   async confirmar(asistencia: AsistenciaConfirmada): Promise<void> {

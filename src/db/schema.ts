@@ -115,11 +115,13 @@ export const turnosPublicados = pgTable(
       .notNull()
       .references(() => colaboradores.idHuellero),
     fecha: date("fecha", { mode: "string" }).notNull(),
-    sede: text("sede").notNull(),
+    grupo: text("grupo").notNull().references(() => grupos.nombre),
+    sede: text("sede"),
     modeloHorarioId: uuid("modelo_horario_id").references(() => modelosDeHorario.id),
     entradaProgramada: text("entrada_programada"),
     salidaProgramada: text("salida_programada"),
     descanso: boolean("descanso").notNull(),
+    motivoNoAsistencia: text("motivo_no_asistencia", { enum: ["descanso", "feriado", "vacaciones", "permiso", "suspension"] }),
     publicadoEn: timestamp("publicado_en", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [uniqueIndex("turnos_publicados_colaborador_fecha").on(table.idHuellero, table.fecha)],
@@ -134,11 +136,13 @@ export const historialDeTurnosPublicados = pgTable("historial_turnos_publicados"
   horario: jsonb("horario").$type<{
     idHuellero: string;
     fecha: string;
-    sede: string;
+    grupo: string;
+    sede: string | null;
     modeloHorarioId: string | null;
     entradaProgramada: string | null;
     salidaProgramada: string | null;
     descanso: boolean;
+    motivoNoAsistencia: "descanso" | "feriado" | "vacaciones" | "permiso" | "suspension" | null;
   }>().notNull(),
   responsableId: uuid("responsable_id").references(() => cuentasLocales.id),
   motivo: text("motivo"),
@@ -167,11 +171,13 @@ export const celdasDePlanesSemanalesEnBorrador = pgTable(
     planId: uuid("plan_id").notNull().references(() => planesSemanalesEnBorrador.id),
     idHuellero: text("id_huellero").notNull().references(() => colaboradores.idHuellero),
     fecha: date("fecha", { mode: "string" }).notNull(),
-    sede: text("sede").notNull(),
+    grupo: text("grupo").notNull().references(() => grupos.nombre),
+    sede: text("sede"),
     modeloHorarioId: uuid("modelo_horario_id").references(() => modelosDeHorario.id),
     entradaProgramada: text("entrada_programada"),
     salidaProgramada: text("salida_programada"),
     descanso: boolean("descanso").notNull(),
+    motivoNoAsistencia: text("motivo_no_asistencia", { enum: ["descanso", "feriado", "vacaciones", "permiso", "suspension"] }),
   },
   (table) => [uniqueIndex("celdas_borrador_plan_colaborador_fecha").on(table.planId, table.idHuellero, table.fecha)],
 );

@@ -1,14 +1,11 @@
 import type { Grupo } from "./configurar-equipos-operativos";
+import type { DatosDeJornadaPlanificada, RepositorioParaValidarJornadaPlanificada } from "./jornada-planificada";
 
-export interface CeldaDePlanSemanalEnBorrador {
+export interface CeldaDePlanSemanalEnBorrador extends DatosDeJornadaPlanificada {
   planId: string;
   idHuellero: string;
   fecha: string;
-  sede: string;
-  modeloHorarioId?: string | null;
-  entradaProgramada: string | null;
-  salidaProgramada: string | null;
-  descanso: boolean;
+  grupo?: Grupo;
 }
 
 export interface PlanSemanalEnBorrador {
@@ -19,17 +16,13 @@ export interface PlanSemanalEnBorrador {
   celdas: CeldaDePlanSemanalEnBorrador[];
 }
 
-export interface HorarioSemanalParaCopiar {
+export interface HorarioSemanalParaCopiar extends DatosDeJornadaPlanificada {
   idHuellero: string;
   fecha: string;
-  sede: string;
-  modeloHorarioId?: string | null;
-  entradaProgramada: string | null;
-  salidaProgramada: string | null;
-  descanso: boolean;
+  grupo?: Grupo;
 }
 
-export interface RepositorioDePlanesSemanales {
+export interface RepositorioDePlanesSemanales extends RepositorioParaValidarJornadaPlanificada {
   obtenerOCrear(semana: string, equipo: Grupo): Promise<PlanSemanalEnBorrador>;
   buscarPorId(id: string): Promise<PlanSemanalEnBorrador | undefined>;
   guardarCelda(celda: CeldaDePlanSemanalEnBorrador): Promise<void>;
@@ -37,7 +30,6 @@ export interface RepositorioDePlanesSemanales {
   reemplazarCeldasDelPlan(planId: string, celdas: CeldaDePlanSemanalEnBorrador[]): Promise<void>;
   borrarCelda(planId: string, idHuellero: string, fecha: string): Promise<void>;
   colaboradorPerteneceAEquipo(idHuellero: string, equipo: Grupo): Promise<boolean>;
-  obtenerSedeDelColaborador(idHuellero: string): Promise<string | undefined>;
   buscarPublicado(idHuellero: string, fecha: string): Promise<HorarioSemanalParaCopiar | undefined>;
   listarHorariosPublicadosDelEquipoEnSemana(semana: string, equipo: Grupo): Promise<HorarioSemanalParaCopiar[]>;
   listarColaboradoresActivosPorEquipo(equipo: Grupo): Promise<Array<{ idHuellero: string; nombre: string; sede: string }>>;

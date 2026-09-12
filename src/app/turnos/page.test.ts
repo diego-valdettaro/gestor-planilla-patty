@@ -11,6 +11,7 @@ const listarColaboradoresProcesadosPorSemanaYEquipo = vi.fn();
 const listarPublicadosPorColaboradoresYSemana = vi.fn();
 const listarProcesamientosDeSemana = vi.fn();
 const listarModelosPorSede = vi.fn();
+const listarSedesActivasPorGrupo = vi.fn();
 
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 vi.mock("@/autenticacion/sesion-del-servidor", () => ({ obtenerActorActual }));
@@ -26,6 +27,7 @@ vi.mock("@/turnos/servicio", () => ({
     listarEquiposConProcesamientosDeSemana,
     listarProcesamientosDeSemana,
     listarPublicadosPorColaboradoresYSemana,
+    listarSedesActivasPorGrupo,
   },
 }));
 vi.mock("./planificador-semanal", () => ({
@@ -50,6 +52,7 @@ describe("página de Horarios (/turnos)", () => {
     listarColaboradoresProcesadosPorSemanaYEquipo.mockResolvedValue([]);
     listarPublicadosPorColaboradoresYSemana.mockResolvedValue([]);
     listarProcesamientosDeSemana.mockResolvedValue([]);
+    listarSedesActivasPorGrupo.mockResolvedValue([]);
     obtenerOCrear.mockResolvedValue({ id: "plan-1", celdas: [] });
   });
 
@@ -59,5 +62,19 @@ describe("página de Horarios (/turnos)", () => {
     expect(html).toContain("<h1>Planificación de horarios</h1>");
     expect(html).not.toContain("Crear horario");
     expect(html).not.toContain('class="crear-horario"');
+  });
+
+  it("carga colaboradores y sedes activas por el grupo operativo", async () => {
+    listarColaboradoresActivosPorEquipo.mockResolvedValue([
+      { idHuellero: "HU-1", nombre: "Ana", sede: "Norte" },
+    ]);
+    listarSedesActivasPorGrupo.mockResolvedValue(["Norte", "Sur"]);
+    listarModelosPorSede.mockResolvedValue([]);
+
+    await render();
+
+    expect(listarColaboradoresActivosPorEquipo).toHaveBeenCalledWith("Tiendas");
+    expect(listarSedesActivasPorGrupo).toHaveBeenCalledWith("Tiendas");
+    expect(listarModelosPorSede.mock.calls.map(([sede]) => sede)).toEqual(["Norte", "Sur"]);
   });
 });

@@ -11,6 +11,7 @@ import {
   horariosSemanalesProcesados,
   estadosManuales,
   horasExtra,
+  modelosDeHorario,
   periodosPlanilla,
   planesSemanalesEnBorrador,
   sedes,
@@ -23,10 +24,42 @@ import type { CeldaDePlanSemanalEnBorrador, PlanSemanalEnBorrador, RepositorioDe
 import type { RepositorioDeTurnos, TurnoPublicado } from "./publicar-turno-semanal";
 import type { ProcesamientoDeHorarioSemanal } from "./procesar-horario-semanal";
 import type { Actor } from "@/colaboradores/registrar-colaborador";
+import { motivoPlanificadoDe, validarJornadaPlanificada } from "./jornada-planificada";
 import { desplazarFecha, diasDeLaSemana, inicioDeSemana } from "./semana";
 
 export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, RepositorioDeGruposDeSedes, RepositorioDePlanesSemanales {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}
+
+  async listarSedesActivasPorGrupo(grupo: Grupo): Promise<string[]> {
+    const resultados = await this.db.select({ sede: sedes.nombre }).from(sedes)
+      .where(and(eq(sedes.grupo, grupo), eq(sedes.activa, true)))
+      .orderBy(sedes.nombre);
+    return resultados.map(({ sede }) => sede);
+  }
+
+  async sedeActivaPerteneceAlGrupo(sede: string, grupo: Grupo): Promise<boolean> {
+    const [resultado] = await this.db.select({ sede: sedes.nombre }).from(sedes)
+      .where(and(eq(sedes.nombre, sede), eq(sedes.grupo, grupo), eq(sedes.activa, true)));
+    return Boolean(resultado);
+  }
+
+  async buscarModeloDeHorario(id: string) {
+    const [modelo] = await this.db.select({
+      id: modelosDeHorario.id,
+      sede: modelosDeHorario.sede,
+      nombre: modelosDeHorario.nombre,
+      entrada: modelosDeHorario.entrada,
+      salida: modelosDeHorario.salida,
+      activo: modelosDeHorario.activo,
+    }).from(modelosDeHorario).where(eq(modelosDeHorario.id, id));
+    return modelo;
+  }
+
+  async obtenerGrupoDelColaborador(idHuellero: string): Promise<Grupo | undefined> {
+    const [colaborador] = await this.db.select({ grupo: colaboradores.grupo }).from(colaboradores)
+      .where(and(eq(colaboradores.idHuellero, idHuellero), eq(colaboradores.activo, true)));
+    return colaborador?.grupo;
+  }
 
   async buscarPublicado(
     idHuellero: string,
@@ -36,11 +69,13 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
       .select({
         idHuellero: turnosPublicados.idHuellero,
         fecha: turnosPublicados.fecha,
+        grupo: turnosPublicados.grupo,
         sede: turnosPublicados.sede,
         modeloHorarioId: turnosPublicados.modeloHorarioId,
         entradaProgramada: turnosPublicados.entradaProgramada,
         salidaProgramada: turnosPublicados.salidaProgramada,
         descanso: turnosPublicados.descanso,
+        motivoNoAsistencia: turnosPublicados.motivoNoAsistencia,
       })
       .from(turnosPublicados)
       .where(
@@ -59,7 +94,25 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
 
   async publicarEnLote(turnos: TurnoPublicado[], actor?: Actor): Promise<void> {
     await this.db.transaction(async (tx) => {
+      const jornadas: Array<TurnoPublicado & { grupo: Grupo; descanso: boolean }> = [];
       for (const turno of turnos) {
+        const [colaborador] = await tx.select({ grupo: colaboradores.grupo }).from(colaboradores).where(and(
+          eq(colaboradores.idHuellero, turno.idHuellero), eq(colaboradores.activo, true),
+        ));
+        if (!colaborador) throw new Error("El colaborador activo no existe.");
+        await validarJornadaPlanificada({
+          sedeActivaPerteneceAlGrupo: async (sede, grupo) => Boolean((await tx.select({ sede: sedes.nombre }).from(sedes)
+            .where(and(eq(sedes.nombre, sede), eq(sedes.grupo, grupo), eq(sedes.activa, true))))[0]),
+          buscarModeloDeHorario: async (id) => (await tx.select({
+            id: modelosDeHorario.id,
+            sede: modelosDeHorario.sede,
+            nombre: modelosDeHorario.nombre,
+            entrada: modelosDeHorario.entrada,
+            salida: modelosDeHorario.salida,
+            activo: modelosDeHorario.activo,
+          }).from(modelosDeHorario).where(eq(modelosDeHorario.id, id)))[0],
+        }, colaborador.grupo, turno);
+        jornadas.push(normalizarJornada(turno, colaborador.grupo));
         const [procesado] = await tx.select({ id: horariosSemanalesProcesados.id }).from(horariosSemanalesProcesados).where(and(
           eq(horariosSemanalesProcesados.idHuellero, turno.idHuellero), eq(horariosSemanalesProcesados.semana, inicioDeSemana(turno.fecha)),
         ));
@@ -73,7 +126,7 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
         ));
         if (existente) throw new Error("Ya existe un horario semanal publicado para este colaborador y fecha.");
       }
-      for (const turno of turnos) {
+      for (const turno of jornadas) {
         const [turnoPublicado] = await tx.insert(turnosPublicados).values(turno).returning({ id: turnosPublicados.id });
         await tx.insert(historialDeTurnosPublicados).values({
           turnoPublicadoId: turnoPublicado.id,
@@ -164,10 +217,12 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
           eq(periodosPlanilla.estado, "abierto"), lte(periodosPlanilla.inicio, turno.fecha), gte(periodosPlanilla.fin, turno.fecha),
         ));
         if (!periodo) throw new Error("La fecha no pertenece a un período de planilla abierto.");
-        const [existente] = await tx.select({ id: turnosPublicados.id }).from(turnosPublicados).where(and(
+        const [existente] = await tx.select({ id: turnosPublicados.id, grupo: turnosPublicados.grupo }).from(turnosPublicados).where(and(
           eq(turnosPublicados.idHuellero, turno.idHuellero), eq(turnosPublicados.fecha, turno.fecha),
         ));
         if (!existente) throw new Error("La corrección debe incluir horarios semanales publicados.");
+        await validarJornadaPlanificada(this, existente.grupo, turno);
+        const jornada = normalizarJornada(turno, existente.grupo);
         const [asistencia] = await tx.select({ id: asistenciasEsperadas.id, estado: asistenciasEsperadas.estado }).from(asistenciasEsperadas).where(and(
           eq(asistenciasEsperadas.idHuellero, turno.idHuellero), eq(asistenciasEsperadas.fecha, turno.fecha),
         )).for("update");
@@ -177,17 +232,18 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
           await tx.delete(estadosManuales).where(eq(estadosManuales.asistenciaId, asistencia.id));
           await tx.delete(tardanzas).where(eq(tardanzas.asistenciaId, asistencia.id));
           await tx.delete(horasExtra).where(eq(horasExtra.asistenciaId, asistencia.id));
-          if (turno.descanso) await tx.delete(asistenciasEsperadas).where(eq(asistenciasEsperadas.id, asistencia.id));
+          if (jornada.descanso) await tx.delete(asistenciasEsperadas).where(eq(asistenciasEsperadas.id, asistencia.id));
           else await tx.update(asistenciasEsperadas).set({ estado: "pendiente", entradaPropuesta: null, salidaPropuesta: null, entradaReal: null, salidaReal: null, minutosTrabajados: null, instantaneaDeTurno: null, confirmadoPorId: null, confirmadoEn: null }).where(eq(asistenciasEsperadas.id, asistencia.id));
-        } else if (!turno.descanso) {
-          await tx.insert(asistenciasEsperadas).values({ idHuellero: turno.idHuellero, fecha: turno.fecha, estado: "pendiente" });
+        } else if (!jornada.descanso) {
+          await tx.insert(asistenciasEsperadas).values({ idHuellero: jornada.idHuellero, fecha: jornada.fecha, estado: "pendiente" });
         }
         await tx.update(turnosPublicados).set({
-          sede: turno.sede, modeloHorarioId: turno.modeloHorarioId ?? null, entradaProgramada: turno.entradaProgramada,
-          salidaProgramada: turno.salidaProgramada, descanso: turno.descanso, publicadoEn: new Date(),
+          sede: jornada.sede, modeloHorarioId: jornada.modeloHorarioId ?? null, entradaProgramada: jornada.entradaProgramada,
+          salidaProgramada: jornada.salidaProgramada, descanso: jornada.descanso,
+          motivoNoAsistencia: jornada.motivoNoAsistencia, publicadoEn: new Date(),
         }).where(eq(turnosPublicados.id, existente.id));
         await tx.insert(historialDeTurnosPublicados).values({
-          turnoPublicadoId: existente.id, horario: contenidoDe(turno), responsableId: actor.id, motivo,
+          turnoPublicadoId: existente.id, horario: contenidoDe(jornada), responsableId: actor.id, motivo,
         });
       }
     });
@@ -245,7 +301,7 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
       })
       .from(colaboradores)
       .where(and(eq(colaboradores.activo, true), eq(colaboradores.grupo, equipo)))
-      .orderBy(colaboradores.sede, colaboradores.nombre);
+      .orderBy(colaboradores.nombre);
   }
 
   async listarColaboradoresProcesadosPorSemanaYEquipo(semana: string, equipo: string): Promise<
@@ -280,11 +336,13 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
       .select({
         idHuellero: turnosPublicados.idHuellero,
         fecha: turnosPublicados.fecha,
+        grupo: turnosPublicados.grupo,
         sede: turnosPublicados.sede,
         modeloHorarioId: turnosPublicados.modeloHorarioId,
         entradaProgramada: turnosPublicados.entradaProgramada,
         salidaProgramada: turnosPublicados.salidaProgramada,
         descanso: turnosPublicados.descanso,
+        motivoNoAsistencia: turnosPublicados.motivoNoAsistencia,
       })
       .from(turnosPublicados)
       .where(and(inArray(turnosPublicados.idHuellero, idHuellero), gte(turnosPublicados.fecha, inicio), lte(turnosPublicados.fecha, fin)));
@@ -325,11 +383,13 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
       .select({
         idHuellero: turnosPublicados.idHuellero,
         fecha: turnosPublicados.fecha,
+        grupo: turnosPublicados.grupo,
         sede: turnosPublicados.sede,
         modeloHorarioId: turnosPublicados.modeloHorarioId,
         entradaProgramada: turnosPublicados.entradaProgramada,
         salidaProgramada: turnosPublicados.salidaProgramada,
         descanso: turnosPublicados.descanso,
+        motivoNoAsistencia: turnosPublicados.motivoNoAsistencia,
       })
       .from(turnosPublicados)
       .where(
@@ -349,11 +409,13 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
     return this.db.select({
       idHuellero: turnosPublicados.idHuellero,
       fecha: turnosPublicados.fecha,
+      grupo: turnosPublicados.grupo,
       sede: turnosPublicados.sede,
       modeloHorarioId: turnosPublicados.modeloHorarioId,
       entradaProgramada: turnosPublicados.entradaProgramada,
       salidaProgramada: turnosPublicados.salidaProgramada,
       descanso: turnosPublicados.descanso,
+      motivoNoAsistencia: turnosPublicados.motivoNoAsistencia,
     }).from(turnosPublicados).where(and(
       eq(turnosPublicados.idHuellero, idHuellero),
       gte(turnosPublicados.fecha, inicio),
@@ -381,18 +443,24 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
   async guardarCeldas(celdas: CeldaDePlanSemanalEnBorrador[]): Promise<void> {
     await this.db.transaction(async (tx) => {
       for (const celda of celdas) {
-        await tx.insert(celdasDePlanesSemanalesEnBorrador).values(celda).onConflictDoUpdate({
+        const [plan] = await tx.select({ grupo: planesSemanalesEnBorrador.equipo }).from(planesSemanalesEnBorrador)
+          .where(eq(planesSemanalesEnBorrador.id, celda.planId));
+        if (!plan) throw new Error("El plan semanal en borrador no existe.");
+        const normalizada = normalizarJornada(celda, plan.grupo);
+        await tx.insert(celdasDePlanesSemanalesEnBorrador).values(normalizada).onConflictDoUpdate({
           target: [
             celdasDePlanesSemanalesEnBorrador.planId,
             celdasDePlanesSemanalesEnBorrador.idHuellero,
             celdasDePlanesSemanalesEnBorrador.fecha,
           ],
           set: {
-            sede: celda.sede,
-            modeloHorarioId: celda.modeloHorarioId,
-            entradaProgramada: celda.entradaProgramada,
-            salidaProgramada: celda.salidaProgramada,
-            descanso: celda.descanso,
+            grupo: normalizada.grupo,
+            sede: normalizada.sede,
+            modeloHorarioId: normalizada.modeloHorarioId,
+            entradaProgramada: normalizada.entradaProgramada,
+            salidaProgramada: normalizada.salidaProgramada,
+            descanso: normalizada.descanso,
+            motivoNoAsistencia: normalizada.motivoNoAsistencia,
           },
         });
       }
@@ -401,8 +469,12 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
 
   async reemplazarCeldasDelPlan(planId: string, celdas: CeldaDePlanSemanalEnBorrador[]): Promise<void> {
     await this.db.transaction(async (tx) => {
+      const [plan] = await tx.select({ grupo: planesSemanalesEnBorrador.equipo }).from(planesSemanalesEnBorrador)
+        .where(eq(planesSemanalesEnBorrador.id, planId));
+      if (!plan) throw new Error("El plan semanal en borrador no existe.");
+      const normalizadas = celdas.map((celda) => normalizarJornada(celda, plan.grupo));
       await tx.delete(celdasDePlanesSemanalesEnBorrador).where(eq(celdasDePlanesSemanalesEnBorrador.planId, planId));
-      if (celdas.length) await tx.insert(celdasDePlanesSemanalesEnBorrador).values(celdas);
+      if (normalizadas.length) await tx.insert(celdasDePlanesSemanalesEnBorrador).values(normalizadas);
       await tx.update(planesSemanalesEnBorrador).set({ actualizadoEn: new Date() }).where(eq(planesSemanalesEnBorrador.id, planId));
     });
   }
@@ -421,28 +493,24 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
     return Boolean(colaborador);
   }
 
-  async obtenerSedeDelColaborador(idHuellero: string): Promise<string | undefined> {
-    const [colaborador] = await this.db.select({ sede: colaboradores.sede }).from(colaboradores)
-      .where(eq(colaboradores.idHuellero, idHuellero));
-    return colaborador?.sede;
-  }
-
   async listarHorariosPublicadosDelEquipoEnSemana(semana: string, equipo: Grupo): Promise<
     Array<Omit<CeldaDePlanSemanalEnBorrador, "planId">>
   > {
     return this.db.select({
       idHuellero: turnosPublicados.idHuellero,
       fecha: turnosPublicados.fecha,
+      grupo: turnosPublicados.grupo,
       sede: turnosPublicados.sede,
       modeloHorarioId: turnosPublicados.modeloHorarioId,
       entradaProgramada: turnosPublicados.entradaProgramada,
       salidaProgramada: turnosPublicados.salidaProgramada,
       descanso: turnosPublicados.descanso,
+      motivoNoAsistencia: turnosPublicados.motivoNoAsistencia,
     }).from(turnosPublicados)
       .innerJoin(colaboradores, eq(turnosPublicados.idHuellero, colaboradores.idHuellero))
       .where(and(
         eq(colaboradores.activo, true),
-        eq(colaboradores.grupo, equipo),
+        eq(turnosPublicados.grupo, equipo),
         gte(turnosPublicados.fecha, semana),
         lte(turnosPublicados.fecha, desplazarFecha(semana, 6)),
       ));
@@ -453,11 +521,13 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
       planId: celdasDePlanesSemanalesEnBorrador.planId,
       idHuellero: celdasDePlanesSemanalesEnBorrador.idHuellero,
       fecha: celdasDePlanesSemanalesEnBorrador.fecha,
+      grupo: celdasDePlanesSemanalesEnBorrador.grupo,
       sede: celdasDePlanesSemanalesEnBorrador.sede,
       modeloHorarioId: celdasDePlanesSemanalesEnBorrador.modeloHorarioId,
       entradaProgramada: celdasDePlanesSemanalesEnBorrador.entradaProgramada,
       salidaProgramada: celdasDePlanesSemanalesEnBorrador.salidaProgramada,
       descanso: celdasDePlanesSemanalesEnBorrador.descanso,
+      motivoNoAsistencia: celdasDePlanesSemanalesEnBorrador.motivoNoAsistencia,
     }).from(celdasDePlanesSemanalesEnBorrador).where(eq(celdasDePlanesSemanalesEnBorrador.planId, plan.id));
     return { ...plan, celdas };
   }
@@ -467,10 +537,22 @@ function contenidoDe(turno: TurnoPublicado) {
   return {
     idHuellero: turno.idHuellero,
     fecha: turno.fecha,
+    grupo: turno.grupo!,
     sede: turno.sede,
     modeloHorarioId: turno.modeloHorarioId ?? null,
     entradaProgramada: turno.entradaProgramada,
     salidaProgramada: turno.salidaProgramada,
-    descanso: turno.descanso,
+    descanso: Boolean(turno.descanso),
+    motivoNoAsistencia: motivoPlanificadoDe(turno),
   };
+}
+
+function normalizarJornada<T extends TurnoPublicado | CeldaDePlanSemanalEnBorrador>(jornada: T, grupo: Grupo): T & { grupo: Grupo; descanso: boolean; motivoNoAsistencia: ReturnType<typeof motivoPlanificadoDe> } {
+  const motivoNoAsistencia = motivoPlanificadoDe(jornada);
+  return {
+    ...jornada,
+    grupo,
+    descanso: motivoNoAsistencia !== null,
+    motivoNoAsistencia,
+  } as T & { grupo: Grupo; descanso: boolean; motivoNoAsistencia: ReturnType<typeof motivoPlanificadoDe> };
 }

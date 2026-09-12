@@ -39,6 +39,9 @@ function crearRepositorioEnMemoria(): {
         }
       },
       perteneceAPeriodoAbierto: async (fecha) => fecha >= "2026-08-26" && fecha <= "2026-09-25",
+      obtenerGrupoDelColaborador: async () => "Tiendas",
+      sedeActivaPerteneceAlGrupo: async (sede, grupo) => sede === "Lima" && grupo === "Tiendas",
+      buscarModeloDeHorario: async () => undefined,
       asistenciaEstaProcesada: async () => false,
       reemplazarSemanaPublicada: async () => undefined,
       listarSemanaPublicada: async (_idHuellero, semana) => ["2026-08-31", "2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04", "2026-09-05", "2026-09-06"]

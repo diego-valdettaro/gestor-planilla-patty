@@ -8,7 +8,7 @@ export interface ColaboradorDelEquipo {
 
 export type CeldaDeConsultaSemanal =
   | { estado: "sin-publicacion" }
-  | { estado: "descanso"; sede: string }
+  | { estado: "descanso"; sede: string | null }
   | { estado: "publicado"; sede: string; entradaProgramada: string; salidaProgramada: string };
 
 export interface GrupoDeSedeEnConsulta {
@@ -50,7 +50,7 @@ export function crearConsultaSemanalPorEquipo({
 function convertirTurnoEnCelda(turno: TurnoPublicado | undefined): CeldaDeConsultaSemanal {
   if (!turno) return { estado: "sin-publicacion" };
   if (turno.descanso) return { estado: "descanso", sede: turno.sede };
-  if (!turno.entradaProgramada || !turno.salidaProgramada) return { estado: "sin-publicacion" };
+  if (!turno.sede || !turno.entradaProgramada || !turno.salidaProgramada) return { estado: "sin-publicacion" };
   return {
     estado: "publicado",
     sede: turno.sede,
