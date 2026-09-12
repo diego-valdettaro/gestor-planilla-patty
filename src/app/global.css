@@ -73,7 +73,8 @@ th, td { border: 1px solid #e2e8f0; padding: 0.6rem; text-align: left; }
 .estado-vacio { background: #f8fafc; border: 1px dashed #b9c6d8; border-radius: .7rem; max-width: 42rem; padding: 1.5rem; }
 .estado-vacio h1, .estado-vacio h2, .estado-vacio h3, .estado-vacio p { margin: 0; }.estado-vacio p { color: #475569; margin-top: .45rem; }
 .dialogo-confirmacion { border: 0; border-radius: .7rem; box-shadow: 0 .8rem 2.5rem #0f172a40; color: #10254b; max-width: 31rem; padding: 0; width: calc(100% - 2rem); }.dialogo-confirmacion::backdrop { background: #0f172a80; }.dialogo-confirmacion > section, .dialogo-confirmacion > form { display: grid; gap: 1rem; padding: 1.35rem; }.dialogo-confirmacion h2, .dialogo-confirmacion p { margin: 0; }.dialogo-confirmacion p { color: #475569; }.acciones-dialogo { display: flex; gap: .65rem; justify-content: flex-end; }
-.mensaje-operacion { border-radius: .4rem; margin: 0; padding: .7rem .8rem; }.mensaje-operacion.error { background: #fef2f2; color: #b91c1c; }.mensaje-operacion.listo { background: #ecfdf5; color: #065f46; }
+.mensaje-operacion { border-radius: .4rem; margin: 0; padding: .7rem .8rem; }.mensaje-operacion.error { background: #fef2f2; color: #b91c1c; }.mensaje-operacion.listo { background: #ecfdf5; color: #065f46; }.mensaje-operacion.advertencia { background: #fff7ed; color: #9a3412; }
+.creador-de-periodo-fila-completa { grid-column: 1 / -1; }
 .importacion-asistencia, .registro-manual-asistencia { display: grid; gap: 1rem; }
 .leyenda-estados { display: flex; flex-wrap: wrap; gap: .5rem; list-style: none; margin: 0 0 1rem; padding: 0; }.leyenda-estados li { border-radius: 999px; font-size: .76rem; padding: .3rem .55rem; }
 .estado-color-borrador-editable { --estado-fondo: #e0f2fe; --estado-borde: #7dd3fc; --estado-texto: #075985; }

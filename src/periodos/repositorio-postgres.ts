@@ -2,7 +2,7 @@ import { and, eq, gte, lte } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "@/db/schema";
 import { asistenciasEsperadas, auditoriaPeriodosPlanilla, colaboradores, horasExtra, periodosPlanilla, tardanzas } from "@/db/schema";
-import type { FiltrosDeResumen, FilaDeResumen, PeriodoPlanilla, RepositorioDePeriodos } from "./periodo-planilla";
+import { PeriodosSolapadosError, type FiltrosDeResumen, type FilaDeResumen, type PeriodoPlanilla, type RepositorioDePeriodos } from "./periodo-planilla";
 
 export class RepositorioPostgresDePeriodos implements RepositorioDePeriodos {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}
@@ -30,6 +30,14 @@ export class RepositorioPostgresDePeriodos implements RepositorioDePeriodos {
       agrupadas.set(fila.idHuellero, actual);
     }
     return [...agrupadas.values()].sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }
+  async crear(inicio: string, fin: string): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      const solapados = await tx.select({ id: periodosPlanilla.id }).from(periodosPlanilla)
+        .where(and(lte(periodosPlanilla.inicio, fin), gte(periodosPlanilla.fin, inicio)));
+      if (solapados.length) throw new PeriodosSolapadosError();
+      await tx.insert(periodosPlanilla).values({ inicio, fin, estado: "abierto" });
+    });
   }
   async cerrar(id: string, responsableId: string, registradoEn: Date): Promise<void> {
     const periodo = await this.buscar(id);
