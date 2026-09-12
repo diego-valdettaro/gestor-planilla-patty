@@ -16,4 +16,15 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm validate
+      - name: Instalar Chromium para Playwright
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Validar (incluye pruebas de navegador)
+        run: pnpm validate
+      - name: Conservar evidencia de Playwright
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidencia-playwright
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7

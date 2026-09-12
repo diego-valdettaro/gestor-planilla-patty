@@ -8,6 +8,7 @@
     "start": "pnpm db:check && next start",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:e2e": "tsx scripts/probar-en-navegador.ts",
     "test:watch": "vitest",
     "validate": "tsx scripts/validar-con-base.ts",
     "revisar": "tsx scripts/revisar-rama.ts",
@@ -32,6 +33,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@types/node": "^22.15.30",
     "@types/pg": "^8.15.4",
     "@types/react": "^19.1.8",

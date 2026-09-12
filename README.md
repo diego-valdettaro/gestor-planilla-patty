@@ -8,6 +8,7 @@ períodos de planilla.
 - Node.js 22
 - Corepack y pnpm 10
 - Docker, para `pnpm validate`
+- Chromium para Playwright (`pnpm exec playwright install chromium`)
 - PostgreSQL, para ejecutar la aplicación localmente
 
 ## Arranque local
@@ -40,7 +41,16 @@ pnpm validate
 ```
 
 El comando crea una base PostgreSQL temporal, aplica las migraciones, ejecuta
-pruebas, typecheck y build. No usa la base local `planilla`.
+pruebas unitarias, de integración y de navegador, typecheck y build. No usa la
+base local `planilla`.
+
+Las pruebas de navegador también pueden ejecutarse por separado. El comando
+crea y siembra su propia base PostgreSQL desechable; no requiere iniciar sesión
+ni levantar la aplicación manualmente:
+
+```powershell
+pnpm test:e2e
+```
 
 ## Cambios
 
