@@ -70,19 +70,17 @@ test("un horario personalizado conserva sede y horas al reabrirlo", async ({ pag
   const jueves = fechaDeLaSemanaDeDemo(3);
   await page.goto(`/turnos?semana=${semana}&equipo=Tiendas`);
   const celda = page.getByRole("button", { name: new RegExp(`Horario de Ana Borrador para ${jueves}`) });
+  await expect(celda).toContainText("Tienda Benavides");
+  await expect(celda).toContainText("08:00–16:00");
   await celda.click();
   const dialogoDeCelda = page.getByRole("dialog", { name: "Turno de Ana Borrador" });
-  await dialogoDeCelda.getByLabel("Quitar asignación").check();
-  await dialogoDeCelda.getByRole("button", { name: "Usar" }).click();
-  await expect(page.getByText("Sin guardar", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Guardar borrador" }).first().click();
-  await expect(page.getByText("Borrador guardado", { exact: true })).toBeVisible();
-
-  await celda.click();
   await dialogoDeCelda.getByLabel("Horario personalizado…").check();
   await dialogoDeCelda.getByRole("button", { name: "Usar" }).click();
 
   const dialogoPersonalizado = page.getByRole("dialog", { name: "Horario personalizado" });
+  await expect(dialogoPersonalizado.getByLabel("Sede")).toHaveValue("Tienda Benavides");
+  await expect(dialogoPersonalizado.getByLabel("Entrada")).toHaveValue("08:00");
+  await expect(dialogoPersonalizado.getByLabel("Salida")).toHaveValue("16:00");
   await dialogoPersonalizado.getByLabel("Sede").selectOption("Tienda San Isidro");
   await dialogoPersonalizado.getByLabel("Entrada").fill("10:00");
   await dialogoPersonalizado.getByLabel("Salida").fill("19:00");
