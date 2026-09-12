@@ -1,13 +1,12 @@
 import type { Actor } from "@/colaboradores/registrar-colaborador";
+import type { Grupo } from "./configurar-equipos-operativos";
+import type { DatosDeJornadaPlanificada, RepositorioParaValidarJornadaPlanificada } from "./jornada-planificada";
+import { validarJornadaPlanificada } from "./jornada-planificada";
 
-export interface TurnoPublicado {
+export interface TurnoPublicado extends DatosDeJornadaPlanificada {
   idHuellero: string;
   fecha: string;
-  sede: string;
-  modeloHorarioId?: string | null;
-  entradaProgramada: string | null;
-  salidaProgramada: string | null;
-  descanso: boolean;
+  grupo?: Grupo;
 }
 
 export interface AsistenciaEsperada {
@@ -16,7 +15,7 @@ export interface AsistenciaEsperada {
   estado: "pendiente";
 }
 
-export interface RepositorioDeTurnos {
+export interface RepositorioDeTurnos extends RepositorioParaValidarJornadaPlanificada {
   buscarPublicado(
     idHuellero: string,
     fecha: string,
@@ -26,6 +25,7 @@ export interface RepositorioDeTurnos {
   asistenciaEstaProcesada(idHuellero: string, fecha: string): Promise<boolean>;
   reemplazarSemanaPublicada(turnos: TurnoPublicado[], actor: Actor, motivo: string): Promise<void>;
   perteneceAPeriodoAbierto(fecha: string): Promise<boolean>;
+  obtenerGrupoDelColaborador(idHuellero: string): Promise<Grupo | undefined>;
 }
 
 export async function publicarTurnoSemanal(
@@ -44,6 +44,10 @@ export async function publicarTurnoSemanal(
   if (await repositorio.buscarPublicado(turno.idHuellero, turno.fecha)) {
     throw new Error("Ya existe un turno publicado para este colaborador y fecha.");
   }
+
+  const grupo = await repositorio.obtenerGrupoDelColaborador(turno.idHuellero);
+  if (!grupo) throw new Error("El colaborador activo no existe.");
+  await validarJornadaPlanificada(repositorio, grupo, turno);
 
   await repositorio.publicar(turno, actor);
 }

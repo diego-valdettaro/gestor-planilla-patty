@@ -35,7 +35,10 @@ function crearRepositorioEnMemoria(): {
       borrarCelda: async (planId, idHuellero, fecha) => { celdas.delete(`${planId}:${idHuellero}:${fecha}`); },
       buscarPublicado: async () => undefined,
       colaboradorPerteneceAEquipo: async (idHuellero, equipo) => (idHuellero === "HU-1024" || idHuellero === "HU-2048") && equipo === "tiendas",
-      obtenerSedeDelColaborador: async (idHuellero) => idHuellero === "HU-1024" || idHuellero === "HU-2048" ? "Lima" : undefined,
+      sedeActivaPerteneceAlGrupo: async (sede, equipo) => sede === "Lima" && equipo === "tiendas",
+      buscarModeloDeHorario: async (id) => id === "modelo-apertura"
+        ? { id, sede: "Lima", nombre: "Apertura", entrada: "09:00", salida: "18:00", activo: true }
+        : undefined,
       listarColaboradoresActivosPorEquipo: async () => [],
       listarHorariosPublicadosDelEquipoEnSemana: async () => [{
         idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima",
@@ -73,8 +76,8 @@ describe("casos de uso de planes semanales en borrador", () => {
     const plan = await casosDeUso.obtenerOCrear("2026-08-31", "tiendas");
 
     await casosDeUso.guardarCelda(plan.id, {
-      idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima",
-      entradaProgramada: null, salidaProgramada: null, descanso: true,
+      idHuellero: "HU-1024", fecha: "2026-09-01", sede: null,
+      entradaProgramada: null, salidaProgramada: null, descanso: true, motivoNoAsistencia: "descanso",
     });
     await casosDeUso.borrarCelda(plan.id, "HU-1024", "2026-09-01");
 
@@ -98,8 +101,8 @@ describe("casos de uso de planes semanales en borrador", () => {
       idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima",
       entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false,
     }, {
-      idHuellero: "HU-1024", fecha: "2026-09-02", sede: "Lima",
-      entradaProgramada: null, salidaProgramada: null, descanso: true,
+      idHuellero: "HU-1024", fecha: "2026-09-02", sede: null,
+      entradaProgramada: null, salidaProgramada: null, descanso: true, motivoNoAsistencia: "descanso",
     }]);
 
     expect(guardados).toBe(1);
@@ -138,6 +141,33 @@ describe("casos de uso de planes semanales en borrador", () => {
     ]);
     expect(turnosPublicados).toEqual([]);
     expect(asistenciasEsperadas).toEqual([]);
+  });
+
+  it("no copia la jornada de una persona que ya no pertenece al grupo del plan", async () => {
+    const { repositorio } = crearRepositorioEnMemoria();
+    repositorio.colaboradorPerteneceAEquipo = async () => false;
+    const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio, {
+      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "operaciones" }),
+    });
+    const plan = await casosDeUso.obtenerOCrear("2026-09-07", "tiendas");
+
+    await casosDeUso.copiarSemanaAnterior(plan.id);
+
+    expect((await casosDeUso.obtenerOCrear("2026-09-07", "tiendas")).celdas).toEqual([]);
+  });
+
+  it("no copia una jornada cuya sede dejó de estar activa en el grupo", async () => {
+    const { repositorio } = crearRepositorioEnMemoria();
+    repositorio.sedeActivaPerteneceAlGrupo = async () => false;
+    const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio, {
+      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "operaciones" }),
+    });
+    const plan = await casosDeUso.obtenerOCrear("2026-09-07", "tiendas");
+
+    await expect(casosDeUso.copiarSemanaAnterior(plan.id)).rejects.toThrow(
+      "La sede debe estar activa y pertenecer al grupo del colaborador.",
+    );
+    expect((await casosDeUso.obtenerOCrear("2026-09-07", "tiendas")).celdas).toEqual([]);
   });
 
   it("reemplaza las celdas editables del borrador al copiar la semana anterior", async () => {
@@ -215,7 +245,7 @@ describe("casos de uso de planes semanales en borrador", () => {
 
     await expect(administracion.guardarCelda(plan.id, celda)).rejects.toThrow("La fecha no pertenece a la semana del plan.");
     await expect(administracion.guardarCelda(plan.id, { ...celda, fecha: "2026-09-01", idHuellero: "HU-9999" })).rejects.toThrow("El colaborador no pertenece al equipo operativo del plan.");
-    await expect(administracion.guardarCelda(plan.id, { ...celda, fecha: "2026-09-01", sede: "Tienda Norte" })).rejects.toThrow("La sede de la celda no corresponde al colaborador.");
+    await expect(administracion.guardarCelda(plan.id, { ...celda, fecha: "2026-09-01", sede: "Tienda Norte" })).rejects.toThrow("La sede debe estar activa y pertenecer al grupo del colaborador.");
     const finanzas = crearCasosDeUsoDePlanesSemanales(repositorio, { obtenerActorActual: async () => ({ id: "finanzas-1", rol: "finanzas" }) });
     await expect(finanzas.borrarCelda(plan.id, "HU-1024", "2026-09-01")).rejects.toThrow("No tiene permiso para editar planes semanales en borrador.");
   });

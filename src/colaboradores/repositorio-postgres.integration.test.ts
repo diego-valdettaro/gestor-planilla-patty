@@ -106,7 +106,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeColaboradores", () => {
     it("devuelve true cuando el colaborador tiene una celda en un plan en borrador de ese grupo", async () => {
       const [plan] = await db.insert(schema.planesSemanalesEnBorrador).values({ semana, equipo: "Tiendas" }).returning({ id: schema.planesSemanalesEnBorrador.id });
       await db.insert(schema.celdasDePlanesSemanalesEnBorrador).values({
-        planId: plan.id, idHuellero, fecha: semana, sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false,
+        planId: plan.id, idHuellero, fecha: semana, grupo: "Tiendas", sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false,
       });
 
       await expect(repositorio.tieneBorradorAbiertoEnGrupo(idHuellero, "Tiendas")).resolves.toBe(true);
@@ -124,7 +124,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeColaboradores", () => {
 
     it("no modifica un turno publicado ni una asistencia esperada ya existentes", async () => {
       await db.insert(schema.turnosPublicados).values({
-        idHuellero, fecha, sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false,
+        idHuellero, fecha, grupo: "Tiendas", sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false,
       });
       await db.insert(schema.asistenciasEsperadas).values({ idHuellero, fecha, estado: "pendiente" });
 

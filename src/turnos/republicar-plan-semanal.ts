@@ -2,6 +2,7 @@ import type { Actor } from "@/colaboradores/registrar-colaborador";
 
 import type { PlanSemanalEnBorrador, RepositorioDePlanesSemanales } from "./plan-semanal-en-borrador";
 import type { RepositorioDeTurnos, TurnoPublicado } from "./publicar-turno-semanal";
+import { jornadasPlanificadasSonIguales, validarJornadaPlanificada } from "./jornada-planificada";
 import { diasDeLaSemana } from "./semana";
 
 type RepositorioParaRepublicar = RepositorioDePlanesSemanales & RepositorioDeTurnos;
@@ -37,22 +38,12 @@ async function obtenerSemanaCorregida(repositorio: RepositorioParaRepublicar, pl
     const celda = celdas.get(fecha);
     const publicado = await repositorio.buscarPublicado(idHuellero, fecha);
     if (!celda || !publicado) throw new Error("La corrección debe incluir los siete días publicados del colaborador.");
-    if (!esValido(celda)) throw new Error("El horario semanal no es válido.");
+    await validarJornadaPlanificada(repositorio, plan.equipo, celda);
     const turno = { ...celda };
     delete (turno as { planId?: string }).planId;
     turnos.push(turno);
-    hayCambios ||= !sonIguales(turno, publicado);
+    hayCambios ||= !jornadasPlanificadasSonIguales(turno, publicado);
   }
   if (!hayCambios) throw new Error("No hay cambios sin publicar para republicar.");
   return turnos;
-}
-
-function esValido(turno: TurnoPublicado): boolean {
-  if (turno.descanso) return turno.entradaProgramada === null && turno.salidaProgramada === null;
-  return Boolean(turno.sede.trim() && turno.entradaProgramada && turno.salidaProgramada);
-}
-
-function sonIguales(a: TurnoPublicado, b: TurnoPublicado): boolean {
-  return a.sede === b.sede && a.modeloHorarioId === b.modeloHorarioId && a.entradaProgramada === b.entradaProgramada
-    && a.salidaProgramada === b.salidaProgramada && a.descanso === b.descanso;
 }

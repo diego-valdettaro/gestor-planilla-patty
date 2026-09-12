@@ -153,8 +153,8 @@ async function limpiar(pool: Pool): Promise<void> {
 function turnosDeSemana(idHuellero: string, sede: string, semana: string) {
   const modelo = modeloApertura(sede);
   return diasDeLaSemana(semana).map((fecha, indice) => indice === 6
-    ? { idHuellero, fecha, sede, modeloHorarioId: null, entradaProgramada: null, salidaProgramada: null, descanso: true }
-    : { idHuellero, fecha, sede, modeloHorarioId: modelo.id, entradaProgramada: modelo.entrada, salidaProgramada: modelo.salida, descanso: false });
+    ? { idHuellero, fecha, sede: null, modeloHorarioId: null, entradaProgramada: null, salidaProgramada: null, descanso: true, motivoNoAsistencia: "descanso" as const }
+    : { idHuellero, fecha, sede, modeloHorarioId: modelo.id, entradaProgramada: modelo.entrada, salidaProgramada: modelo.salida, descanso: false, motivoNoAsistencia: null });
 }
 
 async function marcarConfirmada(

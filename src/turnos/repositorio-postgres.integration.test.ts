@@ -19,6 +19,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeTurnos", () => {
   const db = drizzle({ client: pool, schema });
   const repositorio = new RepositorioPostgresDeTurnos(db);
   const idHuellero = `TEST-${randomUUID()}`;
+  const sede = `Sede turnos ${randomUUID()}`;
   const fecha = "2030-09-02";
   const fechaParaAtomicidad = "2030-09-03";
   const semanaDePlan = "2030-09-02";
@@ -28,10 +29,11 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeTurnos", () => {
   const cuentaId = randomUUID();
 
   beforeAll(async () => {
+    await db.insert(schema.sedes).values({ nombre: sede, grupo: "Tiendas", activa: true });
     await db.insert(schema.colaboradores).values({
       idHuellero,
       nombre: "Ana Rojas",
-      sede: "Lima",
+      sede,
       grupo: "Tiendas",
       activo: true,
     });
@@ -76,6 +78,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeTurnos", () => {
     if (planes.length) await db.delete(schema.celdasDePlanesSemanalesEnBorrador).where(inArray(schema.celdasDePlanesSemanalesEnBorrador.planId, planes.map(({ id }) => id)));
     await db.delete(schema.planesSemanalesEnBorrador).where(and(eq(schema.planesSemanalesEnBorrador.semana, semanaDePlan), eq(schema.planesSemanalesEnBorrador.equipo, "tiendas")));
     await db.delete(schema.colaboradores).where(eq(schema.colaboradores.idHuellero, idHuellero));
+    await db.delete(schema.sedes).where(eq(schema.sedes.nombre, sede));
     await db.delete(schema.cuentasLocales).where(eq(schema.cuentasLocales.id, cuentaId));
     await pool.end();
   });
@@ -84,7 +87,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeTurnos", () => {
     await repositorio.publicar({
       idHuellero,
       fecha,
-      sede: "Lima",
+      sede,
       entradaProgramada: "09:00",
       salidaProgramada: "18:00",
       descanso: false,
@@ -93,7 +96,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeTurnos", () => {
     await expect(repositorio.buscarPublicado(idHuellero, fecha)).resolves.toMatchObject({
       idHuellero,
       fecha,
-      sede: "Lima",
+      sede,
     });
     await expect(
       db
@@ -114,7 +117,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeTurnos", () => {
   });
 
   it("revierte toda la publicación en lote cuando un horario semanal está duplicado", async () => {
-    const turno = { idHuellero, fecha: fechaParaAtomicidad, sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false };
+    const turno = { idHuellero, fecha: fechaParaAtomicidad, sede, entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false };
 
     await expect(repositorio.publicarEnLote([turno, turno])).rejects.toThrow();
     await expect(repositorio.buscarPublicado(idHuellero, fechaParaAtomicidad)).resolves.toBeUndefined();
@@ -126,7 +129,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeTurnos", () => {
 
   it("republica los siete días, conserva la auditoría y reinicia cálculos pendientes", async () => {
     const actor = { id: cuentaId, rol: "operaciones" as const };
-    const originales = fechasDeCorreccion.map((fechaDeCorreccion) => ({ idHuellero, fecha: fechaDeCorreccion, sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false }));
+    const originales = fechasDeCorreccion.map((fechaDeCorreccion) => ({ idHuellero, fecha: fechaDeCorreccion, sede, entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false }));
     await repositorio.publicarEnLote(originales, actor);
     const [asistencia] = await db.select({ id: schema.asistenciasEsperadas.id }).from(schema.asistenciasEsperadas)
       .where(and(eq(schema.asistenciasEsperadas.idHuellero, idHuellero), eq(schema.asistenciasEsperadas.fecha, fechasDeCorreccion[0])));
@@ -149,7 +152,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeTurnos", () => {
 
   it("persiste el procesamiento semanal con responsable y bloquea la edición posterior", async () => {
     await repositorio.publicarEnLote(fechasProcesadas.map((fechaDeProcesamiento) => ({
-      idHuellero, fecha: fechaDeProcesamiento, sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false,
+      idHuellero, fecha: fechaDeProcesamiento, sede, entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false,
     })));
     await db.update(schema.asistenciasEsperadas).set({ estado: "manual" }).where(and(
       eq(schema.asistenciasEsperadas.idHuellero, idHuellero), inArray(schema.asistenciasEsperadas.fecha, fechasProcesadas),
@@ -163,7 +166,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeTurnos", () => {
     await expect(repositorio.listarColaboradoresProcesadosPorSemanaYEquipo(semanaProcesada, "tiendas"))
       .resolves.toEqual(expect.arrayContaining([expect.objectContaining({ idHuellero })]));
     await expect(repositorio.reemplazarSemanaPublicada(
-      fechasProcesadas.map((fechaDeProcesamiento) => ({ idHuellero, fecha: fechaDeProcesamiento, sede: "Lima", entradaProgramada: "10:00", salidaProgramada: "19:00", descanso: false })),
+      fechasProcesadas.map((fechaDeProcesamiento) => ({ idHuellero, fecha: fechaDeProcesamiento, sede, entradaProgramada: "10:00", salidaProgramada: "19:00", descanso: false })),
       { id: cuentaId, rol: "operaciones" }, "Cambio posterior",
     )).rejects.toThrow("No se puede corregir un horario semanal que ya fue procesado.");
   });

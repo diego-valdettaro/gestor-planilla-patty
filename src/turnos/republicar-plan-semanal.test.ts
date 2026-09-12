@@ -4,13 +4,17 @@ import type { PlanSemanalEnBorrador, RepositorioDePlanesSemanales } from "./plan
 import type { RepositorioDeTurnos, TurnoPublicado } from "./publicar-turno-semanal";
 import { republicarPlanSemanal } from "./republicar-plan-semanal";
 
-function crearRepositorio(procesada = false) {
+function crearRepositorio(procesada = false, cambiaSoloMotivo = false) {
   const publicados = new Map<string, TurnoPublicado>();
   const celdas = Array.from({ length: 7 }, (_, indice) => {
     const fecha = new Date(Date.UTC(2026, 7, 31 + indice)).toISOString().slice(0, 10);
-    const turno = { idHuellero: "HU-1", fecha, sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false };
+    const turno = cambiaSoloMotivo && indice === 0
+      ? { idHuellero: "HU-1", fecha, sede: null, modeloHorarioId: null, entradaProgramada: null, salidaProgramada: null, descanso: true, motivoNoAsistencia: "descanso" as const }
+      : { idHuellero: "HU-1", fecha, sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false };
     publicados.set(fecha, turno);
-    return { ...turno, planId: "plan-1", entradaProgramada: indice === 0 ? "10:00" : "09:00" };
+    return cambiaSoloMotivo && indice === 0
+      ? { ...turno, planId: "plan-1", motivoNoAsistencia: "feriado" as const }
+      : { ...turno, planId: "plan-1", entradaProgramada: indice === 0 ? "10:00" : "09:00" };
   });
   const plan: PlanSemanalEnBorrador = { id: "plan-1", semana: "2026-08-31", equipo: "tiendas", celdas };
   const reemplazos: Array<{ turnos: TurnoPublicado[]; motivo: string }> = [];
@@ -22,7 +26,9 @@ function crearRepositorio(procesada = false) {
     reemplazarCeldasDelPlan: async () => undefined,
     borrarCelda: async () => undefined,
     colaboradorPerteneceAEquipo: async () => true,
-    obtenerSedeDelColaborador: async () => "Lima",
+    obtenerGrupoDelColaborador: async () => "tiendas",
+    sedeActivaPerteneceAlGrupo: async (sede, grupo) => sede === "Lima" && grupo === "tiendas",
+    buscarModeloDeHorario: async () => undefined,
     listarColaboradoresActivosPorEquipo: async () => [],
     listarHorariosPublicadosDelEquipoEnSemana: async () => [],
     buscarPublicado: async (_idHuellero, fecha) => publicados.get(fecha),
@@ -54,5 +60,13 @@ describe("republicar plan semanal", () => {
     await expect(republicarPlanSemanal(repositorio, { id: "administracion-1", rol: "administracion" }, "plan-1", "HU-1", "Corrige entrada pactada"))
       .rejects.toThrow("No se puede corregir un horario semanal que ya fue procesado.");
     expect(reemplazos).toEqual([]);
+  });
+
+  it("republica cuando el único cambio es el motivo planificado", async () => {
+    const { reemplazos, repositorio } = crearRepositorio(false, true);
+
+    await republicarPlanSemanal(repositorio, { id: "operaciones-1", rol: "operaciones" }, "plan-1", "HU-1", "Cambia descanso por feriado");
+
+    expect(reemplazos[0].turnos[0]).toMatchObject({ motivoNoAsistencia: "feriado" });
   });
 });

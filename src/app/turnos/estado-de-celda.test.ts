@@ -68,6 +68,10 @@ describe("difiereDelPublicado", () => {
   it("detecta el cambio de descanso a turno con horas", () => {
     expect(difiereDelPublicado(turno, descanso)).toBe(true);
   });
+
+  it("compara el significado de la jornada aunque el booleano legado difiera", () => {
+    expect(difiereDelPublicado({ ...turno, descanso: undefined }, turno)).toBe(false);
+  });
 });
 
 describe("estadoDeSemana", () => {

@@ -1,3 +1,5 @@
+import { jornadasPlanificadasSonIguales, type DatosDeJornadaPlanificada } from "@/turnos/jornada-planificada";
+
 export type EstadoDeHorario = "borrador-editable" | "publicado" | "cambios-sin-publicar" | "liquidado";
 
 export const NOMBRE_DEL_ESTADO_DE_HORARIO: Record<EstadoDeHorario, string> = {
@@ -9,29 +11,17 @@ export const NOMBRE_DEL_ESTADO_DE_HORARIO: Record<EstadoDeHorario, string> = {
 
 export const ESTADOS_DE_HORARIO: EstadoDeHorario[] = ["borrador-editable", "publicado", "cambios-sin-publicar", "liquidado"];
 
-type CeldaComparable = {
-  sede: string;
-  modeloHorarioId?: string | null;
-  entradaProgramada: string | null;
-  salidaProgramada: string | null;
-  descanso: boolean;
-};
-
 // Misma comparación que la grilla ya usaba en el cliente para "Cambios sin publicar".
-export function difiereDelPublicado(celda: CeldaComparable, publicado: CeldaComparable): boolean {
-  return celda.sede !== publicado.sede
-    || (celda.modeloHorarioId ?? null) !== (publicado.modeloHorarioId ?? null)
-    || celda.entradaProgramada !== publicado.entradaProgramada
-    || celda.salidaProgramada !== publicado.salidaProgramada
-    || celda.descanso !== publicado.descanso;
+export function difiereDelPublicado(celda: DatosDeJornadaPlanificada, publicado: DatosDeJornadaPlanificada): boolean {
+  return !jornadasPlanificadasSonIguales(celda, publicado);
 }
 
 // Estado de una celda-día de la grilla de Horarios, derivado de datos que ya existen:
 // la celda del borrador, el turno publicado para (colaborador, fecha) y si la semana
 // de ese colaborador ya quedó liquidada (registro en `horarios semanales procesados`).
 export function estadoDeCelda(
-  celdaEnBorrador: CeldaComparable | undefined,
-  turnoPublicado: CeldaComparable | undefined,
+  celdaEnBorrador: DatosDeJornadaPlanificada | undefined,
+  turnoPublicado: DatosDeJornadaPlanificada | undefined,
   semanaLiquidada: boolean,
 ): EstadoDeHorario {
   if (semanaLiquidada) return "liquidado";

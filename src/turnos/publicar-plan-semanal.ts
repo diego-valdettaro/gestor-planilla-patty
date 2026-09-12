@@ -2,6 +2,7 @@ import type { Actor } from "@/colaboradores/registrar-colaborador";
 
 import type { PlanSemanalEnBorrador, RepositorioDePlanesSemanales } from "./plan-semanal-en-borrador";
 import type { RepositorioDeTurnos, TurnoPublicado } from "./publicar-turno-semanal";
+import { validarJornadaPlanificada } from "./jornada-planificada";
 import { diasDeLaSemana } from "./semana";
 
 export interface ErrorDePublicacionDePlan {
@@ -9,7 +10,6 @@ export interface ErrorDePublicacionDePlan {
   fecha: string;
   mensaje: string;
 }
-
 export interface ResultadoDePublicacionDePlan {
   publicados: number;
   errores: ErrorDePublicacionDePlan[];
@@ -109,21 +109,13 @@ async function validarPersona(
       errores.push({ idHuellero, fecha, mensaje: "La celda está sin definir." });
       continue;
     }
-    if (!esHorarioValido(celda)) errores.push({ idHuellero, fecha, mensaje: "El horario semanal no es válido." });
+    try {
+      await validarJornadaPlanificada(repositorio, plan.equipo, celda);
+    } catch (error) {
+      errores.push({ idHuellero, fecha, mensaje: error instanceof Error ? error.message : "El horario semanal no es válido." });
+    }
     if (!(await repositorio.perteneceAPeriodoAbierto(fecha))) errores.push({ idHuellero, fecha, mensaje: "La fecha no pertenece a un período de planilla abierto." });
     if (!permitePublicados && await repositorio.buscarPublicado(idHuellero, fecha)) errores.push({ idHuellero, fecha, mensaje: "Ya existe un horario semanal publicado para este colaborador y fecha." });
   }
   return errores;
-}
-
-function esHorarioValido(turno: TurnoPublicado): boolean {
-  if (turno.descanso) return turno.entradaProgramada === null && turno.salidaProgramada === null;
-  return Boolean(turno.sede.trim())
-    && esHoraValida(turno.entradaProgramada) && esHoraValida(turno.salidaProgramada);
-}
-
-function esHoraValida(hora: string | null): boolean {
-  if (!hora) return false;
-  const partes = /^(\d{2}):(\d{2})$/.exec(hora);
-  return Boolean(partes && Number(partes[1]) < 24 && Number(partes[2]) < 60);
 }

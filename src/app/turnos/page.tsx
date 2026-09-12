@@ -24,13 +24,13 @@ export default async function PaginaDeTurnos({ searchParams }: { searchParams: P
   const colaboradoresActivos = await repositorioDeTurnos.listarColaboradoresActivosPorEquipo(equipo);
   const colaboradoresProcesados = await repositorioDeTurnos.listarColaboradoresProcesadosPorSemanaYEquipo(semana, equipo);
   const colaboradores = [...new Map([...colaboradoresActivos, ...colaboradoresProcesados].map((colaborador) => [colaborador.idHuellero, colaborador])).values()]
-    .sort((a, b) => a.sede.localeCompare(b.sede) || a.nombre.localeCompare(b.nombre));
+    .sort((a, b) => a.nombre.localeCompare(b.nombre));
   const plan = await crearCasosDeUsoDePlanesSemanales(repositorioDeTurnos, { obtenerActorActual }).obtenerOCrear(semana, equipo);
   const publicados = await repositorioDeTurnos.listarPublicadosPorColaboradoresYSemana(colaboradores.map(({ idHuellero }) => idHuellero), dias[0], dias.at(-1)!);
   const procesados = await repositorioDeTurnos.listarProcesamientosDeSemana(semana, equipo);
-  const sedes = [...new Set(colaboradores.map(({ sede }) => sede))];
+  const sedes = await repositorioDeTurnos.listarSedesActivasPorGrupo(equipo);
   const modelos = (await Promise.all(sedes.map((sede) => repositorioDeModelosDeHorario.listarPorSede(sede)))).flat();
   return <main className="contenido contenido-turnos"><section className="plan-semanal"><header className="barra-plan-semanal"><div><p className="breadcrumb"><span>Operaciones</span> / Horarios</p><h1>Planificación de horarios</h1><p>Asigna sede y turno para cada persona del grupo.</p></div></header>
-    <PlanificadorSemanal actualizadoEn={plan.actualizadoEn?.toISOString()} equipos={equipos} planId={plan.id} semana={semana} equipo={equipo} colaboradores={colaboradores} dias={dias} celdasIniciales={plan.celdas} publicados={publicados} procesados={procesados} modelos={modelos} />
+    <PlanificadorSemanal actualizadoEn={plan.actualizadoEn?.toISOString()} equipos={equipos} planId={plan.id} semana={semana} equipo={equipo} colaboradores={colaboradores} dias={dias} celdasIniciales={plan.celdas} publicados={publicados} procesados={procesados} modelos={modelos} sedes={sedes} />
   </section></main>;
 }

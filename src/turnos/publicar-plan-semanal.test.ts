@@ -14,7 +14,9 @@ function crearRepositorio(plan: PlanSemanalEnBorrador) {
     reemplazarCeldasDelPlan: async () => undefined,
     borrarCelda: async () => undefined,
     colaboradorPerteneceAEquipo: async (id) => id === "HU-1" || id === "HU-2",
-    obtenerSedeDelColaborador: async (id) => id === "HU-1" || id === "HU-2" ? "Lima" : undefined,
+    obtenerGrupoDelColaborador: async () => "tiendas",
+    sedeActivaPerteneceAlGrupo: async (sede, grupo) => sede === "Lima" && grupo === "tiendas",
+    buscarModeloDeHorario: async () => undefined,
     listarColaboradoresActivosPorEquipo: async () => [
       { idHuellero: "HU-1", nombre: "Ana", sede: "Lima" },
       { idHuellero: "HU-2", nombre: "Bea", sede: "Lima" },
@@ -57,7 +59,7 @@ describe("publicar plan semanal", () => {
 
   it("publica todas las personas seleccionadas que tienen sus siete días definidos, incluido un descanso", async () => {
     const celdasDeHu1 = celdasDeSemana("HU-1");
-    celdasDeHu1[6] = { ...celdasDeHu1[6], entradaProgramada: null, salidaProgramada: null, descanso: true };
+    celdasDeHu1[6] = { ...celdasDeHu1[6], sede: null, entradaProgramada: null, salidaProgramada: null, descanso: true, motivoNoAsistencia: "descanso" };
     const plan = { id: "plan-1", semana: "2026-08-31", equipo: "tiendas" as const, celdas: [...celdasDeHu1, ...celdasDeSemana("HU-2")] };
     const { publicados, repositorio } = crearRepositorio(plan);
 
