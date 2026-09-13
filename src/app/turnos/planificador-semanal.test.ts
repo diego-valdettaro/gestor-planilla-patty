@@ -11,7 +11,6 @@ vi.mock("@/app/icono-candado", () => ({ IconoCandado: () => null }));
 vi.mock("./actions", () => ({
   guardarBorradorDesdeGrilla: vi.fn(),
   publicarPlanSemanalDesdeGrilla: vi.fn(),
-  reemplazarPlanificacionSemanalDesdeGrilla: vi.fn(),
   republicarPlanSemanalDesdeGrilla: vi.fn(),
 }));
 
@@ -114,5 +113,62 @@ describe("planificador semanal", () => {
     expect(celdas).toEqual([
       { idHuellero: "HU-1024", fecha: "2026-09-07", sede: null, modeloHorarioId: null, entradaProgramada: null, salidaProgramada: null, descanso: true, motivoNoAsistencia: "descanso" },
     ]);
+  });
+});
+
+function celdaLaboral(idHuellero: string, fecha: string, sede: string) {
+  return { idHuellero, fecha, sede, modeloHorarioId: null, entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false, motivoNoAsistencia: null };
+}
+
+describe("selección de publicación", () => {
+  const dias = ["2026-09-07", "2026-09-08"];
+  const colaboradores = [
+    { idHuellero: "HU-1", nombre: "Ana Pérez", sede: "Tienda Norte" },
+    { idHuellero: "HU-2", nombre: "Beto Ruiz", sede: "Tienda Norte" },
+  ];
+
+  it("muestra un checkbox marcado por defecto solo en la fila completa, sin publicar y sin liquidar", () => {
+    const html = renderToStaticMarkup(createElement(PlanificadorSemanal, {
+      equipos: ["tiendas"], planId: "plan-1", semana: "2026-09-07", equipo: "tiendas",
+      colaboradores, dias,
+      celdasIniciales: [
+        celdaLaboral("HU-1", "2026-09-07", "Tienda Norte"), celdaLaboral("HU-1", "2026-09-08", "Tienda Norte"),
+        celdaLaboral("HU-2", "2026-09-07", "Tienda Norte"), // a HU-2 le falta el segundo día
+      ],
+      publicados: [], procesados: [], modelos: [modeloApertura], sedes: ["Tienda Norte"],
+    }));
+
+    expect(html.match(/type="checkbox"/g)).toHaveLength(1);
+    expect(html).toMatch(/type="checkbox" checked/);
+  });
+
+  it("no muestra el checkbox en una fila ya publicada ni en una liquidada, aunque estén completas", () => {
+    const html = renderToStaticMarkup(createElement(PlanificadorSemanal, {
+      equipos: ["tiendas"], planId: "plan-1", semana: "2026-09-07", equipo: "tiendas",
+      colaboradores, dias,
+      celdasIniciales: [celdaLaboral("HU-2", "2026-09-07", "Tienda Norte"), celdaLaboral("HU-2", "2026-09-08", "Tienda Norte")],
+      publicados: [celdaLaboral("HU-1", "2026-09-07", "Tienda Norte"), celdaLaboral("HU-1", "2026-09-08", "Tienda Norte")],
+      procesados: ["HU-2"], modelos: [modeloApertura], sedes: ["Tienda Norte"],
+    }));
+
+    expect(html).not.toContain('type="checkbox"');
+  });
+
+  it("deshabilita publicar sin ninguna fila elegible y lo habilita apenas hay una", () => {
+    const base = {
+      equipos: ["tiendas"], planId: "plan-1", semana: "2026-09-07", equipo: "tiendas",
+      colaboradores: [colaboradores[0]], dias,
+      publicados: [], procesados: [], modelos: [modeloApertura], sedes: ["Tienda Norte"],
+    };
+
+    const sinElegibles = renderToStaticMarkup(createElement(PlanificadorSemanal, {
+      ...base, celdasIniciales: [celdaLaboral("HU-1", "2026-09-07", "Tienda Norte")], // incompleta
+    }));
+    expect(sinElegibles).toContain('<button class="boton-principal" disabled="" type="button">Publicar planificación</button>');
+
+    const conUnaElegible = renderToStaticMarkup(createElement(PlanificadorSemanal, {
+      ...base, celdasIniciales: [celdaLaboral("HU-1", "2026-09-07", "Tienda Norte"), celdaLaboral("HU-1", "2026-09-08", "Tienda Norte")],
+    }));
+    expect(conUnaElegible).not.toContain('<button class="boton-principal" disabled="" type="button">Publicar planificación</button>');
   });
 });
