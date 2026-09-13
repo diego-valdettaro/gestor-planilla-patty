@@ -1,17 +1,18 @@
 import { redirect } from "next/navigation";
+import React from "react";
 
 import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
 import { repositorioDeAsistencias } from "@/asistencias/servicio";
-import { repositorioDeTurnos } from "@/turnos/servicio";
+import { diasDeLaSemana, inicioDeSemana } from "@/turnos/semana";
+import { repositorioDeGrupos, repositorioDeTurnos } from "@/turnos/servicio";
 
-import { procesarHorarioSemanal } from "./actions";
-import { CalendarioDeAsistencias } from "./calendario-de-asistencias";
 import { ESTADOS_DE_CELDA_ASISTENCIA, NOMBRE_DEL_ESTADO_DE_CELDA_ASISTENCIA } from "./estado-de-celda";
 import { FiltrosDeAsistencia } from "./filtros-de-asistencia";
+import { MatrizSemanalDeAsistencias } from "./matriz-semanal-de-asistencias";
 
 export const dynamic = "force-dynamic";
 
-interface PropiedadesDePagina { searchParams: Promise<{ colaborador?: string; mes?: string; fecha?: string }>; }
+interface PropiedadesDePagina { searchParams: Promise<{ grupo?: string; semana?: string }>; }
 
 export default async function PaginaDeAsistencias({ searchParams }: PropiedadesDePagina) {
   const actor = await obtenerActorActual().catch(() => undefined);
@@ -19,20 +20,15 @@ export default async function PaginaDeAsistencias({ searchParams }: PropiedadesD
   if (actor.rol !== "administracion" && actor.rol !== "finanzas") return <main className="centrado"><p>No tiene permiso para revisar asistencias.</p></main>;
 
   const parametros = await searchParams;
-  const colaboradores = await repositorioDeTurnos.listarColaboradoresActivos();
-  const colaborador = colaboradores.find((item) => item.idHuellero === parametros.colaborador) ?? colaboradores[0];
-  const mes = esMes(parametros.mes) ? parametros.mes : new Date().toISOString().slice(0, 7);
-  const { inicio, fin, dias } = diasDelMes(mes);
-  const asistencias = colaborador ? await repositorioDeAsistencias.listarResumenMensual(colaborador.idHuellero, inicio, fin) : [];
+  const grupos = await repositorioDeGrupos.listar();
+  const grupo = grupos.includes(parametros.grupo ?? "") ? parametros.grupo! : grupos[0];
+  const semana = inicioDeSemana(parametros.semana ?? new Date().toISOString().slice(0, 10));
+  const dias = diasDeLaSemana(semana);
+  const colaboradores = grupo ? await repositorioDeTurnos.listarColaboradoresActivosPorEquipo(grupo) : [];
+  const asistencias = await repositorioDeAsistencias.listarResumenSemanal(colaboradores.map(({ idHuellero }) => idHuellero), dias[0], dias.at(-1)!);
 
   return <main className="contenido">
-    <header className="encabezado"><div><p className="eyebrow">Administración y Finanzas</p><h1>Asistencias</h1><p>Revise un colaborador y su mes de trabajo.</p></div></header>
-<FiltrosDeAsistencia colaborador={colaborador?.idHuellero} colaboradores={colaboradores} mes={mes} />
-    {colaborador ? <section className="tarjeta"><header className="encabezado-seccion"><div><h2>{colaborador.nombre}</h2><p>Haga clic en un día para registrar o ajustar su asistencia.</p></div></header><ul aria-label="Estados de asistencia" className="leyenda-estados">{ESTADOS_DE_CELDA_ASISTENCIA.map((estadoDeCelda) => <li className={`estado-color-${estadoDeCelda}`} key={estadoDeCelda}>{NOMBRE_DEL_ESTADO_DE_CELDA_ASISTENCIA[estadoDeCelda]}</li>)}</ul>{actor.rol === "finanzas" ? <form action={procesarHorarioSemanal} className="filtros"><input name="idHuellero" type="hidden" value={colaborador.idHuellero} /><label>Semana a procesar<input defaultValue={inicioDeSemanaDelMes(mes)} name="semana" required type="date" /></label><button type="submit">Procesar horario semanal</button></form> : null}<CalendarioDeAsistencias asistencias={asistencias} desfase={desfaseLunes(inicio)} dias={dias} idHuellero={colaborador.idHuellero} /></section> : <section className="estado-vacio"><h2>No hay colaboradores activos</h2><p>Registre un colaborador activo desde Configuración antes de revisar asistencias.</p></section>}
+    <header className="encabezado"><div><p className="eyebrow">Administración y Finanzas</p><h1>Asistencias</h1><p>Revise las jornadas semanales por grupo operativo.</p></div></header>
+    {grupo ? <><FiltrosDeAsistencia grupo={grupo} grupos={grupos} semana={semana} /><section className="tarjeta"><header className="encabezado-seccion"><div><h2>{grupo}</h2><p>La matriz muestra las jornadas de los colaboradores del grupo.</p></div></header><ul aria-label="Estados de asistencia" className="leyenda-estados">{ESTADOS_DE_CELDA_ASISTENCIA.map((estadoDeCelda) => <li className={`estado-color-${estadoDeCelda}`} key={estadoDeCelda}>{NOMBRE_DEL_ESTADO_DE_CELDA_ASISTENCIA[estadoDeCelda]}</li>)}</ul><MatrizSemanalDeAsistencias asistencias={asistencias} colaboradores={colaboradores} dias={dias} /></section></> : <section className="estado-vacio"><h2>No hay grupos operativos</h2><p>Configure una sede activa dentro de un grupo operativo antes de revisar asistencias.</p></section>}
   </main>;
 }
-
-function esMes(valor: string | undefined): valor is string { return Boolean(valor && /^\d{4}-\d{2}$/.test(valor)); }
-function diasDelMes(mes: string) { const [anio, numeroMes] = mes.split("-").map(Number); const ultimoDia = new Date(Date.UTC(anio, numeroMes, 0)).getUTCDate(); const inicio = `${mes}-01`; return { inicio, fin: `${mes}-${String(ultimoDia).padStart(2, "0")}`, dias: Array.from({ length: ultimoDia }, (_, indice) => `${mes}-${String(indice + 1).padStart(2, "0")}`) }; }
-function desfaseLunes(fecha: string) { return (new Date(`${fecha}T00:00:00Z`).getUTCDay() + 6) % 7; }
-function inicioDeSemanaDelMes(mes: string) { const fecha = new Date(`${mes}-01T00:00:00Z`); fecha.setUTCDate(fecha.getUTCDate() - ((fecha.getUTCDay() + 6) % 7)); return fecha.toISOString().slice(0, 10); }

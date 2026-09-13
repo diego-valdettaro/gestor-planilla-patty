@@ -1,4 +1,4 @@
-import { and, eq, gte, lte, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import type { EvidenciaDeCeldaAsistencia } from "@/app/asistencias/estado-de-celda";
@@ -24,6 +24,10 @@ export interface FilaDeResumenMensual extends EvidenciaDeCeldaAsistencia {
   entrada: string | null;
   salida: string | null;
   sedeProgramada: string | null;
+}
+
+export interface FilaDeResumenSemanal extends FilaDeResumenMensual {
+  idHuellero: string;
 }
 
 export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencias {
@@ -147,6 +151,27 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
     )).leftJoin(estadosManuales, eq(estadosManuales.asistenciaId, asistenciasEsperadas.id))
       .where(and(eq(asistenciasEsperadas.idHuellero, idHuellero), gte(asistenciasEsperadas.fecha, inicio), lte(asistenciasEsperadas.fecha, fin)))
       .then((filas) => filas as FilaDeResumenMensual[]);
+  }
+
+  async listarResumenSemanal(idsHuellero: string[], inicio: string, fin: string): Promise<FilaDeResumenSemanal[]> {
+    if (!idsHuellero.length) return [];
+    return this.db.select({
+      idHuellero: asistenciasEsperadas.idHuellero,
+      fecha: asistenciasEsperadas.fecha,
+      estado: asistenciasEsperadas.estado,
+      entrada: asistenciasEsperadas.entradaReal,
+      salida: asistenciasEsperadas.salidaReal,
+      sedeProgramada: turnosPublicados.sede,
+      estadoManual: estadosManuales.tipo,
+      entradaPropuesta: asistenciasEsperadas.entradaPropuesta,
+      salidaPropuesta: asistenciasEsperadas.salidaPropuesta,
+      hayMarcasCrudas: sql<boolean>`exists (select 1 from ${marcasCrudas} where ${marcasCrudas.idHuellero} = ${asistenciasEsperadas.idHuellero} and ${marcasCrudas.fecha} = ${asistenciasEsperadas.fecha})`,
+      enPeriodoCerrado: sql<boolean>`exists (select 1 from ${periodosPlanilla} where ${periodosPlanilla.estado} = 'cerrado' and ${asistenciasEsperadas.fecha} between ${periodosPlanilla.inicio} and ${periodosPlanilla.fin})`,
+    }).from(asistenciasEsperadas).leftJoin(turnosPublicados, and(
+      eq(turnosPublicados.idHuellero, asistenciasEsperadas.idHuellero), eq(turnosPublicados.fecha, asistenciasEsperadas.fecha),
+    )).leftJoin(estadosManuales, eq(estadosManuales.asistenciaId, asistenciasEsperadas.id))
+      .where(and(inArray(asistenciasEsperadas.idHuellero, idsHuellero), gte(asistenciasEsperadas.fecha, inicio), lte(asistenciasEsperadas.fecha, fin)))
+      .then((filas) => filas as FilaDeResumenSemanal[]);
   }
 
   async buscarPoliticaVigente(sede: string, fecha: string) {

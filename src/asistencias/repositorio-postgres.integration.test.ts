@@ -113,4 +113,13 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeAsistencias · resumen mensu
     expect(fila.enPeriodoCerrado).toBe(true);
     expect(estadoDeCeldaAsistencia(fila)).toBe("liquidado");
   });
+
+  it("devuelve las jornadas semanales solicitadas sin agrupar al colaborador por sede", async () => {
+    const filas = await repositorio.listarResumenSemanal([idHuellero], "2031-03-10", "2031-03-16");
+
+    expect(filas).toEqual(expect.arrayContaining([
+      expect.objectContaining({ idHuellero, fecha: fechaEsperada }),
+      expect.objectContaining({ idHuellero, fecha: fechaManual, estadoManual: "feriado" }),
+    ]));
+  });
 });
