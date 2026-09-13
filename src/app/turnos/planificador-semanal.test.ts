@@ -14,6 +14,8 @@ vi.mock("./actions", () => ({
   republicarPlanSemanalDesdeGrilla: vi.fn(),
 }));
 
+import type { MotivoPlanificadoDeNoAsistencia } from "@/turnos/jornada-planificada";
+
 import { PlanificadorSemanal, celdasDeSemanaCompleta, valorDe } from "./planificador-semanal";
 
 const jornadaPersonalizada = {
@@ -119,6 +121,74 @@ describe("planificador semanal", () => {
 function celdaLaboral(idHuellero: string, fecha: string, sede: string) {
   return { idHuellero, fecha, sede, modeloHorarioId: null, entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false, motivoNoAsistencia: null };
 }
+
+// Acota el HTML a la primera celda-día de la tabla, para no confundir su contenido con el de
+// los diálogos (el de edición de celda sí lista nombres de modelo entre sus opciones).
+function pastillaDe(html: string): string {
+  const inicio = html.indexOf("<td");
+  return html.slice(inicio, html.indexOf("</td>", inicio) + "</td>".length);
+}
+
+describe("pastillas diarias compactas y accesibles", () => {
+  const colaborador = { idHuellero: "HU-1024", nombre: "Ana Pérez", sede: "Tienda Sur" };
+  const celdaConModelo = { idHuellero: "HU-1024", fecha: "2026-09-07", sede: "Tienda Sur", modeloHorarioId: "modelo-1", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false, motivoNoAsistencia: null };
+  const propsBase = {
+    equipos: ["tiendas"], planId: "plan-1", semana: "2026-09-07", equipo: "tiendas",
+    colaboradores: [colaborador], dias: ["2026-09-07"],
+    publicados: [], procesados: [], modelos: [modeloApertura], sedes: ["Tienda Sur"],
+  };
+  type CeldaDePrueba = { idHuellero: string; fecha: string; sede: string | null; modeloHorarioId: string | null; entradaProgramada: string | null; salidaProgramada: string | null; descanso: boolean; motivoNoAsistencia: MotivoPlanificadoDeNoAsistencia | null };
+  function renderConUnaCelda(celda: CeldaDePrueba, procesados: string[] = []) {
+    return renderToStaticMarkup(createElement(PlanificadorSemanal, { ...propsBase, celdasIniciales: [celda], procesados }));
+  }
+
+  it("la pastilla laboral muestra sede, entrada y salida, y no el nombre del modelo", () => {
+    const celdaHtml = pastillaDe(renderConUnaCelda(celdaConModelo));
+    expect(celdaHtml).toContain("Tienda Sur");
+    expect(celdaHtml).toContain("09:00");
+    expect(celdaHtml).toContain("18:00");
+    expect(celdaHtml).not.toContain("Apertura");
+  });
+
+  it("la pastilla no laboral muestra solo el motivo, sin sede ni horas", () => {
+    const celdaDeMotivo = { idHuellero: "HU-1024", fecha: "2026-09-07", sede: null, modeloHorarioId: null, entradaProgramada: null, salidaProgramada: null, descanso: true, motivoNoAsistencia: "vacaciones" as const };
+    const celdaHtml = pastillaDe(renderConUnaCelda(celdaDeMotivo));
+    expect(celdaHtml).toContain("Vacaciones");
+    expect(celdaHtml).not.toContain("Tienda Sur");
+    expect(celdaHtml).not.toContain("09:00");
+  });
+
+  it("no repite el nombre del estado dentro de cada pastilla: la leyenda y la fila alcanzan para interpretarlo", () => {
+    const dosDias = ["2026-09-07", "2026-09-08"];
+    const cuatroDias = ["2026-09-07", "2026-09-08", "2026-09-09", "2026-09-10"];
+
+    const htmlDosDias = renderToStaticMarkup(createElement(PlanificadorSemanal, { ...propsBase, dias: dosDias, celdasIniciales: dosDias.map((fecha) => ({ ...celdaConModelo, fecha })) }));
+    const htmlCuatroDias = renderToStaticMarkup(createElement(PlanificadorSemanal, { ...propsBase, dias: cuatroDias, celdasIniciales: cuatroDias.map((fecha) => ({ ...celdaConModelo, fecha })) }));
+
+    // La pastilla ya no lleva la clase de la etiqueta de estado (esa clase sigue existiendo en el
+    // CSS compartido porque la matriz de Asistencias todavía la usa, pero Horarios no la renderiza).
+    expect(htmlDosDias).not.toContain("etiqueta-estado-celda");
+    // Si el nombre del estado no se repitiera por pastilla, agregar más días no debería sumar
+    // más apariciones VISIBLES del texto del estado (solo vienen de la leyenda, la barra y la
+    // fila); el aria-label de cada pastilla sí lo menciona y por eso se excluye del conteo.
+    const ocurrenciasVisibles = (html: string) => (html.replace(/aria-label="[^"]*"/g, "").match(/Borrador editable/g) ?? []).length;
+    expect(ocurrenciasVisibles(htmlCuatroDias)).toBe(ocurrenciasVisibles(htmlDosDias));
+  });
+
+  it("conserva el nombre accesible de estado, fecha, resultado e interacción de cada pastilla", () => {
+    const html = renderConUnaCelda(celdaConModelo);
+    expect(html).toContain('aria-label="Horario de Ana Pérez para 2026-09-07: Tienda Sur, 09:00 a 18:00. Borrador editable"');
+    expect(html).toContain('aria-haspopup="dialog"');
+  });
+
+  it("mantiene señales que no dependen solo del color: la marca de edición y el bloqueo de una semana liquidada", () => {
+    expect(renderConUnaCelda(celdaConModelo)).toContain('class="marca-edit"');
+
+    const htmlLiquidado = renderConUnaCelda(celdaConModelo, ["HU-1024"]);
+    expect(htmlLiquidado).toContain("disabled=\"\"");
+    expect(htmlLiquidado).not.toContain('class="marca-edit"');
+  });
+});
 
 describe("selección de publicación", () => {
   const dias = ["2026-09-07", "2026-09-08"];

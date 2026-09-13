@@ -233,7 +233,6 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
     if (!mostrado) clases.push("vacia");
     return <td className={clases.join(" ")} key={fecha}>
       <button aria-haspopup="dialog" aria-label={`Horario de ${colaborador.nombre} para ${fecha}: ${descripcionDeCelda(mostrado)}. ${NOMBRE_DEL_ESTADO_DE_HORARIO[estado]}`} className={`chip-turno estado-color-${estado}`} disabled={estado === "liquidado"} onClick={() => abrirDialogoCelda(colaborador, fecha)} type="button">
-        <EtiquetaEstado className="etiqueta-estado-celda" estado={estado} />
         {contenidoDeChip(mostrado)}
         {mostrado && !mostrado.descanso && estado !== "liquidado" && <span aria-hidden="true" className="marca-edit">✎</span>}
       </button>
