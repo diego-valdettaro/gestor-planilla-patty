@@ -1,4 +1,5 @@
 import type { Actor } from "@/colaboradores/registrar-colaborador";
+import { nombreDelMotivoPlanificado, type MotivoPlanificadoDeNoAsistencia } from "@/asistencias/estado-manual";
 
 export interface MarcaCruda {
   idHuellero: string;
@@ -51,7 +52,12 @@ export interface ResultadoDeImportacion {
 
 export interface RepositorioDeImportaciones {
   buscarColaborador(idHuellero: string): Promise<{ idHuellero: string; sede: string } | undefined>;
-  buscarTurnoPublicado(idHuellero: string, fecha: string): Promise<{ idHuellero: string; fecha: string } | undefined>;
+  buscarTurnoPublicado(idHuellero: string, fecha: string): Promise<{
+    idHuellero: string;
+    fecha: string;
+    descanso: boolean;
+    motivoNoAsistencia: MotivoPlanificadoDeNoAsistencia | null;
+  } | undefined>;
   perteneceAPeriodoAbierto(fecha: string): Promise<boolean>;
   guardar(importacion: ImportacionSemanal): Promise<void>;
 }
@@ -97,6 +103,9 @@ export async function importarSemanaPorSede(
     if (!turnoPublicado) {
       marcasPendientesSinTurno.push(propuesta);
       continue;
+    }
+    if (turnoPublicado.descanso || turnoPublicado.motivoNoAsistencia) {
+      throw new Error(`El horario semanal tiene ${nombreDelMotivoPlanificado(turnoPublicado.motivoNoAsistencia ?? "descanso")} planificado. Corrija y republique el horario antes de importar marcas.`);
     }
     propuestas.push({ ...propuesta, estado: "pendiente" });
     }

@@ -266,3 +266,36 @@ test("publicar selección solo publica la fila marcada y respeta una deselecció
 
   expect(errores).toEqual([]);
 });
+
+test("registra un estado manual y mantiene el diálogo abierto ante una sede discordante", async ({ page }) => {
+  test.setTimeout(60_000);
+  const errores = observarErroresDelNavegador(page);
+
+  await page.goto("/iniciar-sesion");
+  await page.getByLabel("Usuario").fill("admin");
+  await page.getByLabel("Contraseña").fill("admin");
+  await page.getByRole("button", { name: "Entrar" }).click();
+  await expect(page).toHaveURL(/\/turnos$/);
+
+  const sabado = fechaDeLaSemanaDeDemo(5);
+  const mes = sabado.slice(0, 7);
+  await page.goto(`/asistencias?colaborador=DEMO-BETO&mes=${mes}`);
+  const celda = page.getByRole("button", { name: new RegExp(`Asistencia del ${sabado}:`) });
+  await celda.click();
+
+  const dialogo = page.getByRole("dialog", { name: "Registrar asistencia" });
+  await expect(dialogo.getByLabel("Fecha")).toHaveCount(0);
+  await dialogo.getByLabel("Sede").fill("Otra sede");
+  await dialogo.getByLabel("Hora de ingreso").fill("08:00");
+  await dialogo.getByLabel("Hora de salida").fill("16:00");
+  await dialogo.getByRole("button", { name: "Guardar asistencia" }).click();
+  await expect(dialogo.getByRole("alert")).toHaveText("La sede registrada no coincide con la sede planificada (Tienda Benavides). Corrija y republique el horario semanal.");
+  await expect(dialogo).toBeVisible();
+
+  await dialogo.getByLabel("Tipo de asistencia").selectOption("falta");
+  await dialogo.getByLabel("Comentario").fill("No asistió por enfermedad.");
+  await dialogo.getByRole("button", { name: "Guardar asistencia" }).click();
+  await expect(dialogo).toBeHidden();
+  await expect(celda).toContainText("Falta");
+  expect(errores).toEqual([]);
+});

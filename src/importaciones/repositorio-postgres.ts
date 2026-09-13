@@ -2,6 +2,7 @@ import { and, eq, gte, isNull, lte } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import * as schema from "@/db/schema";
+import type { MotivoPlanificadoDeNoAsistencia } from "@/asistencias/estado-manual";
 import {
   asistenciasEsperadas,
   colaboradores,
@@ -23,8 +24,18 @@ export class RepositorioPostgresDeImportaciones implements RepositorioDeImportac
     return colaborador;
   }
 
-  async buscarTurnoPublicado(idHuellero: string, fecha: string): Promise<{ idHuellero: string; fecha: string } | undefined> {
-    const [turno] = await this.db.select({ idHuellero: turnosPublicados.idHuellero, fecha: turnosPublicados.fecha })
+  async buscarTurnoPublicado(idHuellero: string, fecha: string): Promise<{
+    idHuellero: string;
+    fecha: string;
+    descanso: boolean;
+    motivoNoAsistencia: MotivoPlanificadoDeNoAsistencia | null;
+  } | undefined> {
+    const [turno] = await this.db.select({
+      idHuellero: turnosPublicados.idHuellero,
+      fecha: turnosPublicados.fecha,
+      descanso: turnosPublicados.descanso,
+      motivoNoAsistencia: turnosPublicados.motivoNoAsistencia,
+    })
       .from(turnosPublicados).where(and(eq(turnosPublicados.idHuellero, idHuellero), eq(turnosPublicados.fecha, fecha)));
     return turno;
   }

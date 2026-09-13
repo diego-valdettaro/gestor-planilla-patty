@@ -2,6 +2,9 @@ import type { Actor } from "@/colaboradores/registrar-colaborador";
 import { calcularTardanza, type PoliticaDePenalizacionPorTardanzas, type TardanzaCalculada } from "@/tardanzas/politica-de-penalizacion";
 
 import { calcularHoraExtra, type EstadoDeHoraExtra, type HoraExtraCalculada } from "./calcular-hora-extra";
+import { nombreDelMotivoPlanificado, type MotivoPlanificadoDeNoAsistencia, type TipoDeEstadoManualRegistrable } from "./estado-manual";
+
+export type { TipoDeEstadoManual } from "./estado-manual";
 
 export interface InstantaneaDeTurno {
   sede: string;
@@ -10,9 +13,14 @@ export interface InstantaneaDeTurno {
   descanso: boolean;
 }
 
-export interface TurnoParaConfirmar extends InstantaneaDeTurno {
+export interface TurnoParaConfirmar {
   idHuellero: string;
   fecha: string;
+  sede: string | null;
+  entradaProgramada: string | null;
+  salidaProgramada: string | null;
+  descanso: boolean;
+  motivoNoAsistencia: MotivoPlanificadoDeNoAsistencia | null;
 }
 
 export interface AsistenciaConfirmada {
@@ -31,20 +39,23 @@ export interface AsistenciaConfirmada {
 export interface SolicitudDeConfirmacion {
   idHuellero: string;
   fecha: string;
+  sede: string;
   entradaReal: string;
   salidaReal: string;
 }
 
-export interface SolicitudDeAjuste extends SolicitudDeConfirmacion {
+export interface SolicitudDeAjuste {
+  idHuellero: string;
+  fecha: string;
+  entradaReal: string;
+  salidaReal: string;
   motivo: string;
 }
-
-export type TipoDeEstadoManual = "falta" | "descanso" | "feriado" | "vacaciones" | "permiso" | "suspension";
 
 export interface SolicitudDeEstadoManual {
   idHuellero: string;
   fecha: string;
-  tipo: TipoDeEstadoManual;
+  tipo: TipoDeEstadoManualRegistrable;
   comentario: string;
 }
 
@@ -81,7 +92,13 @@ export async function confirmarAsistencia(
   autorizarRevision(actor);
   const turno = await repositorio.buscarTurnoPublicado(solicitud.idHuellero, solicitud.fecha);
   if (!turno) throw new Error("No existe un turno publicado para confirmar esta asistencia.");
-  if (turno.descanso || !turno.entradaProgramada || !turno.salidaProgramada) throw new Error("Un descanso no puede confirmarse como asistencia.");
+  if (turno.motivoNoAsistencia || turno.descanso) {
+    throw new Error(`El horario semanal tiene ${nombreDelMotivoPlanificado(turno.motivoNoAsistencia ?? "descanso")} planificado. Corrija y republique el horario antes de registrar la asistencia.`);
+  }
+  if (!turno.sede || !turno.entradaProgramada || !turno.salidaProgramada) throw new Error("La jornada laboral publicada está incompleta.");
+  if (solicitud.sede !== turno.sede) {
+    throw new Error(`La sede registrada no coincide con la sede planificada (${turno.sede}). Corrija y republique el horario semanal.`);
+  }
   const tardanza = await calcularTardanza(repositorio, {
     idHuellero: solicitud.idHuellero, sede: turno.sede, fecha: solicitud.fecha,
     entradaProgramada: turno.entradaProgramada, entradaReal: solicitud.entradaReal,
@@ -145,6 +162,11 @@ export async function registrarEstadoManual(
   autorizarRevision(actor);
   const comentario = solicitud.comentario.trim();
   if (!comentario) throw new Error("El estado manual requiere un comentario.");
+  const turno = await repositorio.buscarTurnoPublicado(solicitud.idHuellero, solicitud.fecha);
+  if (!turno) throw new Error("No existe un turno publicado para registrar este resultado.");
+  if (turno.motivoNoAsistencia || turno.descanso) {
+    throw new Error(`El horario semanal tiene ${nombreDelMotivoPlanificado(turno.motivoNoAsistencia ?? "descanso")} planificado. No puede reemplazarse con otro estado manual.`);
+  }
   await repositorio.registrarEstadoManual({ ...solicitud, comentario, responsableId: actor.id, registradoEn: new Date() });
 }
 
