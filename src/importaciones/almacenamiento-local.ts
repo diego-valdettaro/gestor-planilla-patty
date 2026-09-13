@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 
 import type { ArchivoFuente } from "./importar-semana-por-sede";
@@ -22,4 +22,8 @@ export async function conservarArchivoFuente(archivo: File): Promise<ArchivoFuen
     ubicacion: join(directorioRaiz, nombreAlmacenado),
     hashSha256: createHash("sha256").update(contenido).digest("hex"),
   };
+}
+
+export async function descartarArchivoFuente(archivo: ArchivoFuente): Promise<void> {
+  await rm(archivo.ubicacion, { force: true });
 }
