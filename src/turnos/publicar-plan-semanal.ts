@@ -45,7 +45,7 @@ export async function revisarPlanSemanal(
   planId: string,
   personasSeleccionadas: string[],
 ): Promise<{ idsSeleccionados: string[]; plan: PlanSemanalEnBorrador; errores: ErrorDePublicacionDePlan[] }> {
-  if (actor.rol !== "operaciones" && actor.rol !== "administracion") throw new Error("No tiene permiso para publicar planes semanales.");
+  if (actor.rol !== "operaciones" && actor.rol !== "administracion" && actor.rol !== "finanzas") throw new Error("No tiene permiso para publicar planes semanales.");
   const plan = await repositorio.buscarPorId(planId);
   if (!plan) throw new Error("El plan semanal en borrador no existe.");
   const idsSeleccionados = [...new Set(personasSeleccionadas)];
