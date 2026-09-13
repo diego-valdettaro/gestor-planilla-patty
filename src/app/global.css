@@ -171,6 +171,10 @@ th, td { border: 1px solid #e2e8f0; padding: 0.6rem; text-align: left; }
 .opciones-celda label:hover { background: #f1f5f9; }
 .opciones-celda input { margin: 0; }
 .dialogo-confirmacion .resumen-publicacion { color: #475569; display: grid; font-size: .82rem; gap: .3rem; margin: 0; padding-left: 1.1rem; }
+.dialogo-completar-semana { max-width: 34rem; }
+.dias-completar-semana { display: grid; gap: .5rem; max-height: 16rem; overflow-y: auto; }
+.dias-completar-semana label { align-items: center; display: flex; font-size: .85rem; gap: .6rem; justify-content: space-between; }
+.dias-completar-semana select { flex: 0 0 auto; }
 
 .sr-only { height: 1px; margin: -1px; overflow: hidden; padding: 0; position: absolute; width: 1px; clip: rect(0, 0, 0, 0); white-space: nowrap; }
 @media (max-width: 700px) { .contenido { padding: 1rem; } .filtros { align-items: stretch; flex-direction: column; } }
