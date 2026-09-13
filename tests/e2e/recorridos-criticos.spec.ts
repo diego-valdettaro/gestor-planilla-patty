@@ -211,3 +211,58 @@ test("completar semana sobre una fila publicada deja cambios sin publicar en vez
   await expect(filaBeto.getByRole("button", { name: "Republicar cambios" })).toBeVisible();
   expect(errores).toEqual([]);
 });
+
+test("publicar selección solo publica la fila marcada y respeta una deselección manual", async ({ page }) => {
+  test.setTimeout(60_000);
+  const errores = observarErroresDelNavegador(page);
+
+  await page.goto("/iniciar-sesion");
+  await page.getByLabel("Usuario").fill("operaciones");
+  await page.getByLabel("Contraseña").fill("operaciones");
+  await page.getByRole("button", { name: "Entrar" }).click();
+  await expect(page).toHaveURL(/\/turnos$/);
+
+  const semana = fechaDeLaSemanaDeDemo(0);
+  const domingo = fechaDeLaSemanaDeDemo(6);
+  await page.goto(`/turnos?semana=${semana}&equipo=Tiendas`);
+
+  const filaAna = page.locator("tr", { hasText: "Ana Borrador" });
+  const filaCarla = page.locator("tr", { hasText: "Carla Cambios" });
+  const checkboxAna = filaAna.locator('input[type="checkbox"]');
+  const botonPublicar = page.getByRole("button", { name: "Publicar planificación" }).first();
+  const dialogoCelda = page.getByRole("dialog", { name: "Turno de Ana Borrador" });
+
+  // A Ana le falta el último día: todavía no hay ninguna fila elegible para publicar.
+  await expect(checkboxAna).toHaveCount(0);
+  await expect(botonPublicar).toBeDisabled();
+
+  await filaAna.getByRole("button", { name: new RegExp(`Horario de Ana Borrador para ${domingo}`) }).click();
+  await dialogoCelda.getByLabel("Descanso").check();
+  await dialogoCelda.getByRole("button", { name: "Usar" }).click();
+
+  // Al completar los siete días, la fila se autoselecciona.
+  await expect(checkboxAna).toBeChecked();
+  await expect(botonPublicar).toBeEnabled();
+
+  await checkboxAna.uncheck();
+  await expect(botonPublicar).toBeDisabled();
+
+  // Una nueva edición sobre la misma fila no revierte la deselección manual.
+  await filaAna.getByRole("button", { name: new RegExp(`Horario de Ana Borrador para ${semana}`) }).click();
+  await dialogoCelda.getByLabel("Permiso").check();
+  await dialogoCelda.getByRole("button", { name: "Usar" }).click();
+  await expect(checkboxAna).not.toBeChecked();
+  await expect(botonPublicar).toBeDisabled();
+
+  await checkboxAna.check();
+  await expect(botonPublicar).toBeEnabled();
+  await botonPublicar.click();
+  await page.getByRole("dialog", { name: "¿Publicar la selección?" }).getByRole("button", { name: "Publicar planificación" }).click();
+
+  await expect(filaAna.locator(".persona small")).toHaveText("Publicado");
+  await expect(checkboxAna).toHaveCount(0);
+  // La publicación selectiva no afecta a otras filas, como los cambios sin publicar de Carla.
+  await expect(filaCarla.locator(".persona small")).toHaveText("Cambios sin publicar");
+
+  expect(errores).toEqual([]);
+});
