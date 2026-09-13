@@ -23,6 +23,7 @@ export interface FilaDeResumenMensual extends EvidenciaDeCeldaAsistencia {
   fecha: string;
   entrada: string | null;
   salida: string | null;
+  sedeProgramada: string | null;
 }
 
 export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencias {
@@ -36,9 +37,9 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
     const [turno] = await this.db.select({
       idHuellero: turnosPublicados.idHuellero, fecha: turnosPublicados.fecha, sede: turnosPublicados.sede,
       entradaProgramada: turnosPublicados.entradaProgramada, salidaProgramada: turnosPublicados.salidaProgramada,
-      descanso: turnosPublicados.descanso,
+      descanso: turnosPublicados.descanso, motivoNoAsistencia: turnosPublicados.motivoNoAsistencia,
     }).from(turnosPublicados).where(and(eq(turnosPublicados.idHuellero, idHuellero), eq(turnosPublicados.fecha, fecha)));
-    return turno?.sede ? { ...turno, sede: turno.sede } : undefined;
+    return turno;
   }
 
   async confirmar(asistencia: AsistenciaConfirmada): Promise<void> {
@@ -135,12 +136,15 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
       estado: asistenciasEsperadas.estado,
       entrada: asistenciasEsperadas.entradaReal,
       salida: asistenciasEsperadas.salidaReal,
+      sedeProgramada: turnosPublicados.sede,
       estadoManual: estadosManuales.tipo,
       entradaPropuesta: asistenciasEsperadas.entradaPropuesta,
       salidaPropuesta: asistenciasEsperadas.salidaPropuesta,
       hayMarcasCrudas: sql<boolean>`exists (select 1 from ${marcasCrudas} where ${marcasCrudas.idHuellero} = ${asistenciasEsperadas.idHuellero} and ${marcasCrudas.fecha} = ${asistenciasEsperadas.fecha})`,
       enPeriodoCerrado: sql<boolean>`exists (select 1 from ${periodosPlanilla} where ${periodosPlanilla.estado} = 'cerrado' and ${asistenciasEsperadas.fecha} between ${periodosPlanilla.inicio} and ${periodosPlanilla.fin})`,
-    }).from(asistenciasEsperadas).leftJoin(estadosManuales, eq(estadosManuales.asistenciaId, asistenciasEsperadas.id))
+    }).from(asistenciasEsperadas).leftJoin(turnosPublicados, and(
+      eq(turnosPublicados.idHuellero, asistenciasEsperadas.idHuellero), eq(turnosPublicados.fecha, asistenciasEsperadas.fecha),
+    )).leftJoin(estadosManuales, eq(estadosManuales.asistenciaId, asistenciasEsperadas.id))
       .where(and(eq(asistenciasEsperadas.idHuellero, idHuellero), gte(asistenciasEsperadas.fecha, inicio), lte(asistenciasEsperadas.fecha, fin)))
       .then((filas) => filas as FilaDeResumenMensual[]);
   }

@@ -24,7 +24,9 @@ function crearRepositorioEnMemoria(): {
       buscarColaborador: async (idHuellero) =>
         idHuellero === "HU-1024" ? { idHuellero, sede: "Lima" } : undefined,
       buscarTurnoPublicado: async (idHuellero, fecha) =>
-        idHuellero === "HU-1024" && fecha === "2026-09-01" ? { idHuellero, fecha } : undefined,
+        idHuellero === "HU-1024" && fecha === "2026-09-01"
+          ? { idHuellero, fecha, descanso: false, motivoNoAsistencia: null }
+          : undefined,
       perteneceAPeriodoAbierto: async (fecha) => fecha >= "2026-08-26" && fecha <= "2026-09-25",
       guardar: async (importacion) => {
         importaciones.push(importacion);
@@ -141,6 +143,28 @@ describe("casos de uso de importaciones en el servidor", () => {
         salidaPropuesta: "2026-09-02T18:00:00-05:00",
       },
     ]);
+  });
+
+  it("bloquea marcas sobre un motivo planificado y no guarda la importación", async () => {
+    const { importaciones, repositorio } = crearRepositorioEnMemoria();
+    repositorio.buscarTurnoPublicado = async (idHuellero, fecha) =>
+      idHuellero === "HU-1024" && fecha === "2026-09-01"
+        ? { idHuellero, fecha, descanso: true, motivoNoAsistencia: "feriado" }
+        : undefined;
+    const casosDeUso = crearCasosDeUsoDeImportaciones(repositorio, {
+      obtenerActorActual: async () => ({ id: "administracion-1", rol: "administracion" }),
+    });
+
+    await expect(casosDeUso.importar({
+      sede: "Lima", semana: "2026-08-31",
+      archivo: { nombre: "huellero.csv", ubicacion: "importaciones/archivo.csv", hashSha256: "abc123" },
+      marcasCrudas: [
+        { idHuellero: "HU-1024", fecha: "2026-09-01", instante: "2026-09-01T09:00:00-05:00" },
+        { idHuellero: "HU-1024", fecha: "2026-09-01", instante: "2026-09-01T18:00:00-05:00" },
+      ],
+    })).rejects.toThrow("El horario semanal tiene Feriado planificado. Corrija y republique el horario antes de importar marcas.");
+
+    expect(importaciones).toEqual([]);
   });
 
   it("conserva pendiente una asistencia esperada que no recibe marcas", async () => {
