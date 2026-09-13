@@ -77,4 +77,13 @@ describe("página de Horarios (/turnos)", () => {
     expect(listarSedesActivasPorGrupo).toHaveBeenCalledWith("Tiendas");
     expect(listarModelosPorSede.mock.calls.map(([sede]) => sede)).toEqual(["Norte", "Sur"]);
   });
+
+  it("permite el acceso a Finanzas con las mismas reglas que Operaciones", async () => {
+    obtenerActorActual.mockResolvedValue({ rol: "finanzas" });
+
+    const html = await render();
+
+    expect(html).toContain("Planificador semanal");
+    expect(html).not.toContain("No tiene permiso para consultar horarios.");
+  });
 });

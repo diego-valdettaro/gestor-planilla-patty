@@ -69,4 +69,13 @@ describe("republicar plan semanal", () => {
 
     expect(reemplazos[0].turnos[0]).toMatchObject({ motivoNoAsistencia: "feriado" });
   });
+
+  it("permite a Finanzas republicar con las mismas reglas que Operaciones", async () => {
+    const { reemplazos, repositorio } = crearRepositorio();
+
+    await republicarPlanSemanal(repositorio, { id: "finanzas-1", rol: "finanzas" }, "plan-1", "HU-1", "Corrige entrada pactada");
+
+    expect(reemplazos).toEqual([expect.objectContaining({ motivo: "Corrige entrada pactada" })]);
+    expect(reemplazos[0].turnos).toHaveLength(7);
+  });
 });

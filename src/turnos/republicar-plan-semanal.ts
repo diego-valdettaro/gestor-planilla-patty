@@ -14,7 +14,7 @@ export async function republicarPlanSemanal(
   idHuellero: string,
   motivo: string,
 ): Promise<void> {
-  if (actor.rol !== "operaciones" && actor.rol !== "administracion") throw new Error("No tiene permiso para republicar horarios semanales.");
+  if (actor.rol !== "operaciones" && actor.rol !== "administracion" && actor.rol !== "finanzas") throw new Error("No tiene permiso para republicar horarios semanales.");
   if (!motivo.trim() || motivo.trim().length > 250) throw new Error("El motivo de republicación es obligatorio y no puede superar 250 caracteres.");
   const plan = await repositorio.buscarPorId(planId);
   if (!plan) throw new Error("El plan semanal en borrador no existe.");

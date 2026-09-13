@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 export default async function PaginaDeTurnos({ searchParams }: { searchParams: Promise<{ semana?: string; equipo?: string; copiar?: string }> }) {
   const actor = await obtenerActorActual().catch(() => undefined);
   if (!actor) redirect("/iniciar-sesion");
-  if (actor.rol !== "operaciones" && actor.rol !== "administracion") return <main className="centrado"><p>No tiene permiso para consultar horarios.</p></main>;
+  if (actor.rol !== "operaciones" && actor.rol !== "administracion" && actor.rol !== "finanzas") return <main className="centrado"><p>No tiene permiso para consultar horarios.</p></main>;
   const parametros = await searchParams;
   const semana = inicioDeSemana(parametros.semana ?? new Date().toISOString().slice(0, 10));
   const grupos = await repositorioDeGrupos.listar();

@@ -226,16 +226,23 @@ describe("casos de uso de planes semanales en borrador", () => {
     ]);
   });
 
-  it("rechaza a Finanzas antes de crear o editar el borrador", async () => {
+  it("permite a Finanzas crear, guardar y borrar celdas del borrador con las mismas reglas que Operaciones", async () => {
     const { repositorio } = crearRepositorioEnMemoria();
-    const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio, {
+    const finanzas = crearCasosDeUsoDePlanesSemanales(repositorio, {
       obtenerActorActual: async () => ({ id: "finanzas-1", rol: "finanzas" }),
     });
 
-    await expect(casosDeUso.obtenerOCrear("2026-08-31", "tiendas")).rejects.toThrow("No tiene permiso para editar planes semanales en borrador.");
+    const plan = await finanzas.obtenerOCrear("2026-08-31", "tiendas");
+    await finanzas.guardarCelda(plan.id, {
+      idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima",
+      entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false,
+    });
+    await finanzas.borrarCelda(plan.id, "HU-1024", "2026-09-01");
+
+    expect((await finanzas.obtenerOCrear("2026-08-31", "tiendas")).celdas).toEqual([]);
   });
 
-  it("rechaza una celda fuera de semana, de otro equipo o editada por Finanzas", async () => {
+  it("rechaza una celda fuera de semana, de otro equipo o con una sede fuera del grupo", async () => {
     const { repositorio } = crearRepositorioEnMemoria();
     const administracion = crearCasosDeUsoDePlanesSemanales(repositorio, {
       obtenerActorActual: async () => ({ id: "administracion-1", rol: "administracion" }),
@@ -246,8 +253,6 @@ describe("casos de uso de planes semanales en borrador", () => {
     await expect(administracion.guardarCelda(plan.id, celda)).rejects.toThrow("La fecha no pertenece a la semana del plan.");
     await expect(administracion.guardarCelda(plan.id, { ...celda, fecha: "2026-09-01", idHuellero: "HU-9999" })).rejects.toThrow("El colaborador no pertenece al equipo operativo del plan.");
     await expect(administracion.guardarCelda(plan.id, { ...celda, fecha: "2026-09-01", sede: "Tienda Norte" })).rejects.toThrow("La sede debe estar activa y pertenecer al grupo del colaborador.");
-    const finanzas = crearCasosDeUsoDePlanesSemanales(repositorio, { obtenerActorActual: async () => ({ id: "finanzas-1", rol: "finanzas" }) });
-    await expect(finanzas.borrarCelda(plan.id, "HU-1024", "2026-09-01")).rejects.toThrow("No tiene permiso para editar planes semanales en borrador.");
   });
 
   it("impide corregir en el borrador una jornada publicada que ya fue procesada", async () => {
