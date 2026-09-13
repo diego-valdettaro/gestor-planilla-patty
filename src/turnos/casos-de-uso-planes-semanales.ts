@@ -14,7 +14,7 @@ export function crearCasosDeUsoDePlanesSemanales(
 ) {
   async function autorizar(): Promise<void> {
     const actor = await sesion.obtenerActorActual();
-    if (actor.rol !== "operaciones" && actor.rol !== "administracion") {
+    if (actor.rol !== "operaciones" && actor.rol !== "administracion" && actor.rol !== "finanzas") {
       throw new Error("No tiene permiso para editar planes semanales en borrador.");
     }
   }

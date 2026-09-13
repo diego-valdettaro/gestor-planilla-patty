@@ -83,10 +83,13 @@ describe("publicar plan semanal", () => {
     expect(publicados).toEqual([]);
   });
 
-  it("rechaza a Finanzas antes de publicar", async () => {
+  it("permite a Finanzas publicar con las mismas reglas que Operaciones", async () => {
     const plan = { id: "plan-1", semana: "2026-08-31", equipo: "tiendas" as const, celdas: celdasDeSemana("HU-1") };
-    const { repositorio } = crearRepositorio(plan);
+    const { publicados, repositorio } = crearRepositorio(plan);
 
-    await expect(publicarPlanSemanal(repositorio, { id: "finanzas-1", rol: "finanzas" }, plan.id, ["HU-1"])).rejects.toThrow("No tiene permiso para publicar planes semanales.");
+    const resultado = await publicarPlanSemanal(repositorio, { id: "finanzas-1", rol: "finanzas" }, plan.id, ["HU-1"]);
+
+    expect(resultado).toEqual({ publicados: 1, errores: [] });
+    expect(publicados).toHaveLength(7);
   });
 });
