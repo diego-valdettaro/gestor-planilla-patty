@@ -56,9 +56,9 @@ _Evitar_: copia de fórmulas del Excel histórico, planilla oficial de pagos
 Regla configurable por Administración y Finanzas para cada sede que convierte tardanzas acumuladas en horas penalizadas desde una fecha de vigencia.
 _Evitar_: descuento fijo por tardanza, regla retroactiva
 
-**Importación semanal por sede**:
-Archivo fuente del huellero que contiene las marcas de una semana para una sede.
-_Evitar_: carga acumulativa, marcas duplicadas
+**Archivo fuente de asistencias**:
+Archivo XLSX del huellero que aporta marcas para una o más sedes y fechas, conservado junto con esas marcas para auditoría.
+_Evitar_: importación semanal por sede, carga acumulativa, marcas duplicadas
 
 **Incidencia de importación**:
 Registro del archivo fuente que no puede asociarse de forma segura a una asistencia, por ejemplo un ID de huellero desconocido.

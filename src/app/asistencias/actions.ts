@@ -8,14 +8,16 @@ import { esTipoDeEstadoManualRegistrable } from "@/asistencias/estado-manual";
 import { repositorioDeAsistencias } from "@/asistencias/servicio";
 import { crearCasosDeUsoDeTurnos } from "@/turnos/casos-de-uso-servidor";
 import { repositorioDeTurnos } from "@/turnos/servicio";
-import { conservarArchivoFuente } from "@/importaciones/almacenamiento-local";
+import { conservarArchivoFuente, descartarArchivoFuente } from "@/importaciones/almacenamiento-local";
 import { crearCasosDeUsoDeImportaciones } from "@/importaciones/casos-de-uso-servidor";
-import { parsearArchivoHuellero } from "@/importaciones/parsear-archivo-huellero";
+import { ErroresDeImportacion } from "@/importaciones/importar-semana-por-sede";
+import { parsearArchivoHuellero, type ErrorDeImportacion } from "@/importaciones/parsear-archivo-huellero";
 import { repositorioDeImportaciones } from "@/importaciones/servicio";
 
 export interface EstadoDeImportacion {
   error?: string;
-  resultado?: { marcasCrudas: number; asistenciasPendientes: number; marcasSinHorario: number; incidencias: number };
+  errores?: ErrorDeImportacion[];
+  resultado?: { jornadas: number };
 }
 
 export interface EstadoDeRegistroManual {
@@ -24,18 +26,22 @@ export interface EstadoDeRegistroManual {
 }
 
 export async function importarAsistencia(_estadoAnterior: EstadoDeImportacion, formData: FormData): Promise<EstadoDeImportacion> {
+  let archivoFuente: Awaited<ReturnType<typeof conservarArchivoFuente>> | undefined;
   try {
     const archivo = formData.get("archivo");
     if (!(archivo instanceof File) || archivo.size === 0) throw new Error("Debe seleccionar un archivo fuente.");
-    const sede = obtenerTexto(formData, "sede");
-    const semana = obtenerTexto(formData, "semana");
-    const marcasCrudas = await parsearArchivoHuellero(archivo);
-    const archivoFuente = await conservarArchivoFuente(archivo);
+    const contenido = await parsearArchivoHuellero(archivo);
     const casosDeUso = crearCasosDeUsoDeImportaciones(repositorioDeImportaciones, { obtenerActorActual });
-    const resultado = await casosDeUso.importar({ sede, semana, archivo: archivoFuente, marcasCrudas });
+    const errores = await casosDeUso.prevalidar({ filas: contenido.filas, erroresDelArchivo: contenido.errores });
+    if (errores.length) return { errores };
+
+    archivoFuente = await conservarArchivoFuente(archivo);
+    const resultado = await casosDeUso.importar({ filas: contenido.filas, erroresDelArchivo: contenido.errores, archivo: archivoFuente });
     revalidatePath("/asistencias");
     return { resultado };
   } catch (causa) {
+    if (archivoFuente) await descartarArchivoFuente(archivoFuente).catch(() => undefined);
+    if (causa instanceof ErroresDeImportacion) return { errores: causa.errores };
     return { error: causa instanceof Error ? causa.message : "No se pudo importar el archivo." };
   }
 }

@@ -298,8 +298,8 @@ export const horasExtra = pgTable(
 
 export const importacionesSemanales = pgTable("importaciones_semanales", {
   id: uuid("id").primaryKey().defaultRandom(),
-  sede: text("sede").notNull(),
-  semana: date("semana", { mode: "string" }).notNull(),
+  sede: text("sede"),
+  semana: date("semana", { mode: "string" }),
   archivoNombre: text("archivo_nombre").notNull(),
   archivoUbicacion: text("archivo_ubicacion").notNull(),
   archivoHashSha256: text("archivo_hash_sha256").notNull(),
@@ -313,6 +313,7 @@ export const marcasCrudas = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     importacionId: uuid("importacion_id").notNull().references(() => importacionesSemanales.id),
     idHuellero: text("id_huellero").notNull(),
+    sede: text("sede"),
     fecha: date("fecha", { mode: "string" }).notNull(),
     instante: text("instante").notNull(),
   },

@@ -1,4 +1,4 @@
-import { and, eq, gte, isNull, lte } from "drizzle-orm";
+import { and, eq, gte, isNull, lte, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import * as schema from "@/db/schema";
@@ -7,32 +7,40 @@ import {
   asistenciasEsperadas,
   colaboradores,
   importacionesSemanales,
-  incidenciasDeImportacion,
+  sedes,
   marcasCrudas,
   periodosPlanilla,
   turnosPublicados,
 } from "@/db/schema";
 
-import type { ImportacionSemanal, RepositorioDeImportaciones } from "./importar-semana-por-sede";
+import type { ImportacionDeAsistencias, RepositorioDeImportaciones } from "./importar-semana-por-sede";
 
 export class RepositorioPostgresDeImportaciones implements RepositorioDeImportaciones {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}
 
-  async buscarColaborador(idHuellero: string): Promise<{ idHuellero: string; sede: string } | undefined> {
-    const [colaborador] = await this.db.select({ idHuellero: colaboradores.idHuellero, sede: colaboradores.sede })
+  async buscarColaborador(idHuellero: string): Promise<{ idHuellero: string } | undefined> {
+    const [colaborador] = await this.db.select({ idHuellero: colaboradores.idHuellero })
       .from(colaboradores).where(eq(colaboradores.idHuellero, idHuellero));
     return colaborador;
+  }
+
+  async buscarSede(nombre: string): Promise<string | undefined> {
+    const sedesCoincidentes = await this.db.select({ nombre: sedes.nombre }).from(sedes)
+      .where(and(eq(sedes.activa, true), sql`lower(btrim(${sedes.nombre})) = lower(btrim(${nombre}))`));
+    return sedesCoincidentes.length === 1 ? sedesCoincidentes[0].nombre : undefined;
   }
 
   async buscarTurnoPublicado(idHuellero: string, fecha: string): Promise<{
     idHuellero: string;
     fecha: string;
+    sede: string | null;
     descanso: boolean;
     motivoNoAsistencia: MotivoPlanificadoDeNoAsistencia | null;
   } | undefined> {
     const [turno] = await this.db.select({
       idHuellero: turnosPublicados.idHuellero,
       fecha: turnosPublicados.fecha,
+      sede: turnosPublicados.sede,
       descanso: turnosPublicados.descanso,
       motivoNoAsistencia: turnosPublicados.motivoNoAsistencia,
     })
@@ -46,23 +54,19 @@ export class RepositorioPostgresDeImportaciones implements RepositorioDeImportac
     return Boolean(periodo);
   }
 
-  async guardar(importacion: ImportacionSemanal): Promise<void> {
+  async guardar(importacion: ImportacionDeAsistencias): Promise<void> {
     await this.db.transaction(async (tx) => {
       const [guardada] = await tx.insert(importacionesSemanales).values({
-        sede: importacion.sede, semana: importacion.semana, archivoNombre: importacion.archivo.nombre,
-        archivoUbicacion: importacion.archivo.ubicacion, archivoHashSha256: importacion.archivo.hashSha256,
+        archivoNombre: importacion.archivo.nombre, archivoUbicacion: importacion.archivo.ubicacion, archivoHashSha256: importacion.archivo.hashSha256,
         usuarioId: importacion.usuarioId, importadaEn: importacion.importadaEn,
       }).returning({ id: importacionesSemanales.id });
       if (importacion.marcasCrudas.length) {
         await tx.insert(marcasCrudas).values(importacion.marcasCrudas.map((marca) => ({ ...marca, importacionId: guardada.id })));
       }
-      if (importacion.incidencias.length) {
-        await tx.insert(incidenciasDeImportacion).values(importacion.incidencias.map((incidencia) => ({ ...incidencia, importacionId: guardada.id })));
-      }
       for (const propuesta of importacion.propuestas) {
         await tx.insert(asistenciasEsperadas).values(propuesta).onConflictDoUpdate({
           target: [asistenciasEsperadas.idHuellero, asistenciasEsperadas.fecha],
-          set: { entradaPropuesta: propuesta.entradaPropuesta ?? null, salidaPropuesta: propuesta.salidaPropuesta ?? null },
+          set: { entradaPropuesta: propuesta.entradaPropuesta, salidaPropuesta: propuesta.salidaPropuesta },
           where: eq(asistenciasEsperadas.estado, "pendiente"),
         });
       }
@@ -99,11 +103,6 @@ export class RepositorioPostgresDeImportaciones implements RepositorioDeImportac
         asistencia.entradaReal !== null && asistencia.salidaReal !== null,
       ),
     );
-  }
-
-  async listarIncidencias(): Promise<Array<{ idHuellero: string; fecha: string; motivo: string }>> {
-    return this.db.select({ idHuellero: incidenciasDeImportacion.idHuellero, fecha: incidenciasDeImportacion.fecha, motivo: incidenciasDeImportacion.motivo })
-      .from(incidenciasDeImportacion);
   }
 
   async listarMarcasSinTurno(): Promise<Array<{
