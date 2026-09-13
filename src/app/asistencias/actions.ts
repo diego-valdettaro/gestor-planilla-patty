@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
 import { crearCasosDeUsoDeAsistencias } from "@/asistencias/casos-de-uso-servidor";
+import { esTipoDeEstadoManualRegistrable } from "@/asistencias/estado-manual";
 import { repositorioDeAsistencias } from "@/asistencias/servicio";
 import { crearCasosDeUsoDeTurnos } from "@/turnos/casos-de-uso-servidor";
 import { repositorioDeTurnos } from "@/turnos/servicio";
@@ -44,6 +45,7 @@ export async function confirmarAsistencia(formData: FormData): Promise<void> {
   await casosDeUso.confirmar({
     idHuellero: obtenerTexto(formData, "idHuellero"),
     fecha: obtenerTexto(formData, "fecha"),
+    sede: obtenerTexto(formData, "sede"),
     entradaReal: obtenerTexto(formData, "entradaReal"),
     salidaReal: obtenerTexto(formData, "salidaReal"),
   });
@@ -56,17 +58,27 @@ export async function registrarAsistenciaManual(
 ): Promise<EstadoDeRegistroManual> {
   try {
     const fecha = obtenerTexto(formData, "fecha");
-    const entrada = obtenerTexto(formData, "entrada");
-    const salida = obtenerTexto(formData, "salida");
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) throw new Error("La fecha no es válida.");
-    if (!/^\d{2}:\d{2}$/.test(entrada) || !/^\d{2}:\d{2}$/.test(salida)) throw new Error("Las horas deben usar el formato HH:MM.");
 
     const casosDeUso = crearCasosDeUsoDeAsistencias(repositorioDeAsistencias, { obtenerActorActual });
+    const tipoDeAsistencia = obtenerTexto(formData, "tipoDeAsistencia");
+    if (esTipoDeEstadoManualRegistrable(tipoDeAsistencia)) {
+      await casosDeUso.registrarEstadoManual({
+        idHuellero: obtenerTexto(formData, "idHuellero"), fecha, tipo: tipoDeAsistencia, comentario: obtenerTexto(formData, "comentario"),
+      });
+      revalidatePath("/asistencias");
+      return { listo: "El estado manual quedó registrado." };
+    }
+    if (tipoDeAsistencia !== "trabajo") throw new Error("El tipo de asistencia no es válido.");
+
+    const entrada = obtenerTexto(formData, "entrada");
+    const salida = obtenerTexto(formData, "salida");
+    if (!/^\d{2}:\d{2}$/.test(entrada) || !/^\d{2}:\d{2}$/.test(salida)) throw new Error("Las horas deben usar el formato HH:MM.");
     const solicitud = { idHuellero: obtenerTexto(formData, "idHuellero"), fecha, entradaReal: `${fecha}T${entrada}`, salidaReal: `${fecha}T${salida}` };
     if (formData.get("estadoActual") === "confirmada") {
       await casosDeUso.ajustar({ ...solicitud, motivo: obtenerTexto(formData, "motivo") });
     } else {
-      await casosDeUso.confirmar(solicitud);
+      await casosDeUso.confirmar({ ...solicitud, sede: obtenerTexto(formData, "sede") });
     }
     revalidatePath("/asistencias");
     return { listo: formData.get("estadoActual") === "confirmada" ? "El ajuste quedó guardado." : "La asistencia manual quedó registrada." };
@@ -108,7 +120,7 @@ export async function rechazarHoraExtra(formData: FormData): Promise<void> {
 export async function registrarEstadoManual(formData: FormData): Promise<void> {
   const casosDeUso = crearCasosDeUsoDeAsistencias(repositorioDeAsistencias, { obtenerActorActual });
   const tipo = obtenerTexto(formData, "tipo");
-  if (!esTipoDeEstadoManual(tipo)) throw new Error("El tipo de estado manual no es válido.");
+  if (!esTipoDeEstadoManualRegistrable(tipo)) throw new Error("El tipo de estado manual no es válido.");
   await casosDeUso.registrarEstadoManual({
     idHuellero: obtenerTexto(formData, "idHuellero"),
     fecha: obtenerTexto(formData, "fecha"),
@@ -132,8 +144,4 @@ function obtenerTexto(formData: FormData, nombre: string): string {
   const valor = formData.get(nombre);
   if (typeof valor !== "string" || !valor.trim()) throw new Error(`El campo ${nombre} es obligatorio.`);
   return valor.trim();
-}
-
-function esTipoDeEstadoManual(valor: string): valor is "falta" | "descanso" | "feriado" | "vacaciones" | "permiso" | "suspension" {
-  return ["falta", "descanso", "feriado", "vacaciones", "permiso", "suspension"].includes(valor);
 }

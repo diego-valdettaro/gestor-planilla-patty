@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 
 import { IconoCandado } from "@/app/icono-candado";
+import { TIPOS_DE_ESTADO_MANUAL_REGISTRABLE, type TipoDeEstadoManualRegistrable } from "@/asistencias/estado-manual";
 
 import { registrarAsistenciaManual, type EstadoDeRegistroManual } from "./actions";
 import {
@@ -17,9 +18,12 @@ interface Asistencia extends EvidenciaDeCeldaAsistencia {
   fecha: string;
   entrada: string | null;
   salida: string | null;
+  sedeProgramada: string | null;
 }
 
 const estadoInicial: EstadoDeRegistroManual = {};
+const TIPOS_DE_ASISTENCIA = ["trabajo", ...TIPOS_DE_ESTADO_MANUAL_REGISTRABLE] as const;
+type TipoDeAsistencia = "trabajo" | TipoDeEstadoManualRegistrable;
 
 export function CalendarioDeAsistencias({
   asistencias,
@@ -34,6 +38,7 @@ export function CalendarioDeAsistencias({
 }) {
   const porFecha = new Map(asistencias.map((asistencia) => [asistencia.fecha, asistencia]));
   const [fechaSeleccionada, setFechaSeleccionada] = useState<string>();
+  const [tipoDeAsistencia, setTipoDeAsistencia] = useState<TipoDeAsistencia>("trabajo");
   const dialogo = useRef<HTMLDialogElement>(null);
   const [estado, accion, pendiente] = useActionState(registrarAsistenciaManual, estadoInicial);
   const asistencia = fechaSeleccionada ? porFecha.get(fechaSeleccionada) : undefined;
@@ -46,6 +51,7 @@ export function CalendarioDeAsistencias({
 
   function abrir(fecha: string) {
     setFechaSeleccionada(fecha);
+    setTipoDeAsistencia("trabajo");
     dialogo.current?.showModal();
   }
 
@@ -59,11 +65,12 @@ export function CalendarioDeAsistencias({
     <dialog aria-labelledby="titulo-asistencia" className="dialogo-confirmacion" ref={dialogo}>
       {fechaSeleccionada && editable && asistencia ? <form action={accion}>
         <h2 id="titulo-asistencia">{asistencia.estado === "confirmada" ? "Ajustar asistencia" : "Registrar asistencia"}</h2>
-        <p>{fechaSeleccionada}</p>
         <input name="idHuellero" type="hidden" value={idHuellero} />
         <input name="fecha" type="hidden" value={fechaSeleccionada} />
         <input name="estadoActual" type="hidden" value={asistencia.estado} />
-        <label>Fecha<input defaultValue={fechaSeleccionada} readOnly type="date" /></label><label>Hora de ingreso<input defaultValue={hora(asistencia.entrada) ?? ""} name="entrada" required type="time" /></label><label>Hora de salida<input defaultValue={hora(asistencia.salida) ?? ""} name="salida" required type="time" /></label>{asistencia.estado === "confirmada" ? <label>Motivo del ajuste<input name="motivo" required /></label> : null}<div className="acciones-dialogo"><button className="boton-secundario" onClick={() => dialogo.current?.close()} type="button">Cancelar</button><button disabled={pendiente} type="submit">{pendiente ? "Guardando…" : "Guardar asistencia"}</button></div>
+        {asistencia.estado === "confirmada" ? <><input name="tipoDeAsistencia" type="hidden" value="trabajo" /><p>Asistencia confirmada: Jornada laboral</p></> : <label>Tipo de asistencia<select name="tipoDeAsistencia" onChange={(evento) => setTipoDeAsistencia(evento.target.value as TipoDeAsistencia)} value={tipoDeAsistencia}>{TIPOS_DE_ASISTENCIA.map((opcion) => <option key={opcion} value={opcion}>{etiquetaTipoDeAsistencia(opcion)}</option>)}</select></label>}
+        {tipoDeAsistencia === "trabajo" ? <>{asistencia.estado === "confirmada" ? <p>Sede planificada: {asistencia.sedeProgramada}</p> : <><label>Sede<input defaultValue={asistencia.sedeProgramada ?? ""} name="sede" required /></label><p className="ayuda-campo">Debe coincidir con la sede planificada.</p></>}<label>Hora de ingreso<input defaultValue={hora(asistencia.entrada) ?? ""} name="entrada" required type="time" /></label><label>Hora de salida<input defaultValue={hora(asistencia.salida) ?? ""} name="salida" required type="time" /></label>{asistencia.estado === "confirmada" ? <label>Motivo del ajuste<input name="motivo" required /></label> : null}</> : <label>Comentario<input name="comentario" required /></label>}
+        <div className="acciones-dialogo"><button className="boton-secundario" onClick={() => dialogo.current?.close()} type="button">Cancelar</button><button disabled={pendiente} type="submit">{pendiente ? "Guardando…" : "Guardar asistencia"}</button></div>
         {estado.error && <p className="mensaje-operacion error" role="alert">{estado.error}</p>}
       </form> : <FormularioSoloLectura estado={estadoSeleccionado} estadoManual={asistencia?.estadoManual ?? null} fecha={fechaSeleccionada} />}
     </dialog>
@@ -103,3 +110,7 @@ function textoSoloLectura(
 }
 
 function hora(valor: string | null): string | undefined { return valor ? /T(\d{2}:\d{2})/.exec(valor)?.[1] : undefined; }
+
+function etiquetaTipoDeAsistencia(tipo: TipoDeAsistencia): string {
+  return tipo === "trabajo" ? "Jornada laboral" : tipo[0].toUpperCase() + tipo.slice(1);
+}
