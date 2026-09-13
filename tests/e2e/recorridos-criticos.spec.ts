@@ -19,6 +19,14 @@ function fechaDeLaSemanaDeDemo(indiceDelDia: number): string {
   return primero.toISOString().slice(0, 10);
 }
 
+function fechaDeLaSemanaAnteriorDeDemo(indiceDelDia: number): string {
+  const hoy = new Date();
+  const primero = new Date(Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth() - 1, 1));
+  const diaDeLaSemana = primero.getUTCDay() === 0 ? 7 : primero.getUTCDay();
+  primero.setUTCDate(1 + ((8 - diaDeLaSemana) % 7) + indiceDelDia);
+  return primero.toISOString().slice(0, 10);
+}
+
 test("una contraseña incorrecta muestra un error recuperable", async ({ page }) => {
   const errores = observarErroresDelNavegador(page);
 
@@ -267,8 +275,7 @@ test("publicar selección solo publica la fila marcada y respeta una deselecció
   expect(errores).toEqual([]);
 });
 
-test("registra un estado manual y mantiene el diálogo abierto ante una sede discordante", async ({ page }) => {
-  test.setTimeout(60_000);
+test("revisa asistencias semanales por grupo sin agrupar colaboradores por sede fija", async ({ page }) => {
   const errores = observarErroresDelNavegador(page);
 
   await page.goto("/iniciar-sesion");
@@ -277,25 +284,23 @@ test("registra un estado manual y mantiene el diálogo abierto ante una sede dis
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page).toHaveURL(/\/turnos$/);
 
-  const sabado = fechaDeLaSemanaDeDemo(5);
-  const mes = sabado.slice(0, 7);
-  await page.goto(`/asistencias?colaborador=DEMO-BETO&mes=${mes}`);
-  const celda = page.getByRole("button", { name: new RegExp(`Asistencia del ${sabado}:`) });
-  await celda.click();
+  const semana = fechaDeLaSemanaDeDemo(0);
+  await page.goto(`/asistencias?grupo=Tiendas&semana=${semana}`);
 
-  const dialogo = page.getByRole("dialog", { name: "Registrar asistencia" });
-  await expect(dialogo.getByLabel("Fecha")).toHaveCount(0);
-  await dialogo.getByLabel("Sede").fill("Otra sede");
-  await dialogo.getByLabel("Hora de ingreso").fill("08:00");
-  await dialogo.getByLabel("Hora de salida").fill("16:00");
-  await dialogo.getByRole("button", { name: "Guardar asistencia" }).click();
-  await expect(dialogo.getByRole("alert")).toHaveText("La sede registrada no coincide con la sede planificada (Tienda Benavides). Corrija y republique el horario semanal.");
-  await expect(dialogo).toBeVisible();
+  const matriz = page.locator(".tabla-plan-semanal");
+  await expect(matriz).toBeVisible();
+  await expect(matriz.getByRole("columnheader")).toHaveCount(8);
+  const filaBeto = matriz.getByRole("row", { name: /Beto Publicado/ });
+  await expect(filaBeto).toContainText("Tienda Benavides");
+  await expect(filaBeto).toContainText("Feriado");
+  await expect(filaBeto).toContainText("Pendiente de revisión");
+  const filaDario = matriz.getByRole("row", { name: /Darío Liquidado/ });
+  await expect(filaDario).toContainText("Tienda San Isidro");
 
-  await dialogo.getByLabel("Tipo de asistencia").selectOption("falta");
-  await dialogo.getByLabel("Comentario").fill("No asistió por enfermedad.");
-  await dialogo.getByRole("button", { name: "Guardar asistencia" }).click();
-  await expect(dialogo).toBeHidden();
-  await expect(celda).toContainText("Falta");
+  const semanaAnterior = fechaDeLaSemanaAnteriorDeDemo(0);
+  await page.goto(`/asistencias?grupo=Tiendas&semana=${semanaAnterior}`);
+  const filaElena = page.locator(".tabla-plan-semanal").getByRole("row", { name: /Elena Sotelo/ });
+  await expect(filaElena).toContainText("Liquidado");
+  await expect(filaElena.locator(".icono-candado")).toHaveCount(6);
   expect(errores).toEqual([]);
 });

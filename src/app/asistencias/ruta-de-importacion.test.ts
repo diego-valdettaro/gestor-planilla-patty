@@ -12,9 +12,9 @@ describe("ruta de importación de asistencias", () => {
 
   it("muestra un enlace secundario al formulario en la fila de filtros", () => {
     const html = renderToStaticMarkup(createElement(FiltrosDeAsistencia, {
-      colaborador: "H-1001",
-      colaboradores: [{ idHuellero: "H-1001", nombre: "Ana" }],
-      mes: "2026-09",
+      grupo: "Tiendas",
+      grupos: ["Tiendas"],
+      semana: "2026-09-14",
     }));
 
     expect(html).toContain('href="/asistencias/importar"');
