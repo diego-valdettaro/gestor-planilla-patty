@@ -304,3 +304,46 @@ test("revisa asistencias semanales por grupo sin agrupar colaboradores por sede 
   await expect(filaElena.locator(".icono-candado")).toHaveCount(6);
   expect(errores).toEqual([]);
 });
+
+test("confirma colaboradores por un rango que corta la semana desde las vistas mensual y semanal", async ({ page }) => {
+  test.setTimeout(60_000);
+  const errores = observarErroresDelNavegador(page);
+  await page.goto("/iniciar-sesion");
+  await page.getByLabel("Usuario").fill("admin");
+  await page.getByLabel("Contraseña").fill("admin");
+  await page.getByRole("button", { name: "Entrar" }).click();
+  await expect(page).toHaveURL(/\/turnos$/);
+
+  const semana = fechaDeLaSemanaDeDemo(0);
+  await page.goto(`/asistencias?vista=mensual&grupo=Tiendas&fecha=${semana}&colaborador=DEMO-EVA`);
+  await page.getByRole("button", { name: "Confirmar por rango" }).click();
+  let dialogo = page.getByRole("dialog", { name: "Confirmar asistencias por rango" });
+  await expect(dialogo.getByText("Eva Confirmable")).toBeVisible();
+  await expect(dialogo.locator(".opciones-confirmacion-rango li")).toHaveCount(1);
+  await dialogo.getByRole("button", { name: "Cancelar" }).click();
+
+  await page.getByRole("link", { name: "Vista semanal" }).click();
+  const botonConfirmarRango = page.getByRole("button", { name: "Confirmar por rango" });
+  await expect(botonConfirmarRango).toHaveAttribute("data-rango-inicio", fechaDeLaSemanaDeDemo(0));
+  await botonConfirmarRango.click();
+  dialogo = page.getByRole("dialog", { name: "Confirmar asistencias por rango" });
+  await expect(dialogo.getByLabel("Desde")).toHaveValue(fechaDeLaSemanaDeDemo(0));
+  await expect(dialogo.getByLabel("Hasta")).toHaveValue(fechaDeLaSemanaDeDemo(6));
+  const martes = fechaDeLaSemanaDeDemo(1);
+  const viernes = fechaDeLaSemanaDeDemo(4);
+  await dialogo.getByLabel("Desde").fill(martes);
+  await dialogo.getByLabel("Hasta").fill(viernes);
+  await dialogo.getByRole("button", { name: "Revisar rango" }).click();
+  const opcionEva = dialogo.locator("li", { hasText: "Eva Confirmable" });
+  const checkboxEva = opcionEva.locator('input[type="checkbox"]');
+  await expect(checkboxEva).toBeChecked();
+  await checkboxEva.uncheck();
+  await expect(dialogo.getByRole("button", { name: "Confirmar selección" })).toBeDisabled();
+  await checkboxEva.check();
+  await dialogo.getByRole("button", { name: "Confirmar 1 colaborador" }).click();
+  await expect(dialogo).toBeHidden();
+
+  const filaEva = page.locator(".tabla-plan-semanal").getByRole("row", { name: /Eva Confirmable/ });
+  await expect(filaEva).toContainText("Registrada");
+  expect(errores).toEqual([]);
+});

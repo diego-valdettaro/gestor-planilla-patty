@@ -12,6 +12,13 @@ import {
   type SolicitudDeDecisionDeHoraExtra,
   type SolicitudDeEstadoManual,
 } from "./confirmar-y-ajustar-asistencia";
+import {
+  confirmarColaboradoresPorRango,
+  evaluarColaboradoresPorRango,
+  type RepositorioDeConfirmacionPorRango,
+  type SolicitudDeConfirmacionPorRango,
+  type SolicitudDeEvaluacionPorRango,
+} from "./confirmar-colaboradores-por-rango";
 
 export function crearCasosDeUsoDeAsistencias(
   repositorio: RepositorioDeAsistencias,
@@ -32,6 +39,20 @@ export function crearCasosDeUsoDeAsistencias(
     },
     async registrarEstadoManual(solicitud: SolicitudDeEstadoManual): Promise<void> {
       await registrarEstadoManual(repositorio, await sesion.obtenerActorActual(), solicitud);
+    },
+  };
+}
+
+export function crearCasosDeUsoDeConfirmacionPorRango(
+  repositorio: RepositorioDeConfirmacionPorRango,
+  sesion: SesionDelServidor,
+) {
+  return {
+    async evaluar(solicitud: SolicitudDeEvaluacionPorRango) {
+      return evaluarColaboradoresPorRango(repositorio, await sesion.obtenerActorActual(), solicitud);
+    },
+    async confirmar(solicitud: SolicitudDeConfirmacionPorRango): Promise<void> {
+      await confirmarColaboradoresPorRango(repositorio, await sesion.obtenerActorActual(), solicitud);
     },
   };
 }

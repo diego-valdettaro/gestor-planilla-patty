@@ -14,10 +14,7 @@ export class RepositorioPostgresDeTardanzas implements RepositorioDeTardanzas {
   }
 
   async buscarPoliticaVigente(sede: string, fecha: string) {
-    const [politica] = await this.db.select().from(politicasDePenalizacionPorTardanzas)
-      .where(and(eq(politicasDePenalizacionPorTardanzas.sede, sede), lte(politicasDePenalizacionPorTardanzas.vigenteDesde, fecha)))
-      .orderBy(desc(politicasDePenalizacionPorTardanzas.vigenteDesde)).limit(1);
-    return politica;
+    return buscarPoliticaVigente(this.db, sede, fecha);
   }
 
   async contarTardanzas(idHuellero: string, inicio: string, fin: string): Promise<number> {
@@ -26,4 +23,15 @@ export class RepositorioPostgresDeTardanzas implements RepositorioDeTardanzas {
       .where(and(eq(asistenciasEsperadas.idHuellero, idHuellero), gte(asistenciasEsperadas.fecha, inicio), lte(asistenciasEsperadas.fecha, fin)));
     return filas.length;
   }
+}
+
+export async function buscarPoliticaVigente(
+  db: Pick<NodePgDatabase<typeof schema>, "select">,
+  sede: string,
+  fecha: string,
+) {
+  const [politica] = await db.select().from(politicasDePenalizacionPorTardanzas)
+    .where(and(eq(politicasDePenalizacionPorTardanzas.sede, sede), lte(politicasDePenalizacionPorTardanzas.vigenteDesde, fecha)))
+    .orderBy(desc(politicasDePenalizacionPorTardanzas.vigenteDesde)).limit(1);
+  return politica;
 }

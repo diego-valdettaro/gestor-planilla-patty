@@ -54,6 +54,7 @@ const COLABORADORES = [
   { idHuellero: "DEMO-CARLA", nombre: "Carla Cambios", sede: SEDES.benavides, grupo: GRUPOS.tiendas, activo: true },
   { idHuellero: "DEMO-DARIO", nombre: "Darío Liquidado", sede: SEDES.sanIsidro, grupo: GRUPOS.tiendas, activo: true },
   { idHuellero: "DEMO-ELENA", nombre: "Elena Sotelo", sede: SEDES.sanIsidro, grupo: GRUPOS.tiendas, activo: true },
+  { idHuellero: "DEMO-EVA", nombre: "Eva Confirmable", sede: SEDES.benavides, grupo: GRUPOS.tiendas, activo: true },
   { idHuellero: "DEMO-FRANCO", nombre: "Franco Díaz", sede: SEDES.taller, grupo: GRUPOS.taller, activo: true },
   { idHuellero: "DEMO-GABI", nombre: "Gabriela Pérez", sede: SEDES.taller, grupo: GRUPOS.taller, activo: true },
   { idHuellero: "DEMO-HUGO", nombre: "Hugo Marín", sede: SEDES.administracion, grupo: GRUPOS.administracion, activo: true },
@@ -236,7 +237,7 @@ async function verificarInvariantes(pool: Pool): Promise<void> {
   );
   if (anterior?.estado !== "cerrado") fallos.push("el período del mes anterior no quedó cerrado");
 
-  for (const idHuellero of ["DEMO-BETO", "DEMO-CARLA", "DEMO-DARIO"]) {
+  for (const idHuellero of ["DEMO-BETO", "DEMO-CARLA", "DEMO-DARIO", "DEMO-EVA"]) {
     const { rows: [turnos] } = await pool.query<{ n: string }>(
       "SELECT count(*)::text AS n FROM turnos_publicados WHERE id_huellero = $1 AND fecha >= $2 AND fecha <= $3",
       [idHuellero, SEMANA_ACTUAL, ultimoDiaSemana],
@@ -264,6 +265,7 @@ function resumen(): string {
     "  Beto Publicado   -> Publicado",
     "  Carla Cambios    -> Cambios sin publicar (miércoles)",
     "  Darío Liquidado  -> Liquidado",
+    "  Eva Confirmable  -> Lista para confirmar por rango",
     `Período ${PERIODO_ANTERIOR.inicio}..${PERIODO_ANTERIOR.fin}: cerrado (Elena publicada + procesada)`,
     `Período ${PERIODO_ACTUAL.inicio}..${PERIODO_ACTUAL.fin}: abierto`,
     "",
@@ -335,6 +337,13 @@ async function main(): Promise<void> {
     await turnos.publicarEnLote(turnosDeSemana("DEMO-BETO", SEDES.benavides, SEMANA_ACTUAL), actorOperaciones);
     await turnos.publicarEnLote(turnosDeSemana("DEMO-CARLA", SEDES.benavides, SEMANA_ACTUAL), actorOperaciones);
     await turnos.publicarEnLote(turnosDeSemana("DEMO-DARIO", SEDES.sanIsidro, SEMANA_ACTUAL), actorOperaciones);
+    await turnos.publicarEnLote(turnosDeSemana("DEMO-EVA", SEDES.benavides, SEMANA_ACTUAL), actorOperaciones);
+    for (const fecha of diasDeLaSemana(SEMANA_ACTUAL).slice(0, 6)) {
+      await db.update(schema.asistenciasEsperadas).set({
+        entradaPropuesta: `${fecha}T08:02:00`,
+        salidaPropuesta: `${fecha}T16:20:00`,
+      }).where(and(eq(schema.asistenciasEsperadas.idHuellero, "DEMO-EVA"), eq(schema.asistenciasEsperadas.fecha, fecha)));
+    }
     // `registrarProcesamiento` exige la semana con las asistencias laborales resueltas.
     await confirmarSemanaLaboral(db, "DEMO-DARIO", modeloApertura(SEDES.sanIsidro), SEMANA_ACTUAL);
     await turnos.registrarProcesamiento({ idHuellero: "DEMO-DARIO", semana: SEMANA_ACTUAL, equipo: "Tiendas", responsableId: finanzas.id });

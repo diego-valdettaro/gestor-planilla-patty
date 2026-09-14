@@ -39,6 +39,7 @@ describe("página semanal de asistencias", () => {
     expect((html.match(/<time /g) ?? [])).toHaveLength(7);
     expect(html).toContain("Tiendas");
     expect(html).toContain("Ana Torres");
+    expect(html).toContain("Confirmar por rango");
     expect(html).not.toContain("Centro");
     expect(html).toContain('href="/asistencias?vista=mensual&amp;grupo=Tiendas&amp;fecha=2031-03-10&amp;colaborador=HU-1"');
   }, 15_000);
@@ -66,5 +67,6 @@ describe("página semanal de asistencias", () => {
     expect((html.match(/Asistencia del 2031-03-/g) ?? [])).toHaveLength(31);
     expect(html).toContain('href="/asistencias?vista=semanal&amp;grupo=Tiendas&amp;fecha=2031-03-12&amp;colaborador=HU-1"');
     expect(html).toContain("Vista semanal");
+    expect(html).toContain("Confirmar por rango");
   });
 });

@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 
 import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
-import { crearCasosDeUsoDeAsistencias } from "@/asistencias/casos-de-uso-servidor";
+import { crearCasosDeUsoDeAsistencias, crearCasosDeUsoDeConfirmacionPorRango } from "@/asistencias/casos-de-uso-servidor";
+import type { ColaboradorParaConfirmar, EvaluacionDeColaborador, SolicitudDeConfirmacionPorRango } from "@/asistencias/confirmar-colaboradores-por-rango";
 import { esTipoDeEstadoManualRegistrable } from "@/asistencias/estado-manual";
 import { repositorioDeAsistencias } from "@/asistencias/servicio";
 import { crearCasosDeUsoDeTurnos } from "@/turnos/casos-de-uso-servidor";
@@ -23,6 +24,30 @@ export interface EstadoDeImportacion {
 export interface EstadoDeRegistroManual {
   error?: string;
   listo?: string;
+}
+
+export async function evaluarConfirmacionPorRango(solicitud: {
+  inicio: string;
+  fin: string;
+  colaboradores: ColaboradorParaConfirmar[];
+}): Promise<{ evaluacion?: EvaluacionDeColaborador[]; error?: string }> {
+  try {
+    const casosDeUso = crearCasosDeUsoDeConfirmacionPorRango(repositorioDeAsistencias, { obtenerActorActual });
+    return { evaluacion: await casosDeUso.evaluar(solicitud) };
+  } catch (causa) {
+    return { error: causa instanceof Error ? causa.message : "No se pudo revisar el rango." };
+  }
+}
+
+export async function confirmarSeleccionPorRango(solicitud: SolicitudDeConfirmacionPorRango): Promise<{ error?: string }> {
+  try {
+    const casosDeUso = crearCasosDeUsoDeConfirmacionPorRango(repositorioDeAsistencias, { obtenerActorActual });
+    await casosDeUso.confirmar(solicitud);
+    revalidatePath("/asistencias");
+    return {};
+  } catch (causa) {
+    return { error: causa instanceof Error ? causa.message : "No se pudo confirmar la selección." };
+  }
 }
 
 export async function importarAsistencia(_estadoAnterior: EstadoDeImportacion, formData: FormData): Promise<EstadoDeImportacion> {
