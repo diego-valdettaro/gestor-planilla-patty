@@ -6,6 +6,7 @@ export interface AsistenciaSemanal extends EvidenciaDeCeldaAsistencia {
   entrada: string | null;
   salida: string | null;
   sedeProgramada: string | null;
+  motivoPlanificado?: string | null;
 }
 
 export interface JornadaSemanal {

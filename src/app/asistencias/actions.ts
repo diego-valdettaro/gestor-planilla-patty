@@ -58,6 +58,12 @@ export async function confirmarAsistencia(formData: FormData): Promise<void> {
   revalidatePath("/asistencias");
 }
 
+export async function confirmarColaboradoresPorRango(solicitud: { inicio: string; fin: string; idsHuellero: string[] }): Promise<void> {
+  const casosDeUso = crearCasosDeUsoDeAsistencias(repositorioDeAsistencias, { obtenerActorActual });
+  await casosDeUso.confirmarPorRango(solicitud);
+  revalidatePath("/asistencias");
+}
+
 export async function registrarAsistenciaManual(
   _estadoAnterior: EstadoDeRegistroManual,
   formData: FormData,

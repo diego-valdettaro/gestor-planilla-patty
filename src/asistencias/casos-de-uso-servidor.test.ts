@@ -31,6 +31,7 @@ function crearRepositorioEnMemoria(): {
     estadosManuales,
     marcasCrudas,
     repositorio: {
+      confirmarColaboradoresPorRango: async () => undefined,
       buscarTurnoPublicado: async (idHuellero, fecha) => turnos.get(`${idHuellero}:${fecha}`),
       confirmar: async (asistencia) => { asistencias.push(asistencia); },
       buscarInstantaneaDeTurno: async (idHuellero, fecha) => {

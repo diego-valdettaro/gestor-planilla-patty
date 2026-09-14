@@ -1,9 +1,10 @@
-import { and, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import type { EvidenciaDeCeldaAsistencia } from "@/app/asistencias/estado-de-celda";
 import * as schema from "@/db/schema";
-import { ajustesDeAsistencia, asistenciasEsperadas, estadosManuales, horasExtra, marcasCrudas, periodosPlanilla, tardanzas, turnosPublicados } from "@/db/schema";
+import { ajustesDeAsistencia, asistenciasEsperadas, estadosManuales, horasExtra, marcasCrudas, periodosPlanilla, politicasDePenalizacionPorTardanzas, tardanzas, turnosPublicados } from "@/db/schema";
+import { calcularTardanza } from "@/tardanzas/politica-de-penalizacion";
 import { RepositorioPostgresDeTardanzas } from "@/tardanzas/repositorio-postgres";
 
 import type {
@@ -14,7 +15,10 @@ import type {
   InstantaneaDeTurno,
   TurnoParaConfirmar,
 } from "./confirmar-y-ajustar-asistencia";
+import { calcularMinutosTrabajados } from "./confirmar-y-ajustar-asistencia";
 import type { EstadoDeHoraExtra, HoraExtraCalculada } from "./calcular-hora-extra";
+import { calcularHoraExtra } from "./calcular-hora-extra";
+import type { SolicitudDeConfirmacionPorRango } from "./confirmar-colaboradores-por-rango";
 
 // Una fila del resumen mensual de asistencias, por (colaborador, día) con horario
 // publicado: la evidencia que deriva el estado de la celda más los campos de
@@ -110,6 +114,54 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
     });
   }
 
+  async confirmarColaboradoresPorRango(solicitud: SolicitudDeConfirmacionPorRango, responsableId: string): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      const filas = await tx.select({
+        idHuellero: asistenciasEsperadas.idHuellero, fecha: asistenciasEsperadas.fecha, estado: asistenciasEsperadas.estado,
+        entradaPropuesta: asistenciasEsperadas.entradaPropuesta, salidaPropuesta: asistenciasEsperadas.salidaPropuesta,
+        sede: turnosPublicados.sede, entradaProgramada: turnosPublicados.entradaProgramada, salidaProgramada: turnosPublicados.salidaProgramada,
+        descanso: turnosPublicados.descanso, motivoNoAsistencia: turnosPublicados.motivoNoAsistencia,
+        enPeriodoCerrado: sql<boolean>`exists (select 1 from ${periodosPlanilla} where ${periodosPlanilla.estado} = 'cerrado' and ${asistenciasEsperadas.fecha} between ${periodosPlanilla.inicio} and ${periodosPlanilla.fin})`,
+      }).from(asistenciasEsperadas).innerJoin(turnosPublicados, and(eq(turnosPublicados.idHuellero, asistenciasEsperadas.idHuellero), eq(turnosPublicados.fecha, asistenciasEsperadas.fecha)))
+        .where(and(inArray(asistenciasEsperadas.idHuellero, solicitud.idsHuellero), gte(asistenciasEsperadas.fecha, solicitud.inicio), lte(asistenciasEsperadas.fecha, solicitud.fin)))
+        .orderBy(asc(asistenciasEsperadas.idHuellero), asc(asistenciasEsperadas.fecha));
+      const porClave = new Map(filas.map((fila) => [`${fila.idHuellero}:${fila.fecha}`, fila]));
+      for (const idHuellero of solicitud.idsHuellero) for (const fecha of fechasDelRango(solicitud.inicio, solicitud.fin)) {
+        const fila = porClave.get(`${idHuellero}:${fecha}`);
+        if (!fila) throw new Error(`El colaborador ${idHuellero} no tiene una jornada publicada para ${fecha}.`);
+        if (fila.enPeriodoCerrado) throw new Error(`La jornada de ${idHuellero} del ${fecha} pertenece a un periodo cerrado.`);
+        if (fila.estado !== "pendiente") throw new Error(`La jornada de ${idHuellero} del ${fecha} ya esta registrada.`);
+        if (fila.motivoNoAsistencia || fila.descanso) {
+          const [actualizada] = await tx.update(asistenciasEsperadas).set({ estado: "manual" })
+            .where(and(eq(asistenciasEsperadas.idHuellero, idHuellero), eq(asistenciasEsperadas.fecha, fecha), eq(asistenciasEsperadas.estado, "pendiente"))).returning({ id: asistenciasEsperadas.id });
+          if (!actualizada) throw new Error("Una jornada cambio mientras se confirmaba la seleccion.");
+          await tx.insert(estadosManuales).values({ asistenciaId: actualizada.id, tipo: fila.motivoNoAsistencia ?? "descanso", comentario: "Motivo planificado confirmado por rango.", responsableId });
+          continue;
+        }
+        if (!fila.sede || !fila.entradaProgramada || !fila.salidaProgramada || !fila.entradaPropuesta || !fila.salidaPropuesta) {
+          throw new Error(`La jornada de ${idHuellero} del ${fecha} no tiene marcas completas para confirmar.`);
+        }
+        const tardanza = await calcularTardanzaEnTransaccion(tx, idHuellero, fecha, fila.sede, fila.entradaProgramada, fila.entradaPropuesta);
+        const [actualizada] = await tx.update(asistenciasEsperadas).set({
+          estado: "confirmada", entradaReal: fila.entradaPropuesta, salidaReal: fila.salidaPropuesta,
+          minutosTrabajados: calcularMinutosTrabajados(fila.entradaPropuesta, fila.salidaPropuesta),
+          instantaneaDeTurno: { sede: fila.sede, entradaProgramada: fila.entradaProgramada, salidaProgramada: fila.salidaProgramada, descanso: false },
+          confirmadoPorId: responsableId, confirmadoEn: new Date(),
+        }).where(and(eq(asistenciasEsperadas.idHuellero, idHuellero), eq(asistenciasEsperadas.fecha, fecha), eq(asistenciasEsperadas.estado, "pendiente"))).returning({ id: asistenciasEsperadas.id });
+        if (!actualizada) throw new Error("Una jornada cambio mientras se confirmaba la seleccion.");
+        if (tardanza) await tx.insert(tardanzas).values({ asistenciaId: actualizada.id, ...tardanza });
+        const horaExtra = calcularHoraExtra(fila.salidaProgramada, fila.salidaPropuesta);
+        if (horaExtra) await tx.insert(horasExtra).values({ asistenciaId: actualizada.id, ...horaExtra });
+      }
+      for (const idHuellero of solicitud.idsHuellero) {
+        for (const fecha of fechasDelRango(solicitud.inicio, solicitud.fin)) {
+          const periodo = limitesDelPeriodo(fecha);
+          await recalcularPenalizacionesEnTransaccion(tx, idHuellero, periodo.inicio, periodo.fin);
+        }
+      }
+    });
+  }
+
   async listarEstadosManuales(): Promise<Array<{
     idHuellero: string; fecha: string; tipo: string; comentario: string; responsableId: string;
   }>> {
@@ -141,6 +193,7 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
       entrada: asistenciasEsperadas.entradaReal,
       salida: asistenciasEsperadas.salidaReal,
       sedeProgramada: turnosPublicados.sede,
+      motivoPlanificado: turnosPublicados.motivoNoAsistencia,
       estadoManual: estadosManuales.tipo,
       entradaPropuesta: asistenciasEsperadas.entradaPropuesta,
       salidaPropuesta: asistenciasEsperadas.salidaPropuesta,
@@ -162,6 +215,7 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
       entrada: asistenciasEsperadas.entradaReal,
       salida: asistenciasEsperadas.salidaReal,
       sedeProgramada: turnosPublicados.sede,
+      motivoPlanificado: turnosPublicados.motivoNoAsistencia,
       estadoManual: estadosManuales.tipo,
       entradaPropuesta: asistenciasEsperadas.entradaPropuesta,
       salidaPropuesta: asistenciasEsperadas.salidaPropuesta,
@@ -181,4 +235,76 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
   async contarTardanzas(idHuellero: string, inicio: string, fin: string): Promise<number> {
     return this.repositorioDeTardanzas.contarTardanzas(idHuellero, inicio, fin);
   }
+}
+
+function fechasDelRango(inicio: string, fin: string): string[] {
+  const fechas: string[] = [];
+  const cursor = new Date(`${inicio}T00:00:00Z`);
+  const limite = new Date(`${fin}T00:00:00Z`);
+  while (cursor <= limite) {
+    fechas.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return fechas;
+}
+
+function limitesDelPeriodo(fecha: string): { inicio: string; fin: string } {
+  const [anio, mes, dia] = fecha.split("-").map(Number);
+  const inicio = dia >= 26 ? new Date(Date.UTC(anio, mes - 1, 26)) : new Date(Date.UTC(anio, mes - 2, 26));
+  const fin = new Date(Date.UTC(inicio.getUTCFullYear(), inicio.getUTCMonth() + 1, 25));
+  return { inicio: inicio.toISOString().slice(0, 10), fin: fin.toISOString().slice(0, 10) };
+}
+
+async function recalcularPenalizacionesEnTransaccion(
+  tx: Parameters<NodePgDatabase<typeof schema>["transaction"]>[0] extends (tx: infer T) => unknown ? T : never,
+  idHuellero: string,
+  inicio: string,
+  fin: string,
+): Promise<void> {
+  const filas = await tx.select({
+    tardanzaId: tardanzas.id, fecha: asistenciasEsperadas.fecha, instantanea: asistenciasEsperadas.instantaneaDeTurno,
+  }).from(tardanzas).innerJoin(asistenciasEsperadas, eq(tardanzas.asistenciaId, asistenciasEsperadas.id))
+    .where(and(eq(asistenciasEsperadas.idHuellero, idHuellero), gte(asistenciasEsperadas.fecha, inicio), lte(asistenciasEsperadas.fecha, fin)))
+    .orderBy(asc(asistenciasEsperadas.fecha));
+  for (const [indice, fila] of filas.entries()) {
+    if (!fila.instantanea?.sede) continue;
+    const [politica] = await tx.select().from(politicasDePenalizacionPorTardanzas)
+      .where(and(eq(politicasDePenalizacionPorTardanzas.sede, fila.instantanea.sede), lte(politicasDePenalizacionPorTardanzas.vigenteDesde, fila.fecha)))
+      .orderBy(desc(politicasDePenalizacionPorTardanzas.vigenteDesde)).limit(1);
+    if (!politica) throw new Error("No existe una politica de tardanzas vigente para la sede.");
+    await tx.update(tardanzas).set({
+      minutosPenalizados: (indice + 1) % politica.tardanzasAcumuladas === 0 ? politica.horasPenalizadas * 60 : 0,
+      politicaVersion: politica.version,
+    }).where(eq(tardanzas.id, fila.tardanzaId));
+  }
+}
+
+function minutosEntreInstantes(entrada: string, salida: string): number {
+  const minutos = (new Date(salida).getTime() - new Date(entrada).getTime()) / 60_000;
+  if (!Number.isInteger(minutos) || minutos < 0) throw new Error("La salida propuesta debe ser posterior a la entrada propuesta.");
+  return minutos;
+}
+
+async function calcularTardanzaEnTransaccion(
+  tx: Parameters<NodePgDatabase<typeof schema>["transaction"]>[0] extends (tx: infer T) => unknown ? T : never,
+  idHuellero: string,
+  fecha: string,
+  sede: string,
+  entradaProgramada: string,
+  entradaReal: string,
+): Promise<{ minutosDeTardanza: number; minutosPenalizados: number; politicaVersion: number } | undefined> {
+  return calcularTardanza({
+    async buscarPoliticaVigente(sedeConsultada, fechaConsultada) {
+      const [politica] = await tx.select().from(politicasDePenalizacionPorTardanzas)
+        .where(and(eq(politicasDePenalizacionPorTardanzas.sede, sedeConsultada), lte(politicasDePenalizacionPorTardanzas.vigenteDesde, fechaConsultada)))
+        .orderBy(desc(politicasDePenalizacionPorTardanzas.vigenteDesde)).limit(1);
+      return politica;
+    },
+    async contarTardanzas(idConsultado, inicio, fin) {
+      const [conteo] = await tx.select({ cantidad: sql<number>`count(*)::int` }).from(tardanzas)
+        .innerJoin(asistenciasEsperadas, eq(tardanzas.asistenciaId, asistenciasEsperadas.id))
+        .where(and(eq(asistenciasEsperadas.idHuellero, idConsultado), gte(asistenciasEsperadas.fecha, inicio), lte(asistenciasEsperadas.fecha, fin), lte(asistenciasEsperadas.fecha, fecha)));
+      return conteo.cantidad;
+    },
+  }, { idHuellero, sede, fecha, entradaProgramada, entradaReal });
 }

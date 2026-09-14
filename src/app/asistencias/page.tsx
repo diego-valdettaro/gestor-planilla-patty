@@ -10,11 +10,13 @@ import { CalendarioDeAsistencias } from "./calendario-de-asistencias";
 import { ESTADOS_DE_CELDA_ASISTENCIA, NOMBRE_DEL_ESTADO_DE_CELDA_ASISTENCIA } from "./estado-de-celda";
 import { FiltrosDeAsistencia } from "./filtros-de-asistencia";
 import { MatrizSemanalDeAsistencias } from "./matriz-semanal-de-asistencias";
+import { SelectorConfirmacionPorRango } from "./selector-confirmacion-por-rango";
+import type { AsistenciaSemanal } from "./resumen-semanal";
 
 export const dynamic = "force-dynamic";
 
 interface PropiedadesDePagina {
-  searchParams: Promise<{ colaborador?: string; fecha?: string; grupo?: string; semana?: string; vista?: string }>;
+  searchParams: Promise<{ colaborador?: string; fecha?: string; grupo?: string; semana?: string; vista?: string; inicio?: string; fin?: string }>;
 }
 
 export default async function PaginaDeAsistencias({ searchParams }: PropiedadesDePagina) {
@@ -38,10 +40,14 @@ export default async function PaginaDeAsistencias({ searchParams }: PropiedadesD
   const asistenciasMensuales = vista === "mensual" && colaborador
     ? await repositorioDeAsistencias.listarResumenMensual(colaborador.idHuellero, diasDelMes[0], diasDelMes.at(-1)!)
     : [];
+  const inicioRango = fechaValida(parametros.inicio) ? parametros.inicio : vista === "mensual" ? diasDelMes[0] : dias[0];
+  const finRango = fechaValida(parametros.fin) && parametros.fin >= inicioRango ? parametros.fin : vista === "mensual" ? diasDelMes.at(-1)! : dias.at(-1)!;
+  const asistenciasDelRango = grupo ? await repositorioDeAsistencias.listarResumenSemanal(colaboradores.map(({ idHuellero }) => idHuellero), inicioRango, finRango) : [];
+  const opcionesDeConfirmacion = opcionesParaConfirmar(colaboradores, inicioRango, finRango, asistenciasDelRango);
 
   return <main className="contenido">
     <header className="encabezado"><div><p className="eyebrow">Administración y Finanzas</p><h1>Asistencias</h1><p>{vista === "mensual" ? "Revise el mes completo de un colaborador." : "Revise las jornadas semanales por grupo operativo."}</p></div></header>
-    {grupo ? <><FiltrosDeAsistencia colaborador={colaborador?.idHuellero} colaboradores={colaboradores} fecha={fecha} grupo={grupo} grupos={grupos} vista={vista} />{vista === "mensual" && !colaborador ? <section className="estado-vacio"><h2>No hay colaboradores activos</h2><p>Registre un colaborador activo en este grupo antes de revisar sus asistencias mensuales.</p></section> : <section className="tarjeta"><header className="encabezado-seccion"><div><h2>{vista === "mensual" ? colaborador?.nombre : grupo}</h2><p>{vista === "mensual" ? "El calendario muestra los resultados diarios del colaborador." : "La matriz muestra las jornadas de los colaboradores del grupo."}</p></div></header><ul aria-label="Estados de asistencia" className="leyenda-estados">{ESTADOS_DE_CELDA_ASISTENCIA.map((estadoDeCelda) => <li className={`estado-color-${estadoDeCelda}`} key={estadoDeCelda}>{NOMBRE_DEL_ESTADO_DE_CELDA_ASISTENCIA[estadoDeCelda]}</li>)}</ul>{vista === "mensual" && colaborador ? <CalendarioDeAsistencias asistencias={asistenciasMensuales} desfase={desfaseLunes(diasDelMes[0])} dias={diasDelMes} idHuellero={colaborador.idHuellero} /> : <MatrizSemanalDeAsistencias asistencias={asistenciasSemanales} colaboradores={colaboradores} dias={dias} />}</section>}</> : <section className="estado-vacio"><h2>No hay grupos operativos</h2><p>Configure una sede activa dentro de un grupo operativo antes de revisar asistencias.</p></section>}
+    {grupo ? <><FiltrosDeAsistencia colaborador={colaborador?.idHuellero} colaboradores={colaboradores} fecha={fecha} grupo={grupo} grupos={grupos} vista={vista} /><section className="tarjeta"><form className="filtros" method="get"><input name="vista" type="hidden" value={vista} /><input name="grupo" type="hidden" value={grupo} /><input name="fecha" type="hidden" value={fecha} /><label>Desde<input defaultValue={inicioRango} name="inicio" type="date" /></label><label>Hasta<input defaultValue={finRango} name="fin" type="date" /></label><button type="submit">Definir rango</button></form><SelectorConfirmacionPorRango fin={finRango} inicio={inicioRango} opciones={opcionesDeConfirmacion} /></section>{vista === "mensual" && !colaborador ? <section className="estado-vacio"><h2>No hay colaboradores activos</h2><p>Registre un colaborador activo en este grupo antes de revisar sus asistencias mensuales.</p></section> : <section className="tarjeta"><header className="encabezado-seccion"><div><h2>{vista === "mensual" ? colaborador?.nombre : grupo}</h2><p>{vista === "mensual" ? "El calendario muestra los resultados diarios del colaborador." : "La matriz muestra las jornadas de los colaboradores del grupo."}</p></div></header><ul aria-label="Estados de asistencia" className="leyenda-estados">{ESTADOS_DE_CELDA_ASISTENCIA.map((estadoDeCelda) => <li className={`estado-color-${estadoDeCelda}`} key={estadoDeCelda}>{NOMBRE_DEL_ESTADO_DE_CELDA_ASISTENCIA[estadoDeCelda]}</li>)}</ul>{vista === "mensual" && colaborador ? <CalendarioDeAsistencias asistencias={asistenciasMensuales} desfase={desfaseLunes(diasDelMes[0])} dias={diasDelMes} idHuellero={colaborador.idHuellero} /> : <MatrizSemanalDeAsistencias asistencias={asistenciasSemanales} colaboradores={colaboradores} dias={dias} />}</section>}</> : <section className="estado-vacio"><h2>No hay grupos operativos</h2><p>Configure una sede activa dentro de un grupo operativo antes de revisar asistencias.</p></section>}
   </main>;
 }
 
@@ -57,4 +63,29 @@ function fechasDelMes(mes: string): string[] {
 
 function desfaseLunes(fecha: string): number {
   return (new Date(`${fecha}T00:00:00Z`).getUTCDay() + 6) % 7;
+}
+
+function opcionesParaConfirmar(colaboradores: Array<{ idHuellero: string; nombre: string }>, inicio: string, fin: string, asistencias: AsistenciaSemanal[]) {
+  const dias = fechasEntre(inicio, fin);
+  const porClave = new Map(asistencias.map((asistencia) => [`${asistencia.idHuellero}:${asistencia.fecha}`, asistencia]));
+  return colaboradores.map((colaborador) => {
+    const causas = dias.flatMap((dia) => {
+      const asistencia = porClave.get(`${colaborador.idHuellero}:${dia}`);
+      if (!asistencia) return [`${dia}: sin jornada publicada`];
+      if (asistencia.enPeriodoCerrado) return [`${dia}: periodo cerrado`];
+      if (asistencia.estado !== "pendiente") return [`${dia}: jornada ya registrada`];
+      if (asistencia.motivoPlanificado) return [];
+      if (!asistencia.entradaPropuesta || !asistencia.salidaPropuesta) return [`${dia}: marcas incompletas`];
+      if (asistencia.salidaPropuesta <= asistencia.entradaPropuesta) return [`${dia}: horas inconsistentes`];
+      return [];
+    });
+    return { ...colaborador, seleccionable: !causas.length, causa: causas[0] };
+  });
+}
+
+function fechasEntre(inicio: string, fin: string): string[] {
+  const resultado: string[] = [];
+  const fecha = new Date(`${inicio}T00:00:00Z`);
+  while (fecha.toISOString().slice(0, 10) <= fin) { resultado.push(fecha.toISOString().slice(0, 10)); fecha.setUTCDate(fecha.getUTCDate() + 1); }
+  return resultado;
 }

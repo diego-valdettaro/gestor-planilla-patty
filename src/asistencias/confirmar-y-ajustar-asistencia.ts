@@ -2,6 +2,7 @@ import type { Actor } from "@/colaboradores/registrar-colaborador";
 import { calcularTardanza, type PoliticaDePenalizacionPorTardanzas, type TardanzaCalculada } from "@/tardanzas/politica-de-penalizacion";
 
 import { calcularHoraExtra, type EstadoDeHoraExtra, type HoraExtraCalculada } from "./calcular-hora-extra";
+import type { RepositorioDeConfirmacionPorRango } from "./confirmar-colaboradores-por-rango";
 import { nombreDelMotivoPlanificado, type MotivoPlanificadoDeNoAsistencia, type TipoDeEstadoManualRegistrable } from "./estado-manual";
 
 export type { TipoDeEstadoManual } from "./estado-manual";
@@ -68,7 +69,7 @@ export interface AjusteDeAsistencia extends SolicitudDeAjuste {
   minutosTrabajados: number;
 }
 
-export interface RepositorioDeAsistencias {
+export interface RepositorioDeAsistencias extends RepositorioDeConfirmacionPorRango {
   buscarTurnoPublicado(idHuellero: string, fecha: string): Promise<TurnoParaConfirmar | undefined>;
   confirmar(asistencia: AsistenciaConfirmada): Promise<void>;
   buscarInstantaneaDeTurno(idHuellero: string, fecha: string): Promise<InstantaneaDeTurno | undefined>;
@@ -170,7 +171,7 @@ export async function registrarEstadoManual(
   await repositorio.registrarEstadoManual({ ...solicitud, comentario, responsableId: actor.id, registradoEn: new Date() });
 }
 
-function calcularMinutosTrabajados(entradaReal: string, salidaReal: string): number {
+export function calcularMinutosTrabajados(entradaReal: string, salidaReal: string): number {
   const minutos = (new Date(salidaReal).getTime() - new Date(entradaReal).getTime()) / 60_000;
   if (!Number.isInteger(minutos) || minutos < 0) {
     throw new Error("La salida real debe ser posterior a la entrada real.");
