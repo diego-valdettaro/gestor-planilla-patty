@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import React, { useActionState, useEffect, useRef, useState } from "react";
 
 import { IconoCandado } from "@/app/icono-candado";
 import { TIPOS_DE_ESTADO_MANUAL_REGISTRABLE, type TipoDeEstadoManualRegistrable } from "@/asistencias/estado-manual";
@@ -60,7 +60,7 @@ export function CalendarioDeAsistencias({
       const item = porFecha.get(fecha);
       const estadoDelDia = estadoDeCeldaAsistencia(item);
       const etiqueta = etiquetaDeCeldaAsistencia(estadoDelDia, item?.estadoManual ?? null);
-      return <button aria-label={`Asistencia del ${fecha}: ${etiqueta}`} className={`dia-calendario estado-color-${estadoDelDia}`} key={fecha} onClick={() => abrir(fecha)} type="button"><time>{Number(fecha.slice(-2))}</time><strong>{estadoDelDia === "liquidado" && <IconoCandado />}{etiqueta}</strong>{item ? <><span>{hora(item.entrada) ?? "sin entrada"}</span><span>{hora(item.salida) ?? "sin salida"}</span></> : <span>Sin planificación</span>}</button>;
+      return <button aria-label={`Asistencia del ${fecha}: ${etiqueta}`} className={`dia-calendario estado-color-${estadoDelDia}`} key={fecha} onClick={() => abrir(fecha)} type="button"><time>{Number(fecha.slice(-2))}</time><strong>{estadoDelDia === "liquidado" && <IconoCandado />}{etiqueta}</strong>{item ? item.estadoManual ? null : <><span>{item.sedeProgramada ?? "sin sede"}</span><span>{hora(item.entrada) ?? "sin entrada"}</span><span>{hora(item.salida) ?? "sin salida"}</span></> : <span>Sin planificación</span>}</button>;
     })}</div></div>
     <dialog aria-labelledby="titulo-asistencia" className="dialogo-confirmacion" ref={dialogo}>
       {fechaSeleccionada && editable && asistencia ? <form action={accion}>
