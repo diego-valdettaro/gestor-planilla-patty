@@ -331,3 +331,25 @@ export const incidenciasDeImportacion = pgTable(
   },
   (table) => [index("incidencias_importacion_id").on(table.importacionId)],
 );
+
+export const reemplazosDeAsistenciaImportada = pgTable(
+  "reemplazos_de_asistencia_importada",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    asistenciaId: uuid("asistencia_id").notNull().references(() => asistenciasEsperadas.id),
+    importacionId: uuid("importacion_id").notNull().references(() => importacionesSemanales.id),
+    estadoAnterior: text("estado_anterior", { enum: ["confirmada", "manual"] }).notNull(),
+    valorAnterior: jsonb("valor_anterior").$type<{
+      entradaReal?: string;
+      salidaReal?: string;
+      tipo?: string;
+      comentario?: string;
+    }>().notNull(),
+    responsableId: uuid("responsable_id").notNull().references(() => cuentasLocales.id),
+    reemplazadoEn: timestamp("reemplazado_en", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("reemplazos_asistencia_importada_asistencia_id").on(table.asistenciaId),
+    index("reemplazos_asistencia_importada_importacion_id").on(table.importacionId),
+  ],
+);
