@@ -1,10 +1,11 @@
-import { and, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import type { EvidenciaDeCeldaAsistencia } from "@/app/asistencias/estado-de-celda";
 import * as schema from "@/db/schema";
 import { ajustesDeAsistencia, asistenciasEsperadas, estadosManuales, horasExtra, marcasCrudas, periodosPlanilla, tardanzas, turnosPublicados } from "@/db/schema";
-import { RepositorioPostgresDeTardanzas } from "@/tardanzas/repositorio-postgres";
+import { buscarPoliticaVigente, RepositorioPostgresDeTardanzas } from "@/tardanzas/repositorio-postgres";
+import { calcularMinutosDeTardanza, calcularMinutosPenalizados } from "@/tardanzas/politica-de-penalizacion";
 
 import type {
   AsistenciaConfirmada,
@@ -14,7 +15,14 @@ import type {
   InstantaneaDeTurno,
   TurnoParaConfirmar,
 } from "./confirmar-y-ajustar-asistencia";
-import type { EstadoDeHoraExtra, HoraExtraCalculada } from "./calcular-hora-extra";
+import { calcularMinutosTrabajados } from "./confirmar-y-ajustar-asistencia";
+import { calcularHoraExtra, type EstadoDeHoraExtra, type HoraExtraCalculada } from "./calcular-hora-extra";
+import type {
+  EvaluacionDeColaborador,
+  RepositorioDeConfirmacionPorRango,
+  SolicitudDeConfirmacionPorRango,
+  SolicitudDeEvaluacionPorRango,
+} from "./confirmar-colaboradores-por-rango";
 
 // Una fila del resumen mensual de asistencias, por (colaborador, día) con horario
 // publicado: la evidencia que deriva el estado de la celda más los campos de
@@ -30,11 +38,108 @@ export interface FilaDeResumenSemanal extends FilaDeResumenMensual {
   idHuellero: string;
 }
 
-export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencias {
+export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencias, RepositorioDeConfirmacionPorRango {
   private readonly repositorioDeTardanzas: RepositorioPostgresDeTardanzas;
 
   constructor(private readonly db: NodePgDatabase<typeof schema>) {
     this.repositorioDeTardanzas = new RepositorioPostgresDeTardanzas(db);
+  }
+
+  async evaluarColaboradoresPorRango(solicitud: SolicitudDeEvaluacionPorRango): Promise<EvaluacionDeColaborador[]> {
+    const idsHuellero = solicitud.colaboradores.map(({ idHuellero }) => idHuellero);
+    if (!idsHuellero.length) return [];
+    const filas = await consultaJornadasDelRango(this.db, idsHuellero, solicitud.inicio, solicitud.fin);
+    return evaluarJornadasDelRango(solicitud, filas);
+  }
+
+  async confirmarColaboradoresPorRango(solicitud: SolicitudDeConfirmacionPorRango, responsableId: string): Promise<void> {
+    try {
+      await this.db.transaction(async (tx) => {
+        const periodos = await tx.select().from(periodosPlanilla).where(and(
+          lte(periodosPlanilla.inicio, solicitud.fin),
+          gte(periodosPlanilla.fin, solicitud.inicio),
+        )).for("update");
+        const filas = await consultaJornadasDelRango(tx, solicitud.idsHuellero, solicitud.inicio, solicitud.fin)
+          .for("update", { of: asistenciasEsperadas });
+        const evaluacion = evaluarJornadasDelRango({
+          inicio: solicitud.inicio,
+          fin: solicitud.fin,
+          colaboradores: solicitud.idsHuellero.map((idHuellero) => ({ idHuellero, nombre: idHuellero })),
+        }, filas);
+        const noSeleccionable = evaluacion.find(({ seleccionable }) => !seleccionable);
+        if (noSeleccionable) {
+          const bloqueo = noSeleccionable.bloqueos[0];
+          throw new Error(bloqueo
+            ? `${noSeleccionable.idHuellero}, ${bloqueo.fecha}: ${bloqueo.causa}`
+            : `${noSeleccionable.idHuellero} ya no tiene asistencias por registrar en el rango.`);
+        }
+
+        const jornadasPendientes = filas.filter(({ estado }) => estado === "pendiente").sort((a, b) => a.fecha.localeCompare(b.fecha));
+        for (const fila of jornadasPendientes) {
+          if (fila.motivoNoAsistencia || fila.descanso) {
+            const [actualizada] = await tx.update(asistenciasEsperadas).set({ estado: "manual" }).where(and(
+              eq(asistenciasEsperadas.idHuellero, fila.idHuellero),
+              eq(asistenciasEsperadas.fecha, fila.fecha),
+              eq(asistenciasEsperadas.estado, "pendiente"),
+            )).returning({ id: asistenciasEsperadas.id });
+            if (!actualizada) throw new Error("Una jornada cambió mientras se confirmaba la selección.");
+            await tx.insert(estadosManuales).values({
+              asistenciaId: actualizada.id,
+              tipo: fila.motivoNoAsistencia ?? "descanso",
+              comentario: "Motivo planificado confirmado por rango.",
+              responsableId,
+            });
+            continue;
+          }
+          if (!fila.sede || !fila.entradaProgramada || !fila.salidaProgramada || !fila.entradaPropuesta || !fila.salidaPropuesta) {
+            throw new Error("Una jornada cambió mientras se confirmaba la selección.");
+          }
+          const [actualizada] = await tx.update(asistenciasEsperadas).set({
+            estado: "confirmada",
+            entradaReal: fila.entradaPropuesta,
+            salidaReal: fila.salidaPropuesta,
+            minutosTrabajados: calcularMinutosTrabajados(fila.entradaPropuesta, fila.salidaPropuesta),
+            instantaneaDeTurno: {
+              sede: fila.sede,
+              entradaProgramada: fila.entradaProgramada,
+              salidaProgramada: fila.salidaProgramada,
+              descanso: false,
+            },
+            confirmadoPorId: responsableId,
+            confirmadoEn: new Date(),
+          }).where(and(
+            eq(asistenciasEsperadas.idHuellero, fila.idHuellero),
+            eq(asistenciasEsperadas.fecha, fila.fecha),
+            eq(asistenciasEsperadas.estado, "pendiente"),
+          )).returning({ id: asistenciasEsperadas.id });
+          if (!actualizada) throw new Error("Una jornada cambió mientras se confirmaba la selección.");
+          const politica = await buscarPoliticaVigente(tx, fila.sede, fila.fecha);
+          if (!politica) throw new Error(`No existe una política de tardanzas vigente para ${fila.sede}.`);
+          const minutosDeTardanza = calcularMinutosDeTardanza(fila.entradaProgramada, fila.entradaPropuesta);
+          if (minutosDeTardanza > politica.toleranciaEnMinutos) {
+            await tx.insert(tardanzas).values({
+              asistenciaId: actualizada.id,
+              minutosDeTardanza,
+              minutosPenalizados: 0,
+              politicaVersion: politica.version,
+            });
+          }
+          const horaExtra = calcularHoraExtra(fila.salidaProgramada, fila.salidaPropuesta);
+          if (horaExtra) await tx.insert(horasExtra).values({ asistenciaId: actualizada.id, ...horaExtra });
+        }
+
+        const recalculos = new Map<string, { idHuellero: string; inicio: string; fin: string }>();
+        for (const fila of jornadasPendientes) {
+          const periodo = periodos.find(({ inicio, fin }) => inicio <= fila.fecha && fin >= fila.fecha);
+          if (!periodo) throw new Error(`La jornada de ${fila.fecha} ya no pertenece a un período abierto.`);
+          recalculos.set(`${fila.idHuellero}:${periodo.inicio}:${periodo.fin}`, { idHuellero: fila.idHuellero, inicio: periodo.inicio, fin: periodo.fin });
+        }
+        for (const recalculo of recalculos.values()) await recalcularPenalizaciones(tx, recalculo);
+      }, { isolationLevel: "serializable" });
+    } catch (causa) {
+      if (codigoPostgres(causa) === "40001") throw new Error("La selección cambió mientras se confirmaba. Revise el rango e intente otra vez.");
+      throw causa;
+    }
   }
 
   async buscarTurnoPublicado(idHuellero: string, fecha: string): Promise<TurnoParaConfirmar | undefined> {
@@ -181,4 +286,134 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
   async contarTardanzas(idHuellero: string, inicio: string, fin: string): Promise<number> {
     return this.repositorioDeTardanzas.contarTardanzas(idHuellero, inicio, fin);
   }
+}
+
+interface FilaParaConfirmarPorRango {
+  idHuellero: string;
+  fecha: string;
+  estado: "pendiente" | "confirmada" | "manual";
+  entradaPropuesta: string | null;
+  salidaPropuesta: string | null;
+  sede: string | null;
+  entradaProgramada: string | null;
+  salidaProgramada: string | null;
+  descanso: boolean;
+  motivoNoAsistencia: "descanso" | "feriado" | "vacaciones" | "permiso" | "suspension" | null;
+  enPeriodoCerrado: boolean;
+  enPeriodoAbierto: boolean;
+}
+
+type FuenteDeConsultaDeAsistencias = Pick<NodePgDatabase<typeof schema>, "select">;
+
+function consultaJornadasDelRango(
+  db: FuenteDeConsultaDeAsistencias,
+  idsHuellero: string[],
+  inicio: string,
+  fin: string,
+) {
+  return db.select({
+    idHuellero: asistenciasEsperadas.idHuellero,
+    fecha: asistenciasEsperadas.fecha,
+    estado: asistenciasEsperadas.estado,
+    entradaPropuesta: asistenciasEsperadas.entradaPropuesta,
+    salidaPropuesta: asistenciasEsperadas.salidaPropuesta,
+    sede: turnosPublicados.sede,
+    entradaProgramada: turnosPublicados.entradaProgramada,
+    salidaProgramada: turnosPublicados.salidaProgramada,
+    descanso: turnosPublicados.descanso,
+    motivoNoAsistencia: turnosPublicados.motivoNoAsistencia,
+    enPeriodoCerrado: sql<boolean>`exists (select 1 from ${periodosPlanilla} where ${periodosPlanilla.estado} = 'cerrado' and ${asistenciasEsperadas.fecha} between ${periodosPlanilla.inicio} and ${periodosPlanilla.fin})`,
+    enPeriodoAbierto: sql<boolean>`exists (select 1 from ${periodosPlanilla} where ${periodosPlanilla.estado} = 'abierto' and ${asistenciasEsperadas.fecha} between ${periodosPlanilla.inicio} and ${periodosPlanilla.fin})`,
+  }).from(asistenciasEsperadas).innerJoin(turnosPublicados, and(
+    eq(turnosPublicados.idHuellero, asistenciasEsperadas.idHuellero),
+    eq(turnosPublicados.fecha, asistenciasEsperadas.fecha),
+  )).where(and(
+    inArray(asistenciasEsperadas.idHuellero, idsHuellero),
+    gte(asistenciasEsperadas.fecha, inicio),
+    lte(asistenciasEsperadas.fecha, fin),
+  ));
+}
+
+function evaluarJornadasDelRango(
+  solicitud: SolicitudDeEvaluacionPorRango,
+  filas: FilaParaConfirmarPorRango[],
+): EvaluacionDeColaborador[] {
+  return solicitud.colaboradores.map((colaborador) => {
+    let jornadasPendientes = 0;
+    let jornadasRegistradas = 0;
+    const bloqueos: Array<{ fecha: string; causa: string }> = [];
+    const jornadas = filas.filter(({ idHuellero }) => idHuellero === colaborador.idHuellero).sort((a, b) => a.fecha.localeCompare(b.fecha));
+    for (const fila of jornadas) {
+      if (fila.estado !== "pendiente") {
+        jornadasRegistradas += 1;
+        continue;
+      }
+      jornadasPendientes += 1;
+      if (fila.enPeriodoCerrado) {
+        bloqueos.push({ fecha: fila.fecha, causa: "La jornada pertenece a un período cerrado." });
+        continue;
+      }
+      if (!fila.enPeriodoAbierto) {
+        bloqueos.push({ fecha: fila.fecha, causa: "No hay un período de planilla abierto para la jornada." });
+        continue;
+      }
+      if (fila.motivoNoAsistencia || fila.descanso) continue;
+      if (!fila.sede || !fila.entradaProgramada || !fila.salidaProgramada) {
+        bloqueos.push({ fecha: fila.fecha, causa: "La jornada laboral publicada está incompleta." });
+      } else if (!fila.entradaPropuesta && !fila.salidaPropuesta) {
+        bloqueos.push({ fecha: fila.fecha, causa: "Faltan las marcas de entrada y salida." });
+      } else if (!fila.entradaPropuesta) {
+        bloqueos.push({ fecha: fila.fecha, causa: "Falta la marca de entrada." });
+      } else if (!fila.salidaPropuesta) {
+        bloqueos.push({ fecha: fila.fecha, causa: "Falta la marca de salida." });
+      } else if (!marcasConsistentes(fila.entradaPropuesta, fila.salidaPropuesta)) {
+        bloqueos.push({ fecha: fila.fecha, causa: "La salida debe ser posterior a la entrada." });
+      }
+    }
+    return {
+      ...colaborador,
+      seleccionable: bloqueos.length === 0 && jornadasPendientes > 0,
+      jornadasPendientes,
+      jornadasRegistradas,
+      bloqueos,
+    };
+  });
+}
+
+function marcasConsistentes(entrada: string, salida: string): boolean {
+  const inicio = new Date(entrada).getTime();
+  const fin = new Date(salida).getTime();
+  return Number.isFinite(inicio) && Number.isFinite(fin) && fin > inicio;
+}
+
+type TransaccionDeAsistencias = Parameters<NodePgDatabase<typeof schema>["transaction"]>[0] extends (tx: infer T) => unknown ? T : never;
+
+async function recalcularPenalizaciones(
+  tx: TransaccionDeAsistencias,
+  alcance: { idHuellero: string; inicio: string; fin: string },
+): Promise<void> {
+  const filas = await tx.select({
+    tardanzaId: tardanzas.id,
+    fecha: asistenciasEsperadas.fecha,
+    instantanea: asistenciasEsperadas.instantaneaDeTurno,
+  }).from(tardanzas).innerJoin(asistenciasEsperadas, eq(tardanzas.asistenciaId, asistenciasEsperadas.id)).where(and(
+    eq(asistenciasEsperadas.idHuellero, alcance.idHuellero),
+    gte(asistenciasEsperadas.fecha, alcance.inicio),
+    lte(asistenciasEsperadas.fecha, alcance.fin),
+  )).orderBy(asc(asistenciasEsperadas.fecha));
+  for (const [indice, fila] of filas.entries()) {
+    if (!fila.instantanea?.sede) throw new Error(`La tardanza de ${fila.fecha} no conserva la sede aplicada.`);
+    const politica = await buscarPoliticaVigente(tx, fila.instantanea.sede, fila.fecha);
+    if (!politica) throw new Error(`No existe una política de tardanzas vigente para ${fila.instantanea.sede}.`);
+    await tx.update(tardanzas).set({
+      minutosPenalizados: calcularMinutosPenalizados(indice + 1, politica),
+      politicaVersion: politica.version,
+    }).where(eq(tardanzas.id, fila.tardanzaId));
+  }
+}
+
+function codigoPostgres(causa: unknown): string | undefined {
+  if (!causa || typeof causa !== "object") return undefined;
+  const error = causa as { code?: string; cause?: unknown };
+  return error.code ?? codigoPostgres(error.cause);
 }

@@ -7,6 +7,7 @@ import { diasDeLaSemana, inicioDeSemana } from "@/turnos/semana";
 import { repositorioDeGrupos, repositorioDeTurnos } from "@/turnos/servicio";
 
 import { CalendarioDeAsistencias } from "./calendario-de-asistencias";
+import { DialogoConfirmacionPorRango } from "./dialogo-confirmacion-por-rango";
 import { ESTADOS_DE_CELDA_ASISTENCIA, NOMBRE_DEL_ESTADO_DE_CELDA_ASISTENCIA } from "./estado-de-celda";
 import { FiltrosDeAsistencia } from "./filtros-de-asistencia";
 import { MatrizSemanalDeAsistencias } from "./matriz-semanal-de-asistencias";
@@ -38,10 +39,14 @@ export default async function PaginaDeAsistencias({ searchParams }: PropiedadesD
   const asistenciasMensuales = vista === "mensual" && colaborador
     ? await repositorioDeAsistencias.listarResumenMensual(colaborador.idHuellero, diasDelMes[0], diasDelMes.at(-1)!)
     : [];
+  const rangoVisible = vista === "mensual"
+    ? { inicio: diasDelMes[0], fin: diasDelMes.at(-1)! }
+    : { inicio: dias[0], fin: dias.at(-1)! };
+  const colaboradoresDelRango = vista === "mensual" ? colaborador ? [colaborador] : [] : colaboradores;
 
   return <main className="contenido">
     <header className="encabezado"><div><p className="eyebrow">Administración y Finanzas</p><h1>Asistencias</h1><p>{vista === "mensual" ? "Revise el mes completo de un colaborador." : "Revise las jornadas semanales por grupo operativo."}</p></div></header>
-    {grupo ? <><FiltrosDeAsistencia colaborador={colaborador?.idHuellero} colaboradores={colaboradores} fecha={fecha} grupo={grupo} grupos={grupos} vista={vista} />{vista === "mensual" && !colaborador ? <section className="estado-vacio"><h2>No hay colaboradores activos</h2><p>Registre un colaborador activo en este grupo antes de revisar sus asistencias mensuales.</p></section> : <section className="tarjeta"><header className="encabezado-seccion"><div><h2>{vista === "mensual" ? colaborador?.nombre : grupo}</h2><p>{vista === "mensual" ? "El calendario muestra los resultados diarios del colaborador." : "La matriz muestra las jornadas de los colaboradores del grupo."}</p></div></header><ul aria-label="Estados de asistencia" className="leyenda-estados">{ESTADOS_DE_CELDA_ASISTENCIA.map((estadoDeCelda) => <li className={`estado-color-${estadoDeCelda}`} key={estadoDeCelda}>{NOMBRE_DEL_ESTADO_DE_CELDA_ASISTENCIA[estadoDeCelda]}</li>)}</ul>{vista === "mensual" && colaborador ? <CalendarioDeAsistencias asistencias={asistenciasMensuales} desfase={desfaseLunes(diasDelMes[0])} dias={diasDelMes} idHuellero={colaborador.idHuellero} /> : <MatrizSemanalDeAsistencias asistencias={asistenciasSemanales} colaboradores={colaboradores} dias={dias} />}</section>}</> : <section className="estado-vacio"><h2>No hay grupos operativos</h2><p>Configure una sede activa dentro de un grupo operativo antes de revisar asistencias.</p></section>}
+    {grupo ? <><FiltrosDeAsistencia colaborador={colaborador?.idHuellero} colaboradores={colaboradores} fecha={fecha} grupo={grupo} grupos={grupos} vista={vista} />{vista === "mensual" && !colaborador ? <section className="estado-vacio"><h2>No hay colaboradores activos</h2><p>Registre un colaborador activo en este grupo antes de revisar sus asistencias mensuales.</p></section> : <section className="tarjeta"><header className="encabezado-seccion encabezado-confirmacion-rango"><div><h2>{vista === "mensual" ? colaborador?.nombre : grupo}</h2><p>{vista === "mensual" ? "El calendario muestra los resultados diarios del colaborador." : "La matriz muestra las jornadas de los colaboradores del grupo."}</p></div><DialogoConfirmacionPorRango colaboradores={colaboradoresDelRango} finInicial={rangoVisible.fin} inicioInicial={rangoVisible.inicio} key={`${vista}-${rangoVisible.inicio}-${rangoVisible.fin}-${colaborador?.idHuellero ?? grupo}`} /></header><ul aria-label="Estados de asistencia" className="leyenda-estados">{ESTADOS_DE_CELDA_ASISTENCIA.map((estadoDeCelda) => <li className={`estado-color-${estadoDeCelda}`} key={estadoDeCelda}>{NOMBRE_DEL_ESTADO_DE_CELDA_ASISTENCIA[estadoDeCelda]}</li>)}</ul>{vista === "mensual" && colaborador ? <CalendarioDeAsistencias asistencias={asistenciasMensuales} desfase={desfaseLunes(diasDelMes[0])} dias={diasDelMes} idHuellero={colaborador.idHuellero} /> : <MatrizSemanalDeAsistencias asistencias={asistenciasSemanales} colaboradores={colaboradores} dias={dias} />}</section>}</> : <section className="estado-vacio"><h2>No hay grupos operativos</h2><p>Configure una sede activa dentro de un grupo operativo antes de revisar asistencias.</p></section>}
   </main>;
 }
 

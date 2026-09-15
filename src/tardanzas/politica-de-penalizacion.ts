@@ -52,15 +52,22 @@ export async function calcularTardanza(
 ): Promise<TardanzaCalculada | undefined> {
   const politica = await repositorio.buscarPoliticaVigente(solicitud.sede, solicitud.fecha);
   if (!politica) throw new Error("No existe una política de tardanzas vigente para la sede.");
-  const minutosDeTardanza = minutosEntreHorarios(solicitud.entradaProgramada, solicitud.entradaReal);
+  const minutosDeTardanza = calcularMinutosDeTardanza(solicitud.entradaProgramada, solicitud.entradaReal);
   if (minutosDeTardanza <= politica.toleranciaEnMinutos) return undefined;
   const periodo = obtenerPeriodoDePlanilla(solicitud.fecha);
   const tardanzasAnteriores = await repositorio.contarTardanzas(solicitud.idHuellero, periodo.inicio, periodo.fin);
   return {
     minutosDeTardanza,
-    minutosPenalizados: (tardanzasAnteriores + 1) % politica.tardanzasAcumuladas === 0 ? politica.horasPenalizadas * 60 : 0,
+    minutosPenalizados: calcularMinutosPenalizados(tardanzasAnteriores + 1, politica),
     politicaVersion: politica.version,
   };
+}
+
+export function calcularMinutosPenalizados(
+  numeroDeTardanza: number,
+  politica: Pick<PoliticaDePenalizacionPorTardanzas, "tardanzasAcumuladas" | "horasPenalizadas">,
+): number {
+  return numeroDeTardanza % politica.tardanzasAcumuladas === 0 ? politica.horasPenalizadas * 60 : 0;
 }
 
 function validarPolitica(solicitud: SolicitudDePoliticaDePenalizacionPorTardanzas): void {
@@ -70,7 +77,7 @@ function validarPolitica(solicitud: SolicitudDePoliticaDePenalizacionPorTardanza
   }
 }
 
-function minutosEntreHorarios(entradaProgramada: string, entradaReal: string): number {
+export function calcularMinutosDeTardanza(entradaProgramada: string, entradaReal: string): number {
   const programada = minutosDelDia(entradaProgramada);
   const real = minutosDelDia(entradaReal.slice(11, 16));
   return real - programada;

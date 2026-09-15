@@ -92,6 +92,17 @@ th, td { border: 1px solid #e2e8f0; padding: 0.6rem; text-align: left; }
 .encabezado-seccion { margin-bottom: 1rem; }
 .encabezado-seccion h2 { margin-bottom: 0.25rem; }
 .encabezado-seccion p { color: #475569; margin: 0; }
+.encabezado-confirmacion-rango { align-items: flex-start; display: flex; gap: 1rem; justify-content: space-between; }
+.dialogo-confirmacion-rango { max-width: 38rem; }
+.dialogo-confirmacion-rango > section > header { display: grid; gap: .35rem; }
+.campos-rango-confirmacion { align-items: end; display: grid; gap: .75rem; grid-template-columns: 1fr 1fr auto; }
+.campos-rango-confirmacion label { display: grid; gap: .35rem; }
+.opciones-confirmacion-rango { border-bottom: 1px solid #e2e8f0; border-top: 1px solid #e2e8f0; list-style: none; margin: 0; max-height: 18rem; overflow-y: auto; padding: 0; }
+.opciones-confirmacion-rango li + li { border-top: 1px solid #e2e8f0; }
+.opciones-confirmacion-rango label { align-items: flex-start; display: flex; gap: .65rem; padding: .75rem .1rem; }
+.opciones-confirmacion-rango label > span { display: grid; gap: .15rem; }
+.opciones-confirmacion-rango small { color: #66758c; }
+.opciones-confirmacion-rango .causa-bloqueo-rango { color: #b91c1c; }
 .calendario { overflow-x: auto; }
 .dias-semana, .celdas-calendario { display: grid; grid-template-columns: repeat(7, minmax(8rem, 1fr)); min-width: 56rem; }
 .dias-semana span { color: #475569; font-size: 0.8rem; font-weight: 700; padding: 0.5rem; text-align: center; }
@@ -178,7 +189,7 @@ th, td { border: 1px solid #e2e8f0; padding: 0.6rem; text-align: left; }
 .dias-completar-semana select { flex: 0 0 auto; }
 
 .sr-only { height: 1px; margin: -1px; overflow: hidden; padding: 0; position: absolute; width: 1px; clip: rect(0, 0, 0, 0); white-space: nowrap; }
-@media (max-width: 700px) { .contenido { padding: 1rem; } .filtros { align-items: stretch; flex-direction: column; } }
+@media (max-width: 700px) { .contenido { padding: 1rem; } .filtros { align-items: stretch; flex-direction: column; } .encabezado-confirmacion-rango { align-items: stretch; flex-direction: column; } .campos-rango-confirmacion { grid-template-columns: 1fr; } }
 @media (max-width: 700px) { .barra-plan-semanal, .herramientas-plan-semanal, .pie-plan-semanal { align-items: stretch; flex-direction: column; } .contexto-plan { align-items: stretch; flex-direction: column; } .estado-borrador, .acciones-plan, .rango-semana, .resumen-plan { margin-left: 0; } .acciones-plan { justify-content: flex-end; } .selector-plan-semanal, .aplicar-horario { align-items: stretch; flex-direction: column; } .navegacion-semana { justify-content: stretch; } .navegacion-semana a { flex: 1; text-align: center; } }
 
 /* Layout de pagina (encabezado, paneles, filtros y tablas compartidos por Configuracion y Liquidaciones) */
