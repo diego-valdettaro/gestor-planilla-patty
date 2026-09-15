@@ -28,6 +28,27 @@ describe("parsearArchivoHuellero", () => {
     });
   });
 
+  it("conserva el día de una fecha Excel en una zona horaria positiva", async () => {
+    const zonaHorariaOriginal = process.env.TZ;
+    process.env.TZ = "Europe/Amsterdam";
+    try {
+      const archivo = await archivoXlsx([
+        ["ID de huellero", "Sede", "Fecha", "Entrada", "Salida"],
+        ["HU-1024", "Centro", new Date(2026, 8, 14), "09:00", "18:00"],
+      ]);
+
+      await expect(parsearArchivoHuellero(archivo)).resolves.toEqual({
+        filas: [
+          { fila: 2, idHuellero: "HU-1024", sede: "Centro", fecha: "2026-09-14", entrada: "09:00", salida: "18:00" },
+        ],
+        errores: [],
+      });
+    } finally {
+      if (zonaHorariaOriginal === undefined) delete process.env.TZ;
+      else process.env.TZ = zonaHorariaOriginal;
+    }
+  });
+
   it("informa todos los defectos estructurales y de filas, sin ocultar duplicados", async () => {
     const archivo = await archivoXlsx([
       ["ID de huellero", "Sede", "Fecha", "Entrada", "Salida"],
