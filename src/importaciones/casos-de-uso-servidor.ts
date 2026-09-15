@@ -1,10 +1,10 @@
 import type { SesionDelServidor } from "@/colaboradores/casos-de-uso-servidor";
 
 import {
-  importarAsistencias,
-  prevalidarImportacion,
+  aplicarImportacion,
+  previsualizarImportacion,
   type RepositorioDeImportaciones,
-  type SolicitudDeImportacion,
+  type SolicitudDeAplicacion,
   type SolicitudDePrevalidacion,
 } from "./importar-semana-por-sede";
 
@@ -13,11 +13,11 @@ export function crearCasosDeUsoDeImportaciones(
   sesion: SesionDelServidor,
 ) {
   return {
-    async prevalidar(solicitud: SolicitudDePrevalidacion) {
-      return prevalidarImportacion(repositorio, await sesion.obtenerActorActual(), solicitud);
+    async previsualizar(solicitud: SolicitudDePrevalidacion) {
+      return previsualizarImportacion(repositorio, await sesion.obtenerActorActual(), solicitud);
     },
-    async importar(solicitud: SolicitudDeImportacion) {
-      return importarAsistencias(repositorio, await sesion.obtenerActorActual(), solicitud);
+    async aplicar(solicitud: SolicitudDeAplicacion) {
+      return aplicarImportacion(repositorio, await sesion.obtenerActorActual(), solicitud);
     },
   };
 }
