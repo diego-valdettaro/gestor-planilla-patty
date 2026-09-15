@@ -11,7 +11,7 @@ import { crearCasosDeUsoDeTurnos } from "@/turnos/casos-de-uso-servidor";
 import { repositorioDeTurnos } from "@/turnos/servicio";
 import { conservarArchivoFuente, descartarArchivoFuente } from "@/importaciones/almacenamiento-local";
 import { crearCasosDeUsoDeImportaciones } from "@/importaciones/casos-de-uso-servidor";
-import { ErroresDeImportacion } from "@/importaciones/importar-semana-por-sede";
+import { ErroresDeImportacion, type VistaPreviaDeImportacion } from "@/importaciones/importar-semana-por-sede";
 import { parsearArchivoHuellero, type ErrorDeImportacion } from "@/importaciones/parsear-archivo-huellero";
 import { repositorioDeImportaciones } from "@/importaciones/servicio";
 
@@ -19,6 +19,7 @@ export interface EstadoDeImportacion {
   error?: string;
   errores?: ErrorDeImportacion[];
   resultado?: { jornadas: number };
+  vistaPrevia?: VistaPreviaDeImportacion;
 }
 
 export interface EstadoDeRegistroManual {
@@ -57,13 +58,25 @@ export async function importarAsistencia(_estadoAnterior: EstadoDeImportacion, f
     if (!(archivo instanceof File) || archivo.size === 0) throw new Error("Debe seleccionar un archivo fuente.");
     const contenido = await parsearArchivoHuellero(archivo);
     const casosDeUso = crearCasosDeUsoDeImportaciones(repositorioDeImportaciones, { obtenerActorActual });
-    const errores = await casosDeUso.prevalidar({ filas: contenido.filas, erroresDelArchivo: contenido.errores });
-    if (errores.length) return { errores };
+    const solicitud = { filas: contenido.filas, erroresDelArchivo: contenido.errores };
+
+    const previa = await casosDeUso.previsualizar(solicitud);
+    if (!previa.vistaPrevia) return { errores: previa.errores };
+
+    const confirmarReemplazoDeConfirmadas = formData.get("confirmarReemplazoDeConfirmadas") === "true";
+    if (previa.vistaPrevia.conteos.confirmado > 0 && !confirmarReemplazoDeConfirmadas) {
+      return { vistaPrevia: previa.vistaPrevia };
+    }
 
     archivoFuente = await conservarArchivoFuente(archivo);
-    const resultado = await casosDeUso.importar({ filas: contenido.filas, erroresDelArchivo: contenido.errores, archivo: archivoFuente });
+    const resultado = await casosDeUso.aplicar({ ...solicitud, archivo: archivoFuente, confirmarReemplazoDeConfirmadas });
+    if (resultado.requiereConfirmacion) {
+      await descartarArchivoFuente(archivoFuente).catch(() => undefined);
+      archivoFuente = undefined;
+      return { vistaPrevia: { conteos: resultado.conteos, filas: previa.vistaPrevia.filas } };
+    }
     revalidatePath("/asistencias");
-    return { resultado };
+    return { resultado: { jornadas: resultado.jornadas }, vistaPrevia: previa.vistaPrevia };
   } catch (causa) {
     if (archivoFuente) await descartarArchivoFuente(archivoFuente).catch(() => undefined);
     if (causa instanceof ErroresDeImportacion) return { errores: causa.errores };
