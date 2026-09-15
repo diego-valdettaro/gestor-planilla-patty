@@ -12,6 +12,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
+import type { ResumenDePeriodo } from "@/periodos/periodo-planilla";
 
 export const colaboradores = pgTable("colaboradores", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -76,6 +77,19 @@ export const auditoriaPeriodosPlanilla = pgTable("auditoria_periodos_planilla", 
   motivo: text("motivo"),
   registradoEn: timestamp("registrado_en", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const revisionesDePeriodosPlanilla = pgTable(
+  "revisiones_periodos_planilla",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    periodoId: uuid("periodo_id").notNull().references(() => periodosPlanilla.id),
+    numero: integer("numero").notNull(),
+    resumen: jsonb("resumen").$type<ResumenDePeriodo>().notNull(),
+    responsableId: uuid("responsable_id").notNull().references(() => cuentasLocales.id),
+    cerradaEn: timestamp("cerrada_en", { withTimezone: true }).notNull(),
+  },
+  (table) => [uniqueIndex("revisiones_periodo_numero").on(table.periodoId, table.numero)],
+);
 
 export const modelosDeHorario = pgTable(
   "modelos_de_horario",

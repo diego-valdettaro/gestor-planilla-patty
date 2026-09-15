@@ -3,6 +3,7 @@ import {
   calcularSugerenciaDePeriodo,
   cerrarPeriodo,
   crearPeriodo,
+  decidirHorasExtra,
   HuecoEntrePeriodosError,
   PeriodosSolapadosError,
   reabrirPeriodo,
@@ -17,8 +18,10 @@ function repositorio(periodos: PeriodoPlanilla[] = []): RepositorioDePeriodos {
     buscar: vi.fn(),
     listarResumen: vi.fn(),
     crear: vi.fn(),
+    decidirHorasExtra: vi.fn(),
     cerrar: vi.fn(),
     reabrir: vi.fn(),
+    listarRevisiones: vi.fn(),
   } as unknown as RepositorioDePeriodos;
 }
 function periodo(inicio: string, fin: string, estado: "abierto" | "cerrado" = "cerrado"): PeriodoPlanilla {
@@ -49,6 +52,34 @@ describe("cierre y reapertura de períodos de planilla", () => {
 
   it("rechaza la reapertura de Administración", async () => {
     await expect(reabrirPeriodo(repositorio(), actor("administracion"), "periodo-1", "Motivo")).rejects.toThrow("Solo Finanzas");
+  });
+});
+
+describe("decisión en lote de horas extra", () => {
+  it("entrega una selección única al repositorio con la decisión de Finanzas", async () => {
+    const repo = repositorio();
+    const ahora = new Date("2042-01-11T10:00:00Z");
+
+    await decidirHorasExtra(repo, actor("finanzas"), {
+      periodoId: "periodo-1",
+      horasExtraIds: ["extra-1", "extra-2", "extra-1"],
+      decision: "aprobada",
+    }, ahora);
+
+    expect(repo.decidirHorasExtra).toHaveBeenCalledWith(
+      "periodo-1",
+      ["extra-1", "extra-2"],
+      "aprobada",
+      "cuenta-1",
+      ahora,
+    );
+  });
+
+  it("rechaza una selección vacía y cualquier rol distinto de Finanzas", async () => {
+    const solicitud = { periodoId: "periodo-1", horasExtraIds: ["extra-1"], decision: "rechazada" as const };
+
+    await expect(decidirHorasExtra(repositorio(), actor("administracion"), solicitud)).rejects.toThrow("Solo Finanzas");
+    await expect(decidirHorasExtra(repositorio(), actor("finanzas"), { ...solicitud, horasExtraIds: [] })).rejects.toThrow("seleccionar");
   });
 });
 

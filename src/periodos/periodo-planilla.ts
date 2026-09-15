@@ -28,7 +28,8 @@ export interface DetalleDeJornada {
   minutosTrabajados: number;
   tardanzaEnMinutos: number;
   minutosPenalizados: number;
-  horaExtra?: { estado: EstadoDeHoraExtra; minutosAl25: number; minutosAl35: number };
+  politicaDeTardanzaVersion: number | null;
+  horaExtra?: { id: string; estado: EstadoDeHoraExtra; minutosAl25: number; minutosAl35: number };
 }
 export interface BloqueoDePeriodo {
   tipo: TipoDeBloqueoDePeriodo;
@@ -53,6 +54,22 @@ export interface ResumenDePeriodo {
   filas: FilaDeResumen[];
   totales: Omit<FilaDeResumen, "idHuellero" | "nombre" | "grupo" | "jornadas">;
   bloqueos: BloqueoDePeriodo[];
+}
+
+export interface RevisionDePeriodo {
+  id: string;
+  periodoId: string;
+  numero: number;
+  resumen: ResumenDePeriodo;
+  responsableId: string;
+  cerradaEn: Date;
+}
+
+export type DecisionDeHoraExtra = Exclude<EstadoDeHoraExtra, "pendiente">;
+export interface SolicitudDeDecisionDeHorasExtra {
+  periodoId: string;
+  horasExtraIds: string[];
+  decision: DecisionDeHoraExtra;
 }
 
 export function crearResumenVacio(): ResumenDePeriodo {
@@ -80,7 +97,9 @@ export interface RepositorioDePeriodos {
   listar(): Promise<PeriodoPlanilla[]>;
   buscar(id: string): Promise<PeriodoPlanilla | undefined>;
   listarResumen(filtros: FiltrosDeResumen): Promise<ResumenDePeriodo>;
+  listarRevisiones(periodoId: string): Promise<RevisionDePeriodo[]>;
   crear(inicio: string, fin: string): Promise<void>;
+  decidirHorasExtra(periodoId: string, horasExtraIds: string[], decision: DecisionDeHoraExtra, responsableId: string, registradaEn: Date): Promise<void>;
   cerrar(id: string, responsableId: string, registradoEn: Date): Promise<void>;
   reabrir(id: string, responsableId: string, motivo: string, registradoEn: Date): Promise<void>;
 }
@@ -103,6 +122,18 @@ export function autorizarGestionDePeriodos(actor: Actor): void {
 
 export function autorizarCierreDePeriodos(actor: Actor): void {
   if (actor.rol !== "finanzas") throw new Error("Solo Finanzas puede cerrar o reabrir períodos de planilla.");
+}
+
+export async function decidirHorasExtra(
+  repositorio: RepositorioDePeriodos,
+  actor: Actor,
+  solicitud: SolicitudDeDecisionDeHorasExtra,
+  ahora = new Date(),
+): Promise<void> {
+  autorizarCierreDePeriodos(actor);
+  const ids = [...new Set(solicitud.horasExtraIds)];
+  if (!ids.length) throw new Error("Debe seleccionar al menos una hora extra.");
+  await repositorio.decidirHorasExtra(solicitud.periodoId, ids, solicitud.decision, actor.id, ahora);
 }
 
 export async function cerrarPeriodo(repositorio: RepositorioDePeriodos, actor: Actor, id: string, ahora = new Date()): Promise<void> {
