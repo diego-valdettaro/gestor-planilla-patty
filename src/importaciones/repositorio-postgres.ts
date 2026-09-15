@@ -1,19 +1,23 @@
-import { and, eq, gte, isNull, lte, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import * as schema from "@/db/schema";
-import type { MotivoPlanificadoDeNoAsistencia } from "@/asistencias/estado-manual";
+import type { MotivoPlanificadoDeNoAsistencia, TipoDeEstadoManual } from "@/asistencias/estado-manual";
 import {
   asistenciasEsperadas,
   colaboradores,
+  estadosManuales,
+  horasExtra,
   importacionesSemanales,
   sedes,
   marcasCrudas,
   periodosPlanilla,
+  reemplazosDeAsistenciaImportada,
+  tardanzas,
   turnosPublicados,
 } from "@/db/schema";
 
-import type { ImportacionDeAsistencias, RepositorioDeImportaciones } from "./importar-semana-por-sede";
+import type { AsistenciaExistente, ImportacionDeAsistencias, RepositorioDeImportaciones } from "./importar-semana-por-sede";
 
 export class RepositorioPostgresDeImportaciones implements RepositorioDeImportaciones {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}
@@ -54,6 +58,56 @@ export class RepositorioPostgresDeImportaciones implements RepositorioDeImportac
     return Boolean(periodo);
   }
 
+  async buscarAsistenciasExistentes(identidades: Array<{ idHuellero: string; fecha: string }>): Promise<AsistenciaExistente[]> {
+    if (!identidades.length) return [];
+    const filas = await this.db.select({
+      id: asistenciasEsperadas.id,
+      idHuellero: asistenciasEsperadas.idHuellero,
+      fecha: asistenciasEsperadas.fecha,
+      estado: asistenciasEsperadas.estado,
+      entradaPropuesta: asistenciasEsperadas.entradaPropuesta,
+      salidaPropuesta: asistenciasEsperadas.salidaPropuesta,
+      entradaReal: asistenciasEsperadas.entradaReal,
+      salidaReal: asistenciasEsperadas.salidaReal,
+    }).from(asistenciasEsperadas).where(or(...identidades.map(({ idHuellero, fecha }) =>
+      and(eq(asistenciasEsperadas.idHuellero, idHuellero), eq(asistenciasEsperadas.fecha, fecha)),
+    )));
+
+    const idsManuales = filas.filter((fila) => fila.estado === "manual").map((fila) => fila.id);
+    const estadosManualesPorAsistencia = await this.buscarUltimoEstadoManualPorAsistencia(idsManuales);
+
+    return filas.map((fila) => ({
+      idHuellero: fila.idHuellero,
+      fecha: fila.fecha,
+      asistenciaId: fila.id,
+      estado: fila.estado,
+      entradaPropuesta: fila.entradaPropuesta,
+      salidaPropuesta: fila.salidaPropuesta,
+      entradaReal: fila.entradaReal,
+      salidaReal: fila.salidaReal,
+      estadoManual: estadosManualesPorAsistencia.get(fila.id),
+    }));
+  }
+
+  private async buscarUltimoEstadoManualPorAsistencia(
+    asistenciaIds: string[],
+  ): Promise<Map<string, { tipo: TipoDeEstadoManual; comentario: string }>> {
+    if (!asistenciaIds.length) return new Map();
+    const registros = await this.db.select({
+      asistenciaId: estadosManuales.asistenciaId,
+      tipo: estadosManuales.tipo,
+      comentario: estadosManuales.comentario,
+      registradoEn: estadosManuales.registradoEn,
+    }).from(estadosManuales).where(inArray(estadosManuales.asistenciaId, asistenciaIds));
+
+    const masReciente = new Map<string, { tipo: TipoDeEstadoManual; comentario: string; registradoEn: Date }>();
+    for (const registro of registros) {
+      const actual = masReciente.get(registro.asistenciaId);
+      if (!actual || registro.registradoEn > actual.registradoEn) masReciente.set(registro.asistenciaId, registro);
+    }
+    return new Map([...masReciente].map(([asistenciaId, { tipo, comentario }]) => [asistenciaId, { tipo, comentario }]));
+  }
+
   async guardar(importacion: ImportacionDeAsistencias): Promise<void> {
     await this.db.transaction(async (tx) => {
       const [guardada] = await tx.insert(importacionesSemanales).values({
@@ -64,11 +118,43 @@ export class RepositorioPostgresDeImportaciones implements RepositorioDeImportac
         await tx.insert(marcasCrudas).values(importacion.marcasCrudas.map((marca) => ({ ...marca, importacionId: guardada.id })));
       }
       for (const propuesta of importacion.propuestas) {
-        await tx.insert(asistenciasEsperadas).values(propuesta).onConflictDoUpdate({
+        const [actualizada] = await tx.insert(asistenciasEsperadas).values(propuesta).onConflictDoUpdate({
           target: [asistenciasEsperadas.idHuellero, asistenciasEsperadas.fecha],
           set: { entradaPropuesta: propuesta.entradaPropuesta, salidaPropuesta: propuesta.salidaPropuesta },
           where: eq(asistenciasEsperadas.estado, "pendiente"),
+        }).returning({ id: asistenciasEsperadas.id });
+        if (!actualizada) {
+          throw new Error(`La asistencia de ${propuesta.idHuellero} el ${propuesta.fecha} cambió mientras se aplicaba la importación.`);
+        }
+      }
+      for (const reemplazo of importacion.reemplazos) {
+        await tx.insert(reemplazosDeAsistenciaImportada).values({
+          asistenciaId: reemplazo.asistenciaId,
+          importacionId: guardada.id,
+          estadoAnterior: reemplazo.estadoAnterior,
+          valorAnterior: reemplazo.valorAnterior,
+          responsableId: importacion.usuarioId,
+          reemplazadoEn: importacion.importadaEn,
         });
+        await tx.delete(tardanzas).where(eq(tardanzas.asistenciaId, reemplazo.asistenciaId));
+        await tx.delete(horasExtra).where(eq(horasExtra.asistenciaId, reemplazo.asistenciaId));
+        const [actualizada] = await tx.update(asistenciasEsperadas).set({
+          estado: "pendiente",
+          entradaPropuesta: reemplazo.entradaPropuesta,
+          salidaPropuesta: reemplazo.salidaPropuesta,
+          entradaReal: null,
+          salidaReal: null,
+          minutosTrabajados: null,
+          instantaneaDeTurno: null,
+          confirmadoPorId: null,
+          confirmadoEn: null,
+        }).where(and(
+          eq(asistenciasEsperadas.id, reemplazo.asistenciaId),
+          eq(asistenciasEsperadas.estado, reemplazo.estadoAnterior),
+        )).returning({ id: asistenciasEsperadas.id });
+        if (!actualizada) {
+          throw new Error(`La asistencia de ${reemplazo.idHuellero} el ${reemplazo.fecha} cambió mientras se aplicaba la importación.`);
+        }
       }
     });
   }
