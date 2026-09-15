@@ -28,7 +28,7 @@ export async function parsearArchivoHuellero(archivo: File): Promise<ResultadoDe
 
   let libro: XLSX.WorkBook;
   try {
-    libro = XLSX.read(await archivo.arrayBuffer(), { type: "array", cellDates: true });
+    libro = XLSX.read(await archivo.arrayBuffer(), { type: "array", cellDates: false });
   } catch {
     return resultadoConError("No se pudo leer el archivo XLSX.");
   }
