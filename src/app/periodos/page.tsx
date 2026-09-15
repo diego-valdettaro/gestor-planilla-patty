@@ -7,7 +7,7 @@ import { calcularSugerenciaDePeriodo, crearResumenVacio } from "@/periodos/perio
 import type { BloqueoDePeriodo, DetalleDeJornada, FilaDeResumen, ResumenDePeriodo } from "@/periodos/periodo-planilla";
 import { repositorioDePeriodos } from "@/periodos/servicio";
 
-import { cerrarPeriodoDesdeFormulario, reabrirPeriodoDesdeFormulario } from "./actions";
+import { cerrarPeriodoDesdeFormulario, decidirHorasExtraDesdeFormulario, reabrirPeriodoDesdeFormulario } from "./actions";
 import { CreadorDePeriodo } from "./creador-de-periodo";
 
 export const dynamic = "force-dynamic";
@@ -42,12 +42,41 @@ export default async function PaginaDePeriodos({ searchParams }: { searchParams:
       <section className="tarjeta panel">
         <header className="panel-cabecera"><div><h2>Período {periodo.inicio} a {periodo.fin}</h2><p>Estado actual: {periodo.estado === "abierto" ? <span className="insignia ok">Abierto</span> : <span className="insignia neutro">Cerrado</span>}</p></div>{periodo.estado === "abierto" && actor.rol === "finanzas" ? <BotonDeAccionConfirmada accion={cerrarPeriodoDesdeFormulario} confirmar="Cerrar período" descripcion="Ya no se podrán importar ni modificar asistencias de este período hasta que lo reabra con un motivo." etiqueta="Cerrar período" titulo="¿Cerrar este período de planilla?"><input type="hidden" name="periodoId" value={periodo.id} /></BotonDeAccionConfirmada> : null}</header>
         {periodo.estado === "cerrado" && actor.rol === "finanzas" ? <form action={reabrirPeriodoDesdeFormulario} className="filtros"><input type="hidden" name="periodoId" value={periodo.id} /><label>Motivo de reapertura<input name="motivo" required /></label><button type="submit">Reabrir período</button></form> : null}
+        {periodo.estado === "abierto" && actor.rol === "finanzas" ? <DecisionesDeHorasExtra periodoId={periodo.id} filas={resumen.filas} /> : null}
         <TotalesGenerales resumen={resumen} />
         <Bloqueos bloqueos={resumen.bloqueos} />
         {resumen.filas.length ? <ResumenPorGrupos filas={resumen.filas} /> : <section className="estado-vacio"><h3>Sin resultados</h3><p>No hay colaboradores que coincidan con los filtros elegidos. Los totales y bloqueos siguen cubriendo el período completo.</p></section>}
       </section>
     </> : <section className="estado-vacio"><h2>No hay períodos de planilla</h2><p>Cuando haya un período abierto, aquí podrá revisar y exportar sus totales.</p></section>}
   </main>;
+}
+
+function DecisionesDeHorasExtra({ periodoId, filas }: { periodoId: string; filas: FilaDeResumen[] }) {
+  const pendientes = filas.flatMap((fila) => fila.jornadas
+    .filter((jornada) => jornada.horaExtra?.estado === "pendiente")
+    .map((jornada) => ({ ...jornada.horaExtra!, nombre: fila.nombre, fecha: jornada.fecha })));
+  if (!pendientes.length) return null;
+  const campos = <>
+    <input name="periodoId" type="hidden" value={periodoId} />
+    <fieldset>
+      <legend>Seleccione una o más horas extra pendientes</legend>
+      {pendientes.map((horaExtra) => <label className="checkbox" key={horaExtra.id}>
+        <input name="horaExtraId" type="checkbox" value={horaExtra.id} />
+        {horaExtra.nombre}, {horaExtra.fecha}: 25% {formatearDuracion(horaExtra.minutosAl25)}, 35% {formatearDuracion(horaExtra.minutosAl35)}
+      </label>)}
+    </fieldset>
+  </>;
+  return <section>
+    <h3>Decidir horas extra pendientes</h3>
+    <div className="acciones">
+      <BotonDeAccionConfirmada accion={decidirHorasExtraDesdeFormulario} confirmar="Aprobar selección" descripcion="Seleccione al menos una hora extra. La selección quedará aprobada en una sola operación." etiqueta="Aprobar horas extra" requiereSeleccion="horaExtraId" titulo="¿Aprobar estas horas extra?">
+        <input name="decision" type="hidden" value="aprobada" />{campos}
+      </BotonDeAccionConfirmada>
+      <BotonDeAccionConfirmada accion={decidirHorasExtraDesdeFormulario} confirmar="Rechazar selección" descripcion="Seleccione al menos una hora extra. La selección quedará rechazada en una sola operación." etiqueta="Rechazar horas extra" requiereSeleccion="horaExtraId" titulo="¿Rechazar estas horas extra?" peligro>
+        <input name="decision" type="hidden" value="rechazada" />{campos}
+      </BotonDeAccionConfirmada>
+    </div>
+  </section>;
 }
 
 function TotalesGenerales({ resumen }: { resumen: ResumenDePeriodo }) {

@@ -1,4 +1,5 @@
 import { createElement } from "react";
+import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -15,10 +16,11 @@ vi.mock("@/turnos/servicio", () => ({
   repositorioDeTurnos: { listarSedesConColaboradoresActivos, listarColaboradoresActivos },
 }));
 vi.mock("@/app/boton-de-accion-confirmada", () => ({
-  BotonDeAccionConfirmada: ({ etiqueta }: { etiqueta: string }) => createElement("button", undefined, etiqueta),
+  BotonDeAccionConfirmada: ({ etiqueta, children }: { etiqueta: string; children?: ReactNode }) => createElement("div", undefined, createElement("button", undefined, etiqueta), children),
 }));
 vi.mock("./actions", () => ({
   cerrarPeriodoDesdeFormulario: vi.fn(),
+  decidirHorasExtraDesdeFormulario: vi.fn(),
   reabrirPeriodoDesdeFormulario: vi.fn(),
   crearPeriodoDesdeFormulario: vi.fn(),
 }));
@@ -164,7 +166,7 @@ describe("página de Liquidaciones (/periodos)", () => {
     const totales = { jornadasTrabajadas: 1, minutosTrabajados: 480, noAsistencias: { falta: 0, descanso: 0, feriado: 0, vacaciones: 0, permiso: 0, suspension: 0 }, cantidadTardanzas: 0, minutosPenalizados: 0, horasExtra: { pendiente: { minutosAl25: 30, minutosAl35: 0 }, aprobada: { minutosAl25: 0, minutosAl35: 0 }, rechazada: { minutosAl25: 0, minutosAl35: 0 } } };
     listarResumen.mockResolvedValue({
       filas: [{ idHuellero: "H-1", nombre: "Ana", grupo: "Tiendas", ...totales, jornadas: [
-        { fecha: "2026-01-02", sede: "Centro", resultado: "trabajada", entradaReal: "2026-01-02T09:00:00.000Z", salidaReal: "2026-01-02T17:00:00.000Z", minutosTrabajados: 480, tardanzaEnMinutos: 0, minutosPenalizados: 0, horaExtra: { estado: "pendiente", minutosAl25: 30, minutosAl35: 0 } },
+        { fecha: "2026-01-02", sede: "Centro", resultado: "trabajada", entradaReal: "2026-01-02T09:00:00.000Z", salidaReal: "2026-01-02T17:00:00.000Z", minutosTrabajados: 480, tardanzaEnMinutos: 0, minutosPenalizados: 0, politicaDeTardanzaVersion: null, horaExtra: { id: "extra-1", estado: "pendiente", minutosAl25: 30, minutosAl35: 0 } },
         { fecha: "2026-01-03", sede: null, resultado: "pendiente", entradaReal: null, salidaReal: null, minutosTrabajados: 0, tardanzaEnMinutos: 0, minutosPenalizados: 0 },
       ] }],
       totales,
@@ -184,6 +186,19 @@ describe("página de Liquidaciones (/periodos)", () => {
     expect(html).toContain("Centro");
     expect(html).toContain("Trabajada");
     expect(html).toContain("Pendiente de revisión");
+    expect(html).toContain("Aprobar horas extra");
+    expect(html).toContain("Rechazar horas extra");
+    expect(html).toContain('name="horaExtraId"');
+  });
+
+  it("no ofrece decisiones de horas extra a Administración", async () => {
+    obtenerActorActual.mockResolvedValue({ rol: "administracion" });
+    listar.mockResolvedValue([{ id: "p1", inicio: "2026-01-01", fin: "2026-01-31", estado: "abierto" }]);
+
+    const html = await render();
+
+    expect(html).not.toContain("Aprobar horas extra");
+    expect(html).not.toContain("Rechazar horas extra");
   });
 
   it("mantiene los totales globales al aplicar filtros de presentación", async () => {

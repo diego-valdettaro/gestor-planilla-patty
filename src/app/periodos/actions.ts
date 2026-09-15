@@ -6,6 +6,14 @@ import { HuecoEntrePeriodosError } from "@/periodos/periodo-planilla";
 import { repositorioDePeriodos } from "@/periodos/servicio";
 export async function cerrarPeriodoDesdeFormulario(formData: FormData): Promise<void> { const casos = crearCasosDeUsoDePeriodos(repositorioDePeriodos, { obtenerActorActual }); await casos.cerrar(obtenerTexto(formData, "periodoId")); revalidatePath("/periodos"); }
 export async function reabrirPeriodoDesdeFormulario(formData: FormData): Promise<void> { const casos = crearCasosDeUsoDePeriodos(repositorioDePeriodos, { obtenerActorActual }); await casos.reabrir(obtenerTexto(formData, "periodoId"), obtenerTexto(formData, "motivo")); revalidatePath("/periodos"); }
+export async function decidirHorasExtraDesdeFormulario(formData: FormData): Promise<void> {
+  const decision = obtenerTexto(formData, "decision");
+  if (decision !== "aprobada" && decision !== "rechazada") throw new Error("La decisión de horas extra no es válida.");
+  const horasExtraIds = formData.getAll("horaExtraId").filter((valor): valor is string => typeof valor === "string" && Boolean(valor.trim()));
+  const casos = crearCasosDeUsoDePeriodos(repositorioDePeriodos, { obtenerActorActual });
+  await casos.decidirHorasExtra({ periodoId: obtenerTexto(formData, "periodoId"), horasExtraIds, decision });
+  revalidatePath("/periodos");
+}
 
 export interface EstadoDeCreacionDePeriodo { error?: string; advertencia?: string; valores?: { inicio: string; fin: string }; listo?: boolean; }
 
