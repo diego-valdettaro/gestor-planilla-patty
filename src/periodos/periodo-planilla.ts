@@ -12,10 +12,66 @@ export interface PeriodoPlanilla {
   cerradoEn?: Date | null;
 }
 
+export type MotivoDeNoAsistencia = "falta" | "descanso" | "feriado" | "vacaciones" | "permiso" | "suspension";
+export type EstadoDeHoraExtra = "pendiente" | "aprobada" | "rechazada";
+export type TipoDeBloqueoDePeriodo = "asistencia" | "hora-extra";
+
 export interface FiltrosDeResumen { periodoId: string; sede?: string; idHuellero?: string; }
+export interface TotalesDeHorasExtra { minutosAl25: number; minutosAl35: number; }
+export type ConteosDeNoAsistencia = Record<MotivoDeNoAsistencia, number>;
+export interface DetalleDeJornada {
+  fecha: string;
+  sede: string | null;
+  resultado: "pendiente" | "trabajada" | MotivoDeNoAsistencia;
+  entradaReal: string | null;
+  salidaReal: string | null;
+  minutosTrabajados: number;
+  tardanzaEnMinutos: number;
+  minutosPenalizados: number;
+  horaExtra?: { estado: EstadoDeHoraExtra; minutosAl25: number; minutosAl35: number };
+}
+export interface BloqueoDePeriodo {
+  tipo: TipoDeBloqueoDePeriodo;
+  idHuellero: string;
+  nombre: string;
+  grupo: string;
+  fecha: string;
+}
 export interface FilaDeResumen {
-  idHuellero: string; nombre: string; sede: string; minutosTrabajados: number;
-  cantidadTardanzas: number; minutosPenalizados: number; minutosAl25: number; minutosAl35: number;
+  idHuellero: string;
+  nombre: string;
+  grupo: string;
+  jornadasTrabajadas: number;
+  minutosTrabajados: number;
+  noAsistencias: ConteosDeNoAsistencia;
+  cantidadTardanzas: number;
+  minutosPenalizados: number;
+  horasExtra: Record<EstadoDeHoraExtra, TotalesDeHorasExtra>;
+  jornadas: DetalleDeJornada[];
+}
+export interface ResumenDePeriodo {
+  filas: FilaDeResumen[];
+  totales: Omit<FilaDeResumen, "idHuellero" | "nombre" | "grupo" | "jornadas">;
+  bloqueos: BloqueoDePeriodo[];
+}
+
+export function crearResumenVacio(): ResumenDePeriodo {
+  return {
+    filas: [],
+    bloqueos: [],
+    totales: {
+      jornadasTrabajadas: 0,
+      minutosTrabajados: 0,
+      noAsistencias: { falta: 0, descanso: 0, feriado: 0, vacaciones: 0, permiso: 0, suspension: 0 },
+      cantidadTardanzas: 0,
+      minutosPenalizados: 0,
+      horasExtra: {
+        pendiente: { minutosAl25: 0, minutosAl35: 0 },
+        aprobada: { minutosAl25: 0, minutosAl35: 0 },
+        rechazada: { minutosAl25: 0, minutosAl35: 0 },
+      },
+    },
+  };
 }
 
 export interface NuevoPeriodo { inicio: string; fin: string; confirmarHueco?: boolean; }
@@ -23,7 +79,7 @@ export interface NuevoPeriodo { inicio: string; fin: string; confirmarHueco?: bo
 export interface RepositorioDePeriodos {
   listar(): Promise<PeriodoPlanilla[]>;
   buscar(id: string): Promise<PeriodoPlanilla | undefined>;
-  listarResumen(filtros: FiltrosDeResumen): Promise<FilaDeResumen[]>;
+  listarResumen(filtros: FiltrosDeResumen): Promise<ResumenDePeriodo>;
   crear(inicio: string, fin: string): Promise<void>;
   cerrar(id: string, responsableId: string, registradoEn: Date): Promise<void>;
   reabrir(id: string, responsableId: string, motivo: string, registradoEn: Date): Promise<void>;
