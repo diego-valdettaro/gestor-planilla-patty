@@ -1,114 +1,35 @@
-# Contrato de diseño
+# Contrato visual de Planilla Patty
 
-Este documento rige los cambios de interfaz de Planilla Patty. Antes de editar
-una ruta, un componente visible o `src/app/global.css`, leerlo junto con
-`docs/agents/domain.md` y la issue correspondiente.
-
-## Producto y alcance
-
-Planilla Patty permite administrar colaboradores, sedes y modelos de horario;
-planificar y publicar turnos; importar y corregir asistencias; y consultar o
-cerrar períodos de planilla. Las rutas actuales son:
-
-- `/iniciar-sesion`
-- `/configuracion`
-- `/turnos`
-- `/asistencias` e `/asistencias/importar`
-- `/periodos`
-
-Una tarea de UI no autoriza a crear módulos, rutas, roles, paneles, métricas,
-automatizaciones o flujos nuevos. Si el pedido no está en la issue, el PRD o un
-ADR, detenerse y pedir o registrar una decisión de producto. No sustituir el
-vocabulario del dominio por términos genéricos.
-
-## Fuente de verdad
-
-- La implementación vigente en `src/app/global.css` y los componentes de
-  `src/app/` es la fuente de verdad ejecutable.
-- `docs/propuesta-visual/` es una maqueta local no versionada. Sirve de
-  referencia cuando exista, pero no reemplaza este contrato ni justifica
-  cambios de alcance.
-- Las decisiones de producto y comportamiento viven en `CONTEXT.md`,
-  `docs/adr/` y las issues.
-
-Si una nueva necesidad exige una variante que no está aquí, extender primero el
-sistema compartido y documentar la decisión. No resolverla con estilos aislados
-en una sola pantalla.
+La issue y los ADR definen qué se construye; este contrato define cómo se presenta. No autoriza rutas, roles, flujos ni capacidades nuevas. Conserva el vocabulario del dominio y usa la interfaz actual como referencia para los patrones existentes.
 
 ## Identidad visual
 
-La aplicación es clara, sobria y operativa. Prioriza lectura rápida de datos y
-acciones administrativas seguras.
+Mantener la tipografía Inter con respaldo del sistema y la paleta de `src/app/global.css`: fondo blanco, texto azul marino y verde para la acción principal y los estados positivos. Reutilizar sus espaciados, bordes y sombras discretas. Son el punto de partida para nuevas vistas; la auditoría de la interfaz puede justificar un ajuste compartido.
 
-- Tipografía: `Inter` con las fuentes del sistema como respaldo.
-- Texto principal: azul marino. El verde `#079557` identifica la acción
-  primaria y los estados positivos.
-- Fondo blanco, superficies blancas y bordes gris azulados suaves.
-- Radio pequeño, aproximadamente entre `0.3rem` y `0.7rem`. Sombras discretas,
-  solo para separar tarjetas, diálogos y controles flotantes.
-- Espaciado en una escala consistente. Reutilizar las clases y valores del CSS
-  compartido antes de introducir una medida nueva.
-- No añadir modo oscuro, gradientes decorativos, paletas alternativas,
-  ilustraciones o una biblioteca de iconos sin una decisión de producto.
+## Estructura
 
-## Patrones obligatorios
+En escritorio, las vistas autenticadas usan navegación lateral y dejan el contenido en `.contenido`. Hasta 900 px, la navegación pasa a una barra superior con el nombre de la sección y un botón de menú; el contenido recibe el ancho disponible. El menú muestra las rutas permitidas y el acceso a cerrar sesión. La pantalla de inicio de sesión conserva su composición centrada.
 
-### Estructura
+## Jerarquía y datos
 
-- Las vistas autenticadas usan la navegación lateral existente y el contenedor
-  `.contenido`. La pantalla de inicio de sesión usa el patrón centrado.
-- Agrupar contenido en tarjetas para formularios, colecciones y secciones de
-  trabajo. No envolver cada fragmento pequeño en una tarjeta.
-- Formularios con `label` visible, controles nativos cuando basten y mensajes
-  de ayuda cerca del campo.
-- Tablas para datos comparables en filas. Las cifras se alinean a la derecha
-  cuando ayude a compararlas. En pantallas estrechas, permitir desplazamiento
-  horizontal antes que truncar datos importantes.
+En una vista de revisión, mostrar primero qué objeto se revisa y su estado. Después, criterios de consulta, resumen con totales y bloqueos, y detalle por colaborador. Rotular el alcance de cada cifra: en `/periodos`, «Totales del período completo» indica que el total incluye a todos los colaboradores aunque el filtro muestre solo a Beto.
 
-### Acciones y estados
+Usar tablas para registros comparables. Cada columna lleva encabezado y las magnitudes indican su unidad, como `45 min` o `S/ 120,00`. Alinear las cifras a la derecha para poder compararlas por columna. Si la tabla no cabe, permitir desplazamiento horizontal dentro de ella sin estrechar el resto de la vista.
 
-- Usar `boton-principal` para la única acción que avanza el trabajo, y
-  `boton-secundario` para acciones alternativas, cancelar o navegar. Reservar
-  `peligro` para eliminar u otra acción destructiva.
-- Una acción irreversible, que publique, cierre un período o modifique datos
-  ya confirmados requiere un diálogo que explique consecuencia, alcance y
-  cancelación.
-- Un control no disponible se deshabilita y la interfaz explica qué falta para
-  habilitarlo cuando no sea evidente.
-- Reutilizar insignias y clases de estado existentes. No depender solo del
-  color para comunicar borrador, publicado, procesado, error o éxito.
-- Usar `.estado-vacio` para ausencia de datos o permisos. Debe decir qué falta
-  y, si existe, la siguiente acción permitida.
-- Los mensajes de operación usan los patrones de éxito o error existentes y
-  anuncian errores mediante `role="alert"` cuando corresponde.
+## Patrones compartidos
 
-### Accesibilidad
+Usar `.panel` para formularios o resultados, `.panel-filtros` para criterios de consulta y `.panel-tabla` para registros comparables. Los controles tienen etiquetas visibles; preferir `input`, `select` y `button` nativos. Si estos patrones no cubren una necesidad, explicar por qué y añadir la variante al estilo compartido.
 
-- Todo control interactivo debe ser operable con teclado y tener nombre
-  accesible. Preferir `button`, `a`, `input` y `select` nativos.
-- Mantener el foco visible definido en `global.css`. No eliminar `outline`.
-- Asociar cada diálogo a un título y devolver el foco de forma natural al
-  cerrarlo.
-- No usar emoji o caracteres decorativos como único icono o única etiqueta de
-  una acción.
+## Acciones y estados
 
-## Límites de implementación
+Dar a cada contexto una sola acción principal con `.boton-principal`; usar `.boton-secundario` para alternativas y `.peligro` para acciones destructivas. En listas de configuración, mostrar una acción discreta «Editar» por fila y reunir allí cambios poco frecuentes, como desactivar o eliminar. Separar las acciones destructivas de las ordinarias y confirmar su alcance y consecuencia. Las acciones operativas frecuentes, como revisar una asistencia pendiente, pueden estar visibles donde se usan.
 
-- No añadir valores de color, tamaños, radios o sombras arbitrarios si ya hay
-  un valor equivalente en el sistema compartido.
-- No duplicar un botón, diálogo, estado vacío o mensaje de operación para una
-  sola ruta si el patrón existente se puede reutilizar o generalizar.
-- Mantener estilos compartidos en `src/app/global.css`. Los estilos de una
-  pantalla deben llevar un prefijo de componente o ruta para evitar colisiones.
-- Tratar `src/app/global.css`, navegación y rutas como áreas compartidas. No
-  editarlas en paralelo con otra tarea sin coordinarlo.
+Expresar cada estado con texto además de color. Un bloqueo indica la causa y el siguiente paso permitido. Usar `.estado-vacio` para explicar qué falta cuando no hay datos. Los errores y éxitos usan los mensajes compartidos y se sitúan cerca de la acción que los produjo.
 
-## Checklist de una tarea visual
+## Teclado y errores
 
-1. Confirmar que la issue autoriza el comportamiento y la ruta.
-2. Reutilizar un patrón existente o documentar la nueva variante.
-3. Comprobar estados normal, foco, deshabilitado, vacío, éxito y error que
-   apliquen.
-4. Revisar la vista en navegador, incluido un ancho estrecho si cambia la
-   estructura o una tabla.
-5. Ejecutar la validación indicada en `AGENTS.md` antes de entregar o cometer.
+Todo control tiene un nombre claro, funciona con teclado y conserva el foco visible. Los diálogos tienen título, ofrecen Cancelar y Confirmar, y devuelven el foco al control que los abrió. Mostrar los errores junto al campo o la acción correspondiente y anunciarlos con `role="alert"` cuando aparezcan.
+
+## Evolución del contrato
+
+Cambiar este contrato cuando la auditoría de una vista existente o una necesidad aprobada revele un patrón reutilizable. Explicar la razón y las vistas a las que aplica. Registrar las discrepancias con el código en la issue o el PR que las resolverá; no convertir una excepción local en patrón general. Las comprobaciones de cada ticket pertenecen a `docs/agents/agent-workflow.md`.
