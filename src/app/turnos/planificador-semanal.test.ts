@@ -279,5 +279,7 @@ describe("selección de publicación", () => {
     expect(html).not.toContain("<dialog");
     expect(html).not.toContain('aria-haspopup="dialog" aria-label="Horario');
     expect(html).not.toContain("marca-edit");
+    expect(html).toContain("Sin asignar");
+    expect(html).not.toContain("＋ Asignar");
   });
 });

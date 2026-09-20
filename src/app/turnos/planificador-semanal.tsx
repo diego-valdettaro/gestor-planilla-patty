@@ -213,7 +213,7 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
   }
 
   function contenidoDeChip(celda: Celda | Publicado | undefined) {
-    if (!celda) return <span className="chip-vacio">＋ Asignar</span>;
+    if (!celda) return <span className="chip-vacio">{soloLectura ? "Sin asignar" : "＋ Asignar"}</span>;
     if (celda.motivoNoAsistencia) return <b>{ETIQUETA_DE_MOTIVO[celda.motivoNoAsistencia]}</b>;
     return <><b>{celda.sede}</b><small>{celda.entradaProgramada}–{celda.salidaProgramada}</small></>;
   }
