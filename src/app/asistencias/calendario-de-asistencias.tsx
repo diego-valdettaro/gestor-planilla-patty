@@ -6,6 +6,7 @@ import { IconoCandado } from "@/app/icono-candado";
 import { TIPOS_DE_ESTADO_MANUAL_REGISTRABLE, type TipoDeEstadoManualRegistrable } from "@/asistencias/estado-manual";
 
 import { registrarAsistenciaManual, type EstadoDeRegistroManual } from "./actions";
+import { crearResumenDeAjuste, type ResumenDeAjuste } from "./resumen-de-ajuste";
 import {
   celdaDeAsistenciaEsEditable,
   estadoDeCeldaAsistencia,
@@ -30,16 +31,21 @@ export function CalendarioDeAsistencias({
   dias,
   desfase,
   idHuellero,
+  nombreColaborador,
 }: {
   asistencias: Asistencia[];
   dias: string[];
   desfase: number;
   idHuellero: string;
+  nombreColaborador: string;
 }) {
   const porFecha = new Map(asistencias.map((asistencia) => [asistencia.fecha, asistencia]));
   const [fechaSeleccionada, setFechaSeleccionada] = useState<string>();
   const [tipoDeAsistencia, setTipoDeAsistencia] = useState<TipoDeAsistencia>("trabajo");
   const dialogo = useRef<HTMLDialogElement>(null);
+  const formulario = useRef<HTMLFormElement>(null);
+  const titulo = useRef<HTMLHeadingElement>(null);
+  const [resumen, setResumen] = useState<ResumenDeAjuste>();
   const [estado, accion, pendiente] = useActionState(registrarAsistenciaManual, estadoInicial);
   const asistencia = fechaSeleccionada ? porFecha.get(fechaSeleccionada) : undefined;
   const estadoSeleccionado: EstadoDeCeldaAsistencia = estadoDeCeldaAsistencia(asistencia);
@@ -49,11 +55,39 @@ export function CalendarioDeAsistencias({
     if (estado.listo) dialogo.current?.close();
   }, [estado.listo]);
 
+  useEffect(() => {
+    if (resumen) titulo.current?.focus();
+  }, [resumen]);
+
+  function volverAlFormulario() {
+    setResumen(undefined);
+    requestAnimationFrame(() => formulario.current?.querySelector<HTMLElement>('input:not([type="hidden"])')?.focus());
+  }
+
   function abrir(fecha: string) {
     setFechaSeleccionada(fecha);
     setTipoDeAsistencia("trabajo");
+    setResumen(undefined);
     dialogo.current?.showModal();
   }
+
+  function revisarAjuste() {
+    const form = formulario.current;
+    if (!form || !fechaSeleccionada || !asistencia || !form.reportValidity()) return;
+    const datos = new FormData(form);
+    setResumen(crearResumenDeAjuste({
+      fecha: fechaSeleccionada,
+      colaborador: nombreColaborador,
+      sede: asistencia.sedeProgramada,
+      entradaActual: hora(asistencia.entrada) ?? null,
+      salidaActual: hora(asistencia.salida) ?? null,
+      entradaNueva: String(datos.get("entrada") ?? ""),
+      salidaNueva: String(datos.get("salida") ?? ""),
+      motivo: String(datos.get("motivo") ?? ""),
+    }));
+  }
+
+  const confirmada = asistencia?.estado === "confirmada";
 
   return <>
     <div className="calendario"><div className="dias-semana">{["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"].map((dia) => <span key={dia}>{dia}</span>)}</div><div className="celdas-calendario">{Array.from({ length: desfase }).map((_, indice) => <span className="celda-vacia" key={`vacia-${indice}`} />)}{dias.map((fecha) => {
@@ -63,14 +97,26 @@ export function CalendarioDeAsistencias({
       return <button aria-label={`Asistencia del ${fecha}: ${etiqueta}`} className={`dia-calendario estado-color-${estadoDelDia}`} key={fecha} onClick={() => abrir(fecha)} type="button"><time>{Number(fecha.slice(-2))}</time><strong>{estadoDelDia === "liquidado" && <IconoCandado />}{etiqueta}</strong>{item ? item.estadoManual ? null : <><span>{item.sedeProgramada ?? "sin sede"}</span><span>{hora(item.entrada) ?? "sin entrada"}</span><span>{hora(item.salida) ?? "sin salida"}</span></> : <span>Sin planificación</span>}</button>;
     })}</div></div>
     <dialog aria-labelledby="titulo-asistencia" className="dialogo-confirmacion" ref={dialogo}>
-      {fechaSeleccionada && editable && asistencia ? <form action={accion}>
-        <h2 id="titulo-asistencia">{asistencia.estado === "confirmada" ? "Ajustar asistencia" : "Registrar asistencia"}</h2>
+      {fechaSeleccionada && editable && asistencia ? <form action={accion} key={fechaSeleccionada} ref={formulario}>
+        <h2 id="titulo-asistencia" ref={titulo} tabIndex={-1}>{resumen ? "¿Confirmar el ajuste de asistencia?" : confirmada ? "Ajustar asistencia" : "Registrar asistencia"}</h2>
+        {resumen ? <section aria-label="Resumen del ajuste">
+          <p>Colaborador: {resumen.colaborador}. Fecha: {resumen.fecha}.</p>
+          <ul>{resumen.cambios.map((linea) => <li key={linea}>{linea}</li>)}</ul>
+          <p>Motivo: {resumen.motivo}</p>
+          <p>{resumen.consecuencia}</p>
+        </section> : null}
+        <div hidden={Boolean(resumen)}>
         <input name="idHuellero" type="hidden" value={idHuellero} />
         <input name="fecha" type="hidden" value={fechaSeleccionada} />
         <input name="estadoActual" type="hidden" value={asistencia.estado} />
         {asistencia.estado === "confirmada" ? <><input name="tipoDeAsistencia" type="hidden" value="trabajo" /><p>Asistencia confirmada: Jornada laboral</p></> : <label>Tipo de asistencia<select name="tipoDeAsistencia" onChange={(evento) => setTipoDeAsistencia(evento.target.value as TipoDeAsistencia)} value={tipoDeAsistencia}>{TIPOS_DE_ASISTENCIA.map((opcion) => <option key={opcion} value={opcion}>{etiquetaTipoDeAsistencia(opcion)}</option>)}</select></label>}
-        {tipoDeAsistencia === "trabajo" ? <>{asistencia.estado === "confirmada" ? <p>Sede planificada: {asistencia.sedeProgramada}</p> : <><label>Sede<input defaultValue={asistencia.sedeProgramada ?? ""} name="sede" required /></label><p className="ayuda-campo">Debe coincidir con la sede planificada.</p></>}<label>Hora de ingreso<input defaultValue={hora(asistencia.entrada) ?? ""} name="entrada" required type="time" /></label><label>Hora de salida<input defaultValue={hora(asistencia.salida) ?? ""} name="salida" required type="time" /></label>{asistencia.estado === "confirmada" ? <label>Motivo del ajuste<input name="motivo" required /></label> : null}</> : <label>Comentario<input name="comentario" required /></label>}
-        <div className="acciones-dialogo"><button className="boton-secundario" onClick={() => dialogo.current?.close()} type="button">Cancelar</button><button disabled={pendiente} type="submit">{pendiente ? "Guardando…" : "Guardar asistencia"}</button></div>
+        {tipoDeAsistencia === "trabajo" ? <>{asistencia.estado === "confirmada" ? <p>Sede planificada: {asistencia.sedeProgramada}</p> : <><label>Sede<input defaultValue={asistencia.sedeProgramada ?? ""} name="sede" required /></label><p className="ayuda-campo">Debe coincidir con la sede planificada.</p></>}<label>Hora de ingreso<input defaultValue={hora(asistencia.entrada) ?? ""} name="entrada" required type="time" /></label><label>Hora de salida<input defaultValue={hora(asistencia.salida) ?? ""} name="salida" required type="time" /></label>{asistencia.estado === "confirmada" ? <label>Motivo del ajuste<input name="motivo" required /></label> : null}</> : <label>Comentario<input name="comentario" required /></label>}</div>
+        <div className="acciones-dialogo">
+          <button className="boton-secundario" onClick={() => dialogo.current?.close()} type="button">Cancelar</button>
+          {resumen ? <><button className="boton-secundario" onClick={volverAlFormulario} type="button">Volver al formulario</button><button className="boton-principal" disabled={pendiente} type="submit">{pendiente ? "Guardando…" : "Confirmar ajuste"}</button></>
+            : confirmada && tipoDeAsistencia === "trabajo" ? <button className="boton-principal" onClick={revisarAjuste} type="button">Revisar ajuste</button>
+            : <button className="boton-principal" disabled={pendiente} type="submit">{pendiente ? "Guardando…" : "Guardar asistencia"}</button>}
+        </div>
         {estado.error && <p className="mensaje-operacion error" role="alert">{estado.error}</p>}
       </form> : <FormularioSoloLectura estado={estadoSeleccionado} estadoManual={asistencia?.estadoManual ?? null} fecha={fechaSeleccionada} />}
     </dialog>
