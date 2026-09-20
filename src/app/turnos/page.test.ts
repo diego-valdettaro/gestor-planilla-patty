@@ -31,7 +31,7 @@ vi.mock("@/turnos/servicio", () => ({
   },
 }));
 vi.mock("./planificador-semanal", () => ({
-  PlanificadorSemanal: () => createElement("div", undefined, "Planificador semanal"),
+  PlanificadorSemanal: ({ soloLectura }: { soloLectura?: boolean }) => createElement("div", undefined, soloLectura ? "Planificador semanal de solo lectura" : "Planificador semanal editable"),
 }));
 
 async function render() {
@@ -78,12 +78,50 @@ describe("página de Horarios (/turnos)", () => {
     expect(listarModelosPorSede.mock.calls.map(([sede]) => sede)).toEqual(["Norte", "Sur"]);
   });
 
-  it("permite el acceso a Finanzas con las mismas reglas que Operaciones", async () => {
+  it("permite a Finanzas consultar el horario semanal en solo lectura", async () => {
     obtenerActorActual.mockResolvedValue({ rol: "finanzas" });
 
     const html = await render();
 
-    expect(html).toContain("Planificador semanal");
-    expect(html).not.toContain("No tiene permiso para consultar horarios.");
+    expect(html).toContain("Planificador semanal de solo lectura");
+    expect(html).toContain("Su rol no permite editarlo ni publicarlo.");
+    expect(html).not.toContain("Sin permiso");
+  });
+
+  it.each(["operaciones", "administracion"])("entrega el planificador editable a %s", async (rol) => {
+    obtenerActorActual.mockResolvedValue({ rol });
+
+    const html = await render();
+
+    expect(html).toContain("Planificador semanal editable");
+  });
+
+  it("explica con el patrón de estado vacío que no hay grupo y ofrece ir a Configuración a Operaciones", async () => {
+    obtenerActorActual.mockResolvedValue({ rol: "operaciones" });
+    listarGrupos.mockResolvedValue([]);
+
+    const html = await render();
+
+    expect(html).toContain('class="estado-vacio"');
+    expect(html).toContain('href="/configuracion"');
+  });
+
+  it("no ofrece ir a Configuración a Finanzas cuando no hay grupo", async () => {
+    obtenerActorActual.mockResolvedValue({ rol: "finanzas" });
+    listarGrupos.mockResolvedValue([]);
+
+    const html = await render();
+
+    expect(html).toContain('class="estado-vacio"');
+    expect(html).not.toContain('href="/configuracion"');
+  });
+
+  it("muestra el estado sin permiso con el patrón compartido a un rol no autorizado", async () => {
+    obtenerActorActual.mockResolvedValue({ rol: "otro" });
+
+    const html = await render();
+
+    expect(html).toContain('class="estado-vacio"');
+    expect(html).toContain("Sin permiso");
   });
 });

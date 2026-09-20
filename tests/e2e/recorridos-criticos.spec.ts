@@ -347,3 +347,42 @@ test("confirma colaboradores por un rango que corta la semana desde las vistas m
   await expect(filaEva).toContainText("Registrada");
   expect(errores).toEqual([]);
 });
+
+async function iniciarSesion(page: Page, usuario: string) {
+  await page.goto("/iniciar-sesion");
+  await page.getByLabel("Usuario").fill(usuario);
+  await page.getByLabel("Contraseña").fill(usuario);
+  await page.getByRole("button", { name: "Entrar" }).click();
+  await page.waitForURL((url) => !url.pathname.startsWith("/iniciar-sesion"), { timeout: 30_000 });
+}
+
+test("Finanzas consulta Horarios sin controles de edición ni publicación", async ({ page }) => {
+  const errores = observarErroresDelNavegador(page);
+
+  await iniciarSesion(page, "finanzas");
+  await page.goto("/turnos");
+
+  await expect(page.getByRole("heading", { name: "Planificación de horarios", level: 1 })).toBeVisible();
+  await expect(page.getByLabel("Grupo", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Selector semanal" })).toBeVisible();
+  for (const nombre of ["Guardar borrador", "Publicar planificación", "Completar semana", "Republicar cambios"]) {
+    await expect(page.getByRole("button", { name: nombre })).toHaveCount(0);
+  }
+  await expect(page.getByRole("checkbox")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Horario de / })).toHaveCount(0);
+  expect(errores, "Horarios en solo lectura no debe registrar errores de navegador").toEqual([]);
+});
+
+test("Operaciones conserva la acción principal de Horarios y ve por qué Guardar borrador está deshabilitado", async ({ page }) => {
+  const errores = observarErroresDelNavegador(page);
+
+  await iniciarSesion(page, "operaciones");
+  await page.goto("/turnos");
+
+  const guardar = page.getByRole("button", { name: "Guardar borrador" }).first();
+  await expect(guardar).toBeDisabled();
+  await expect(guardar).toHaveAccessibleDescription(/no hay cambios sin guardar/);
+  await expect(page.getByRole("button", { name: "Publicar planificación" }).first()).toHaveClass(/boton-principal/);
+  await expect(page.getByRole("button", { name: "Completar semana" }).first()).toHaveClass(/boton-secundario/);
+  expect(errores, "Horarios no debe registrar errores de navegador").toEqual([]);
+});
