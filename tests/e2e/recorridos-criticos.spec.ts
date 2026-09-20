@@ -347,3 +347,50 @@ test("confirma colaboradores por un rango que corta la semana desde las vistas m
   await expect(filaEva).toContainText("Registrada");
   expect(errores).toEqual([]);
 });
+
+test("el selector semanal y el panel de feedback se operan con teclado y devuelven el foco", async ({ page }) => {
+  const errores = observarErroresDelNavegador(page);
+  await page.goto("/iniciar-sesion");
+  await page.getByLabel("Usuario").fill("operaciones");
+  await page.getByLabel("Contraseña").fill("operaciones");
+  await page.getByRole("button", { name: "Entrar" }).click();
+  await expect(page).toHaveURL(/\/turnos$/);
+  await page.goto(`/turnos?semana=${fechaDeLaSemanaDeDemo(0)}&equipo=Tiendas`);
+
+  const disparador = page.locator(".boton-fecha-semanal");
+  await disparador.focus();
+  await page.keyboard.press("Enter");
+  const calendario = page.getByRole("dialog", { name: "Elegir semana" });
+  await expect(calendario).toBeVisible();
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Tab");
+  const fecha = page.locator(".fechas-calendario-semanal button").first();
+  await fecha.focus();
+  await expect(fecha).toBeFocused();
+  const contorno = await fecha.evaluate((elemento) => getComputedStyle(elemento).outlineStyle);
+  expect(contorno).not.toBe("none");
+  await page.keyboard.press("Escape");
+  await expect(calendario).toBeHidden();
+  await expect(disparador).toBeFocused();
+
+  await disparador.press("Enter");
+  await page.getByRole("button", { name: "Cancelar" }).first().click();
+  await expect(disparador).toBeFocused();
+
+  const feedback = page.getByRole("button", { name: "Enviar feedback" });
+  await feedback.focus();
+  await page.keyboard.press("Enter");
+  const panel = page.getByRole("dialog", { name: "Enviar feedback" });
+  await expect(panel).toBeVisible();
+  await expect(panel.getByLabel("Comentario")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(panel).toBeHidden();
+  await expect(feedback).toBeFocused();
+
+  await feedback.press("Enter");
+  await panel.getByRole("button", { name: "Cancelar" }).click();
+  await expect(panel).toBeHidden();
+  await expect(feedback).toBeFocused();
+  expect(errores).toEqual([]);
+});
