@@ -72,6 +72,14 @@ _Evitar_: estado de tardanza, tardanza manual
 Tiempo real trabajado fuera de la jornada ordinaria diaria o semanal, incluso antes de la entrada o después de la salida programadas. Se mide en minutos, sin descartar fracciones ni contar dos veces un mismo tramo.
 _Evitar_: saldo de jornada, compensación de tardanza
 
+**Hora extra 25 %**:
+Primeros 120 minutos reales de sobretiempo de una jornada, incluidas sus fracciones.
+_Evitar_: primeras dos horas redondeadas, hora extra fija
+
+**Hora extra 35 %**:
+Minutos reales de sobretiempo posteriores a los primeros 120 de una jornada, incluidas sus fracciones.
+_Evitar_: tercera hora en adelante redondeada, hora extra fija
+
 **Hora extra pendiente**:
 Tiempo fuera de la jornada que requiere verificar si corresponde a trabajo efectivo antes de incluirlo en el resumen del período.
 _Evitar_: hora extra autorizada, pago de extra, marca automáticamente pagable
