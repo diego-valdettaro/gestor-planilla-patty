@@ -96,32 +96,47 @@ describe("página de Horarios (/turnos)", () => {
     expect(html).toContain("Planificador semanal editable");
   });
 
-  it("explica con el patrón de estado vacío que no hay grupo y ofrece ir a Configuración a Operaciones", async () => {
+  it("explica con el estado vacío compartido que no hay grupo y no manda a Operaciones a Configuración", async () => {
     obtenerActorActual.mockResolvedValue({ rol: "operaciones" });
     listarGrupos.mockResolvedValue([]);
 
     const html = await render();
 
     expect(html).toContain('class="estado-vacio"');
+    expect(html).toContain("No hay grupos operativos");
+    expect(html).toContain("Pida a Administración");
+    expect(html).not.toContain("/configuracion");
+    expect(html).not.toContain("Planificador semanal");
+  });
+
+  it("ofrece Configuración a Administración cuando no hay grupo", async () => {
+    listarGrupos.mockResolvedValue([]);
+
+    const html = await render();
+
+    expect(html).toContain("No hay grupos operativos");
     expect(html).toContain('href="/configuracion"');
   });
 
-  it("no ofrece ir a Configuración a Finanzas cuando no hay grupo", async () => {
+  it("no ofrece Configuración a Finanzas cuando no hay grupo", async () => {
     obtenerActorActual.mockResolvedValue({ rol: "finanzas" });
     listarGrupos.mockResolvedValue([]);
 
     const html = await render();
 
     expect(html).toContain('class="estado-vacio"');
-    expect(html).not.toContain('href="/configuracion"');
+    expect(html).toContain("No hay grupos operativos");
+    expect(html).not.toContain("/configuracion");
+    expect(html).toContain("Pida a Administración");
   });
 
-  it("muestra el estado sin permiso con el patrón compartido a un rol no autorizado", async () => {
+  it("usa el estado vacío compartido para un rol sin permiso de Horarios", async () => {
     obtenerActorActual.mockResolvedValue({ rol: "otro" });
 
     const html = await render();
 
     expect(html).toContain('class="estado-vacio"');
     expect(html).toContain("Sin permiso");
+    expect(html).toContain("Su rol no permite consultar Horarios");
   });
 });

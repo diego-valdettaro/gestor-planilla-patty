@@ -47,7 +47,7 @@ export default async function PaginaDePeriodos({ searchParams }: { searchParams:
         <Bloqueos bloqueos={resumen.bloqueos} />
         {resumen.filas.length ? <ResumenPorGrupos filas={resumen.filas} /> : <section className="estado-vacio"><h3>Sin resultados</h3><p>No hay colaboradores que coincidan con los filtros elegidos. Los totales y bloqueos siguen cubriendo el período completo.</p></section>}
       </section>
-    </> : <section className="estado-vacio"><h2>No hay períodos de planilla</h2><p>Cuando haya un período abierto, aquí podrá revisar y exportar sus totales.</p></section>}
+    </> : <section className="estado-vacio"><h2>No hay períodos de planilla</h2><p>Cree un período con el formulario «Nuevo período» de arriba para revisar y exportar sus totales.</p></section>}
   </main>;
 }
 
@@ -85,7 +85,7 @@ function TotalesGenerales({ resumen }: { resumen: ResumenDePeriodo }) {
 }
 
 function Bloqueos({ bloqueos }: { bloqueos: BloqueoDePeriodo[] }) {
-  if (!bloqueos.length) return <p className="mensaje-operacion exito">El período no tiene asistencias ni horas extra pendientes.</p>;
+  if (!bloqueos.length) return <p className="mensaje-operacion listo" role="status">El período no tiene asistencias ni horas extra pendientes.</p>;
   return <section className="mensaje-operacion advertencia" role="status"><h3>Bloqueos del período completo</h3><ul>{bloqueos.map((bloqueo) => <li key={`${bloqueo.tipo}-${bloqueo.idHuellero}-${bloqueo.fecha}`}><a href={enlaceDelBloqueo(bloqueo)}>{bloqueo.tipo === "asistencia" ? "Asistencia pendiente" : "Hora extra pendiente"}: {bloqueo.nombre}, {bloqueo.fecha}</a></li>)}</ul></section>;
 }
 
