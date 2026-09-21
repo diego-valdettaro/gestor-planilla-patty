@@ -434,6 +434,76 @@ test("el selector semanal y el panel de feedback se operan con teclado y devuelv
   expect(errores).toEqual([]);
 });
 
+test("Administración confirma o cancela el ajuste de una asistencia confirmada", async ({ page }) => {
+  test.setTimeout(60_000);
+  const errores = observarErroresDelNavegador(page);
+
+  await page.goto("/iniciar-sesion");
+  await page.getByLabel("Usuario").fill("admin");
+  await page.getByLabel("Contraseña").fill("admin");
+  await page.getByRole("button", { name: "Entrar" }).click();
+  await expect(page).toHaveURL(/\/turnos$/);
+
+  // Eva queda confirmada con instantánea de turno por el recorrido de confirmación por rango anterior.
+  const martes = fechaDeLaSemanaDeDemo(1);
+  await page.goto(`/asistencias?vista=mensual&grupo=Tiendas&fecha=${martes}&colaborador=DEMO-EVA`);
+  const celda = page.getByRole("button", { name: new RegExp(`Asistencia del ${martes}`) });
+  await celda.click();
+  const dialogo = page.getByRole("dialog", { name: "Ajustar asistencia" });
+  await dialogo.getByLabel("Hora de salida").fill("15:00");
+  await dialogo.getByLabel("Motivo del ajuste").fill("Salida anticipada autorizada");
+  await dialogo.getByRole("button", { name: "Revisar ajuste" }).click();
+
+  const confirmacion = page.getByRole("dialog", { name: "¿Confirmar el ajuste de asistencia?" });
+  await expect(confirmacion.getByRole("heading", { name: "¿Confirmar el ajuste de asistencia?" })).toBeFocused();
+  await expect(confirmacion).toContainText(martes);
+  await expect(confirmacion).toContainText("Eva Confirmable");
+  await expect(confirmacion).toContainText("15:00");
+  await expect(confirmacion).toContainText("ya está confirmada");
+  await confirmacion.getByRole("button", { name: "Cancelar" }).click();
+  await expect(confirmacion).toBeHidden();
+  await expect(celda).toBeFocused();
+  await expect(celda).not.toContainText("15:00");
+
+  await celda.click();
+  await dialogo.getByLabel("Hora de salida").fill("15:00");
+  await dialogo.getByLabel("Motivo del ajuste").fill("Salida anticipada autorizada");
+  await dialogo.getByRole("button", { name: "Revisar ajuste" }).click();
+  await confirmacion.getByRole("button", { name: "Confirmar ajuste" }).click();
+  await expect(confirmacion).toBeHidden();
+  await expect(celda).toContainText("15:00");
+  expect(errores).toEqual([]);
+});
+
+test("Finanzas cancela y luego confirma la reapertura de un período cerrado", async ({ page }) => {
+  test.setTimeout(60_000);
+  const errores = observarErroresDelNavegador(page);
+
+  await page.goto("/iniciar-sesion");
+  await page.getByLabel("Usuario").fill("finanzas");
+  await page.getByLabel("Contraseña").fill("finanzas");
+  await page.getByRole("button", { name: "Entrar" }).click();
+  await expect(page).not.toHaveURL(/\/iniciar-sesion/);
+  await page.goto("/periodos");
+  const cerrado = await page.locator('select[name="periodoId"] option', { hasText: "(cerrado)" }).getAttribute("value");
+  await page.goto(`/periodos?periodoId=${cerrado}`);
+
+  const boton = page.getByRole("button", { name: "Reabrir período" });
+  await boton.click();
+  const dialogo = page.getByRole("dialog", { name: "¿Reabrir este período de planilla?" });
+  await expect(dialogo).toContainText("volverá a estar abierto");
+  await dialogo.getByRole("button", { name: "Cancelar" }).click();
+  await expect(dialogo).toBeHidden();
+  await expect(boton).toBeFocused();
+  await expect(page.getByText("Cerrado", { exact: true })).toBeVisible();
+
+  await boton.click();
+  await dialogo.getByLabel("Motivo de reapertura").fill("Corrección de una asistencia");
+  await dialogo.getByRole("button", { name: "Reabrir período" }).click();
+  await expect(page.getByRole("button", { name: "Reabrir período" })).toHaveCount(0);
+  expect(errores).toEqual([]);
+});
+
 async function iniciarSesionComoAdministracion(page: Page): Promise<void> {
   await page.goto("/iniciar-sesion");
   await page.getByLabel("Usuario").fill("admin");

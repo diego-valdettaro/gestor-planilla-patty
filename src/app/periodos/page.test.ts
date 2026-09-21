@@ -16,7 +16,7 @@ vi.mock("@/turnos/servicio", () => ({
   repositorioDeTurnos: { listarSedesConColaboradoresActivos, listarColaboradoresActivos },
 }));
 vi.mock("@/app/boton-de-accion-confirmada", () => ({
-  BotonDeAccionConfirmada: ({ etiqueta, children }: { etiqueta: string; children?: ReactNode }) => createElement("div", undefined, createElement("button", undefined, etiqueta), children),
+  BotonDeAccionConfirmada: ({ etiqueta, titulo, descripcion, children }: { etiqueta: string; titulo?: string; descripcion?: string; children?: ReactNode }) => createElement("div", undefined, createElement("button", undefined, etiqueta), createElement("dialog", undefined, createElement("h2", undefined, titulo), createElement("p", undefined, descripcion), children, createElement("button", undefined, "Cancelar"))),
 }));
 vi.mock("./actions", () => ({
   cerrarPeriodoDesdeFormulario: vi.fn(),
@@ -67,13 +67,17 @@ describe("página de Liquidaciones (/periodos)", () => {
     expect(html).toContain("Abierto");
   });
 
-  it("muestra el formulario de reapertura y la insignia neutra cuando el período está cerrado", async () => {
+  it("muestra el diálogo de reapertura con motivo, período y consecuencia y la insignia neutra cuando el período está cerrado", async () => {
     listar.mockResolvedValue([{ id: "p1", inicio: "2026-01-01", fin: "2026-01-31", estado: "cerrado" }]);
 
     const html = await render();
 
     expect(html).toContain("Motivo de reapertura");
     expect(html).toContain("Reabrir período</button>");
+    expect(html).toContain("¿Reabrir este período de planilla?");
+    expect(html).toContain("2026-01-01 al 2026-01-31");
+    expect(html).toContain("volverá a estar abierto");
+    expect(html).toContain(">Cancelar</button>");
     expect(html).toContain('class="insignia neutro"');
     expect(html).toContain("Cerrado");
   });
