@@ -12,6 +12,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .enlaces-navegacion a span { color: #77839a; font-size: 1.5rem; line-height: 1; width: 1.45rem; }
 .enlaces-navegacion a.activo { background: #dff7e9; color: #098b50; font-weight: 700; }
 .enlaces-navegacion a.activo span { color: #079557; }
+.barra-navegacion { display: flex; flex-direction: column; }
+.seccion-navegacion, .boton-menu-navegacion { display: none; }
+.menu-navegacion { display: flex; flex: 1; flex-direction: column; min-height: 0; overflow-y: auto; }
+.texto-activo { font-size: .7rem; font-weight: 600; }
 .cuenta-navegacion { align-items: center; display: flex; gap: .65rem; margin-top: auto; padding: .6rem .7rem; width: 100%; }
 .cuenta-navegacion > span:not(.avatar-navegacion) { display: grid; gap: .1rem; min-width: 0; }
 .cuenta-navegacion strong { color: #173054; font-size: .76rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -140,7 +144,7 @@ th, td { border: 1px solid #e2e8f0; padding: 0.6rem; text-align: left; }
 .resumen-plan { font-size: 0.85rem; margin: 0 0 0 auto; white-space: nowrap; }
 .resumen-plan strong { color: #166534; }
 .resumen-plan b { color: #92400e; }
-.tabla-plan-semanal { border: 1px solid #dce2ea; border-radius: .6rem; overflow-x: auto; }
+.tabla-plan-semanal { border: 1px solid #dce2ea; border-radius: .6rem; overflow-x: auto; position: relative; }
 .tabla-plan-semanal table { font-size: .78rem; min-width: 72rem; }.tabla-plan-semanal th, .tabla-plan-semanal td { border: 0; border-bottom: 1px solid #dfe5ed; border-right: 1px solid #dfe5ed; padding: .55rem .48rem; vertical-align: middle; }.tabla-plan-semanal tr:last-child > * { border-bottom: 0; }.tabla-plan-semanal tr > *:last-child { border-right: 0; }
 .tabla-plan-semanal thead th { background: #fbfcfd; font-weight: 700; padding: .8rem .55rem; position: sticky; top: 0; text-align: center; white-space: nowrap; z-index: 2; }.tabla-plan-semanal thead th:first-child { text-align: left; }
 .tabla-plan-semanal thead th:first-child, .tabla-plan-semanal tbody > tr:not(.grupo-sede) > th { background: #fff; left: 0; min-width: 11rem; position: sticky; z-index: 1; }.tabla-plan-semanal thead th:first-child { background: #fbfcfd; z-index: 3; }
@@ -231,15 +235,45 @@ th, td { border: 1px solid #e2e8f0; padding: 0.6rem; text-align: left; }
 .formulario-politica { display: grid; gap: .85rem; }
 .campos-politica { display: grid; gap: .75rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .pie-politica { align-items: center; display: flex; gap: 1rem; justify-content: space-between; }
-.panel-tabla { border: 1px solid #dce2ea; border-radius: .5rem; overflow-x: auto; }
+.panel-tabla { border: 1px solid #dce2ea; border-radius: .5rem; overflow-x: auto; position: relative; }
 .panel-tabla table { font-size: .85rem; min-width: 45rem; }
 .panel-tabla th { background: #f8fafc; color: #526174; font-size: .75rem; letter-spacing: .02em; }
 .panel-tabla th, .panel-tabla td { border: 0; border-bottom: 1px solid #e3e8ef; padding: .7rem .65rem; vertical-align: middle; }
 .panel-tabla tr:last-child td { border-bottom: 0; }
 @media (max-width: 900px) { .pagina { padding: 1.5rem; } .grilla-configuracion { grid-template-columns: 1fr; } .panel-filtros { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 700px) { .pagina { max-width: calc(100% - 13.85rem); padding: 1rem; } .encabezado-pagina h1 { font-size: 2rem; } .panel-cabecera, .pie-politica { align-items: stretch; flex-direction: column; } .panel-filtros, .campos-politica { grid-template-columns: 1fr; } .lista-con-estado li, .lista-sedes li { grid-template-columns: 1fr; } .acciones-configuracion { justify-content: flex-start; } .formulario-edicion { left: 0; right: auto; width: min(27rem, calc(100vw - 3rem)); } }
+@media (max-width: 700px) { .pagina { padding: 1rem; } .encabezado-pagina h1 { font-size: 2rem; } .panel-cabecera, .pie-politica { align-items: stretch; flex-direction: column; } .panel-filtros, .campos-politica { grid-template-columns: 1fr; } .lista-con-estado li, .lista-sedes li { grid-template-columns: 1fr; } .acciones-configuracion { justify-content: flex-start; } .formulario-edicion { left: 0; right: auto; width: min(27rem, calc(100vw - 3rem)); } }
 
 /* Liquidaciones (/periodos) */
 .periodos-filtros { grid-template-columns: repeat(3, minmax(0, 1fr)) auto auto; }
 @media (max-width: 900px) { .periodos-filtros { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 700px) { .periodos-filtros { grid-template-columns: 1fr; } }
+
+/* Ancho estrecho: la navegación lateral pasa a barra superior con menú y el contenido usa todo el ancho */
+@media (max-width: 900px) {
+  .navegacion { border-bottom: 1px solid #e3e7ee; border-right: 0; bottom: auto; padding: 0; right: 0; width: auto; }
+  .barra-navegacion { align-items: center; flex-direction: row; gap: .75rem; padding: .5rem 1rem; }
+  .marca { font-size: 1.6rem; margin: 0; }
+  .seccion-navegacion { color: #173054; display: block; flex: 1; font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .boton-menu-navegacion { display: block; background: #fff; border: 1px solid #9ca3af; color: #1d2733; font-size: .85rem; min-height: 2.5rem; }
+  .menu-navegacion { display: none; max-height: calc(100vh - 3.6rem); padding: 0 .55rem .75rem; }
+  .navegacion-abierta .menu-navegacion { display: flex; }
+  .contenido, .contenido-turnos, .pagina { margin: 3.6rem 0 0; max-width: 100%; min-width: 0; }
+  .contenido { padding: 1rem; }
+  .pagina { padding: 1rem; }
+  .contenido-turnos { padding: 1rem; }
+  .panel, .encabezado-pagina { max-width: 100%; min-width: 0; }
+  .grilla-configuracion, .lista-con-estado li, .lista-sedes li, .campos-politica { grid-template-columns: minmax(0, 1fr); }
+  .lista-configuracion li > * { min-width: 0; }
+  .formulario-edicion { grid-template-columns: minmax(0, 1fr); margin-top: .4rem; position: static; width: 100%; }
+  .formulario-edicion button { grid-column: auto; }
+  .encabezado, .panel-cabecera, .titulo-grilla { flex-wrap: wrap; }
+  .titulo-grilla { gap: .25rem 1rem; }
+  .plan-semanal { min-width: 0; }
+  .panel-filtros, .periodos-filtros { grid-template-columns: 1fr; }
+  .filtros { flex-wrap: wrap; }
+  .filtros > *, .panel-filtros > * { min-width: 0; }
+  .encabezado-pagina h1, .barra-plan-semanal h1 { font-size: 1.8rem; }
+  .centrado { min-height: 100vh; }
+  .panel-tabla, .tabla-plan-semanal, .calendario { max-width: 100%; }
+  .panel-tabla, .tabla-plan-semanal, .calendario, .dias { overflow-x: auto; }
+}
