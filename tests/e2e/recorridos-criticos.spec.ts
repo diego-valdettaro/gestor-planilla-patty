@@ -348,6 +348,53 @@ test("confirma colaboradores por un rango que corta la semana desde las vistas m
   expect(errores).toEqual([]);
 });
 
+test("el selector semanal y el panel de feedback se operan con teclado y devuelven el foco", async ({ page }) => {
+  const errores = observarErroresDelNavegador(page);
+  await page.goto("/iniciar-sesion");
+  await page.getByLabel("Usuario").fill("operaciones");
+  await page.getByLabel("Contraseña").fill("operaciones");
+  await page.getByRole("button", { name: "Entrar" }).click();
+  await expect(page).toHaveURL(/\/turnos$/);
+  await page.goto(`/turnos?semana=${fechaDeLaSemanaDeDemo(0)}&equipo=Tiendas`);
+
+  const disparador = page.locator(".boton-fecha-semanal");
+  await disparador.focus();
+  await page.keyboard.press("Enter");
+  const calendario = page.getByRole("dialog", { name: "Elegir semana" });
+  await expect(calendario).toBeVisible();
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Tab");
+  const fecha = page.locator(".fechas-calendario-semanal button").first();
+  await fecha.focus();
+  await expect(fecha).toBeFocused();
+  const contorno = await fecha.evaluate((elemento) => getComputedStyle(elemento).outlineStyle);
+  expect(contorno).not.toBe("none");
+  await page.keyboard.press("Escape");
+  await expect(calendario).toBeHidden();
+  await expect(disparador).toBeFocused();
+
+  await disparador.press("Enter");
+  await page.getByRole("button", { name: "Cancelar" }).first().click();
+  await expect(disparador).toBeFocused();
+
+  const feedback = page.getByRole("button", { name: "Enviar feedback" });
+  await feedback.focus();
+  await page.keyboard.press("Enter");
+  const panel = page.getByRole("dialog", { name: "Enviar feedback" });
+  await expect(panel).toBeVisible();
+  await expect(panel.getByLabel("Comentario")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(panel).toBeHidden();
+  await expect(feedback).toBeFocused();
+
+  await feedback.press("Enter");
+  await panel.getByRole("button", { name: "Cancelar" }).click();
+  await expect(panel).toBeHidden();
+  await expect(feedback).toBeFocused();
+  expect(errores).toEqual([]);
+});
+
 test("Administración confirma o cancela el ajuste de una asistencia confirmada", async ({ page }) => {
   test.setTimeout(60_000);
   const errores = observarErroresDelNavegador(page);
@@ -415,5 +462,88 @@ test("Finanzas cancela y luego confirma la reapertura de un período cerrado", a
   await dialogo.getByLabel("Motivo de reapertura").fill("Corrección de una asistencia");
   await dialogo.getByRole("button", { name: "Reabrir período" }).click();
   await expect(page.getByRole("button", { name: "Reabrir período" })).toHaveCount(0);
+  expect(errores).toEqual([]);
+});
+
+async function iniciarSesionComoAdministracion(page: Page): Promise<void> {
+  await page.goto("/iniciar-sesion");
+  await page.getByLabel("Usuario").fill("admin");
+  await page.getByLabel("Contraseña").fill("admin");
+  await page.getByRole("button", { name: "Entrar" }).click();
+  await expect(page).toHaveURL(/\/turnos$/);
+}
+
+async function desbordeHorizontalDeLaPagina(page: Page): Promise<number> {
+  return page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+}
+
+async function elementosQueDesbordan(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const ancho = document.documentElement.clientWidth;
+    const medida = () => document.documentElement.scrollWidth - ancho;
+    const resultado: string[] = [];
+    for (const el of document.querySelectorAll<HTMLElement>("main *")) {
+      const previo = el.style.display;
+      el.style.display = "none";
+      const nueva = medida();
+      el.style.display = previo;
+      if (nueva < 1) resultado.push(`${el.tagName.toLowerCase()}.${String(el.className)}`);
+      if (resultado.length >= 4) break;
+    }
+    return resultado.join(" | ");
+  });
+}
+
+const rutasAutenticadas = ["/configuracion", "/turnos", "/asistencias", "/asistencias/importar", "/periodos"];
+
+for (const [nombre, ancho, alto] of [["375 px", 375, 812], ["escritorio", 1280, 800]] as const) {
+  test(`las rutas autenticadas caben en ${nombre} sin errores de consola`, async ({ page }) => {
+    const errores = observarErroresDelNavegador(page);
+    await page.setViewportSize({ width: ancho, height: alto });
+
+    await page.goto("/iniciar-sesion");
+    expect(await desbordeHorizontalDeLaPagina(page)).toBeLessThanOrEqual(0);
+    await iniciarSesionComoAdministracion(page);
+
+    for (const ruta of rutasAutenticadas) {
+      await page.goto(ruta);
+      const desborde = await desbordeHorizontalDeLaPagina(page);
+      expect(desborde, `desborde en ${ruta}: ${desborde > 0 ? await elementosQueDesbordan(page) : ""}`).toBeLessThanOrEqual(0);
+
+      const navegacion = await page.getByRole("navigation", { name: "Navegación principal" }).boundingBox();
+      const contenido = await page.locator("main").first().boundingBox();
+      expect(navegacion && contenido, `medidas en ${ruta}`).toBeTruthy();
+      if (ancho <= 900) expect(contenido!.y, `solapamiento en ${ruta}`).toBeGreaterThanOrEqual(navegacion!.y + navegacion!.height - 1);
+      else expect(contenido!.x, `solapamiento en ${ruta}`).toBeGreaterThanOrEqual(navegacion!.x + navegacion!.width - 1);
+    }
+    expect(errores).toEqual([]);
+  });
+}
+
+test("en ancho estrecho el menú se opera con teclado e identifica la sección por texto", async ({ page }) => {
+  const errores = observarErroresDelNavegador(page);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await iniciarSesionComoAdministracion(page);
+  await page.goto("/asistencias");
+
+  const navegacion = page.getByRole("navigation", { name: "Navegación principal" });
+  await expect(navegacion.getByText("Asistencia", { exact: true })).toBeVisible();
+  const menu = navegacion.getByRole("button", { name: "Menú" });
+  await expect(menu).toHaveAttribute("aria-expanded", "false");
+  await expect(navegacion.getByRole("link", { name: /Configuración/ })).toBeHidden();
+
+  await menu.focus();
+  await page.keyboard.press("Enter");
+  await expect(navegacion.getByRole("button", { name: "Cerrar menú" })).toHaveAttribute("aria-expanded", "true");
+  await expect(navegacion.getByRole("link", { name: /Asistencia.*sección actual/ })).toHaveAttribute("aria-current", "page");
+  await expect(navegacion.getByRole("button", { name: "Cerrar sesión" })).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await expect(navegacion.getByRole("button", { name: "Menú" })).toHaveAttribute("aria-expanded", "false");
+
+  await navegacion.getByRole("button", { name: "Menú" }).click();
+  await navegacion.getByRole("link", { name: /Horarios/ }).click();
+  await expect(page).toHaveURL(/\/turnos$/);
+  await expect(navegacion.getByRole("button", { name: "Menú" })).toHaveAttribute("aria-expanded", "false");
   expect(errores).toEqual([]);
 });
