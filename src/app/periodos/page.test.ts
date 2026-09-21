@@ -212,4 +212,22 @@ describe("página de Liquidaciones (/periodos)", () => {
 
     expect(listarResumen).toHaveBeenCalledWith({ periodoId: "p1", sede: "Centro", idHuellero: "H-1" });
   });
+  it("indica el siguiente paso permitido cuando no hay períodos", async () => {
+    listar.mockResolvedValue([]);
+
+    const html = await render();
+
+    expect(html).toContain("Nuevo período");
+    expect(html).toMatch(/estado-vacio[\s\S]*Cree un período/);
+  });
+
+  it("anuncia con la variante listo y role status que el período no tiene bloqueos", async () => {
+    listar.mockResolvedValue([{ id: "p1", inicio: "2026-01-01", fin: "2026-01-31", estado: "abierto" }]);
+
+    const html = await render();
+
+    expect(html).toContain('class="mensaje-operacion listo" role="status"');
+    expect(html).toContain("El período no tiene asistencias ni horas extra pendientes.");
+    expect(html).not.toContain("mensaje-operacion exito");
+  });
 });

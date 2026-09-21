@@ -31,7 +31,7 @@ vi.mock("@/turnos/servicio", () => ({
   },
 }));
 vi.mock("./planificador-semanal", () => ({
-  PlanificadorSemanal: () => createElement("div", undefined, "Planificador semanal"),
+  PlanificadorSemanal: ({ soloLectura }: { soloLectura?: boolean }) => createElement("div", undefined, soloLectura ? "Planificador semanal de solo lectura" : "Planificador semanal editable"),
 }));
 
 async function render() {
@@ -78,12 +78,65 @@ describe("página de Horarios (/turnos)", () => {
     expect(listarModelosPorSede.mock.calls.map(([sede]) => sede)).toEqual(["Norte", "Sur"]);
   });
 
-  it("permite el acceso a Finanzas con las mismas reglas que Operaciones", async () => {
+  it("permite a Finanzas consultar el horario semanal en solo lectura", async () => {
     obtenerActorActual.mockResolvedValue({ rol: "finanzas" });
 
     const html = await render();
 
-    expect(html).toContain("Planificador semanal");
-    expect(html).not.toContain("No tiene permiso para consultar horarios.");
+    expect(html).toContain("Planificador semanal de solo lectura");
+    expect(html).toContain("Su rol no permite editarlo ni publicarlo.");
+    expect(html).not.toContain("Sin permiso");
+  });
+
+  it.each(["operaciones", "administracion"])("entrega el planificador editable a %s", async (rol) => {
+    obtenerActorActual.mockResolvedValue({ rol });
+
+    const html = await render();
+
+    expect(html).toContain("Planificador semanal editable");
+  });
+
+  it("explica con el estado vacío compartido que no hay grupo y no manda a Operaciones a Configuración", async () => {
+    obtenerActorActual.mockResolvedValue({ rol: "operaciones" });
+    listarGrupos.mockResolvedValue([]);
+
+    const html = await render();
+
+    expect(html).toContain('class="estado-vacio"');
+    expect(html).toContain("No hay grupos operativos");
+    expect(html).toContain("Pida a Administración");
+    expect(html).not.toContain("/configuracion");
+    expect(html).not.toContain("Planificador semanal");
+  });
+
+  it("ofrece Configuración a Administración cuando no hay grupo", async () => {
+    listarGrupos.mockResolvedValue([]);
+
+    const html = await render();
+
+    expect(html).toContain("No hay grupos operativos");
+    expect(html).toContain('href="/configuracion"');
+  });
+
+  it("no ofrece Configuración a Finanzas cuando no hay grupo", async () => {
+    obtenerActorActual.mockResolvedValue({ rol: "finanzas" });
+    listarGrupos.mockResolvedValue([]);
+
+    const html = await render();
+
+    expect(html).toContain('class="estado-vacio"');
+    expect(html).toContain("No hay grupos operativos");
+    expect(html).not.toContain("/configuracion");
+    expect(html).toContain("Pida a Administración");
+  });
+
+  it("usa el estado vacío compartido para un rol sin permiso de Horarios", async () => {
+    obtenerActorActual.mockResolvedValue({ rol: "otro" });
+
+    const html = await render();
+
+    expect(html).toContain('class="estado-vacio"');
+    expect(html).toContain("Sin permiso");
+    expect(html).toContain("Su rol no permite consultar Horarios");
   });
 });

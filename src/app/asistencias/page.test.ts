@@ -69,4 +69,35 @@ describe("página semanal de asistencias", () => {
     expect(html).toContain("Vista semanal");
     expect(html).toContain("Confirmar por rango");
   });
+  it("usa el estado vacío compartido para un rol sin permiso de Asistencias", async () => {
+    const { obtenerActorActual } = await import("@/autenticacion/sesion-del-servidor");
+    vi.mocked(obtenerActorActual).mockResolvedValue({ id: "op-1", rol: "operaciones" });
+    const { default: PaginaDeAsistencias } = await import("./page");
+    const html = renderToStaticMarkup(await PaginaDeAsistencias({ searchParams: Promise.resolve({}) }));
+
+    expect(html).toContain('class="estado-vacio"');
+    expect(html).toContain("Sin permiso");
+    expect(html).toContain("Administración y Finanzas");
+  });
+
+  it("no manda a Finanzas a Configuración cuando no hay grupos operativos", async () => {
+    const { obtenerActorActual } = await import("@/autenticacion/sesion-del-servidor");
+    vi.mocked(obtenerActorActual).mockResolvedValue({ id: "fin-1", rol: "finanzas" });
+    listarGrupos.mockResolvedValue([]);
+    const { default: PaginaDeAsistencias } = await import("./page");
+    const html = renderToStaticMarkup(await PaginaDeAsistencias({ searchParams: Promise.resolve({}) }));
+
+    expect(html).toContain("No hay grupos operativos");
+    expect(html).not.toContain('href="/configuracion"');
+    expect(html).toContain("Administración");
+  });
+
+  it("ofrece Configuración a Administración cuando no hay grupos operativos", async () => {
+    listarGrupos.mockResolvedValue([]);
+    const { default: PaginaDeAsistencias } = await import("./page");
+    const html = renderToStaticMarkup(await PaginaDeAsistencias({ searchParams: Promise.resolve({}) }));
+
+    expect(html).toContain("No hay grupos operativos");
+    expect(html).toContain('href="/configuracion"');
+  });
 });
