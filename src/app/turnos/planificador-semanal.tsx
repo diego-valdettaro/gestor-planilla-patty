@@ -22,8 +22,8 @@ type Publicado = HorarioSemanalParaCopiar;
 type Confirmacion = { tipo: "cambiar-semana"; destino: string } | { tipo: "publicar" } | { tipo: "republicar"; idHuellero: string; nombre: string };
 type ResultadoDeDia = "laboral" | MotivoPlanificadoDeNoAsistencia;
 
-export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, equipo, colaboradores, dias, celdasIniciales, publicados, procesados, modelos, sedes }: {
-  actualizadoEn?: string; equipos: Grupo[]; planId: string; semana: string; equipo: Grupo; colaboradores: Colaborador[]; dias: string[]; celdasIniciales: Celda[]; publicados: Publicado[]; procesados: string[]; modelos: Modelo[]; sedes: string[];
+export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, equipo, colaboradores, dias, celdasIniciales, publicados, procesados, modelos, sedes, soloLectura = false }: {
+  actualizadoEn?: string; equipos: Grupo[]; planId: string; semana: string; equipo: Grupo; colaboradores: Colaborador[]; dias: string[]; celdasIniciales: Celda[]; publicados: Publicado[]; procesados: string[]; modelos: Modelo[]; sedes: string[]; soloLectura?: boolean;
 }) {
   const router = useRouter();
   const dialogoPersonalizado = useRef<HTMLDialogElement>(null);
@@ -64,6 +64,7 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
     .map(({ idHuellero }) => idHuellero), [colaboradores, resumenesPorColaborador]);
   const elegiblesParaPublicar = useMemo(() => new Set(idsElegiblesParaPublicar), [idsElegiblesParaPublicar]);
   const seleccionados = useMemo(() => seleccionEfectiva(idsElegiblesParaPublicar, overridesDeSeleccion), [idsElegiblesParaPublicar, overridesDeSeleccion]);
+  const motivosDeAccionesDeshabilitadas = [!cambios && !guardando ? "Guardar borrador está deshabilitado porque no hay cambios sin guardar." : "", !seleccionados.size && !publicando ? "Publicar planificación está deshabilitado porque no hay colaboradores marcados para publicar." : ""].filter(Boolean).join(" ");
   const estadoDeLaPlanificacion = useMemo<EstadoDeHorario>(() => {
     if (!colaboradores.length) return "borrador-editable";
     const estados = new Set([...resumenesPorColaborador.values()].map((item) => item.estado));
@@ -212,7 +213,7 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
   }
 
   function contenidoDeChip(celda: Celda | Publicado | undefined) {
-    if (!celda) return <span className="chip-vacio">＋ Asignar</span>;
+    if (!celda) return <span className="chip-vacio">{soloLectura ? "Sin asignar" : "＋ Asignar"}</span>;
     if (celda.motivoNoAsistencia) return <b>{ETIQUETA_DE_MOTIVO[celda.motivoNoAsistencia]}</b>;
     return <><b>{celda.sede}</b><small>{celda.entradaProgramada}–{celda.salidaProgramada}</small></>;
   }
@@ -231,6 +232,10 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
     if (publicado) clases.push("publicado");
     if (mostrado?.motivoNoAsistencia || mostrado?.descanso) clases.push("descanso");
     if (!mostrado) clases.push("vacia");
+    const descripcion = `Horario de ${colaborador.nombre} para ${fecha}: ${descripcionDeCelda(mostrado)}. ${NOMBRE_DEL_ESTADO_DE_HORARIO[estado]}`;
+    if (soloLectura) return <td className={clases.join(" ")} key={fecha}>
+      <span className={`chip-turno estado-color-${estado}`}><span className="sr-only">{descripcion}</span>{contenidoDeChip(mostrado)}</span>
+    </td>;
     return <td className={clases.join(" ")} key={fecha}>
       <button aria-haspopup="dialog" aria-label={`Horario de ${colaborador.nombre} para ${fecha}: ${descripcionDeCelda(mostrado)}. ${NOMBRE_DEL_ESTADO_DE_HORARIO[estado]}`} className={`chip-turno estado-color-${estado}`} disabled={estado === "liquidado"} onClick={() => abrirDialogoCelda(colaborador, fecha)} type="button">
         {contenidoDeChip(mostrado)}
@@ -245,10 +250,10 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
         <label className="selector-equipo"><span>Grupo</span><select aria-label="Grupo" onChange={(evento) => router.push(`/turnos?semana=${semana}&equipo=${evento.target.value}`)} value={equipo}>{equipos.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
         <SelectorSemanal semana={semana} alSeleccionar={cambiarSemana} />
       </div>
-      <div className={`estado-doble ${cambios ? "sin-guardar" : ""}`}>
-        <strong>{cambios ? "Sin guardar" : "Borrador guardado"}</strong>
-        <span>{guardadoEn ? `Guardado ${formatearFecha(guardadoEn)}` : "Aún no guardado"}</span>
-      </div>
+      {!soloLectura && <div className={`estado-doble ${cambios ? "sin-guardar" : ""}`}>
+          <strong>{cambios ? "Sin guardar" : "Borrador guardado"}</strong>
+          <span>{guardadoEn ? `Guardado ${formatearFecha(guardadoEn)}` : "Aún no guardado"}</span>
+        </div>}
       <div className="estado-doble">
         <strong>Planificación</strong>
         <span className={`chip-estado-plan estado-color-${estadoDeLaPlanificacion}`}>
@@ -260,13 +265,14 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
         <div className="cabeza"><span>Cobertura de la semana</span><span>{resumen.asignadas} / {resumen.total} días</span></div>
         <div className="pista-barra"><i style={{ width: `${resumen.total ? Math.round((resumen.asignadas / resumen.total) * 100) : 0}%` }} /></div>
       </div>
-      <div className="acciones-plan"><button className="boton-secundario" disabled={!cambios || guardando} onClick={guardar} type="button">{guardando ? "Guardando…" : "Guardar borrador"}</button><button className="boton-principal" disabled={publicando || !seleccionados.size} onClick={solicitarPublicacion} type="button">{publicando ? "Publicando…" : "Publicar planificación"}</button></div>
+      {!soloLectura && <><div className="acciones-plan"><button aria-describedby={motivosDeAccionesDeshabilitadas ? "motivo-acciones-plan" : undefined} className="boton-secundario" disabled={!cambios || guardando} onClick={guardar} type="button">{guardando ? "Guardando…" : "Guardar borrador"}</button><button aria-describedby={motivosDeAccionesDeshabilitadas ? "motivo-acciones-plan" : undefined} className="boton-principal" disabled={publicando || !seleccionados.size} onClick={solicitarPublicacion} type="button">{publicando ? "Publicando…" : "Publicar planificación"}</button></div>{motivosDeAccionesDeshabilitadas && <p className="pista-configuracion" id="motivo-acciones-plan">{motivosDeAccionesDeshabilitadas}</p>}</>}
       {error && <p className="mensaje-operacion error" role="alert">{error}</p>}
     </div>
     <div className="titulo-grilla"><h2>Grupo {equipo}</h2><span>{colaboradores.length} colaboradores · {sedes.length} {sedes.length === 1 ? "sede" : "sedes"}</span><span className="aviso-desplazamiento">Desplácese horizontalmente para ver la semana completa.</span></div><ul aria-label="Estados de la planificación" className="leyenda-estados leyenda-plan">{ESTADOS_DE_HORARIO.map((estado) => <li className={`estado-color-${estado}`} key={estado}><EtiquetaEstado estado={estado} /></li>)}</ul><div className="tabla-plan-semanal"><table><thead><tr><th>Colaborador</th>{dias.map((fecha) => <th key={fecha}>{new Intl.DateTimeFormat("es-PE", { weekday: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${fecha}T00:00:00Z`))}</th>)}</tr></thead><tbody>
-      {colaboradores.map((colaborador) => { const semana = resumenesPorColaborador.get(colaborador.idHuellero)!; return <tr key={colaborador.idHuellero}><th scope="row"><div className="persona"><span className="ini">{iniciales(colaborador.nombre)}</span><span>{colaborador.nombre}<small><EtiquetaEstado estado={semana.estado} /></small>{elegiblesParaPublicar.has(colaborador.idHuellero) && <label className="checkbox-publicar-fila"><input checked={seleccionados.has(colaborador.idHuellero)} disabled={publicando} onChange={(evento) => alternarSeleccion(colaborador.idHuellero, evento.target.checked)} type="checkbox" />Publicar</label>}{!semana.semanaLiquidada && <button aria-haspopup="dialog" disabled={publicando} onClick={() => abrirCompletarSemana(colaborador)} type="button">Completar semana</button>}{semana.tieneCambiosSinPublicar && !semana.semanaLiquidada && <button disabled={publicando} onClick={() => pedirConfirmacion({ tipo: "republicar", idHuellero: colaborador.idHuellero, nombre: colaborador.nombre })} type="button">Republicar cambios</button>}</span></div></th>{dias.map((fecha) => renderCelda(colaborador, fecha, semana.semanaLiquidada))}</tr>; })}
+      {colaboradores.map((colaborador) => { const semana = resumenesPorColaborador.get(colaborador.idHuellero)!; return <tr key={colaborador.idHuellero}><th scope="row"><div className="persona"><span className="ini">{iniciales(colaborador.nombre)}</span><span>{colaborador.nombre}<small><EtiquetaEstado estado={semana.estado} /></small>{!soloLectura && elegiblesParaPublicar.has(colaborador.idHuellero) && <label className="checkbox-publicar-fila"><input checked={seleccionados.has(colaborador.idHuellero)} disabled={publicando} onChange={(evento) => alternarSeleccion(colaborador.idHuellero, evento.target.checked)} type="checkbox" />Publicar</label>}{!soloLectura && !semana.semanaLiquidada && <button aria-haspopup="dialog" className="boton-secundario" disabled={publicando} onClick={() => abrirCompletarSemana(colaborador)} type="button">Completar semana</button>}{!soloLectura && semana.tieneCambiosSinPublicar && !semana.semanaLiquidada && <button className="boton-secundario" disabled={publicando} onClick={() => pedirConfirmacion({ tipo: "republicar", idHuellero: colaborador.idHuellero, nombre: colaborador.nombre })} type="button">Republicar cambios</button>}</span></div></th>{dias.map((fecha) => renderCelda(colaborador, fecha, semana.semanaLiquidada))}</tr>; })}
     </tbody></table></div>
-    <footer className="pie-plan-semanal"><p><strong>{resumen.asignadas} de {resumen.total} días asignados</strong><span>{textoDeCobertura(resumen.faltantesPorColaborador.length, seleccionados.size)}</span></p><div><button className="boton-secundario" disabled={!cambios || guardando} onClick={guardar} type="button">Guardar borrador</button><button className="boton-principal" disabled={publicando || !seleccionados.size} onClick={solicitarPublicacion} type="button">Publicar planificación</button></div></footer>
+    <footer className="pie-plan-semanal"><p><strong>{resumen.asignadas} de {resumen.total} días asignados</strong>{!soloLectura && <span>{textoDeCobertura(resumen.faltantesPorColaborador.length, seleccionados.size)}</span>}</p>{!soloLectura && <div><button aria-describedby={motivosDeAccionesDeshabilitadas ? "motivo-acciones-plan" : undefined} className="boton-secundario" disabled={!cambios || guardando} onClick={guardar} type="button">Guardar borrador</button><button aria-describedby={motivosDeAccionesDeshabilitadas ? "motivo-acciones-plan" : undefined} className="boton-principal" disabled={publicando || !seleccionados.size} onClick={solicitarPublicacion} type="button">Publicar planificación</button></div>}</footer>
+    {!soloLectura && <>
     <dialog aria-labelledby="titulo-dialogo-confirmacion" className="dialogo-confirmacion" ref={dialogoConfirmacion}><form action={confirmarOperacion}><h2 id="titulo-dialogo-confirmacion">{tituloDeConfirmacion(confirmacion)}</h2><p>{descripcionDeConfirmacion(confirmacion)}</p>{confirmacion?.tipo === "publicar" && <ul className="resumen-publicacion"><li>{seleccionados.size} {seleccionados.size === 1 ? "colaborador se publica" : "colaboradores se publican"}</li></ul>}{confirmacion?.tipo === "republicar" && <label>Motivo de la republicación<input name="motivo" maxLength={250} required /></label>}<div className="acciones-dialogo"><button className="boton-secundario" onClick={() => dialogoConfirmacion.current?.close()} type="button">Cancelar</button><button className={confirmacion?.tipo === "publicar" ? "boton-principal" : "boton-secundario"} type="submit">{etiquetaDeConfirmacion(confirmacion)}</button></div></form></dialog>
     <dialog aria-labelledby="titulo-dialogo-celda" className="dialogo-confirmacion" ref={dialogoCelda}><form action={elegirEnDialogoCelda} key={celdaEnEdicion ? `${celdaEnEdicion.colaborador.idHuellero}:${celdaEnEdicion.fecha}` : "sin-celda"}><h2 id="titulo-dialogo-celda">Turno de {celdaEnEdicion?.colaborador.nombre ?? ""}</h2><p>{celdaEnEdicion ? formatearDiaLargo(celdaEnEdicion.fecha) : ""}</p><div className="opciones-celda">{opcionesDeCelda().map((opcion) => <label key={opcion.value}><input defaultChecked={opcion.value === valorDe(celdaEnEdicion ? porClave.get(`${celdaEnEdicion.colaborador.idHuellero}:${celdaEnEdicion.fecha}`) ?? publicadosPorClave.get(`${celdaEnEdicion.colaborador.idHuellero}:${celdaEnEdicion.fecha}`) : undefined)} name="opcion" type="radio" value={opcion.value} />{opcion.label}</label>)}</div><div className="acciones-dialogo"><button className="boton-secundario" onClick={() => dialogoCelda.current?.close()} type="button">Cancelar</button><button className="boton-principal" type="submit">Usar</button></div></form></dialog>
     <dialog aria-labelledby="titulo-dialogo-personalizado" ref={dialogoPersonalizado}><form action={guardarPersonalizado} key={personalizado ? `${personalizado.colaborador.idHuellero}:${personalizado.fecha}:${personalizado.apertura}` : "sin-personalizar"}><h2 id="titulo-dialogo-personalizado">Horario personalizado</h2><label>Sede<select defaultValue={personalizado?.celda?.sede ?? sedes[0]} name="sede" required>{sedes.map((sede) => <option key={sede} value={sede}>{sede}</option>)}</select></label><label>Entrada<input defaultValue={personalizado?.celda?.entradaProgramada ?? "09:00"} name="entrada" type="time" required /></label><label>Salida<input defaultValue={personalizado?.celda?.salidaProgramada ?? "18:00"} name="salida" type="time" required /></label><button className="boton-principal" type="submit">Usar horario</button><button className="boton-secundario" onClick={cerrarPersonalizado} type="button">Cancelar</button></form></dialog>
@@ -278,6 +284,7 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
       <div className="dias-completar-semana">{dias.map((fecha) => <label key={fecha}>{formatearDiaLargo(fecha)}<select defaultValue="laboral" name={`dia-${fecha}`}><option value="laboral">Laboral</option>{MOTIVOS_PLANIFICADOS_DE_NO_ASISTENCIA.map((motivo) => <option key={motivo} value={motivo}>{ETIQUETA_DE_MOTIVO[motivo]}</option>)}</select></label>)}</div>
       <div className="acciones-dialogo"><button className="boton-secundario" onClick={cerrarCompletarSemana} type="button">Cancelar</button><button className="boton-principal" type="submit">Completar semana</button></div>
     </form></dialog>
+    </>}
   </>;
 }
 

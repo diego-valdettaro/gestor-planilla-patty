@@ -31,7 +31,7 @@ vi.mock("@/turnos/servicio", () => ({
   },
 }));
 vi.mock("./planificador-semanal", () => ({
-  PlanificadorSemanal: () => createElement("div", undefined, "Planificador semanal"),
+  PlanificadorSemanal: ({ soloLectura }: { soloLectura?: boolean }) => createElement("div", undefined, soloLectura ? "Planificador semanal de solo lectura" : "Planificador semanal editable"),
 }));
 
 async function render() {
@@ -78,14 +78,24 @@ describe("página de Horarios (/turnos)", () => {
     expect(listarModelosPorSede.mock.calls.map(([sede]) => sede)).toEqual(["Norte", "Sur"]);
   });
 
-  it("permite el acceso a Finanzas con las mismas reglas que Operaciones", async () => {
+  it("permite a Finanzas consultar el horario semanal en solo lectura", async () => {
     obtenerActorActual.mockResolvedValue({ rol: "finanzas" });
 
     const html = await render();
 
-    expect(html).toContain("Planificador semanal");
-    expect(html).not.toContain("No tiene permiso para consultar horarios.");
+    expect(html).toContain("Planificador semanal de solo lectura");
+    expect(html).toContain("Su rol no permite editarlo ni publicarlo.");
+    expect(html).not.toContain("Sin permiso");
   });
+
+  it.each(["operaciones", "administracion"])("entrega el planificador editable a %s", async (rol) => {
+    obtenerActorActual.mockResolvedValue({ rol });
+
+    const html = await render();
+
+    expect(html).toContain("Planificador semanal editable");
+  });
+
   it("explica con el estado vacío compartido que no hay grupo y no manda a Operaciones a Configuración", async () => {
     obtenerActorActual.mockResolvedValue({ rol: "operaciones" });
     listarGrupos.mockResolvedValue([]);

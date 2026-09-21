@@ -46,6 +46,38 @@ describe("página de Configuración (/configuracion)", () => {
     listarModelosPorSede.mockResolvedValue([]);
   });
 
+  it("no explica acciones deshabilitadas cuando hay sedes y grupos", async () => {
+    filasDeSedes.mockReturnValue([{ nombre: "Norte", grupo: "Tiendas" }]);
+    listarGrupos.mockResolvedValue(["Tiendas"]);
+
+    const html = await render();
+
+    expect(html).not.toContain("está deshabilitado");
+  });
+
+  it("explica junto a cada acción por qué está deshabilitada cuando no hay sedes ni grupos", async () => {
+    const html = await render();
+
+    expect(html).toMatch(/aria-describedby="motivo-crear-modelo"[^>]*disabled=""/);
+    expect(html).toContain('id="motivo-crear-modelo"');
+    expect(html).toContain("Crear colaborador está deshabilitado porque no hay sedes activas ni grupos.");
+    expect(html).toContain("Crear sede está deshabilitado porque no hay grupos.");
+    expect(html).toContain("Guardar política está deshabilitado porque no hay sedes activas.");
+  });
+
+  it("no ofrece a Operaciones acciones de Administración", async () => {
+    obtenerActorActual.mockResolvedValue({ rol: "operaciones" });
+    filasDeSedes.mockReturnValue([{ nombre: "Norte", grupo: "Tiendas" }]);
+    listarGrupos.mockResolvedValue(["Tiendas"]);
+
+    const html = await render();
+
+    expect(html).toContain("Crear modelo");
+    expect(html).not.toContain("Crear colaborador");
+    expect(html).not.toContain("Crear sede");
+    expect(html).not.toContain("Guardar política");
+  });
+
   it("explica con el estado vacío compartido que Finanzas no puede cambiar la configuración", async () => {
     obtenerActorActual.mockResolvedValue({ rol: "finanzas" });
 
@@ -53,6 +85,7 @@ describe("página de Configuración (/configuracion)", () => {
 
     expect(html).toContain('class="estado-vacio"');
     expect(html).toContain("Sin permiso");
+    expect(html).not.toContain("Crear modelo");
   });
 
   it("sin sedes, Administración ve estados vacíos de modelos, sedes y colaboradores con su siguiente paso", async () => {
