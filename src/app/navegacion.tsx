@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
 import type { Actor } from "@/colaboradores/registrar-colaborador";
 
 import { cerrarSesionDesdeFormulario } from "./cerrar-sesion/actions";
+import { enlacesPermitidos, esEnlaceActivo, seccionActiva } from "./enlaces-navegacion";
 
 const etiquetasDeRol = {
   operaciones: "Operaciones",
@@ -14,23 +16,38 @@ const etiquetasDeRol = {
 };
 
 export function Navegacion({ actor }: { actor?: Actor }) {
+  const ruta = usePathname();
+  const [menuAbierto, setMenuAbierto] = useState(false);
+
+  useEffect(() => setMenuAbierto(false), [ruta]);
+  useEffect(() => {
+    if (!menuAbierto) return;
+    const cerrarConEscape = (evento: KeyboardEvent) => { if (evento.key === "Escape") setMenuAbierto(false); };
+    document.addEventListener("keydown", cerrarConEscape);
+    return () => document.removeEventListener("keydown", cerrarConEscape);
+  }, [menuAbierto]);
+
   if (!actor) return null;
 
-  const ruta = usePathname();
-  const enlaces = [
-    { href: "/configuracion", etiqueta: "Configuración", icono: "♧", visible: actor.rol === "administracion" },
-    { href: "/turnos", etiqueta: "Horarios", icono: "▣", visible: actor.rol === "operaciones" || actor.rol === "administracion" },
-    { href: "/asistencias", etiqueta: "Asistencia", icono: "◷", visible: actor.rol === "administracion" || actor.rol === "finanzas" },
-    { href: "/periodos", etiqueta: "Liquidaciones", icono: "▤", visible: actor.rol === "administracion" || actor.rol === "finanzas" },
-  ];
+  const enlaces = enlacesPermitidos(actor.rol);
+  const seccion = seccionActiva(ruta, enlaces);
 
   return (
-    <nav className="navegacion" aria-label="Navegación principal">
-      <Link className="marca" href="/">Patty</Link>
-      <div className="enlaces-navegacion">
-        {enlaces.filter((enlace) => enlace.visible).map((enlace) => <Link className={ruta === enlace.href || (enlace.href !== "/" && ruta.startsWith(enlace.href)) ? "activo" : ""} href={enlace.href} key={enlace.href}><span aria-hidden="true">{enlace.icono}</span>{enlace.etiqueta}</Link>)}
+    <nav className={menuAbierto ? "navegacion navegacion-abierta" : "navegacion"} aria-label="Navegación principal">
+      <div className="barra-navegacion">
+        <Link className="marca" href="/">Patty</Link>
+        <span className="seccion-navegacion">{seccion?.etiqueta}</span>
+        <button aria-controls="menu-navegacion" aria-expanded={menuAbierto} className="boton-menu-navegacion" onClick={() => setMenuAbierto(!menuAbierto)} type="button">{menuAbierto ? "Cerrar menú" : "Menú"}</button>
       </div>
-      <div className="cuenta-navegacion"><span className="avatar-navegacion">{iniciales(actor.nombreUsuario ?? etiquetasDeRol[actor.rol])}</span><span><strong>{actor.nombreUsuario ?? "Sesión activa"}</strong><small>{etiquetasDeRol[actor.rol]}</small></span><form action={cerrarSesionDesdeFormulario}><button aria-label="Cerrar sesión" title="Cerrar sesión" type="submit">⌄</button></form></div>
+      <div className="menu-navegacion" id="menu-navegacion">
+        <div className="enlaces-navegacion">
+          {enlaces.map((enlace) => {
+            const activo = esEnlaceActivo(ruta, enlace.href);
+            return <Link aria-current={activo ? "page" : undefined} className={activo ? "activo" : ""} href={enlace.href} key={enlace.href}><span aria-hidden="true">{enlace.icono}</span>{enlace.etiqueta}{activo && <small className="texto-activo"> (sección actual)</small>}</Link>;
+          })}
+        </div>
+        <div className="cuenta-navegacion"><span className="avatar-navegacion">{iniciales(actor.nombreUsuario ?? etiquetasDeRol[actor.rol])}</span><span><strong>{actor.nombreUsuario ?? "Sesión activa"}</strong><small>{etiquetasDeRol[actor.rol]}</small></span><form action={cerrarSesionDesdeFormulario}><button aria-label="Cerrar sesión" title="Cerrar sesión" type="submit">⌄</button></form></div>
+      </div>
     </nav>
   );
 }
