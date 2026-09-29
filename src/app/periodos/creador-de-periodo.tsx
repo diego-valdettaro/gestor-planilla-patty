@@ -21,7 +21,7 @@ export function CreadorDePeriodo({ sugerencia }: { sugerencia: { inicio: string;
       {estado.error ? <p className="mensaje-operacion error creador-de-periodo-fila-completa" role="alert">{estado.error}</p> : null}
       {estado.advertencia ? (
         <>
-          <p className="mensaje-operacion advertencia creador-de-periodo-fila-completa" role="alert">{estado.advertencia}</p>
+          <p className="mensaje-operacion advertencia creador-de-periodo-fila-completa" role="status">{estado.advertencia}</p>
           <label className="checkbox creador-de-periodo-fila-completa">
             <input name="confirmarHueco" required type="checkbox" value="true" /> Confirmo que quiero dejar este hueco sin período
           </label>

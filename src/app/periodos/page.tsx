@@ -41,13 +41,13 @@ export default async function PaginaDePeriodos({ searchParams }: { searchParams:
       </form>
       <section className="tarjeta panel">
         <header className="panel-cabecera"><div><h2>Período {periodo.inicio} a {periodo.fin}</h2><p>Estado actual: {periodo.estado === "abierto" ? <span className="insignia ok">Abierto</span> : <span className="insignia neutro">Cerrado</span>}</p></div>{periodo.estado === "abierto" && actor.rol === "finanzas" ? <BotonDeAccionConfirmada accion={cerrarPeriodoDesdeFormulario} confirmar="Cerrar período" descripcion="Ya no se podrán importar ni modificar asistencias de este período hasta que lo reabra con un motivo." etiqueta="Cerrar período" titulo="¿Cerrar este período de planilla?"><input type="hidden" name="periodoId" value={periodo.id} /></BotonDeAccionConfirmada> : null}</header>
-        {periodo.estado === "cerrado" && actor.rol === "finanzas" ? <form action={reabrirPeriodoDesdeFormulario} className="filtros"><input type="hidden" name="periodoId" value={periodo.id} /><label>Motivo de reapertura<input name="motivo" required /></label><button type="submit">Reabrir período</button></form> : null}
+        {periodo.estado === "cerrado" && actor.rol === "finanzas" ? <BotonDeAccionConfirmada accion={reabrirPeriodoDesdeFormulario} confirmar="Reabrir período" descripcion={`El período de planilla del ${periodo.inicio} al ${periodo.fin} volverá a estar abierto: se podrán importar y modificar asistencias de esas fechas hasta que se cierre de nuevo. La reapertura queda registrada con el motivo indicado.`} etiqueta="Reabrir período" titulo="¿Reabrir este período de planilla?"><input type="hidden" name="periodoId" value={periodo.id} /><label>Motivo de reapertura<input name="motivo" required /></label></BotonDeAccionConfirmada> : null}
         {periodo.estado === "abierto" && actor.rol === "finanzas" ? <DecisionesDeHorasExtra periodoId={periodo.id} filas={resumen.filas} /> : null}
         <TotalesGenerales resumen={resumen} />
         <Bloqueos bloqueos={resumen.bloqueos} />
         {resumen.filas.length ? <ResumenPorGrupos filas={resumen.filas} /> : <section className="estado-vacio"><h3>Sin resultados</h3><p>No hay colaboradores que coincidan con los filtros elegidos. Los totales y bloqueos siguen cubriendo el período completo.</p></section>}
       </section>
-    </> : <section className="estado-vacio"><h2>No hay períodos de planilla</h2><p>Cuando haya un período abierto, aquí podrá revisar y exportar sus totales.</p></section>}
+    </> : <section className="estado-vacio"><h2>No hay períodos de planilla</h2><p>Cree un período con el formulario «Nuevo período» de arriba para revisar y exportar sus totales.</p></section>}
   </main>;
 }
 
@@ -85,7 +85,7 @@ function TotalesGenerales({ resumen }: { resumen: ResumenDePeriodo }) {
 }
 
 function Bloqueos({ bloqueos }: { bloqueos: BloqueoDePeriodo[] }) {
-  if (!bloqueos.length) return <p className="mensaje-operacion exito">El período no tiene asistencias ni horas extra pendientes.</p>;
+  if (!bloqueos.length) return <p className="mensaje-operacion listo" role="status">El período no tiene asistencias ni horas extra pendientes.</p>;
   return <section className="mensaje-operacion advertencia" role="status"><h3>Bloqueos del período completo</h3><ul>{bloqueos.map((bloqueo) => <li key={`${bloqueo.tipo}-${bloqueo.idHuellero}-${bloqueo.fecha}`}><a href={enlaceDelBloqueo(bloqueo)}>{bloqueo.tipo === "asistencia" ? "Asistencia pendiente" : "Hora extra pendiente"}: {bloqueo.nombre}, {bloqueo.fecha}</a></li>)}</ul></section>;
 }
 

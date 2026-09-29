@@ -22,4 +22,14 @@ describe("página de importación de asistencias", () => {
     expect(formularioDeImportacion).toHaveBeenCalledWith({}, undefined);
     expect(html).toContain("formulario");
   });
+  it("usa el estado vacío compartido para un rol sin permiso", async () => {
+    obtenerActorActual.mockResolvedValue({ rol: "operaciones" });
+    const { default: PaginaDeImportacionDeAsistencias } = await import("./page");
+    const html = renderToStaticMarkup(await PaginaDeImportacionDeAsistencias());
+
+    expect(html).toContain('class="estado-vacio"');
+    expect(html).toContain("Sin permiso");
+    expect(html).toContain("Administración y Finanzas");
+    expect(formularioDeImportacion).not.toHaveBeenCalled();
+  });
 });

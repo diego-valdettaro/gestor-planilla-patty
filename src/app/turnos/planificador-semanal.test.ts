@@ -234,11 +234,52 @@ describe("selección de publicación", () => {
     const sinElegibles = renderToStaticMarkup(createElement(PlanificadorSemanal, {
       ...base, celdasIniciales: [celdaLaboral("HU-1", "2026-09-07", "Tienda Norte")], // incompleta
     }));
-    expect(sinElegibles).toContain('<button class="boton-principal" disabled="" type="button">Publicar planificación</button>');
+    expect(sinElegibles).toContain('<button aria-describedby="motivo-acciones-plan" class="boton-principal" disabled="" type="button">Publicar planificación</button>');
+    expect(sinElegibles).toContain('id="motivo-acciones-plan"');
+    expect(sinElegibles).toContain("Publicar planificación está deshabilitado porque no hay colaboradores marcados para publicar.");
 
     const conUnaElegible = renderToStaticMarkup(createElement(PlanificadorSemanal, {
       ...base, celdasIniciales: [celdaLaboral("HU-1", "2026-09-07", "Tienda Norte"), celdaLaboral("HU-1", "2026-09-08", "Tienda Norte")],
     }));
-    expect(conUnaElegible).not.toContain('<button class="boton-principal" disabled="" type="button">Publicar planificación</button>');
+    expect(conUnaElegible).not.toContain('<button aria-describedby="motivo-acciones-plan" class="boton-principal" disabled="" type="button">Publicar planificación</button>');
+    expect(conUnaElegible).not.toContain("Publicar planificación está deshabilitado");
+  });
+
+  it("explica que Guardar borrador está deshabilitado cuando no hay cambios", () => {
+    const html = renderToStaticMarkup(createElement(PlanificadorSemanal, {
+      equipos: ["tiendas"], planId: "plan-1", semana: "2026-09-07", equipo: "tiendas",
+      colaboradores: [colaboradores[0]], dias, celdasIniciales: [], publicados: [], procesados: [], modelos: [modeloApertura], sedes: ["Tienda Norte"],
+    }));
+
+    expect(html).toContain("Guardar borrador está deshabilitado porque no hay cambios sin guardar.");
+  });
+
+  it("muestra acciones secundarias en Completar semana y Republicar cambios", () => {
+    const html = renderToStaticMarkup(createElement(PlanificadorSemanal, {
+      equipos: ["tiendas"], planId: "plan-1", semana: "2026-09-07", equipo: "tiendas",
+      colaboradores: [colaboradores[0]], dias, celdasIniciales: [], publicados: [], procesados: [], modelos: [modeloApertura], sedes: ["Tienda Norte"],
+    }));
+
+    expect(html).toContain('class="boton-secundario" type="button">Completar semana</button>');
+  });
+
+  it("en solo lectura conserva la consulta y omite todo control de edición y publicación", () => {
+    const html = renderToStaticMarkup(createElement(PlanificadorSemanal, {
+      equipos: ["tiendas"], planId: "plan-1", semana: "2026-09-07", equipo: "tiendas",
+      colaboradores, dias,
+      celdasIniciales: [celdaLaboral("HU-1", "2026-09-07", "Tienda Norte"), celdaLaboral("HU-1", "2026-09-08", "Tienda Norte")],
+      publicados: [], procesados: [], modelos: [modeloApertura], sedes: ["Tienda Norte"], soloLectura: true,
+    }));
+
+    expect(html).toContain('aria-label="Grupo"');
+    expect(html).toContain("Selector semanal");
+    expect(html).toContain("Tienda Norte");
+    for (const control of ["Guardar borrador", "Publicar planificación", "Completar semana", "Republicar cambios", "Borrador guardado", "Sin guardar"]) expect(html).not.toContain(control);
+    expect(html).not.toContain('type="checkbox"');
+    expect(html).not.toContain("<dialog");
+    expect(html).not.toContain('aria-haspopup="dialog" aria-label="Horario');
+    expect(html).not.toContain("marca-edit");
+    expect(html).toContain("Sin asignar");
+    expect(html).not.toContain("＋ Asignar");
   });
 });

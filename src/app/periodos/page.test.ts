@@ -16,7 +16,7 @@ vi.mock("@/turnos/servicio", () => ({
   repositorioDeTurnos: { listarSedesConColaboradoresActivos, listarColaboradoresActivos },
 }));
 vi.mock("@/app/boton-de-accion-confirmada", () => ({
-  BotonDeAccionConfirmada: ({ etiqueta, children }: { etiqueta: string; children?: ReactNode }) => createElement("div", undefined, createElement("button", undefined, etiqueta), children),
+  BotonDeAccionConfirmada: ({ etiqueta, titulo, descripcion, children }: { etiqueta: string; titulo?: string; descripcion?: string; children?: ReactNode }) => createElement("div", undefined, createElement("button", undefined, etiqueta), createElement("dialog", undefined, createElement("h2", undefined, titulo), createElement("p", undefined, descripcion), children, createElement("button", undefined, "Cancelar"))),
 }));
 vi.mock("./actions", () => ({
   cerrarPeriodoDesdeFormulario: vi.fn(),
@@ -67,13 +67,17 @@ describe("página de Liquidaciones (/periodos)", () => {
     expect(html).toContain("Abierto");
   });
 
-  it("muestra el formulario de reapertura y la insignia neutra cuando el período está cerrado", async () => {
+  it("muestra el diálogo de reapertura con motivo, período y consecuencia y la insignia neutra cuando el período está cerrado", async () => {
     listar.mockResolvedValue([{ id: "p1", inicio: "2026-01-01", fin: "2026-01-31", estado: "cerrado" }]);
 
     const html = await render();
 
     expect(html).toContain("Motivo de reapertura");
     expect(html).toContain("Reabrir período</button>");
+    expect(html).toContain("¿Reabrir este período de planilla?");
+    expect(html).toContain("2026-01-01 al 2026-01-31");
+    expect(html).toContain("volverá a estar abierto");
+    expect(html).toContain(">Cancelar</button>");
     expect(html).toContain('class="insignia neutro"');
     expect(html).toContain("Cerrado");
   });
@@ -207,5 +211,23 @@ describe("página de Liquidaciones (/periodos)", () => {
     await render({ sede: "Centro", idHuellero: "H-1" });
 
     expect(listarResumen).toHaveBeenCalledWith({ periodoId: "p1", sede: "Centro", idHuellero: "H-1" });
+  });
+  it("indica el siguiente paso permitido cuando no hay períodos", async () => {
+    listar.mockResolvedValue([]);
+
+    const html = await render();
+
+    expect(html).toContain("Nuevo período");
+    expect(html).toMatch(/estado-vacio[\s\S]*Cree un período/);
+  });
+
+  it("anuncia con la variante listo y role status que el período no tiene bloqueos", async () => {
+    listar.mockResolvedValue([{ id: "p1", inicio: "2026-01-01", fin: "2026-01-31", estado: "abierto" }]);
+
+    const html = await render();
+
+    expect(html).toContain('class="mensaje-operacion listo" role="status"');
+    expect(html).toContain("El período no tiene asistencias ni horas extra pendientes.");
+    expect(html).not.toContain("mensaje-operacion exito");
   });
 });
