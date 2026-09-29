@@ -1,6 +1,6 @@
 # Administración con acceso operativo completo
 
-Estado: aceptada
+Estado: sustituida por ADR 0012
 
 Administración puede acceder y publicar turnos, además de importar y revisar asistencias. La administración operativa necesita probar y resolver el flujo completo sin depender de una cuenta de Operaciones.
 
