@@ -15,7 +15,7 @@ Issues and specs for this project live in [diego-valdettaro/gestor-planilla-patt
 The repository uses these labels as a routing rule:
 
 - `type:epic`: product scope and implementation decisions. Its title starts with `[Epic]`, it does not carry `ready-for-agent`, and no agent executes it with `issue-to-pr`.
-- `type:task`: one independently verifiable implementation slice. It links to one parent epic and is the only issue type that `issue-to-pr` may execute.
+- `type:task`: one independently verifiable implementation slice. It may link to one parent epic, or stand alone without one. It is the only issue type that `issue-to-pr` may execute.
 
 The labels already exist in GitHub. In a new repository, create them once before publishing the first epic or task:
 
@@ -32,7 +32,7 @@ PRs as a request surface: no.
 
 Create a GitHub issue in `diego-valdettaro/gestor-planilla-patty`.
 
-`to-spec` publishes an epic with `type:epic`. `to-tickets` publishes child tasks with `type:task`, links each task to its epic, and records blocking edges. `issue-to-pr` only accepts a `type:task` issue.
+`to-spec` publishes an epic with `type:epic`. `to-tickets` publishes child tasks with `type:task`, links each task to its epic, and records blocking edges. A `type:task` may also be published without a parent epic. `issue-to-pr` only accepts a `type:task` issue; when the task has a parent epic it must read the epic and its linked documents, and when it has none it does not block on that absence.
 
 ## Ready frontier
 
