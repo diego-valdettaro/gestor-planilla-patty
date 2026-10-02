@@ -12,17 +12,17 @@ export class RepositorioPostgresDeColaboradores
 {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}
 
-  async buscarPorIdHuellero(idHuellero: string): Promise<Colaborador | undefined> {
+  async buscarPorDni(dni: string): Promise<Colaborador | undefined> {
     const [colaborador] = await this.db
       .select({
-        idHuellero: colaboradores.idHuellero,
+        dni: colaboradores.dni,
         nombre: colaboradores.nombre,
         sede: colaboradores.sede,
         grupo: colaboradores.grupo,
         activo: colaboradores.activo,
       })
       .from(colaboradores)
-      .where(eq(colaboradores.idHuellero, idHuellero));
+      .where(eq(colaboradores.dni, dni));
 
     return colaborador;
   }
@@ -41,12 +41,12 @@ export class RepositorioPostgresDeColaboradores
         activo: colaborador.activo,
         actualizadoEn: new Date(),
       })
-      .where(eq(colaboradores.idHuellero, colaborador.idHuellero));
+      .where(eq(colaboradores.dni, colaborador.dni));
   }
 
   async listar(): Promise<Colaborador[]> {
     return this.db.select({
-      idHuellero: colaboradores.idHuellero,
+      dni: colaboradores.dni,
       nombre: colaboradores.nombre,
       sede: colaboradores.sede,
       grupo: colaboradores.grupo,
@@ -54,13 +54,13 @@ export class RepositorioPostgresDeColaboradores
     }).from(colaboradores).orderBy(colaboradores.nombre);
   }
 
-  async tieneBorradorAbiertoEnGrupo(idHuellero: string, grupo: string): Promise<boolean> {
+  async tieneBorradorAbiertoEnGrupo(dni: string, grupo: string): Promise<boolean> {
     const [celda] = await this.db
       .select({ id: celdasDePlanesSemanalesEnBorrador.id })
       .from(celdasDePlanesSemanalesEnBorrador)
       .innerJoin(planesSemanalesEnBorrador, eq(celdasDePlanesSemanalesEnBorrador.planId, planesSemanalesEnBorrador.id))
       .where(and(
-        eq(celdasDePlanesSemanalesEnBorrador.idHuellero, idHuellero),
+        eq(celdasDePlanesSemanalesEnBorrador.dni, dni),
         eq(planesSemanalesEnBorrador.equipo, grupo),
       ));
     return Boolean(celda);

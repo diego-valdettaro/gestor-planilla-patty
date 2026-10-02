@@ -12,7 +12,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   const datos = resumen.filas.map((fila) => ({
     Grupo: fila.grupo,
     Colaborador: fila.nombre,
-    "ID huellero": fila.idHuellero,
+    "DNI": fila.dni,
     "Jornadas trabajadas": fila.jornadasTrabajadas,
     "Horas trabajadas (decimal)": fila.minutosTrabajados / 60,
     Faltas: fila.noAsistencias.falta,

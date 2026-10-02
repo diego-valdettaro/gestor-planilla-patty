@@ -2,13 +2,13 @@ import type { Actor, Colaborador, RepositorioDeColaboradores } from "./registrar
 import { verificarPermiso } from "./registrar-colaborador";
 
 export interface RepositorioParaCambiarGrupo extends RepositorioDeColaboradores {
-  tieneBorradorAbiertoEnGrupo(idHuellero: string, grupo: string): Promise<boolean>;
+  tieneBorradorAbiertoEnGrupo(dni: string, grupo: string): Promise<boolean>;
 }
 
 export async function cambiarGrupoDeColaborador(
   repositorio: RepositorioParaCambiarGrupo,
   actor: Actor,
-  idHuellero: string,
+  dni: string,
   grupoNuevo: string,
 ): Promise<void> {
   verificarPermiso(actor);
@@ -16,12 +16,12 @@ export async function cambiarGrupoDeColaborador(
   const normalizado = grupoNuevo.trim();
   if (!normalizado) throw new Error("El grupo operativo es obligatorio.");
 
-  const colaborador: Colaborador | undefined = await repositorio.buscarPorIdHuellero(idHuellero);
-  if (!colaborador) throw new Error("No existe un colaborador con ese ID de huellero.");
+  const colaborador: Colaborador | undefined = await repositorio.buscarPorDni(dni);
+  if (!colaborador) throw new Error("No existe un colaborador con ese DNI.");
 
   if (colaborador.grupo === normalizado) return;
 
-  if (await repositorio.tieneBorradorAbiertoEnGrupo(idHuellero, colaborador.grupo)) {
+  if (await repositorio.tieneBorradorAbiertoEnGrupo(dni, colaborador.grupo)) {
     throw new Error("No se puede cambiar de grupo: el colaborador tiene un plan semanal en borrador en su grupo actual.");
   }
 

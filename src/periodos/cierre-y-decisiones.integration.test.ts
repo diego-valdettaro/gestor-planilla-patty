@@ -1,3 +1,4 @@
+import { dniDePrueba } from "../colaboradores/dni-de-prueba";
 import { randomUUID } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -18,7 +19,7 @@ describe.skipIf(!databaseUrl)("decisiones y revisiones de períodos en PostgreSQ
   const repositorio = new RepositorioPostgresDePeriodos(db);
   const sufijo = randomUUID().slice(0, 8);
   const grupo = `Grupo 75 ${sufijo}`;
-  const idHuellero = `L75-${sufijo}`;
+  const dni = dniDePrueba();
   const finanzasId = randomUUID();
   const administracionId = randomUUID();
   const instantePrimerCierre = new Date("2071-02-05T10:00:00Z");
@@ -36,7 +37,7 @@ describe.skipIf(!databaseUrl)("decisiones y revisiones de períodos en PostgreSQ
       { id: finanzasId, nombreUsuario: `finanzas-75-${sufijo}`, hashContrasena: "prueba", rol: "finanzas" },
       { id: administracionId, nombreUsuario: `admin-75-${sufijo}`, hashContrasena: "prueba", rol: "administracion" },
     ]);
-    await db.insert(schema.colaboradores).values({ idHuellero, nombre: "Ana Revisión", sede: "Centro", grupo });
+    await db.insert(schema.colaboradores).values({ dni, nombre: "Ana Revisión", sede: "Centro", grupo });
     const periodos = await db.insert(schema.periodosPlanilla).values([
       { inicio: "2071-01-01", fin: "2071-01-10", estado: "abierto" },
       { inicio: "2071-02-01", fin: "2071-02-03", estado: "abierto" },
@@ -46,16 +47,16 @@ describe.skipIf(!databaseUrl)("decisiones y revisiones de períodos en PostgreSQ
 
     const fechas = ["2071-01-01", "2071-01-02", "2071-02-01", "2071-02-02", "2071-02-03"];
     await db.insert(schema.turnosPublicados).values(fechas.map((fecha) => ({
-      idHuellero, fecha, grupo, sede: "Centro", entradaProgramada: "09:00", salidaProgramada: "17:00", descanso: false,
+      dni, fecha, grupo, sede: "Centro", entradaProgramada: "09:00", salidaProgramada: "17:00", descanso: false,
     })));
     const asistencias = await db.insert(schema.asistenciasEsperadas).values([
       ...["2071-01-01", "2071-01-02"].map((fecha) => ({
-        idHuellero, fecha, estado: "confirmada" as const, entradaReal: `${fecha}T09:00:00Z`, salidaReal: `${fecha}T18:00:00Z`, minutosTrabajados: 540,
+        dni, fecha, estado: "confirmada" as const, entradaReal: `${fecha}T09:00:00Z`, salidaReal: `${fecha}T18:00:00Z`, minutosTrabajados: 540,
         instantaneaDeTurno: { sede: "Centro", entradaProgramada: "09:00", salidaProgramada: "17:00", descanso: false },
       })),
-      { idHuellero, fecha: "2071-02-01", estado: "confirmada", entradaReal: "2071-02-01T09:15:00Z", salidaReal: "2071-02-01T18:00:00Z", minutosTrabajados: 525, instantaneaDeTurno: { sede: "Centro", entradaProgramada: "09:00", salidaProgramada: "17:00", descanso: false } },
-      { idHuellero, fecha: "2071-02-02", estado: "manual" },
-      { idHuellero, fecha: "2071-02-03", estado: "pendiente" },
+      { dni, fecha: "2071-02-01", estado: "confirmada", entradaReal: "2071-02-01T09:15:00Z", salidaReal: "2071-02-01T18:00:00Z", minutosTrabajados: 525, instantaneaDeTurno: { sede: "Centro", entradaProgramada: "09:00", salidaProgramada: "17:00", descanso: false } },
+      { dni, fecha: "2071-02-02", estado: "manual" },
+      { dni, fecha: "2071-02-03", estado: "pendiente" },
     ]).returning({ id: schema.asistenciasEsperadas.id, fecha: schema.asistenciasEsperadas.fecha });
     const porFecha = new Map(asistencias.map(({ id, fecha }) => [fecha, id]));
     asistenciaTrabajadaId = porFecha.get("2071-02-01")!;
@@ -72,7 +73,7 @@ describe.skipIf(!databaseUrl)("decisiones y revisiones de períodos en PostgreSQ
   });
 
   afterAll(async () => {
-    const asistencias = await db.select({ id: schema.asistenciasEsperadas.id }).from(schema.asistenciasEsperadas).where(eq(schema.asistenciasEsperadas.idHuellero, idHuellero));
+    const asistencias = await db.select({ id: schema.asistenciasEsperadas.id }).from(schema.asistenciasEsperadas).where(eq(schema.asistenciasEsperadas.dni, dni));
     const ids = asistencias.map(({ id }) => id);
     await db.delete(schema.revisionesDePeriodosPlanilla).where(inArray(schema.revisionesDePeriodosPlanilla.periodoId, [periodoDecisionesId, periodoCierreId]));
     await db.delete(schema.auditoriaPeriodosPlanilla).where(inArray(schema.auditoriaPeriodosPlanilla.periodoId, [periodoDecisionesId, periodoCierreId]));
@@ -81,10 +82,10 @@ describe.skipIf(!databaseUrl)("decisiones y revisiones de períodos en PostgreSQ
       await db.delete(schema.tardanzas).where(inArray(schema.tardanzas.asistenciaId, ids));
       await db.delete(schema.estadosManuales).where(inArray(schema.estadosManuales.asistenciaId, ids));
     }
-    await db.delete(schema.asistenciasEsperadas).where(eq(schema.asistenciasEsperadas.idHuellero, idHuellero));
-    await db.delete(schema.turnosPublicados).where(eq(schema.turnosPublicados.idHuellero, idHuellero));
+    await db.delete(schema.asistenciasEsperadas).where(eq(schema.asistenciasEsperadas.dni, dni));
+    await db.delete(schema.turnosPublicados).where(eq(schema.turnosPublicados.dni, dni));
     await db.delete(schema.periodosPlanilla).where(inArray(schema.periodosPlanilla.id, [periodoDecisionesId, periodoCierreId]));
-    await db.delete(schema.colaboradores).where(eq(schema.colaboradores.idHuellero, idHuellero));
+    await db.delete(schema.colaboradores).where(eq(schema.colaboradores.dni, dni));
     await db.delete(schema.cuentasLocales).where(inArray(schema.cuentasLocales.id, [finanzasId, administracionId]));
     await db.delete(schema.grupos).where(eq(schema.grupos.nombre, grupo));
     await pool.end();

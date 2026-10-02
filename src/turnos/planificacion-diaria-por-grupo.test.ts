@@ -16,7 +16,7 @@ function crearContexto() {
   const repositorio = {
     buscarPorId: async () => ({ ...plan, celdas: guardadas }),
     guardarCelda: async (celda) => { guardadas.push(celda); },
-    colaboradorPerteneceAEquipo: async (idHuellero, grupo) => idHuellero === "HU-1" && grupo === "Tiendas",
+    colaboradorPerteneceAEquipo: async (dni, grupo) => dni === "00000011" && grupo === "Tiendas",
     sedeActivaPerteneceAlGrupo: async (sede, grupo) => grupo === "Tiendas" && (sede === "Norte" || sede === "Sur"),
     buscarModeloDeHorario: async (id) => modelos.get(id),
     buscarPublicado: async () => undefined,
@@ -32,7 +32,7 @@ describe("planificacion diaria por grupo", () => {
     const { casosDeUso, guardadas } = crearContexto();
 
     await casosDeUso.guardarCelda(plan.id, {
-      idHuellero: "HU-1",
+      dni: "00000011",
       fecha: semana,
       sede: "Sur",
       modeloHorarioId: null,
@@ -48,7 +48,7 @@ describe("planificacion diaria por grupo", () => {
   it("exige que el modelo esté activo, pertenezca a la sede elegida y defina sus horas", async () => {
     const { casosDeUso } = crearContexto();
     const jornada = {
-      idHuellero: "HU-1",
+      dni: "00000011",
       fecha: semana,
       sede: "Norte",
       entradaProgramada: "09:00",
@@ -68,7 +68,7 @@ describe("planificacion diaria por grupo", () => {
 
     for (const [indice, motivo] of ["descanso", "feriado", "vacaciones", "permiso", "suspension"].entries()) {
       await casosDeUso.guardarCelda(plan.id, {
-        idHuellero: "HU-1",
+        dni: "00000011",
         fecha: `2026-09-${String(7 + indice).padStart(2, "0")}`,
         sede: null,
         modeloHorarioId: null,
@@ -83,7 +83,7 @@ describe("planificacion diaria por grupo", () => {
       "descanso", "feriado", "vacaciones", "permiso", "suspension",
     ]);
     await expect(casosDeUso.guardarCelda(plan.id, {
-      idHuellero: "HU-1",
+      dni: "00000011",
       fecha: "2026-09-12",
       sede: null,
       modeloHorarioId: null,
@@ -98,7 +98,7 @@ describe("planificacion diaria por grupo", () => {
     const { casosDeUso } = crearContexto();
 
     await expect(casosDeUso.guardarCelda(plan.id, {
-      idHuellero: "HU-1",
+      dni: "00000011",
       fecha: semana,
       sede: "Norte",
       modeloHorarioId: null,

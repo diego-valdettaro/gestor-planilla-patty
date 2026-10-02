@@ -4,7 +4,7 @@ import type { Actor } from "@/colaboradores/registrar-colaborador";
 import type { ErrorDeImportacion, FilaDeAsistenciaImportada } from "./parsear-archivo-huellero";
 
 export interface MarcaCruda {
-  idHuellero: string;
+  dni: string;
   sede: string;
   fecha: string;
   instante: string;
@@ -17,7 +17,7 @@ export interface ArchivoFuente {
 }
 
 export interface AsistenciaPendiente {
-  idHuellero: string;
+  dni: string;
   fecha: string;
   estado: "pendiente";
   entradaPropuesta: string;
@@ -25,7 +25,7 @@ export interface AsistenciaPendiente {
 }
 
 export interface ReemplazoDeAsistencia {
-  idHuellero: string;
+  dni: string;
   fecha: string;
   asistenciaId: string;
   estadoAnterior: "confirmada" | "manual";
@@ -67,7 +67,7 @@ export interface ConteosDeVistaPrevia {
 
 export interface FilaClasificada {
   fila: number;
-  idHuellero: string;
+  dni: string;
   fecha: string;
   categoria: CategoriaDeFila;
 }
@@ -87,7 +87,7 @@ export type ResultadoDeAplicacion =
   | { requiereConfirmacion: false; jornadas: number };
 
 export interface AsistenciaExistente {
-  idHuellero: string;
+  dni: string;
   fecha: string;
   asistenciaId: string;
   estado: "pendiente" | "confirmada" | "manual";
@@ -99,17 +99,17 @@ export interface AsistenciaExistente {
 }
 
 export interface RepositorioDeImportaciones {
-  buscarColaborador(idHuellero: string): Promise<{ idHuellero: string } | undefined>;
+  buscarColaborador(dni: string): Promise<{ dni: string } | undefined>;
   buscarSede(nombre: string): Promise<string | undefined>;
-  buscarTurnoPublicado(idHuellero: string, fecha: string): Promise<{
-    idHuellero: string;
+  buscarTurnoPublicado(dni: string, fecha: string): Promise<{
+    dni: string;
     fecha: string;
     sede: string | null;
     descanso: boolean;
     motivoNoAsistencia: MotivoPlanificadoDeNoAsistencia | null;
   } | undefined>;
   perteneceAPeriodoAbierto(fecha: string): Promise<boolean>;
-  buscarAsistenciasExistentes(identidades: Array<{ idHuellero: string; fecha: string }>): Promise<AsistenciaExistente[]>;
+  buscarAsistenciasExistentes(identidades: Array<{ dni: string; fecha: string }>): Promise<AsistenciaExistente[]>;
   guardar(importacion: ImportacionDeAsistencias): Promise<void>;
 }
 
@@ -132,8 +132,8 @@ export async function prevalidarImportacion(
       errores.push(errorDe(fila, "La salida debe ser posterior a la entrada."));
     }
 
-    const colaborador = await repositorio.buscarColaborador(fila.idHuellero);
-    if (!colaborador) errores.push(errorDe(fila, "ID de huellero desconocido."));
+    const colaborador = await repositorio.buscarColaborador(fila.dni);
+    if (!colaborador) errores.push(errorDe(fila, "DNI desconocido."));
 
     const sede = await repositorio.buscarSede(fila.sede);
     if (!sede) errores.push(errorDe(fila, "Sede desconocida."));
@@ -143,7 +143,7 @@ export async function prevalidarImportacion(
     }
 
     if (!colaborador) continue;
-    const turno = await repositorio.buscarTurnoPublicado(fila.idHuellero, fila.fecha);
+    const turno = await repositorio.buscarTurnoPublicado(fila.dni, fila.fecha);
     if (!turno) {
       errores.push(errorDe(fila, "No tiene horario publicado."));
       continue;
@@ -172,7 +172,7 @@ export async function previsualizarImportacion(
     errores: [],
     vistaPrevia: {
       conteos,
-      filas: clasificadas.map(({ fila, categoria }) => ({ fila: fila.fila, idHuellero: fila.idHuellero, fecha: fila.fecha, categoria })),
+      filas: clasificadas.map(({ fila, categoria }) => ({ fila: fila.fila, dni: fila.dni, fecha: fila.fecha, categoria })),
     },
   };
 }
@@ -198,7 +198,7 @@ export async function aplicarImportacion(
     const salidaPropuesta = instanteDe(fila.fecha, fila.salida);
     if (categoria === "confirmado" && existente) {
       reemplazos.push({
-        idHuellero: fila.idHuellero,
+        dni: fila.dni,
         fecha: fila.fecha,
         asistenciaId: existente.asistenciaId,
         estadoAnterior: existente.estado === "confirmada" ? "confirmada" : "manual",
@@ -207,7 +207,7 @@ export async function aplicarImportacion(
         salidaPropuesta,
       });
     } else {
-      propuestas.push({ idHuellero: fila.idHuellero, fecha: fila.fecha, estado: "pendiente", entradaPropuesta, salidaPropuesta });
+      propuestas.push({ dni: fila.dni, fecha: fila.fecha, estado: "pendiente", entradaPropuesta, salidaPropuesta });
     }
   }
 
@@ -216,8 +216,8 @@ export async function aplicarImportacion(
     usuarioId: actor.id,
     importadaEn: new Date(),
     marcasCrudas: solicitud.filas.flatMap((fila) => [
-      { idHuellero: fila.idHuellero, sede: fila.sede, fecha: fila.fecha, instante: instanteDe(fila.fecha, fila.entrada) },
-      { idHuellero: fila.idHuellero, sede: fila.sede, fecha: fila.fecha, instante: instanteDe(fila.fecha, fila.salida) },
+      { dni: fila.dni, sede: fila.sede, fecha: fila.fecha, instante: instanteDe(fila.fecha, fila.entrada) },
+      { dni: fila.dni, sede: fila.sede, fecha: fila.fecha, instante: instanteDe(fila.fecha, fila.salida) },
     ]),
     propuestas,
     reemplazos,
@@ -232,10 +232,10 @@ async function clasificarFilas(
   clasificadas: Array<{ fila: FilaDeAsistenciaImportada; existente?: AsistenciaExistente; categoria: CategoriaDeFila }>;
   conteos: ConteosDeVistaPrevia;
 }> {
-  const existentes = await repositorio.buscarAsistenciasExistentes(filas.map((fila) => ({ idHuellero: fila.idHuellero, fecha: fila.fecha })));
-  const existentesPorClave = new Map(existentes.map((existente) => [claveDeJornada(existente.idHuellero, existente.fecha), existente]));
+  const existentes = await repositorio.buscarAsistenciasExistentes(filas.map((fila) => ({ dni: fila.dni, fecha: fila.fecha })));
+  const existentesPorClave = new Map(existentes.map((existente) => [claveDeJornada(existente.dni, existente.fecha), existente]));
   const clasificadas = filas.map((fila) => {
-    const existente = existentesPorClave.get(claveDeJornada(fila.idHuellero, fila.fecha));
+    const existente = existentesPorClave.get(claveDeJornada(fila.dni, fila.fecha));
     return { fila, existente, categoria: clasificarFila(fila, existente) };
   });
   const conteos: ConteosDeVistaPrevia = { nuevo: 0, igual: 0, pendiente: 0, confirmado: 0 };
@@ -262,12 +262,12 @@ function clasificarFila(fila: FilaDeAsistenciaImportada, existente: AsistenciaEx
   return "confirmado";
 }
 
-function claveDeJornada(idHuellero: string, fecha: string): string {
-  return `${idHuellero} ${fecha}`;
+function claveDeJornada(dni: string, fecha: string): string {
+  return `${dni} ${fecha}`;
 }
 
 function errorDe(fila: FilaDeAsistenciaImportada, motivo: string): ErrorDeImportacion {
-  return { fila: fila.fila, idHuellero: fila.idHuellero, fecha: fila.fecha, motivo };
+  return { fila: fila.fila, dni: fila.dni, fecha: fila.fecha, motivo };
 }
 
 function instanteDe(fecha: string, hora: string): string {

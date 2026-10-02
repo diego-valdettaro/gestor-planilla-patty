@@ -15,5 +15,5 @@ export function esElegibleParaPublicar(opciones: {
 // una decisión manual (marcar o desmarcar) queda fija para la sesión y no se revierte
 // aunque la fila deje de ser elegible y vuelva a serlo con nuevas ediciones.
 export function seleccionEfectiva(elegibles: string[], overrides: ReadonlyMap<string, boolean>): Set<string> {
-  return new Set(elegibles.filter((idHuellero) => overrides.get(idHuellero) ?? true));
+  return new Set(elegibles.filter((dni) => overrides.get(dni) ?? true));
 }

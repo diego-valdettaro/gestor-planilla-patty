@@ -8,7 +8,7 @@ import {
 
 describe("confirmación de asistencias por rango", () => {
   const evaluacion = [{
-    idHuellero: "HU-1",
+    dni: "00000011",
     nombre: "Ana Torres",
     seleccionable: true,
     jornadasPendientes: 2,
@@ -19,7 +19,7 @@ describe("confirmación de asistencias por rango", () => {
   const repositorio: RepositorioDeConfirmacionPorRango = {
     evaluarColaboradoresPorRango: async () => evaluacion,
     confirmarColaboradoresPorRango: async (solicitud, responsableId) => {
-      llamadas.push(`${responsableId}:${solicitud.idsHuellero.join(",")}`);
+      llamadas.push(`${responsableId}:${solicitud.dnis.join(",")}`);
     },
   };
 
@@ -28,8 +28,8 @@ describe("confirmación de asistencias por rango", () => {
       inicio: "2031-03-24",
       fin: "2031-03-27",
       colaboradores: [
-        { idHuellero: "HU-1", nombre: "Ana Torres" },
-        { idHuellero: "HU-1", nombre: "Ana Torres" },
+        { dni: "00000011", nombre: "Ana Torres" },
+        { dni: "00000011", nombre: "Ana Torres" },
       ],
     });
 
@@ -40,21 +40,21 @@ describe("confirmación de asistencias por rango", () => {
     await confirmarColaboradoresPorRango(repositorio, { id: "finanzas-1", rol: "finanzas" }, {
       inicio: "2031-03-24",
       fin: "2031-03-27",
-      idsHuellero: ["HU-1", "HU-1"],
+      dnis: ["00000011", "00000011"],
     });
 
-    expect(llamadas).toEqual(["finanzas-1:HU-1"]);
+    expect(llamadas).toEqual(["finanzas-1:00000011"]);
   });
 
   it("rechaza rangos inválidos, selecciones vacías y roles sin permiso", async () => {
     await expect(evaluarColaboradoresPorRango(repositorio, { id: "op-1", rol: "operaciones" }, {
-      inicio: "2031-03-24", fin: "2031-03-27", colaboradores: [{ idHuellero: "HU-1", nombre: "Ana" }],
+      inicio: "2031-03-24", fin: "2031-03-27", colaboradores: [{ dni: "00000011", nombre: "Ana" }],
     })).rejects.toThrow("No tiene permiso");
     await expect(confirmarColaboradoresPorRango(repositorio, { id: "admin-1", rol: "administracion" }, {
-      inicio: "2031-03-28", fin: "2031-03-27", idsHuellero: ["HU-1"],
+      inicio: "2031-03-28", fin: "2031-03-27", dnis: ["00000011"],
     })).rejects.toThrow("rango de confirmación");
     await expect(confirmarColaboradoresPorRango(repositorio, { id: "admin-1", rol: "administracion" }, {
-      inicio: "2031-03-24", fin: "2031-03-27", idsHuellero: [],
+      inicio: "2031-03-24", fin: "2031-03-27", dnis: [],
     })).rejects.toThrow("al menos un colaborador");
   });
 });

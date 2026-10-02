@@ -50,12 +50,12 @@ describe("casos de uso de tardanzas en el servidor", () => {
     });
 
     await expect(casosDeUso.calcularTardanza({
-      idHuellero: "HU-1024", sede: "Lima", fecha: "2026-09-01", entradaProgramada: "09:00",
+      dni: "00001024", sede: "Lima", fecha: "2026-09-01", entradaProgramada: "09:00",
       entradaReal: "2026-09-01T09:10:00-05:00",
     })).resolves.toBeUndefined();
 
     await expect(casosDeUso.calcularTardanza({
-      idHuellero: "HU-1024", sede: "Lima", fecha: "2026-09-01", entradaProgramada: "09:00",
+      dni: "00001024", sede: "Lima", fecha: "2026-09-01", entradaProgramada: "09:00",
       entradaReal: "2026-09-01T09:11:00-05:00",
     })).resolves.toEqual({ minutosDeTardanza: 11, minutosPenalizados: 0, politicaVersion: 1 });
   });
@@ -83,7 +83,7 @@ describe("casos de uso de tardanzas en el servidor", () => {
     });
 
     await expect(casosDeUso.calcularTardanza({
-      idHuellero: "HU-1024", sede: "Lima", fecha: "2026-09-01", entradaProgramada: "09:00",
+      dni: "00001024", sede: "Lima", fecha: "2026-09-01", entradaProgramada: "09:00",
       entradaReal: "2026-09-01T09:11:00-05:00",
     })).resolves.toEqual({ minutosDeTardanza: 11, minutosPenalizados: 60, politicaVersion: 1 });
   });

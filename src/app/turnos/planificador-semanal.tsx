@@ -16,10 +16,10 @@ import { resumirPlanSemanal } from "./resumen-plan-semanal";
 import { esElegibleParaPublicar, seleccionEfectiva } from "./seleccion-de-publicacion";
 
 type Celda = Omit<CeldaDePlanSemanalEnBorrador, "planId">;
-type Colaborador = { idHuellero: string; nombre: string; sede: string };
+type Colaborador = { dni: string; nombre: string; sede: string };
 type Modelo = ModeloDeHorario;
 type Publicado = HorarioSemanalParaCopiar;
-type Confirmacion = { tipo: "cambiar-semana"; destino: string } | { tipo: "publicar" } | { tipo: "republicar"; idHuellero: string; nombre: string };
+type Confirmacion = { tipo: "cambiar-semana"; destino: string } | { tipo: "publicar" } | { tipo: "republicar"; dni: string; nombre: string };
 type ResultadoDeDia = "laboral" | MotivoPlanificadoDeNoAsistencia;
 
 export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, equipo, colaboradores, dias, celdasIniciales, publicados, procesados, modelos, sedes, soloLectura = false }: {
@@ -49,19 +49,19 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
   // al cambiar de plan (semana o grupo) se descartan para no arrastrar una deselección
   // manual a un colaborador con el mismo id en otra semana.
   useEffect(() => setOverridesDeSeleccion(new Map()), [planId]);
-  const porClave = useMemo(() => new Map(celdas.map((celda) => [`${celda.idHuellero}:${celda.fecha}`, celda])), [celdas]);
-  const publicadosPorClave = useMemo(() => new Map(publicados.map((celda) => [`${celda.idHuellero}:${celda.fecha}`, celda])), [publicados]);
+  const porClave = useMemo(() => new Map(celdas.map((celda) => [`${celda.dni}:${celda.fecha}`, celda])), [celdas]);
+  const publicadosPorClave = useMemo(() => new Map(publicados.map((celda) => [`${celda.dni}:${celda.fecha}`, celda])), [publicados]);
   const procesadosPorId = useMemo(() => new Set(procesados), [procesados]);
   const resumen = useMemo(() => resumirPlanSemanal(colaboradores, dias, celdas, publicados), [celdas, colaboradores, dias, publicados]);
-  const publicadosCompletos = useMemo(() => colaboradores.filter(({ idHuellero }) => estaPublicadaLaSemana(idHuellero, dias, publicadosPorClave)).length, [colaboradores, dias, publicadosPorClave]);
+  const publicadosCompletos = useMemo(() => colaboradores.filter(({ dni }) => estaPublicadaLaSemana(dni, dias, publicadosPorClave)).length, [colaboradores, dias, publicadosPorClave]);
   const planificacionPublicada = publicadosCompletos === colaboradores.length && colaboradores.length > 0;
   const resumenesPorColaborador = useMemo(
-    () => new Map(colaboradores.map((colaborador) => [colaborador.idHuellero, resumenSemanalDe(colaborador.idHuellero, dias, porClave, publicadosPorClave, procesadosPorId)])),
+    () => new Map(colaboradores.map((colaborador) => [colaborador.dni, resumenSemanalDe(colaborador.dni, dias, porClave, publicadosPorClave, procesadosPorId)])),
     [colaboradores, dias, porClave, publicadosPorClave, procesadosPorId],
   );
   const idsElegiblesParaPublicar = useMemo(() => colaboradores
-    .filter(({ idHuellero }) => esElegibleParaPublicar(resumenesPorColaborador.get(idHuellero)!))
-    .map(({ idHuellero }) => idHuellero), [colaboradores, resumenesPorColaborador]);
+    .filter(({ dni }) => esElegibleParaPublicar(resumenesPorColaborador.get(dni)!))
+    .map(({ dni }) => dni), [colaboradores, resumenesPorColaborador]);
   const elegiblesParaPublicar = useMemo(() => new Set(idsElegiblesParaPublicar), [idsElegiblesParaPublicar]);
   const seleccionados = useMemo(() => seleccionEfectiva(idsElegiblesParaPublicar, overridesDeSeleccion), [idsElegiblesParaPublicar, overridesDeSeleccion]);
   const motivosDeAccionesDeshabilitadas = [!cambios && !guardando ? "Guardar borrador está deshabilitado porque no hay cambios sin guardar." : "", !seleccionados.size && !publicando ? "Publicar planificación está deshabilitado porque no hay colaboradores marcados para publicar." : ""].filter(Boolean).join(" ");
@@ -70,8 +70,8 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
     const estados = new Set([...resumenesPorColaborador.values()].map((item) => item.estado));
     return PRIORIDAD_ESTADO_PLANIFICACION.find((estado) => estados.has(estado)) ?? "liquidado";
   }, [colaboradores, resumenesPorColaborador]);
-  function alternarSeleccion(idHuellero: string, seleccionado: boolean) {
-    setOverridesDeSeleccion((actuales) => new Map(actuales).set(idHuellero, seleccionado));
+  function alternarSeleccion(dni: string, seleccionado: boolean) {
+    setOverridesDeSeleccion((actuales) => new Map(actuales).set(dni, seleccionado));
   }
 
   function opcionesDeCelda() {
@@ -94,13 +94,13 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
       dialogoPersonalizado.current?.showModal();
       return;
     }
-    const clave = `${colaborador.idHuellero}:${fecha}`;
+    const clave = `${colaborador.dni}:${fecha}`;
     setCambios(true);
-    setCeldas((actuales) => valor === "" ? actuales.filter((item) => `${item.idHuellero}:${item.fecha}` !== clave) : [
-      ...actuales.filter((item) => `${item.idHuellero}:${item.fecha}` !== clave),
+    setCeldas((actuales) => valor === "" ? actuales.filter((item) => `${item.dni}:${item.fecha}` !== clave) : [
+      ...actuales.filter((item) => `${item.dni}:${item.fecha}` !== clave),
       valor.startsWith("motivo:")
-        ? crearNoAsistencia(colaborador.idHuellero, fecha, valor.slice("motivo:".length) as MotivoPlanificadoDeNoAsistencia)
-        : crearDesdeModelo(colaborador.idHuellero, fecha, modelos.find((modelo) => `modelo:${modelo.id}` === valor)!),
+        ? crearNoAsistencia(colaborador.dni, fecha, valor.slice("motivo:".length) as MotivoPlanificadoDeNoAsistencia)
+        : crearDesdeModelo(colaborador.dni, fecha, modelos.find((modelo) => `modelo:${modelo.id}` === valor)!),
     ]);
   }
   function abrirDialogoCelda(colaborador: Colaborador, fecha: string) {
@@ -110,7 +110,7 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
   function elegirEnDialogoCelda(formData: FormData) {
     if (!celdaEnEdicion) return;
     const valor = String(formData.get("opcion") ?? "");
-    const clave = `${celdaEnEdicion.colaborador.idHuellero}:${celdaEnEdicion.fecha}`;
+    const clave = `${celdaEnEdicion.colaborador.dni}:${celdaEnEdicion.fecha}`;
     dialogoCelda.current?.close();
     actualizar(porClave.get(clave) ?? publicadosPorClave.get(clave), celdaEnEdicion.colaborador, celdaEnEdicion.fecha, valor);
   }
@@ -130,18 +130,18 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
       }
       const datos = new FormData();
       datos.set("planId", planId);
-      for (const idHuellero of seleccionados) datos.append("idHuellero", idHuellero);
+      for (const dni of seleccionados) datos.append("dni", dni);
       await publicarPlanSemanalDesdeGrilla(datos);
       router.refresh();
     }
     catch (causa) { setError(causa instanceof Error ? causa.message : "No se pudo publicar el horario semanal."); }
     finally { setPublicando(false); }
   }
-  async function republicar(idHuellero: string, motivo: string) {
+  async function republicar(dni: string, motivo: string) {
     if (cambios) { setError("Guarde el borrador antes de republicar."); return; }
     setPublicando(true); setError(undefined);
     const datos = new FormData();
-    datos.set("planId", planId); datos.set("idHuellero", idHuellero); datos.set("motivo", motivo);
+    datos.set("planId", planId); datos.set("dni", dni); datos.set("motivo", motivo);
     try { await republicarPlanSemanalDesdeGrilla(datos); router.refresh(); }
     catch (causa) { setError(causa instanceof Error ? causa.message : "No se pudo republicar el horario semanal."); }
     finally { setPublicando(false); }
@@ -151,10 +151,10 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
     const sede = String(formData.get("sede") ?? ""); const entrada = String(formData.get("entrada") ?? ""); const salida = String(formData.get("salida") ?? "");
     if (!sedes.includes(sede)) { setError("Seleccione una sede activa del grupo."); return; }
     if (!/^\d{2}:\d{2}$/.test(entrada) || !/^\d{2}:\d{2}$/.test(salida) || salida <= entrada) { setError("El horario personalizado debe tener entrada y salida válidas del mismo día."); return; }
-    const clave = `${personalizado.colaborador.idHuellero}:${personalizado.fecha}`;
+    const clave = `${personalizado.colaborador.dni}:${personalizado.fecha}`;
     setCeldas((actuales) => [
-      ...actuales.filter((item) => `${item.idHuellero}:${item.fecha}` !== clave),
-      { idHuellero: personalizado.colaborador.idHuellero, fecha: personalizado.fecha, sede, modeloHorarioId: null, entradaProgramada: entrada, salidaProgramada: salida, descanso: false, motivoNoAsistencia: null },
+      ...actuales.filter((item) => `${item.dni}:${item.fecha}` !== clave),
+      { dni: personalizado.colaborador.dni, fecha: personalizado.fecha, sede, modeloHorarioId: null, entradaProgramada: entrada, salidaProgramada: salida, descanso: false, motivoNoAsistencia: null },
     ]);
     setCambios(true); cerrarPersonalizado();
   }
@@ -182,13 +182,13 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
     }
     let nuevas: Celda[];
     try {
-      nuevas = celdasDeSemanaCompleta(completarSemana.colaborador.idHuellero, dias, resultados, modelo);
+      nuevas = celdasDeSemanaCompleta(completarSemana.colaborador.dni, dias, resultados, modelo);
     } catch (causa) {
       setError(causa instanceof Error ? causa.message : "No se pudo completar la semana.");
       return;
     }
-    const { idHuellero } = completarSemana.colaborador;
-    setCeldas((actuales) => [...actuales.filter((item) => !(item.idHuellero === idHuellero && dias.includes(item.fecha))), ...nuevas]);
+    const { dni } = completarSemana.colaborador;
+    setCeldas((actuales) => [...actuales.filter((item) => !(item.dni === dni && dias.includes(item.fecha))), ...nuevas]);
     setCambios(true);
     setError(undefined);
     cerrarCompletarSemana();
@@ -209,7 +209,7 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
     if (!actual) return;
     if (actual.tipo === "cambiar-semana") navegarSemana(actual.destino);
     if (actual.tipo === "publicar") void publicarPlanificacion();
-    if (actual.tipo === "republicar") void republicar(actual.idHuellero, String(formData.get("motivo") ?? "").trim());
+    if (actual.tipo === "republicar") void republicar(actual.dni, String(formData.get("motivo") ?? "").trim());
   }
 
   function contenidoDeChip(celda: Celda | Publicado | undefined) {
@@ -223,7 +223,7 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
     return `${celda.sede}, ${celda.entradaProgramada} a ${celda.salidaProgramada}`;
   }
   function renderCelda(colaborador: Colaborador, fecha: string, semanaProcesada: boolean) {
-    const clave = `${colaborador.idHuellero}:${fecha}`;
+    const clave = `${colaborador.dni}:${fecha}`;
     const publicado = publicadosPorClave.get(clave);
     const celda = porClave.get(clave);
     const mostrado = celda ?? publicado;
@@ -269,14 +269,14 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
       {error && <p className="mensaje-operacion error" role="alert">{error}</p>}
     </div>
     <div className="titulo-grilla"><h2>Grupo {equipo}</h2><span>{colaboradores.length} colaboradores · {sedes.length} {sedes.length === 1 ? "sede" : "sedes"}</span><span className="aviso-desplazamiento">Desplácese horizontalmente para ver la semana completa.</span></div><ul aria-label="Estados de la planificación" className="leyenda-estados leyenda-plan">{ESTADOS_DE_HORARIO.map((estado) => <li className={`estado-color-${estado}`} key={estado}><EtiquetaEstado estado={estado} /></li>)}</ul><div className="tabla-plan-semanal"><table><thead><tr><th>Colaborador</th>{dias.map((fecha) => <th key={fecha}>{new Intl.DateTimeFormat("es-PE", { weekday: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${fecha}T00:00:00Z`))}</th>)}</tr></thead><tbody>
-      {colaboradores.map((colaborador) => { const semana = resumenesPorColaborador.get(colaborador.idHuellero)!; return <tr key={colaborador.idHuellero}><th scope="row"><div className="persona"><span className="ini">{iniciales(colaborador.nombre)}</span><span>{colaborador.nombre}<small><EtiquetaEstado estado={semana.estado} /></small>{!soloLectura && elegiblesParaPublicar.has(colaborador.idHuellero) && <label className="checkbox-publicar-fila"><input checked={seleccionados.has(colaborador.idHuellero)} disabled={publicando} onChange={(evento) => alternarSeleccion(colaborador.idHuellero, evento.target.checked)} type="checkbox" />Publicar</label>}{!soloLectura && !semana.semanaLiquidada && <button aria-haspopup="dialog" className="boton-secundario" disabled={publicando} onClick={() => abrirCompletarSemana(colaborador)} type="button">Completar semana</button>}{!soloLectura && semana.tieneCambiosSinPublicar && !semana.semanaLiquidada && <button className="boton-secundario" disabled={publicando} onClick={() => pedirConfirmacion({ tipo: "republicar", idHuellero: colaborador.idHuellero, nombre: colaborador.nombre })} type="button">Republicar cambios</button>}</span></div></th>{dias.map((fecha) => renderCelda(colaborador, fecha, semana.semanaLiquidada))}</tr>; })}
+      {colaboradores.map((colaborador) => { const semana = resumenesPorColaborador.get(colaborador.dni)!; return <tr key={colaborador.dni}><th scope="row"><div className="persona"><span className="ini">{iniciales(colaborador.nombre)}</span><span>{colaborador.nombre}<small><EtiquetaEstado estado={semana.estado} /></small>{!soloLectura && elegiblesParaPublicar.has(colaborador.dni) && <label className="checkbox-publicar-fila"><input checked={seleccionados.has(colaborador.dni)} disabled={publicando} onChange={(evento) => alternarSeleccion(colaborador.dni, evento.target.checked)} type="checkbox" />Publicar</label>}{!soloLectura && !semana.semanaLiquidada && <button aria-haspopup="dialog" className="boton-secundario" disabled={publicando} onClick={() => abrirCompletarSemana(colaborador)} type="button">Completar semana</button>}{!soloLectura && semana.tieneCambiosSinPublicar && !semana.semanaLiquidada && <button className="boton-secundario" disabled={publicando} onClick={() => pedirConfirmacion({ tipo: "republicar", dni: colaborador.dni, nombre: colaborador.nombre })} type="button">Republicar cambios</button>}</span></div></th>{dias.map((fecha) => renderCelda(colaborador, fecha, semana.semanaLiquidada))}</tr>; })}
     </tbody></table></div>
     <footer className="pie-plan-semanal"><p><strong>{resumen.asignadas} de {resumen.total} días asignados</strong>{!soloLectura && <span>{textoDeCobertura(resumen.faltantesPorColaborador.length, seleccionados.size)}</span>}</p>{!soloLectura && <div><button aria-describedby={motivosDeAccionesDeshabilitadas ? "motivo-acciones-plan" : undefined} className="boton-secundario" disabled={!cambios || guardando} onClick={guardar} type="button">Guardar borrador</button><button aria-describedby={motivosDeAccionesDeshabilitadas ? "motivo-acciones-plan" : undefined} className="boton-principal" disabled={publicando || !seleccionados.size} onClick={solicitarPublicacion} type="button">Publicar planificación</button></div>}</footer>
     {!soloLectura && <>
     <dialog aria-labelledby="titulo-dialogo-confirmacion" className="dialogo-confirmacion" ref={dialogoConfirmacion}><form action={confirmarOperacion}><h2 id="titulo-dialogo-confirmacion">{tituloDeConfirmacion(confirmacion)}</h2><p>{descripcionDeConfirmacion(confirmacion)}</p>{confirmacion?.tipo === "publicar" && <ul className="resumen-publicacion"><li>{seleccionados.size} {seleccionados.size === 1 ? "colaborador se publica" : "colaboradores se publican"}</li></ul>}{confirmacion?.tipo === "republicar" && <label>Motivo de la republicación<input name="motivo" maxLength={250} required /></label>}<div className="acciones-dialogo"><button className="boton-secundario" onClick={() => dialogoConfirmacion.current?.close()} type="button">Cancelar</button><button className={confirmacion?.tipo === "publicar" ? "boton-principal" : "boton-secundario"} type="submit">{etiquetaDeConfirmacion(confirmacion)}</button></div></form></dialog>
-    <dialog aria-labelledby="titulo-dialogo-celda" className="dialogo-confirmacion" ref={dialogoCelda}><form action={elegirEnDialogoCelda} key={celdaEnEdicion ? `${celdaEnEdicion.colaborador.idHuellero}:${celdaEnEdicion.fecha}` : "sin-celda"}><h2 id="titulo-dialogo-celda">Turno de {celdaEnEdicion?.colaborador.nombre ?? ""}</h2><p>{celdaEnEdicion ? formatearDiaLargo(celdaEnEdicion.fecha) : ""}</p><div className="opciones-celda">{opcionesDeCelda().map((opcion) => <label key={opcion.value}><input defaultChecked={opcion.value === valorDe(celdaEnEdicion ? porClave.get(`${celdaEnEdicion.colaborador.idHuellero}:${celdaEnEdicion.fecha}`) ?? publicadosPorClave.get(`${celdaEnEdicion.colaborador.idHuellero}:${celdaEnEdicion.fecha}`) : undefined)} name="opcion" type="radio" value={opcion.value} />{opcion.label}</label>)}</div><div className="acciones-dialogo"><button className="boton-secundario" onClick={() => dialogoCelda.current?.close()} type="button">Cancelar</button><button className="boton-principal" type="submit">Usar</button></div></form></dialog>
-    <dialog aria-labelledby="titulo-dialogo-personalizado" ref={dialogoPersonalizado}><form action={guardarPersonalizado} key={personalizado ? `${personalizado.colaborador.idHuellero}:${personalizado.fecha}:${personalizado.apertura}` : "sin-personalizar"}><h2 id="titulo-dialogo-personalizado">Horario personalizado</h2><label>Sede<select defaultValue={personalizado?.celda?.sede ?? sedes[0]} name="sede" required>{sedes.map((sede) => <option key={sede} value={sede}>{sede}</option>)}</select></label><label>Entrada<input defaultValue={personalizado?.celda?.entradaProgramada ?? "09:00"} name="entrada" type="time" required /></label><label>Salida<input defaultValue={personalizado?.celda?.salidaProgramada ?? "18:00"} name="salida" type="time" required /></label><button className="boton-principal" type="submit">Usar horario</button><button className="boton-secundario" onClick={cerrarPersonalizado} type="button">Cancelar</button></form></dialog>
-    <dialog aria-labelledby="titulo-dialogo-completar-semana" className="dialogo-confirmacion dialogo-completar-semana" ref={dialogoCompletarSemana}><form action={confirmarCompletarSemana} key={completarSemana ? `${completarSemana.colaborador.idHuellero}:${completarSemana.apertura}` : "sin-completar"}>
+    <dialog aria-labelledby="titulo-dialogo-celda" className="dialogo-confirmacion" ref={dialogoCelda}><form action={elegirEnDialogoCelda} key={celdaEnEdicion ? `${celdaEnEdicion.colaborador.dni}:${celdaEnEdicion.fecha}` : "sin-celda"}><h2 id="titulo-dialogo-celda">Turno de {celdaEnEdicion?.colaborador.nombre ?? ""}</h2><p>{celdaEnEdicion ? formatearDiaLargo(celdaEnEdicion.fecha) : ""}</p><div className="opciones-celda">{opcionesDeCelda().map((opcion) => <label key={opcion.value}><input defaultChecked={opcion.value === valorDe(celdaEnEdicion ? porClave.get(`${celdaEnEdicion.colaborador.dni}:${celdaEnEdicion.fecha}`) ?? publicadosPorClave.get(`${celdaEnEdicion.colaborador.dni}:${celdaEnEdicion.fecha}`) : undefined)} name="opcion" type="radio" value={opcion.value} />{opcion.label}</label>)}</div><div className="acciones-dialogo"><button className="boton-secundario" onClick={() => dialogoCelda.current?.close()} type="button">Cancelar</button><button className="boton-principal" type="submit">Usar</button></div></form></dialog>
+    <dialog aria-labelledby="titulo-dialogo-personalizado" ref={dialogoPersonalizado}><form action={guardarPersonalizado} key={personalizado ? `${personalizado.colaborador.dni}:${personalizado.fecha}:${personalizado.apertura}` : "sin-personalizar"}><h2 id="titulo-dialogo-personalizado">Horario personalizado</h2><label>Sede<select defaultValue={personalizado?.celda?.sede ?? sedes[0]} name="sede" required>{sedes.map((sede) => <option key={sede} value={sede}>{sede}</option>)}</select></label><label>Entrada<input defaultValue={personalizado?.celda?.entradaProgramada ?? "09:00"} name="entrada" type="time" required /></label><label>Salida<input defaultValue={personalizado?.celda?.salidaProgramada ?? "18:00"} name="salida" type="time" required /></label><button className="boton-principal" type="submit">Usar horario</button><button className="boton-secundario" onClick={cerrarPersonalizado} type="button">Cancelar</button></form></dialog>
+    <dialog aria-labelledby="titulo-dialogo-completar-semana" className="dialogo-confirmacion dialogo-completar-semana" ref={dialogoCompletarSemana}><form action={confirmarCompletarSemana} key={completarSemana ? `${completarSemana.colaborador.dni}:${completarSemana.apertura}` : "sin-completar"}>
       <h2 id="titulo-dialogo-completar-semana">Completar semana de {completarSemana?.colaborador.nombre ?? ""}</h2>
       <p>Elija la sede y el modelo por defecto, y decida qué días son laborales o un motivo de no asistencia. Confirmar reemplaza los siete días editables de esta fila.</p>
       <label>Sede por defecto<select defaultValue={sedes[0] ?? ""} name="sede" onChange={(evento) => setSedeCompletarSemana(evento.target.value)} required>{sedes.map((sede) => <option key={sede} value={sede}>{sede}</option>)}</select></label>
@@ -316,18 +316,18 @@ const ETIQUETA_DE_MOTIVO: Record<MotivoPlanificadoDeNoAsistencia, string> = {
   permiso: "Permiso",
   suspension: "Suspensión",
 };
-function crearDesdeModelo(idHuellero: string, fecha: string, modelo: Modelo): Celda { return { idHuellero, fecha, sede: modelo.sede, modeloHorarioId: modelo.id, entradaProgramada: modelo.entrada, salidaProgramada: modelo.salida, descanso: false, motivoNoAsistencia: null }; }
-function crearNoAsistencia(idHuellero: string, fecha: string, motivoNoAsistencia: MotivoPlanificadoDeNoAsistencia): Celda { return { idHuellero, fecha, sede: null, modeloHorarioId: null, entradaProgramada: null, salidaProgramada: null, descanso: true, motivoNoAsistencia }; }
+function crearDesdeModelo(dni: string, fecha: string, modelo: Modelo): Celda { return { dni, fecha, sede: modelo.sede, modeloHorarioId: modelo.id, entradaProgramada: modelo.entrada, salidaProgramada: modelo.salida, descanso: false, motivoNoAsistencia: null }; }
+function crearNoAsistencia(dni: string, fecha: string, motivoNoAsistencia: MotivoPlanificadoDeNoAsistencia): Celda { return { dni, fecha, sede: null, modeloHorarioId: null, entradaProgramada: null, salidaProgramada: null, descanso: true, motivoNoAsistencia }; }
 // Reemplaza los siete días editables mostrados para un colaborador desde el modal "Completar semana":
 // los días laborales usan la sede y horas del modelo por defecto; el resto queda con su motivo elegido.
-export function celdasDeSemanaCompleta(idHuellero: string, dias: string[], resultados: Record<string, ResultadoDeDia>, modeloPorDefecto: Modelo | undefined): Celda[] {
+export function celdasDeSemanaCompleta(dni: string, dias: string[], resultados: Record<string, ResultadoDeDia>, modeloPorDefecto: Modelo | undefined): Celda[] {
   return dias.map((fecha) => {
     const resultado = resultados[fecha] ?? "laboral";
     if (resultado === "laboral") {
       if (!modeloPorDefecto) throw new Error("Seleccione un modelo de horario por defecto.");
-      return crearDesdeModelo(idHuellero, fecha, modeloPorDefecto);
+      return crearDesdeModelo(dni, fecha, modeloPorDefecto);
     }
-    return crearNoAsistencia(idHuellero, fecha, resultado);
+    return crearNoAsistencia(dni, fecha, resultado);
   });
 }
 export function valorDe(celda: Celda | Publicado | undefined) {
@@ -368,24 +368,24 @@ function desplazarMes(mes: string, cantidad: number) { const fecha = new Date(`$
 function nombreDelMes(mes: string) { return new Intl.DateTimeFormat("es-PE", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${mes}-01T00:00:00Z`)); }
 function diasDelCalendario(mes: string) { const primero = new Date(`${mes}-01T00:00:00Z`); const inicioCalendario = new Date(primero); inicioCalendario.setUTCDate(inicioCalendario.getUTCDate() - ((inicioCalendario.getUTCDay() + 6) % 7)); return Array.from({ length: 42 }, (_, indice) => { const fecha = new Date(inicioCalendario); fecha.setUTCDate(fecha.getUTCDate() + indice); return fecha.toISOString().slice(0, 10); }); }
 function desplazarSemana(semana: string, dias: number) { const fecha = new Date(`${semana}T00:00:00Z`); fecha.setUTCDate(fecha.getUTCDate() + dias); return fecha.toISOString().slice(0, 10); }
-function estaPublicadaLaSemana(idHuellero: string, dias: string[], publicados: Map<string, Publicado>) { return dias.every((fecha) => publicados.has(`${idHuellero}:${fecha}`)); }
-function filaCompletaDe(idHuellero: string, dias: string[], celdas: Map<string, Celda>, publicados: Map<string, Publicado>) {
-  return dias.every((fecha) => { const clave = `${idHuellero}:${fecha}`; return celdas.has(clave) || publicados.has(clave); });
+function estaPublicadaLaSemana(dni: string, dias: string[], publicados: Map<string, Publicado>) { return dias.every((fecha) => publicados.has(`${dni}:${fecha}`)); }
+function filaCompletaDe(dni: string, dias: string[], celdas: Map<string, Celda>, publicados: Map<string, Publicado>) {
+  return dias.every((fecha) => { const clave = `${dni}:${fecha}`; return celdas.has(clave) || publicados.has(clave); });
 }
-function hayCambiosSinPublicar(idHuellero: string, dias: string[], celdas: Map<string, Celda>, publicados: Map<string, Publicado>) {
+function hayCambiosSinPublicar(dni: string, dias: string[], celdas: Map<string, Celda>, publicados: Map<string, Publicado>) {
   return dias.some((fecha) => {
-    const clave = `${idHuellero}:${fecha}`; const celda = celdas.get(clave); const publicado = publicados.get(clave);
+    const clave = `${dni}:${fecha}`; const celda = celdas.get(clave); const publicado = publicados.get(clave);
     return Boolean(celda && publicado && difiereDelPublicado(celda, publicado));
   });
 }
 
 // Estado de la semana de un colaborador, más los intermedios que la fila también necesita
 // (incluida su elegibilidad para el checkbox de publicación selectiva).
-function resumenSemanalDe(idHuellero: string, dias: string[], celdas: Map<string, Celda>, publicados: Map<string, Publicado>, liquidadas: Set<string>) {
-  const semanaPublicada = estaPublicadaLaSemana(idHuellero, dias, publicados);
-  const semanaLiquidada = liquidadas.has(idHuellero);
-  const tieneCambiosSinPublicar = semanaPublicada && hayCambiosSinPublicar(idHuellero, dias, celdas, publicados);
-  const filaCompleta = filaCompletaDe(idHuellero, dias, celdas, publicados);
+function resumenSemanalDe(dni: string, dias: string[], celdas: Map<string, Celda>, publicados: Map<string, Publicado>, liquidadas: Set<string>) {
+  const semanaPublicada = estaPublicadaLaSemana(dni, dias, publicados);
+  const semanaLiquidada = liquidadas.has(dni);
+  const tieneCambiosSinPublicar = semanaPublicada && hayCambiosSinPublicar(dni, dias, celdas, publicados);
+  const filaCompleta = filaCompletaDe(dni, dias, celdas, publicados);
   return {
     semanaPublicada, semanaLiquidada, tieneCambiosSinPublicar, filaCompleta,
     estado: estadoDeSemana({ semanaPublicada, semanaLiquidada, hayCambiosSinPublicar: tieneCambiosSinPublicar }),

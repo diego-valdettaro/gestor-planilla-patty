@@ -5,7 +5,7 @@ import { jornadasPlanificadasSonIguales, motivoPlanificadoDe, validarJornadaPlan
 import type { CeldaDePlanSemanalEnBorrador, PlanSemanalEnBorrador, RepositorioDePlanesSemanales } from "./plan-semanal-en-borrador";
 import { desplazarFecha } from "./semana";
 
-type SeleccionDeCelda = Pick<CeldaDePlanSemanalEnBorrador, "idHuellero" | "fecha" | "sede">;
+type SeleccionDeCelda = Pick<CeldaDePlanSemanalEnBorrador, "dni" | "fecha" | "sede">;
 type HorarioParaAplicar = Pick<CeldaDePlanSemanalEnBorrador, "modeloHorarioId" | "entradaProgramada" | "salidaProgramada" | "descanso" | "motivoNoAsistencia">;
 
 export function crearCasosDeUsoDePlanesSemanales(
@@ -30,9 +30,9 @@ export function crearCasosDeUsoDePlanesSemanales(
     ): Promise<void> {
       await autorizar();
       const plan = await obtenerPlan(repositorio, planId);
-      await verificarQueNoEsteProcesado(repositorio, celda.idHuellero, plan.semana);
+      await verificarQueNoEsteProcesado(repositorio, celda.dni, plan.semana);
       await validarCelda(repositorio, plan, celda);
-      if (!(await repositorio.colaboradorPerteneceAEquipo(celda.idHuellero, plan.equipo))) {
+      if (!(await repositorio.colaboradorPerteneceAEquipo(celda.dni, plan.equipo))) {
         throw new Error("El colaborador no pertenece al equipo operativo del plan.");
       }
       await verificarQueNoSeaPublicadoProcesado(repositorio, celda);
@@ -46,7 +46,7 @@ export function crearCasosDeUsoDePlanesSemanales(
       const plan = await obtenerPlan(repositorio, planId);
       const celdasProcesadas = new Map<string, CeldaDePlanSemanalEnBorrador>();
       for (const celda of plan.celdas) {
-        if (await repositorio.horarioSemanalEstaProcesado?.(celda.idHuellero, plan.semana)) {
+        if (await repositorio.horarioSemanalEstaProcesado?.(celda.dni, plan.semana)) {
           celdasProcesadas.set(claveDeCelda(celda), celda);
         }
       }
@@ -57,9 +57,9 @@ export function crearCasosDeUsoDePlanesSemanales(
           if (!jornadasPlanificadasSonIguales(celda, celdaProcesada)) throw new Error("El horario semanal ya fue procesado y no se puede editar.");
           continue;
         }
-        await verificarQueNoEsteProcesado(repositorio, celda.idHuellero, plan.semana);
+        await verificarQueNoEsteProcesado(repositorio, celda.dni, plan.semana);
         await validarCelda(repositorio, plan, celda);
-        if (!(await repositorio.colaboradorPerteneceAEquipo(celda.idHuellero, plan.equipo))) {
+        if (!(await repositorio.colaboradorPerteneceAEquipo(celda.dni, plan.equipo))) {
           throw new Error("El colaborador no pertenece al equipo operativo del plan.");
         }
         await verificarQueNoSeaPublicadoProcesado(repositorio, celda);
@@ -67,16 +67,16 @@ export function crearCasosDeUsoDePlanesSemanales(
       }
       await repositorio.reemplazarCeldasDelPlan(planId, [...celdasEditables, ...celdasProcesadas.values()]);
     },
-    async borrarCelda(planId: string, idHuellero: string, fecha: string): Promise<void> {
+    async borrarCelda(planId: string, dni: string, fecha: string): Promise<void> {
       await autorizar();
       const plan = await obtenerPlan(repositorio, planId);
       if (!fechaPerteneceALaSemana(fecha, plan.semana)) throw new Error("La fecha no pertenece a la semana del plan.");
-      if (!(await repositorio.colaboradorPerteneceAEquipo(idHuellero, plan.equipo))) {
+      if (!(await repositorio.colaboradorPerteneceAEquipo(dni, plan.equipo))) {
         throw new Error("El colaborador no pertenece al equipo operativo del plan.");
       }
-      await verificarQueNoEsteProcesado(repositorio, idHuellero, plan.semana);
-      await verificarQueNoEstePublicado(repositorio, idHuellero, fecha);
-      await repositorio.borrarCelda(planId, idHuellero, fecha);
+      await verificarQueNoEsteProcesado(repositorio, dni, plan.semana);
+      await verificarQueNoEstePublicado(repositorio, dni, fecha);
+      await repositorio.borrarCelda(planId, dni, fecha);
     },
     async copiarSemanaAnterior(planId: string): Promise<void> {
       await autorizar();
@@ -85,20 +85,20 @@ export function crearCasosDeUsoDePlanesSemanales(
       const horarios = await repositorio.listarHorariosPublicadosDelEquipoEnSemana(semanaAnterior, plan.equipo);
       const celdasCopia: CeldaDePlanSemanalEnBorrador[] = [];
       for (const horario of horarios) {
-        if (!(await repositorio.colaboradorPerteneceAEquipo(horario.idHuellero, plan.equipo))) continue;
+        if (!(await repositorio.colaboradorPerteneceAEquipo(horario.dni, plan.equipo))) continue;
         const celda = { ...horario, planId, fecha: desplazarFecha(horario.fecha, 7) };
         await validarCelda(repositorio, plan, celda);
         celdasCopia.push(celda);
       }
       const idsProcesados = new Set<string>();
-      for (const { idHuellero } of celdasCopia) {
-        if (await repositorio.horarioSemanalEstaProcesado?.(idHuellero, plan.semana)) idsProcesados.add(idHuellero);
+      for (const { dni } of celdasCopia) {
+        if (await repositorio.horarioSemanalEstaProcesado?.(dni, plan.semana)) idsProcesados.add(dni);
       }
-      const celdas = celdasCopia.filter(({ idHuellero }) => !idsProcesados.has(idHuellero));
-      await Promise.all(celdas.map((celda) => verificarQueNoEstePublicado(repositorio, celda.idHuellero, celda.fecha)));
+      const celdas = celdasCopia.filter(({ dni }) => !idsProcesados.has(dni));
+      await Promise.all(celdas.map((celda) => verificarQueNoEstePublicado(repositorio, celda.dni, celda.fecha)));
       const celdasProcesadas = [] as CeldaDePlanSemanalEnBorrador[];
       for (const celda of plan.celdas) {
-        if (idsProcesados.has(celda.idHuellero) || await repositorio.horarioSemanalEstaProcesado?.(celda.idHuellero, plan.semana)) celdasProcesadas.push(celda);
+        if (idsProcesados.has(celda.dni) || await repositorio.horarioSemanalEstaProcesado?.(celda.dni, plan.semana)) celdasProcesadas.push(celda);
       }
       await repositorio.reemplazarCeldasDelPlan(planId, [...celdasProcesadas, ...celdas]);
     },
@@ -113,9 +113,9 @@ export function crearCasosDeUsoDePlanesSemanales(
         sede: horario.motivoNoAsistencia || horario.descanso ? null : celda.sede,
       }));
       for (const celda of celdas) {
-        await verificarQueNoEsteProcesado(repositorio, celda.idHuellero, plan.semana);
+        await verificarQueNoEsteProcesado(repositorio, celda.dni, plan.semana);
         await validarCelda(repositorio, plan, celda);
-        if (!(await repositorio.colaboradorPerteneceAEquipo(celda.idHuellero, plan.equipo))) {
+        if (!(await repositorio.colaboradorPerteneceAEquipo(celda.dni, plan.equipo))) {
           throw new Error("El colaborador no pertenece al equipo operativo del plan.");
         }
         await verificarQueNoSeaPublicadoProcesado(repositorio, celda);
@@ -125,8 +125,8 @@ export function crearCasosDeUsoDePlanesSemanales(
   };
 }
 
-async function verificarQueNoEsteProcesado(repositorio: RepositorioDePlanesSemanales, idHuellero: string, semana: string): Promise<void> {
-  if (await repositorio.horarioSemanalEstaProcesado?.(idHuellero, semana)) {
+async function verificarQueNoEsteProcesado(repositorio: RepositorioDePlanesSemanales, dni: string, semana: string): Promise<void> {
+  if (await repositorio.horarioSemanalEstaProcesado?.(dni, semana)) {
     throw new Error("El horario semanal ya fue procesado y no se puede editar.");
   }
 }
@@ -135,21 +135,21 @@ async function verificarQueNoSeaPublicadoProcesado(
   repositorio: RepositorioDePlanesSemanales,
   celda: Omit<CeldaDePlanSemanalEnBorrador, "planId">,
 ): Promise<void> {
-  const publicado = await repositorio.buscarPublicado(celda.idHuellero, celda.fecha);
+  const publicado = await repositorio.buscarPublicado(celda.dni, celda.fecha);
   if (publicado && !jornadasPlanificadasSonIguales(celda, publicado)) {
-    const procesada = await repositorio.asistenciaEstaProcesada?.(celda.idHuellero, celda.fecha);
+    const procesada = await repositorio.asistenciaEstaProcesada?.(celda.dni, celda.fecha);
     if (procesada) throw new Error("El horario semanal ya fue procesado y no se puede corregir.");
   }
 }
 
-async function verificarQueNoEstePublicado(repositorio: RepositorioDePlanesSemanales, idHuellero: string, fecha: string): Promise<void> {
-  if (await repositorio.buscarPublicado(idHuellero, fecha)) {
+async function verificarQueNoEstePublicado(repositorio: RepositorioDePlanesSemanales, dni: string, fecha: string): Promise<void> {
+  if (await repositorio.buscarPublicado(dni, fecha)) {
     throw new Error("El horario semanal ya fue publicado y no se puede editar desde el borrador.");
   }
 }
 
-function claveDeCelda(celda: Pick<CeldaDePlanSemanalEnBorrador, "idHuellero" | "fecha">): string {
-  return `${celda.idHuellero}:${celda.fecha}`;
+function claveDeCelda(celda: Pick<CeldaDePlanSemanalEnBorrador, "dni" | "fecha">): string {
+  return `${celda.dni}:${celda.fecha}`;
 }
 
 async function obtenerPlan(repositorio: RepositorioDePlanesSemanales, id: string): Promise<PlanSemanalEnBorrador> {

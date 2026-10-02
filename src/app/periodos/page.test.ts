@@ -39,7 +39,7 @@ describe("página de Liquidaciones (/periodos)", () => {
     vi.clearAllMocks();
     obtenerActorActual.mockResolvedValue({ rol: "finanzas" });
     listarSedesConColaboradoresActivos.mockResolvedValue(["Centro"]);
-    listarColaboradoresActivos.mockResolvedValue([{ idHuellero: "H-1", nombre: "Ana" }]);
+    listarColaboradoresActivos.mockResolvedValue([{ dni: "00000001", nombre: "Ana" }]);
     listarResumen.mockResolvedValue({ filas: [], bloqueos: [], totales: { jornadasTrabajadas: 0, minutosTrabajados: 0, noAsistencias: { falta: 0, descanso: 0, feriado: 0, vacaciones: 0, permiso: 0, suspension: 0 }, cantidadTardanzas: 0, minutosPenalizados: 0, horasExtra: { pendiente: { minutosAl25: 0, minutosAl35: 0 }, aprobada: { minutosAl25: 0, minutosAl35: 0 }, rechazada: { minutosAl25: 0, minutosAl35: 0 } } } });
   });
 
@@ -130,7 +130,7 @@ describe("página de Liquidaciones (/periodos)", () => {
     listar.mockResolvedValue([{ id: "p1", inicio: "2026-01-01", fin: "2026-01-31", estado: "abierto" }]);
     listarResumen.mockResolvedValue({
       filas: [{
-        idHuellero: "H-1", nombre: "Ana", grupo: "Tiendas", jornadasTrabajadas: 2, minutosTrabajados: 960,
+        dni: "00000001", nombre: "Ana", grupo: "Tiendas", jornadasTrabajadas: 2, minutosTrabajados: 960,
         noAsistencias: { falta: 1, descanso: 1, feriado: 1, vacaciones: 1, permiso: 1, suspension: 1 },
         cantidadTardanzas: 2, minutosPenalizados: 60,
         horasExtra: {
@@ -169,14 +169,14 @@ describe("página de Liquidaciones (/periodos)", () => {
     listar.mockResolvedValue([{ id: "p1", inicio: "2026-01-01", fin: "2026-01-31", estado: "abierto" }]);
     const totales = { jornadasTrabajadas: 1, minutosTrabajados: 480, noAsistencias: { falta: 0, descanso: 0, feriado: 0, vacaciones: 0, permiso: 0, suspension: 0 }, cantidadTardanzas: 0, minutosPenalizados: 0, horasExtra: { pendiente: { minutosAl25: 30, minutosAl35: 0 }, aprobada: { minutosAl25: 0, minutosAl35: 0 }, rechazada: { minutosAl25: 0, minutosAl35: 0 } } };
     listarResumen.mockResolvedValue({
-      filas: [{ idHuellero: "H-1", nombre: "Ana", grupo: "Tiendas", ...totales, jornadas: [
+      filas: [{ dni: "00000001", nombre: "Ana", grupo: "Tiendas", ...totales, jornadas: [
         { fecha: "2026-01-02", sede: "Centro", resultado: "trabajada", entradaReal: "2026-01-02T09:00:00.000Z", salidaReal: "2026-01-02T17:00:00.000Z", minutosTrabajados: 480, tardanzaEnMinutos: 0, minutosPenalizados: 0, politicaDeTardanzaVersion: null, horaExtra: { id: "extra-1", estado: "pendiente", minutosAl25: 30, minutosAl35: 0 } },
         { fecha: "2026-01-03", sede: null, resultado: "pendiente", entradaReal: null, salidaReal: null, minutosTrabajados: 0, tardanzaEnMinutos: 0, minutosPenalizados: 0 },
       ] }],
       totales,
       bloqueos: [
-        { tipo: "asistencia", idHuellero: "H-1", nombre: "Ana", grupo: "Tiendas", fecha: "2026-01-03" },
-        { tipo: "hora-extra", idHuellero: "H-1", nombre: "Ana", grupo: "Tiendas", fecha: "2026-01-02" },
+        { tipo: "asistencia", dni: "00000001", nombre: "Ana", grupo: "Tiendas", fecha: "2026-01-03" },
+        { tipo: "hora-extra", dni: "00000001", nombre: "Ana", grupo: "Tiendas", fecha: "2026-01-02" },
       ],
     });
 
@@ -184,9 +184,9 @@ describe("página de Liquidaciones (/periodos)", () => {
 
     expect(html).toContain("Asistencia pendiente");
     expect(html).toContain("Hora extra pendiente");
-    expect(html).toContain('href="/asistencias?vista=mensual&amp;grupo=Tiendas&amp;fecha=2026-01-03&amp;colaborador=H-1"');
-    expect(html).toContain('href="#jornada-H-1-2026-01-02"');
-    expect(html).toContain('id="jornada-H-1-2026-01-02"');
+    expect(html).toContain('href="/asistencias?vista=mensual&amp;grupo=Tiendas&amp;fecha=2026-01-03&amp;colaborador=00000001"');
+    expect(html).toContain('href="#jornada-00000001-2026-01-02"');
+    expect(html).toContain('id="jornada-00000001-2026-01-02"');
     expect(html).toContain("Centro");
     expect(html).toContain("Trabajada");
     expect(html).toContain("Pendiente de revisión");
@@ -208,9 +208,9 @@ describe("página de Liquidaciones (/periodos)", () => {
   it("mantiene los totales globales al aplicar filtros de presentación", async () => {
     listar.mockResolvedValue([{ id: "p1", inicio: "2026-01-01", fin: "2026-01-31", estado: "abierto" }]);
 
-    await render({ sede: "Centro", idHuellero: "H-1" });
+    await render({ sede: "Centro", dni: "00000001" });
 
-    expect(listarResumen).toHaveBeenCalledWith({ periodoId: "p1", sede: "Centro", idHuellero: "H-1" });
+    expect(listarResumen).toHaveBeenCalledWith({ periodoId: "p1", sede: "Centro", dni: "00000001" });
   });
   it("indica el siguiente paso permitido cuando no hay períodos", async () => {
     listar.mockResolvedValue([]);

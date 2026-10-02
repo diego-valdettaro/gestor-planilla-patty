@@ -1,3 +1,4 @@
+import { dniDePrueba } from "../colaboradores/dni-de-prueba";
 import { randomUUID } from "node:crypto";
 
 import { and, eq } from "drizzle-orm";
@@ -15,29 +16,29 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeTurnos al publicar un descan
   const pool = new Pool({ connectionString: databaseUrl });
   const db = drizzle({ client: pool, schema });
   const repositorio = new RepositorioPostgresDeTurnos(db);
-  const idHuellero = `TEST-DESCANSO-${randomUUID()}`;
+  const dni = dniDePrueba();
   const fecha = "2031-09-04";
 
   beforeAll(async () => {
-    await db.insert(schema.colaboradores).values({ idHuellero, nombre: "Ana Rojas", sede: "Lima", grupo: "Tiendas", activo: true });
+    await db.insert(schema.colaboradores).values({ dni, nombre: "Ana Rojas", sede: "Lima", grupo: "Tiendas", activo: true });
     await db.insert(schema.periodosPlanilla).values({ inicio: "2031-08-26", fin: "2031-09-25", estado: "abierto" });
   });
 
   afterAll(async () => {
     const [turno] = await db.select({ id: schema.turnosPublicados.id }).from(schema.turnosPublicados)
-      .where(and(eq(schema.turnosPublicados.idHuellero, idHuellero), eq(schema.turnosPublicados.fecha, fecha)));
-    await db.delete(schema.asistenciasEsperadas).where(and(eq(schema.asistenciasEsperadas.idHuellero, idHuellero), eq(schema.asistenciasEsperadas.fecha, fecha)));
+      .where(and(eq(schema.turnosPublicados.dni, dni), eq(schema.turnosPublicados.fecha, fecha)));
+    await db.delete(schema.asistenciasEsperadas).where(and(eq(schema.asistenciasEsperadas.dni, dni), eq(schema.asistenciasEsperadas.fecha, fecha)));
     if (turno) await db.delete(schema.historialDeTurnosPublicados).where(eq(schema.historialDeTurnosPublicados.turnoPublicadoId, turno.id));
-    await db.delete(schema.turnosPublicados).where(and(eq(schema.turnosPublicados.idHuellero, idHuellero), eq(schema.turnosPublicados.fecha, fecha)));
+    await db.delete(schema.turnosPublicados).where(and(eq(schema.turnosPublicados.dni, dni), eq(schema.turnosPublicados.fecha, fecha)));
     await db.delete(schema.periodosPlanilla).where(and(eq(schema.periodosPlanilla.inicio, "2031-08-26"), eq(schema.periodosPlanilla.fin, "2031-09-25")));
-    await db.delete(schema.colaboradores).where(eq(schema.colaboradores.idHuellero, idHuellero));
+    await db.delete(schema.colaboradores).where(eq(schema.colaboradores.dni, dni));
     await pool.end();
   });
 
   it("no crea una asistencia esperada", async () => {
-    await repositorio.publicar({ idHuellero, fecha, sede: null, entradaProgramada: null, salidaProgramada: null, descanso: true, motivoNoAsistencia: "descanso" });
+    await repositorio.publicar({ dni, fecha, sede: null, entradaProgramada: null, salidaProgramada: null, descanso: true, motivoNoAsistencia: "descanso" });
 
     await expect(db.select({ id: schema.asistenciasEsperadas.id }).from(schema.asistenciasEsperadas)
-      .where(and(eq(schema.asistenciasEsperadas.idHuellero, idHuellero), eq(schema.asistenciasEsperadas.fecha, fecha)))).resolves.toEqual([]);
+      .where(and(eq(schema.asistenciasEsperadas.dni, dni), eq(schema.asistenciasEsperadas.fecha, fecha)))).resolves.toEqual([]);
   });
 });

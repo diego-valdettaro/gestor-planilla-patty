@@ -14,7 +14,7 @@ describe("exportación del resumen del período", () => {
     buscar.mockResolvedValue({ id: "p1", inicio: "2026-01-01", fin: "2026-01-31", estado: "abierto" });
     listarResumen.mockResolvedValue({
       filas: [{
-        idHuellero: "H-1", nombre: "Ana", grupo: "Tiendas", jornadasTrabajadas: 2, minutosTrabajados: 930,
+        dni: "00000001", nombre: "Ana", grupo: "Tiendas", jornadasTrabajadas: 2, minutosTrabajados: 930,
         noAsistencias: { falta: 1, descanso: 0, feriado: 0, vacaciones: 0, permiso: 0, suspension: 0 },
         cantidadTardanzas: 1, minutosPenalizados: 60,
         horasExtra: {
@@ -31,7 +31,7 @@ describe("exportación del resumen del período", () => {
 
   it("exporta el período completo y solo las horas extra aprobadas", async () => {
     const { GET } = await import("./route");
-    const respuesta = await GET(new NextRequest("http://localhost/api/periodos/p1/exportar?sede=Centro&idHuellero=H-2"), { params: Promise.resolve({ periodoId: "p1" }) });
+    const respuesta = await GET(new NextRequest("http://localhost/api/periodos/p1/exportar?sede=Centro&dni=00000002"), { params: Promise.resolve({ periodoId: "p1" }) });
     const libro = XLSX.read(await respuesta.arrayBuffer());
     const [fila] = XLSX.utils.sheet_to_json<Record<string, unknown>>(libro.Sheets.Resumen);
 

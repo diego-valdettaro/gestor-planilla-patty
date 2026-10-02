@@ -1,7 +1,7 @@
 import type { TurnoPublicado } from "./publicar-turno-semanal";
 
 export interface ColaboradorDelEquipo {
-  idHuellero: string;
+  dni: string;
   nombre: string;
   sede: string;
 }
@@ -14,7 +14,7 @@ export type CeldaDeConsultaSemanal =
 export interface GrupoDeSedeEnConsulta {
   sede: string;
   colaboradores: Array<{
-    idHuellero: string;
+    dni: string;
     nombre: string;
     celdas: CeldaDeConsultaSemanal[];
   }>;
@@ -30,7 +30,7 @@ export function crearConsultaSemanalPorEquipo({
   turnos: TurnoPublicado[];
 }): GrupoDeSedeEnConsulta[] {
   const turnosPorColaboradorYFecha = new Map(
-    turnos.map((turno) => [`${turno.idHuellero}:${turno.fecha}`, turno]),
+    turnos.map((turno) => [`${turno.dni}:${turno.fecha}`, turno]),
   );
   const grupos = new Map<string, GrupoDeSedeEnConsulta>();
 
@@ -38,9 +38,9 @@ export function crearConsultaSemanalPorEquipo({
     const grupo = grupos.get(colaborador.sede) ?? { sede: colaborador.sede, colaboradores: [] };
     grupos.set(colaborador.sede, grupo);
     grupo.colaboradores.push({
-      idHuellero: colaborador.idHuellero,
+      dni: colaborador.dni,
       nombre: colaborador.nombre,
-      celdas: dias.map((fecha) => convertirTurnoEnCelda(turnosPorColaboradorYFecha.get(`${colaborador.idHuellero}:${fecha}`))),
+      celdas: dias.map((fecha) => convertirTurnoEnCelda(turnosPorColaboradorYFecha.get(`${colaborador.dni}:${fecha}`))),
     });
   }
 

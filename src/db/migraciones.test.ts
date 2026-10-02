@@ -72,3 +72,59 @@ describe.skipIf(!databaseUrl)("migración 0021_grupo_directo_de_colaborador", ()
     }
   });
 });
+
+// El identificador del colaborador pasa de «id_huellero» a «dni» (issue #107, ADR 0010).
+describe.skipIf(!databaseUrl)("migración 0026_identificar_colaboradores_por_dni", () => {
+  const nombreDeLaBase = `planilla_migracion_0026_${randomUUID().replace(/-/g, "_")}`;
+  const adminPool = new Pool({ connectionString: databaseUrl });
+  let pool: Pool;
+
+  beforeAll(async () => {
+    await adminPool.query(`CREATE DATABASE "${nombreDeLaBase}"`);
+    const url = new URL(databaseUrl!);
+    url.pathname = `/${nombreDeLaBase}`;
+    pool = new Pool({ connectionString: url.toString() });
+    const migraciones = await leerMigraciones();
+    for (const migracion of migraciones.filter(({ archivo }) => archivo < "0026_identificar_colaboradores_por_dni.sql")) {
+      await pool.query(migracion.contenido);
+    }
+    await pool.query("INSERT INTO grupos (nombre) VALUES ('Grupo 0026')");
+    await pool.query("INSERT INTO sedes (nombre, activa, grupo) VALUES ('Sede 0026', true, 'Grupo 0026')");
+    await pool.query("INSERT INTO colaboradores (id_huellero, nombre, sede, grupo, activo) VALUES ('HU-LEGADO', 'Legado', 'Sede 0026', 'Grupo 0026', true)");
+    await pool.query("INSERT INTO turnos_publicados (id_huellero, fecha, sede, grupo, entrada_programada, salida_programada, descanso) VALUES ('HU-LEGADO', '2026-09-01', 'Sede 0026', 'Grupo 0026', '09:00', '18:00', false)");
+    await pool.query("CREATE TABLE instantanea_0026 (datos jsonb NOT NULL)");
+    await pool.query(`INSERT INTO instantanea_0026 VALUES ('{"filas":[{"idHuellero":"HU-LEGADO","otro":1}]}')`);
+    const migracion = migraciones.find(({ archivo }) => archivo === "0026_identificar_colaboradores_por_dni.sql");
+    await pool.query(migracion!.contenido);
+  });
+
+  afterAll(async () => {
+    await pool.end();
+    await adminPool.query(`DROP DATABASE IF EXISTS "${nombreDeLaBase}"`);
+    await adminPool.end();
+  });
+
+  it("renombra la columna en colaboradores y en las tablas que la referencian sin perder filas", async () => {
+    const colaboradores = await pool.query("SELECT dni FROM colaboradores");
+    const turnos = await pool.query("SELECT dni FROM turnos_publicados");
+    const restantes = await pool.query("SELECT 1 FROM information_schema.columns WHERE column_name = 'id_huellero'");
+
+    expect(colaboradores.rows).toEqual([{ dni: "HU-LEGADO" }]);
+    expect(turnos.rows).toEqual([{ dni: "HU-LEGADO" }]);
+    expect(restantes.rowCount).toBe(0);
+  });
+
+  it("reescribe la clave idHuellero de las instantáneas JSON a dni", async () => {
+    const { rows } = await pool.query("SELECT datos FROM instantanea_0026");
+
+    expect(rows[0].datos).toEqual({ filas: [{ dni: "HU-LEGADO", otro: 1 }] });
+  });
+
+  it("conserva el DNI único y exige 8 dígitos solo a filas nuevas o modificadas", async () => {
+    const insertar = (dni: string) => pool.query("INSERT INTO colaboradores (dni, nombre, sede, grupo, activo) VALUES ($1, 'Prueba', 'Sede 0026', 'Grupo 0026', true)", [dni]);
+
+    await insertar("12345678");
+    await expect(insertar("12345678")).rejects.toThrow(/duplicate key|unique/i);
+    await expect(insertar("1234")).rejects.toThrow(/colaboradores_dni_ocho_digitos/);
+  });
+});
