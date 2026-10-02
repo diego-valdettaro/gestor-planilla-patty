@@ -303,6 +303,7 @@ export const horasExtra = pgTable(
     asistenciaId: uuid("asistencia_id").notNull().unique().references(() => asistenciasEsperadas.id),
     minutosAl25: integer("minutos_al_25").notNull(),
     minutosAl35: integer("minutos_al_35").notNull(),
+    trabajoNocturno: boolean("trabajo_nocturno").notNull().default(false),
     estado: text("estado", { enum: ["pendiente", "aprobada", "rechazada"] }).notNull().default("pendiente"),
     decididaPorId: uuid("decidida_por_id").references(() => cuentasLocales.id),
     decididaEn: timestamp("decidida_en", { withTimezone: true }),
