@@ -61,6 +61,8 @@ describe("planificador semanal", () => {
     expect(html).not.toContain("Falta");
     expect(html).not.toContain("Sede fija anterior");
     expect(html).toContain('aria-labelledby="titulo-dialogo-celda"');
+    expect(html).toMatch(/id="titulo-dialogo-celda">Horario semanal de/);
+    expect(html).not.toContain("Turno de");
     expect(html).toContain('aria-labelledby="titulo-dialogo-personalizado"');
     expect(html).toContain('aria-labelledby="titulo-dialogo-completar-semana"');
     // El botón de la fila, más el título y el botón de confirmar del modal.
