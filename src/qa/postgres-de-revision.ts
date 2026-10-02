@@ -27,7 +27,7 @@ export const ejecutarDockerReal: EjecutarDocker = (args) => {
 
 export function nombreDeContenedor(nombreBase: string): string {
   if (!/^[a-z][a-z0-9_]*$/.test(nombreBase)) {
-    throw new Error(`El nombre de base "${nombreBase}" no es válido: use minúsculas, dígitos y guiones bajos, empezando por una letra.`);
+    throw new Error(`El nombre de base "${nombreBase}" no es válido: usá minúsculas, dígitos y guiones bajos, empezando por una letra.`);
   }
   return `postgres-${nombreBase}`;
 }
@@ -37,15 +37,15 @@ export function comprobarDocker(docker: EjecutarDocker): void {
   if (resultado.error && (resultado.error as NodeJS.ErrnoException).code === "ENOENT") {
     throw new Error(
       "Docker no está instalado. `pnpm revisar` necesita Docker para crear su PostgreSQL desechable. " +
-        "Instálelo desde https://docs.docker.com/engine/install/ y vuelva a ejecutar el comando.",
+        "Instalalo desde https://docs.docker.com/engine/install/ y volvé a ejecutar el comando.",
     );
   }
   if (resultado.status !== 0) {
     const detalle = resultado.stderr.trim();
     throw new Error(
       "Docker no responde. `pnpm revisar` necesita que Docker esté iniciado: " +
-        "en Linux ejecute `sudo systemctl start docker`; en Windows o macOS abra Docker Desktop. " +
-        "Compruebe que `docker info` funciona y vuelva a ejecutar el comando." +
+        "en Linux ejecutá `sudo systemctl start docker`; en Windows o macOS abrí Docker Desktop. " +
+        "Comprobá que `docker info` funciona y volvé a ejecutar el comando." +
         (detalle ? `\nDetalle: ${detalle}` : ""),
     );
   }
@@ -80,8 +80,11 @@ export async function levantarPostgresDeRevision(opciones: {
   nombreBase: string;
   reutilizar: boolean;
   dormir?: (milisegundos: number) => Promise<void>;
+  // Prepara la base recién creada (migrar, sembrar). Si falla, se elimina el contenedor:
+  // dejarlo haría que `--reutilizar` sirviera una base a medio preparar.
+  alCrear?: (url: string) => Promise<void>;
 }): Promise<{ url: string; creado: boolean }> {
-  const { docker, nombreBase, reutilizar } = opciones;
+  const { docker, nombreBase, reutilizar, alCrear } = opciones;
   const dormir = opciones.dormir ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   const nombre = nombreDeContenedor(nombreBase);
   comprobarDocker(docker);
@@ -107,7 +110,16 @@ export async function levantarPostgresDeRevision(opciones: {
   // que solo escucha por socket Unix.
   for (let intento = 1; intento <= INTENTOS_DE_ESPERA; intento += 1) {
     const listo = docker(["exec", nombre, "pg_isready", "-h", "127.0.0.1", "-U", USUARIO, "-d", nombreBase]);
-    if (listo.status === 0) return { url: urlDeRevision(puertoPublicado(docker, nombre), nombreBase), creado: true };
+    if (listo.status === 0) {
+      const url = urlDeRevision(puertoPublicado(docker, nombre), nombreBase);
+      try {
+        await alCrear?.(url);
+      } catch (error) {
+        eliminarPostgresDeRevision(docker, nombreBase);
+        throw error;
+      }
+      return { url, creado: true };
+    }
     if (intento < INTENTOS_DE_ESPERA) await dormir(1000);
   }
 
@@ -117,6 +129,6 @@ export async function levantarPostgresDeRevision(opciones: {
 
 // Entorno de los procesos hijos: la base de revisión gana sobre cualquier DATABASE_URL
 // exportado en la terminal (o que traiga direnv, etc.).
-export function entornoDeRevision(base: NodeJS.ProcessEnv, url: string): NodeJS.ProcessEnv {
-  return { ...base, DATABASE_URL: url, TEST_DATABASE_URL: url };
+export function entornoDeRevision(entornoBase: NodeJS.ProcessEnv, url: string): NodeJS.ProcessEnv {
+  return { ...entornoBase, DATABASE_URL: url, TEST_DATABASE_URL: url };
 }

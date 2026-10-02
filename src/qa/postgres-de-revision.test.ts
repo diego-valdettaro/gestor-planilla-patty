@@ -8,6 +8,7 @@ import {
   ejecutarDockerReal,
   eliminarPostgresDeRevision,
   entornoDeRevision,
+  IMAGEN_POSTGRES,
   levantarPostgresDeRevision,
   nombreDeContenedor,
   type EjecutarDocker,
@@ -48,6 +49,7 @@ function dockerSimulado(opciones: { corriendo?: boolean; listoEnIntento?: number
 }
 
 const sinEspera = async () => {};
+const BASE = "planilla_rev_146";
 
 describe("PostgreSQL desechable para revisar una rama (Docker simulado)", () => {
   it("nombra el contenedor a partir de la base y rechaza nombres peligrosos", () => {
@@ -59,7 +61,7 @@ describe("PostgreSQL desechable para revisar una rama (Docker simulado)", () => 
   it("arranca: comprueba Docker, crea el contenedor, espera y devuelve la URL del puerto publicado", async () => {
     const { docker, llamadas, subcomandos } = dockerSimulado({ listoEnIntento: 3 });
 
-    const resultado = await levantarPostgresDeRevision({ docker, nombreBase: "planilla_rev_146", reutilizar: false, dormir: sinEspera });
+    const resultado = await levantarPostgresDeRevision({ docker, nombreBase: BASE, reutilizar: false, dormir: sinEspera });
 
     expect(resultado).toEqual({ creado: true, url: "postgres://postgres:postgres@127.0.0.1:49153/planilla_rev_146" });
     expect(subcomandos()).toEqual(["info", "inspect", "run", "exec", "exec", "exec", "port"]);
@@ -70,7 +72,7 @@ describe("PostgreSQL desechable para revisar una rama (Docker simulado)", () => 
       "--label", "planilla-revision=planilla_rev_146",
       "-e", "POSTGRES_DB=planilla_rev_146",
       "-p", "127.0.0.1::5432",
-      "postgres:16-alpine",
+      IMAGEN_POSTGRES,
     ]));
     expect(llamadas.find((l) => l[0] === "exec")).toEqual([
       "exec", "postgres-planilla_rev_146", "pg_isready", "-h", "127.0.0.1", "-U", "postgres", "-d", "planilla_rev_146",
@@ -80,7 +82,7 @@ describe("PostgreSQL desechable para revisar una rama (Docker simulado)", () => 
   it("con --reutilizar y el contenedor corriendo no lo recrea", async () => {
     const { docker, subcomandos } = dockerSimulado({ corriendo: true, puerto: "127.0.0.1:50000\n" });
 
-    const resultado = await levantarPostgresDeRevision({ docker, nombreBase: "planilla_rev_146", reutilizar: true, dormir: sinEspera });
+    const resultado = await levantarPostgresDeRevision({ docker, nombreBase: BASE, reutilizar: true, dormir: sinEspera });
 
     expect(resultado).toEqual({ creado: false, url: "postgres://postgres:postgres@127.0.0.1:50000/planilla_rev_146" });
     expect(subcomandos()).not.toContain("run");
@@ -90,7 +92,7 @@ describe("PostgreSQL desechable para revisar una rama (Docker simulado)", () => 
   it("con --reutilizar pero sin contenedor, crea uno nuevo", async () => {
     const { docker, subcomandos } = dockerSimulado({ corriendo: false });
 
-    const resultado = await levantarPostgresDeRevision({ docker, nombreBase: "planilla_rev_146", reutilizar: true, dormir: sinEspera });
+    const resultado = await levantarPostgresDeRevision({ docker, nombreBase: BASE, reutilizar: true, dormir: sinEspera });
 
     expect(resultado.creado).toBe(true);
     expect(subcomandos()).toContain("run");
@@ -99,7 +101,7 @@ describe("PostgreSQL desechable para revisar una rama (Docker simulado)", () => 
   it("sin --reutilizar elimina el contenedor existente y lo crea de nuevo", async () => {
     const { docker, subcomandos } = dockerSimulado({ corriendo: true });
 
-    const resultado = await levantarPostgresDeRevision({ docker, nombreBase: "planilla_rev_146", reutilizar: false, dormir: sinEspera });
+    const resultado = await levantarPostgresDeRevision({ docker, nombreBase: BASE, reutilizar: false, dormir: sinEspera });
 
     expect(resultado.creado).toBe(true);
     const comandos = subcomandos();
@@ -110,17 +112,41 @@ describe("PostgreSQL desechable para revisar una rama (Docker simulado)", () => 
   it("si PostgreSQL no queda listo, elimina el contenedor y falla", async () => {
     const { docker, subcomandos } = dockerSimulado({ listoEnIntento: Infinity });
 
-    await expect(levantarPostgresDeRevision({ docker, nombreBase: "planilla_rev_146", reutilizar: false, dormir: sinEspera }))
+    await expect(levantarPostgresDeRevision({ docker, nombreBase: BASE, reutilizar: false, dormir: sinEspera }))
       .rejects.toThrow(/no quedó listo/i);
 
     expect(subcomandos().at(-1)).toBe("rm");
     expect(subcomandos().filter((s) => s === "exec")).toHaveLength(30);
   });
 
+  it("tras crear el contenedor ejecuta la preparación con la URL; con --reutilizar no", async () => {
+    const preparadas: string[] = [];
+    const alCrear = async (url: string) => {
+      preparadas.push(url);
+    };
+
+    await levantarPostgresDeRevision({ docker: dockerSimulado().docker, nombreBase: BASE, reutilizar: false, dormir: sinEspera, alCrear });
+    await levantarPostgresDeRevision({ docker: dockerSimulado({ corriendo: true }).docker, nombreBase: BASE, reutilizar: true, dormir: sinEspera, alCrear });
+
+    expect(preparadas).toEqual([`postgres://postgres:postgres@127.0.0.1:49153/${BASE}`]);
+  });
+
+  it("si la preparación falla elimina el contenedor, para que --reutilizar no sirva una base sin sembrar", async () => {
+    const { docker, subcomandos } = dockerSimulado();
+    const alCrear = async () => {
+      throw new Error("falló el seed");
+    };
+
+    await expect(levantarPostgresDeRevision({ docker, nombreBase: BASE, reutilizar: false, dormir: sinEspera, alCrear }))
+      .rejects.toThrow("falló el seed");
+
+    expect(subcomandos().at(-1)).toBe("rm");
+  });
+
   it("si docker run falla, informa el motivo", async () => {
     const docker: EjecutarDocker = (args) => (args[0] === "run" ? falla("pull access denied") : args[0] === "inspect" ? falla() : ok());
 
-    await expect(levantarPostgresDeRevision({ docker, nombreBase: "planilla_rev_146", reutilizar: false, dormir: sinEspera }))
+    await expect(levantarPostgresDeRevision({ docker, nombreBase: BASE, reutilizar: false, dormir: sinEspera }))
       .rejects.toThrow(/pull access denied/);
   });
 
@@ -153,7 +179,7 @@ describe("PostgreSQL desechable para revisar una rama (Docker simulado)", () => 
       return falla("Cannot connect to the Docker daemon");
     };
 
-    await expect(levantarPostgresDeRevision({ docker, nombreBase: "planilla_rev_146", reutilizar: false, dormir: sinEspera }))
+    await expect(levantarPostgresDeRevision({ docker, nombreBase: BASE, reutilizar: false, dormir: sinEspera }))
       .rejects.toThrow(/Docker no responde/);
     expect(llamadas).toEqual([["info"]]);
   });

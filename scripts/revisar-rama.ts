@@ -128,31 +128,29 @@ async function main(): Promise<void> {
   }
 
   comprobarDocker(ejecutarDockerReal);
+  if (!existsSync(path.join(worktree, "node_modules"))) {
+    await pnpm(["install", "--frozen-lockfile"], process.env);
+  }
   matarPuerto(opciones.puerto);
+
   console.log("Levantando PostgreSQL desechable en Docker (la primera vez descarga la imagen)…");
   const { url: revUrl, creado } = await levantarPostgresDeRevision({
     docker: ejecutarDockerReal,
     nombreBase: opciones.nombreBase,
     reutilizar: opciones.reutilizar,
+    alCrear: async (url) => {
+      const envHijo = entornoDeRevision(process.env, url);
+      await pnpm(["exec", "tsx", "scripts/migrar-base.ts", "migrate", "--url", url], envHijo);
+      await pnpm(["exec", "tsx", "scripts/sembrar-base.ts", "--url", url], envHijo);
+      const escenario = path.join("scripts", "escenarios", `issue-${opciones.numero}.ts`);
+      if (existsSync(path.join(worktree, escenario))) {
+        console.log(`Ejecutando ${escenario}…`);
+        await pnpm(["exec", "tsx", escenario, "--url", url], envHijo);
+      }
+    },
   });
-  console.log(creado ? `Base "${opciones.nombreBase}" creada.` : `Reutilizando la base "${opciones.nombreBase}" existente.`);
-
+  console.log(creado ? `Base "${opciones.nombreBase}" creada y sembrada.` : `Reutilizando la base "${opciones.nombreBase}" existente.`);
   escribirEnvDelWorktree(worktree, revUrl);
-  const envHijo = entornoDeRevision(process.env, revUrl);
-
-  if (!existsSync(path.join(worktree, "node_modules"))) {
-    await pnpm(["install", "--frozen-lockfile"], envHijo);
-  }
-
-  if (creado) {
-    await pnpm(["exec", "tsx", "scripts/migrar-base.ts", "migrate", "--url", revUrl], envHijo);
-    await pnpm(["exec", "tsx", "scripts/sembrar-base.ts", "--url", revUrl], envHijo);
-    const escenario = path.join("scripts", "escenarios", `issue-${opciones.numero}.ts`);
-    if (existsSync(path.join(worktree, escenario))) {
-      console.log(`Ejecutando ${escenario}…`);
-      await pnpm(["exec", "tsx", escenario, "--url", revUrl], envHijo);
-    }
-  }
 
   console.log("");
   const issue = traerIssue(opciones.numero);
@@ -165,7 +163,7 @@ async function main(): Promise<void> {
   })) console.log(linea);
   console.log("");
 
-  await pnpm(["exec", "next", "dev", "-p", String(opciones.puerto)], envHijo);
+  await pnpm(["exec", "next", "dev", "-p", String(opciones.puerto)], entornoDeRevision(process.env, revUrl));
 }
 
 main().catch((error: unknown) => {
