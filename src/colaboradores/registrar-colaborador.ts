@@ -59,9 +59,12 @@ export async function actualizarColaborador(
   await repositorio.actualizar(colaborador);
 }
 
+export const LONGITUD_DNI = 8;
+const FORMATO_DNI = new RegExp(`^[0-9]{${LONGITUD_DNI}}$`);
+
 export function validarDni(dni: string): void {
   if (!dni.trim()) throw new Error("El DNI es obligatorio.");
-  if (!/^[0-9]{8}$/.test(dni)) throw new Error("El DNI debe tener exactamente 8 dígitos.");
+  if (!FORMATO_DNI.test(dni)) throw new Error(`El DNI debe tener exactamente ${LONGITUD_DNI} dígitos.`);
 }
 
 export function verificarPermiso(actor: Actor): void {

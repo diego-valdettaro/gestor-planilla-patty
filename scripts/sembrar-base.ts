@@ -48,6 +48,9 @@ const CUENTAS = [
   { nombreUsuario: "finanzas", contrasena: "finanzas", rol: "finanzas" },
 ] as const;
 
+// Los DNI de demo comparten este patrón (99900001…99900011) para poder limpiarlos al resembrar.
+const PATRON_DNI_DEMO = "999000__";
+
 const COLABORADORES = [
   { dni: "99900001", nombre: "Ana Borrador", sede: SEDES.benavides, grupo: GRUPOS.tiendas, activo: true },
   { dni: "99900002", nombre: "Beto Publicado", sede: SEDES.benavides, grupo: GRUPOS.tiendas, activo: true },
@@ -124,25 +127,25 @@ async function limpiar(pool: Pool): Promise<void> {
   const sedes = NOMBRES_DE_SEDE.map((nombre) => `'${nombre.replace(/'/g, "''")}'`).join(", ");
   await pool.query(`
     BEGIN;
-    DELETE FROM horas_extra WHERE asistencia_id IN (SELECT id FROM asistencias_esperadas WHERE dni LIKE '999000__');
-    DELETE FROM tardanzas WHERE asistencia_id IN (SELECT id FROM asistencias_esperadas WHERE dni LIKE '999000__');
-    DELETE FROM estados_manuales WHERE asistencia_id IN (SELECT id FROM asistencias_esperadas WHERE dni LIKE '999000__');
-    DELETE FROM ajustes_de_asistencia WHERE asistencia_id IN (SELECT id FROM asistencias_esperadas WHERE dni LIKE '999000__');
-    DELETE FROM asistencias_esperadas WHERE dni LIKE '999000__';
-    DELETE FROM incidencias_de_importacion WHERE dni LIKE '999000__';
-    DELETE FROM marcas_crudas WHERE dni LIKE '999000__';
+    DELETE FROM horas_extra WHERE asistencia_id IN (SELECT id FROM asistencias_esperadas WHERE dni LIKE '${PATRON_DNI_DEMO}');
+    DELETE FROM tardanzas WHERE asistencia_id IN (SELECT id FROM asistencias_esperadas WHERE dni LIKE '${PATRON_DNI_DEMO}');
+    DELETE FROM estados_manuales WHERE asistencia_id IN (SELECT id FROM asistencias_esperadas WHERE dni LIKE '${PATRON_DNI_DEMO}');
+    DELETE FROM ajustes_de_asistencia WHERE asistencia_id IN (SELECT id FROM asistencias_esperadas WHERE dni LIKE '${PATRON_DNI_DEMO}');
+    DELETE FROM asistencias_esperadas WHERE dni LIKE '${PATRON_DNI_DEMO}';
+    DELETE FROM incidencias_de_importacion WHERE dni LIKE '${PATRON_DNI_DEMO}';
+    DELETE FROM marcas_crudas WHERE dni LIKE '${PATRON_DNI_DEMO}';
     DELETE FROM importaciones_semanales WHERE sede IN (${sedes});
-    DELETE FROM historial_turnos_publicados WHERE turno_publicado_id IN (SELECT id FROM turnos_publicados WHERE dni LIKE '999000__');
-    DELETE FROM turnos_publicados WHERE dni LIKE '999000__';
-    DELETE FROM horarios_semanales_procesados WHERE dni LIKE '999000__';
-    DELETE FROM celdas_planes_semanales_en_borrador WHERE dni LIKE '999000__';
+    DELETE FROM historial_turnos_publicados WHERE turno_publicado_id IN (SELECT id FROM turnos_publicados WHERE dni LIKE '${PATRON_DNI_DEMO}');
+    DELETE FROM turnos_publicados WHERE dni LIKE '${PATRON_DNI_DEMO}';
+    DELETE FROM horarios_semanales_procesados WHERE dni LIKE '${PATRON_DNI_DEMO}';
+    DELETE FROM celdas_planes_semanales_en_borrador WHERE dni LIKE '${PATRON_DNI_DEMO}';
     DELETE FROM planes_semanales_en_borrador WHERE semana IN ('${SEMANA_ACTUAL}', '${SEMANA_ANTERIOR}');
     DELETE FROM auditoria_modelos_de_horario WHERE modelo_id IN (SELECT id FROM modelos_de_horario WHERE sede IN (${sedes}));
     DELETE FROM modelos_de_horario WHERE sede IN (${sedes});
     DELETE FROM politicas_de_penalizacion_por_tardanzas WHERE sede IN (${sedes});
     DELETE FROM auditoria_periodos_planilla WHERE periodo_id IN (SELECT id FROM periodos_planilla WHERE inicio IN ('${PERIODO_ACTUAL.inicio}', '${PERIODO_ANTERIOR.inicio}'));
     DELETE FROM periodos_planilla WHERE inicio IN ('${PERIODO_ACTUAL.inicio}', '${PERIODO_ANTERIOR.inicio}');
-    DELETE FROM colaboradores WHERE dni LIKE '999000__';
+    DELETE FROM colaboradores WHERE dni LIKE '${PATRON_DNI_DEMO}';
     DELETE FROM sedes WHERE nombre IN (${sedes});
     DELETE FROM grupos WHERE nombre IN (${NOMBRES_DE_GRUPO.map((nombre) => `'${nombre.replace(/'/g, "''")}'`).join(", ")});
     DELETE FROM sesiones WHERE cuenta_id IN (SELECT id FROM cuentas_locales WHERE nombre_usuario IN (${usuarios}));

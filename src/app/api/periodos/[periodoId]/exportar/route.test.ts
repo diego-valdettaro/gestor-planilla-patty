@@ -31,7 +31,7 @@ describe("exportación del resumen del período", () => {
 
   it("exporta el período completo y solo las horas extra aprobadas", async () => {
     const { GET } = await import("./route");
-    const respuesta = await GET(new NextRequest("http://localhost/api/periodos/p1/exportar?sede=Centro&dni=H-2"), { params: Promise.resolve({ periodoId: "p1" }) });
+    const respuesta = await GET(new NextRequest("http://localhost/api/periodos/p1/exportar?sede=Centro&dni=00000002"), { params: Promise.resolve({ periodoId: "p1" }) });
     const libro = XLSX.read(await respuesta.arrayBuffer());
     const [fila] = XLSX.utils.sheet_to_json<Record<string, unknown>>(libro.Sheets.Resumen);
 
