@@ -28,6 +28,11 @@ y pedirla.
 
 1. Relacionar cada criterio de aceptación con una prueba o una comprobación
    observable.
+   Cuando la tarea tenga un recorrido en la app, incluir en la issue una sección
+   `## QA manual` con hasta seis pasos numerados, breves y accionables. Indicar
+   la ruta, la cuenta de prueba y la acción o resultado que hay que comprobar.
+   `pnpm revisar` muestra esos pasos; si falta la sección, toma los criterios de
+   aceptación que puedan comprobarse manualmente.
 2. Añadir pruebas de comportamiento en las costuras existentes.
 3. Ejecutar `pnpm validate` antes de crear un commit. No usar la base local
    `planilla` para las pruebas.
@@ -45,7 +50,10 @@ aislado. Es también el método que usa el humo funcional del punto 4.
   `planilla_rev_<n>` en el mismo PostgreSQL, le aplica las migraciones de la
   rama, corre `scripts/sembrar-base.ts` y `next dev` en el puerto `3000 + <n>`.
   Deduce `<n>` del nombre de rama; `--puerto` / `--nombre` / `--numero` lo
-  fuerzan. `--reutilizar` salta el recrear/sembrar si la base ya existe.
+  fuerzan. Antes de iniciar Next.js muestra la issue, la URL, las cuentas y el
+  checklist de QA manual. Si no puede consultar GitHub, informa el fallback y
+  sigue levantando el servidor. `--reutilizar` salta el recrear/sembrar si la
+  base ya existe.
 - `pnpm revisar:limpiar`: baja el servidor, elimina `planilla_rev_<n>` y el
   `.env` del worktree.
 - La base local `planilla` nunca se toca. El `.env` que genera `pnpm revisar`
