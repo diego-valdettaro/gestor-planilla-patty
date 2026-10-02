@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 
+import { IMAGEN_POSTGRES } from "../src/qa/postgres-de-revision";
 import { ejecutar } from "./ejecutar-proceso";
 import { puertoDisponible } from "./puerto-disponible";
 
@@ -47,7 +48,7 @@ export async function conPostgresTemporal<T>(
         "-e", "POSTGRES_PASSWORD=postgres",
         "-e", "POSTGRES_DB=planilla_test",
         "-p", `127.0.0.1:${puerto}:5432`,
-        "postgres:16-alpine",
+        IMAGEN_POSTGRES,
       ],
     });
     await esperarPostgres(nombre);

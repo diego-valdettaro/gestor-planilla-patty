@@ -7,9 +7,9 @@ períodos de planilla.
 
 - Node.js 22
 - Corepack y pnpm 10
-- Docker, para `pnpm validate`
+- Docker, para `pnpm validate` y `pnpm revisar`
 - Chromium para Playwright (`pnpm exec playwright install chromium`)
-- PostgreSQL, para ejecutar la aplicación localmente
+- PostgreSQL, solo para ejecutar la aplicación localmente con `pnpm dev`
 
 ## Arranque local
 
@@ -51,6 +51,20 @@ ni levantar la aplicación manualmente:
 ```powershell
 pnpm test:e2e
 ```
+
+## Revisar una rama
+
+```powershell
+pnpm revisar
+pnpm revisar:limpiar
+```
+
+`pnpm revisar` levanta la rama del worktree en un entorno aislado: un contenedor
+PostgreSQL desechable en Docker, con migraciones y datos de demostración, y
+`next dev` en el puerto `3000 + <n>` (`<n>` es el número de issue). Requiere
+Docker, pero no un `.env` ni un PostgreSQL local. `pnpm revisar:limpiar` elimina
+el servidor, el contenedor y el `.env` del worktree. Los detalles están en
+[docs/agents/agent-workflow.md](docs/agents/agent-workflow.md).
 
 ## Cambios
 
