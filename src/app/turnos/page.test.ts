@@ -60,6 +60,7 @@ describe("página de Horarios (/turnos)", () => {
     const html = await render();
 
     expect(html).toContain("<h1>Planificación de horarios</h1>");
+    expect(html).toContain("modelo de horario en el horario semanal de cada persona del grupo");
     expect(html).not.toContain("Crear horario");
     expect(html).not.toContain('class="crear-horario"');
   });

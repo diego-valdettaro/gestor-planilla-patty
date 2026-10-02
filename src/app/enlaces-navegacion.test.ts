@@ -9,6 +9,11 @@ describe("enlaces de navegación", () => {
     expect(enlacesPermitidos("administracion")).toHaveLength(4);
   });
 
+  it("nombra cada sección con el vocabulario del dominio", () => {
+    expect(enlacesPermitidos("administracion").map((enlace) => enlace.etiqueta)).toEqual(["Configuración", "Horarios", "Asistencia", "Períodos de planilla"]);
+    expect(enlacesPermitidos("finanzas").map((enlace) => enlace.etiqueta)).toEqual(["Asistencia", "Períodos de planilla"]);
+  });
+
   it("marca activa la ruta y sus subrutas, sin confundir prefijos parecidos", () => {
     expect(esEnlaceActivo("/asistencias", "/asistencias")).toBe(true);
     expect(esEnlaceActivo("/asistencias/importar", "/asistencias")).toBe(true);

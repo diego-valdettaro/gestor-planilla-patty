@@ -6,7 +6,7 @@ const enlacesDeLaAplicacion: (EnlaceDeNavegacion & { roles: Actor["rol"][] })[] 
   { href: "/configuracion", etiqueta: "Configuración", icono: "♧", roles: ["administracion"] },
   { href: "/turnos", etiqueta: "Horarios", icono: "▣", roles: ["operaciones", "administracion"] },
   { href: "/asistencias", etiqueta: "Asistencia", icono: "◷", roles: ["administracion", "finanzas"] },
-  { href: "/periodos", etiqueta: "Liquidaciones", icono: "▤", roles: ["administracion", "finanzas"] },
+  { href: "/periodos", etiqueta: "Períodos de planilla", icono: "▤", roles: ["administracion", "finanzas"] },
 ];
 
 export function enlacesPermitidos(rol: Actor["rol"]): EnlaceDeNavegacion[] {

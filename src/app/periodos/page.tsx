@@ -26,7 +26,7 @@ export default async function PaginaDePeriodos({ searchParams }: { searchParams:
   const sugerencia = calcularSugerenciaDePeriodo(periodos, new Date());
 
   return <main className="contenido pagina">
-    <header className="encabezado encabezado-pagina"><div><p className="eyebrow">Administración y Finanzas</p><h1>Liquidaciones</h1><p>Filtre, revise y exporte los totales antes de cerrar el período.</p></div></header>
+    <header className="encabezado encabezado-pagina"><div><p className="eyebrow">Administración y Finanzas</p><h1>Períodos de planilla</h1><p>Filtre, revise y exporte los totales de asistencia antes de cerrar el período de planilla.</p></div></header>
     <section className="tarjeta panel">
       <header className="panel-cabecera"><div><h2>Nuevo período</h2><p>Se sugiere continuar del día 26 al 25, pero puede indicar otras fechas.</p></div></header>
       <CreadorDePeriodo sugerencia={sugerencia} />

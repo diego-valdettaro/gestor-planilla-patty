@@ -34,7 +34,7 @@ async function render(searchParams: Record<string, string> = {}) {
   return renderToStaticMarkup(await PaginaDePeriodos({ searchParams: Promise.resolve(searchParams) }));
 }
 
-describe("página de Liquidaciones (/periodos)", () => {
+describe("página de Períodos de planilla (/periodos)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     obtenerActorActual.mockResolvedValue({ rol: "finanzas" });
@@ -43,14 +43,16 @@ describe("página de Liquidaciones (/periodos)", () => {
     listarResumen.mockResolvedValue({ filas: [], bloqueos: [], totales: { jornadasTrabajadas: 0, minutosTrabajados: 0, noAsistencias: { falta: 0, descanso: 0, feriado: 0, vacaciones: 0, permiso: 0, suspension: 0 }, cantidadTardanzas: 0, minutosPenalizados: 0, horasExtra: { pendiente: { minutosAl25: 0, minutosAl35: 0 }, aprobada: { minutosAl25: 0, minutosAl35: 0 }, rechazada: { minutosAl25: 0, minutosAl35: 0 } } } });
   });
 
-  it("usa el encabezado de página compartido con el h1 'Liquidaciones'", async () => {
+  it("usa el encabezado de página compartido con el h1 'Períodos de planilla'", async () => {
     listar.mockResolvedValue([{ id: "p1", inicio: "2026-01-01", fin: "2026-01-31", estado: "abierto" }]);
 
     const html = await render();
 
     expect(html).toContain('class="encabezado encabezado-pagina"');
     expect(html).toContain('class="eyebrow"');
-    expect(html).toContain("<h1>Liquidaciones</h1>");
+    expect(html).toContain("<h1>Períodos de planilla</h1>");
+    expect(html).not.toContain("Liquidaciones");
+    expect(html).not.toMatch(/preliquidaci/i);
     expect(html).not.toContain("Resumen del período");
   });
 
