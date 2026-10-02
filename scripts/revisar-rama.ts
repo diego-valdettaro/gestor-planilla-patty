@@ -1,13 +1,19 @@
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import { Client } from "pg";
-
 import { resumenDeRevision, type IssueDeGitHub } from "../src/qa/checklist-qa";
+import {
+  comprobarDocker,
+  ejecutarDockerReal,
+  eliminarPostgresDeRevision,
+  entornoDeRevision,
+  levantarPostgresDeRevision,
+} from "../src/qa/postgres-de-revision";
 
 // `pnpm revisar` / `pnpm revisar:limpiar`: levanta (o baja) un entorno de revisión aislado
-// para la rama del worktree actual. Ver docs/agents/agent-workflow.md.
+// para la rama del worktree actual, con un PostgreSQL desechable en Docker.
+// Ver docs/agents/agent-workflow.md.
 
 interface Opciones {
   limpiar: boolean;
@@ -66,35 +72,6 @@ function valorDe(argv: string[], bandera: string): string | undefined {
   return indice >= 0 ? argv[indice + 1] : undefined;
 }
 
-function urlPrincipal(): URL {
-  const commonDir = git(["rev-parse", "--git-common-dir"]);
-  const repoPrincipal = path.dirname(path.resolve(commonDir));
-  const envPrincipal = path.join(repoPrincipal, ".env");
-  if (!existsSync(envPrincipal)) {
-    throw new Error(`No encuentro ${envPrincipal}. Configuralo con DATABASE_URL como indica el README.`);
-  }
-  const contenido = readFileSync(envPrincipal, "utf8");
-  const match = /^DATABASE_URL=(.+)$/m.exec(contenido);
-  if (!match) throw new Error(`El .env principal (${envPrincipal}) no define DATABASE_URL.`);
-  return new URL(match[1].trim());
-}
-
-function conUrl(base: URL, nombreBase: string): string {
-  const copia = new URL(base.toString());
-  copia.pathname = `/${nombreBase}`;
-  return copia.toString();
-}
-
-async function conCliente<T>(url: string, fn: (cliente: Client) => Promise<T>): Promise<T> {
-  const cliente = new Client({ connectionString: url });
-  await cliente.connect();
-  try {
-    return await fn(cliente);
-  } finally {
-    await cliente.end();
-  }
-}
-
 function pnpm(args: string[], env: NodeJS.ProcessEnv = process.env): Promise<void> {
   const win = process.platform === "win32";
   const comando = win ? "corepack.cmd" : "corepack";
@@ -123,8 +100,7 @@ function matarPuerto(puerto: number): void {
 }
 
 // Escribe un `.env` mínimo en el worktree: solo apunta a la base de revisión.
-// No copia el `.env` principal para no esparcir secretos (OPENAI_API_KEY, GITHUB_TOKEN…).
-// Si un review puntual necesita esas features, se agregan a mano y se documenta.
+// No lee ni copia ningún `.env` principal, así no se esparcen secretos.
 function escribirEnvDelWorktree(worktree: string, url: string): void {
   const contenido = [
     "# Generado por `pnpm revisar`. Solo apunta a la base de revisión desechable.",
@@ -135,66 +111,46 @@ function escribirEnvDelWorktree(worktree: string, url: string): void {
   writeFileSync(path.join(worktree, ".env"), contenido, "utf8");
 }
 
-async function baseExiste(admin: string, nombreBase: string): Promise<boolean> {
-  return conCliente(admin, async (cliente) => {
-    const { rowCount } = await cliente.query("SELECT 1 FROM pg_database WHERE datname = $1", [nombreBase]);
-    return rowCount === 1;
-  });
-}
-
 async function main(): Promise<void> {
   const opciones = leerOpciones();
   const worktree = git(["rev-parse", "--show-toplevel"]);
-  const base = urlPrincipal();
-  const admin = conUrl(base, "postgres");
-  const revUrl = conUrl(base, opciones.nombreBase);
-
-  if (opciones.nombreBase === "planilla") throw new Error("El entorno de revisión no puede llamarse `planilla`.");
+  const envWorktree = path.join(worktree, ".env");
 
   if (opciones.limpiar) {
     matarPuerto(opciones.puerto);
-    await conCliente(admin, async (cliente) => {
-      await cliente.query(`DROP DATABASE IF EXISTS "${opciones.nombreBase}" WITH (FORCE)`);
-    });
-    const envWorktree = path.join(worktree, ".env");
     if (existsSync(envWorktree)) rmSync(envWorktree);
-    console.log(`Listo. Base "${opciones.nombreBase}" eliminada y .env del worktree borrado.`);
+    // Si Docker no está disponible, lo local ya quedó limpio y este error lo dice.
+    comprobarDocker(ejecutarDockerReal);
+    const existia = eliminarPostgresDeRevision(ejecutarDockerReal, opciones.nombreBase);
+    console.log(`Listo. Servidor del puerto ${opciones.puerto} y .env del worktree eliminados; ${existia ? `contenedor de "${opciones.nombreBase}" eliminado` : "no había contenedor de PostgreSQL"}.`);
     console.log(`Si ya no necesitás el worktree: git worktree remove "${worktree}"`);
     return;
   }
 
-  const yaExiste = await baseExiste(admin, opciones.nombreBase);
-  const recrear = !(opciones.reutilizar && yaExiste);
-  if (recrear) {
-    matarPuerto(opciones.puerto);
-    await conCliente(admin, async (cliente) => {
-      await cliente.query(`DROP DATABASE IF EXISTS "${opciones.nombreBase}" WITH (FORCE)`);
-      await cliente.query(`CREATE DATABASE "${opciones.nombreBase}"`);
-    });
-    console.log(`Base "${opciones.nombreBase}" creada.`);
-  } else {
-    console.log(`Reutilizando la base "${opciones.nombreBase}" existente.`);
-  }
-
-  escribirEnvDelWorktree(worktree, revUrl);
-
-  // Env hermético para los procesos hijos: la base de revisión gana sobre cualquier
-  // DATABASE_URL que ya esté exportado en la terminal (o que traiga direnv, etc.).
-  const envHijo: NodeJS.ProcessEnv = { ...process.env, DATABASE_URL: revUrl, TEST_DATABASE_URL: revUrl };
-
+  comprobarDocker(ejecutarDockerReal);
   if (!existsSync(path.join(worktree, "node_modules"))) {
-    await pnpm(["install", "--frozen-lockfile"], envHijo);
+    await pnpm(["install", "--frozen-lockfile"], process.env);
   }
+  matarPuerto(opciones.puerto);
 
-  if (recrear) {
-    await pnpm(["exec", "tsx", "scripts/migrar-base.ts", "migrate", "--url", revUrl], envHijo);
-    await pnpm(["exec", "tsx", "scripts/sembrar-base.ts", "--url", revUrl], envHijo);
-    const escenario = path.join("scripts", "escenarios", `issue-${opciones.numero}.ts`);
-    if (existsSync(path.join(worktree, escenario))) {
-      console.log(`Ejecutando ${escenario}…`);
-      await pnpm(["exec", "tsx", escenario, "--url", revUrl], envHijo);
-    }
-  }
+  console.log("Levantando PostgreSQL desechable en Docker (la primera vez descarga la imagen)…");
+  const { url: revUrl, creado } = await levantarPostgresDeRevision({
+    docker: ejecutarDockerReal,
+    nombreBase: opciones.nombreBase,
+    reutilizar: opciones.reutilizar,
+    alCrear: async (url) => {
+      const envHijo = entornoDeRevision(process.env, url);
+      await pnpm(["exec", "tsx", "scripts/migrar-base.ts", "migrate", "--url", url], envHijo);
+      await pnpm(["exec", "tsx", "scripts/sembrar-base.ts", "--url", url], envHijo);
+      const escenario = path.join("scripts", "escenarios", `issue-${opciones.numero}.ts`);
+      if (existsSync(path.join(worktree, escenario))) {
+        console.log(`Ejecutando ${escenario}…`);
+        await pnpm(["exec", "tsx", escenario, "--url", url], envHijo);
+      }
+    },
+  });
+  console.log(creado ? `Base "${opciones.nombreBase}" creada y sembrada.` : `Reutilizando la base "${opciones.nombreBase}" existente.`);
+  escribirEnvDelWorktree(worktree, revUrl);
 
   console.log("");
   const issue = traerIssue(opciones.numero);
@@ -207,7 +163,7 @@ async function main(): Promise<void> {
   })) console.log(linea);
   console.log("");
 
-  await pnpm(["exec", "next", "dev", "-p", String(opciones.puerto)], envHijo);
+  await pnpm(["exec", "next", "dev", "-p", String(opciones.puerto)], entornoDeRevision(process.env, revUrl));
 }
 
 main().catch((error: unknown) => {

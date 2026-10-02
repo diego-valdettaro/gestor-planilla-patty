@@ -46,18 +46,26 @@ y pedirla.
 Antes del merge, la app se prueba a mano desde la rama del PR con un entorno
 aislado. Es también el método que usa el humo funcional del punto 4.
 
-- `pnpm revisar` (corrido dentro del worktree): crea una base desechable
-  `planilla_rev_<n>` en el mismo PostgreSQL, le aplica las migraciones de la
-  rama, corre `scripts/sembrar-base.ts` y `next dev` en el puerto `3000 + <n>`.
-  Deduce `<n>` del nombre de rama; `--puerto` / `--nombre` / `--numero` lo
-  fuerzan. Antes de iniciar Next.js muestra la issue, la URL, las cuentas y el
-  checklist de QA manual. Si no puede consultar GitHub, informa el fallback y
-  sigue levantando el servidor. `--reutilizar` salta el recrear/sembrar si la
-  base ya existe.
-- `pnpm revisar:limpiar`: baja el servidor, elimina `planilla_rev_<n>` y el
-  `.env` del worktree.
-- La base local `planilla` nunca se toca. El `.env` que genera `pnpm revisar`
-  solo apunta a la base de revisión; no copia secretos del `.env` principal.
+Requiere Docker. Es el único mecanismo: no hace falta un `.env` en el checkout
+principal ni un PostgreSQL local, y `pnpm revisar` no lee ningún `.env` principal
+ni un `DATABASE_URL` externo. Si Docker no está instalado o iniciado, el comando
+falla con un mensaje que explica cómo instalarlo o iniciarlo.
+
+- `pnpm revisar` (corrido dentro del worktree): levanta un contenedor PostgreSQL
+  desechable `postgres-planilla_rev_<n>` (misma imagen que `pnpm validate`,
+  publicado solo en `127.0.0.1`), crea en él la base `planilla_rev_<n>`, le aplica
+  las migraciones de la rama, corre `scripts/sembrar-base.ts` y `next dev` en el
+  puerto `3000 + <n>`. Deduce `<n>` del nombre de rama; `--puerto` / `--nombre` /
+  `--numero` lo fuerzan. Antes de iniciar Next.js muestra la issue, la URL, las
+  cuentas y el checklist de QA manual; si no puede consultar GitHub, informa el
+  fallback y sigue levantando el servidor. `--reutilizar` conserva el contenedor y la base, sin
+  recrearlos ni sembrar de nuevo, mientras el contenedor siga corriendo (si
+  Docker se reinició, se crea uno nuevo).
+- `pnpm revisar:limpiar`: baja el servidor, elimina el contenedor (con su base) y
+  el `.env` del worktree. Ctrl+C solo corta el servidor: el contenedor sigue
+  activo hasta ejecutar `pnpm revisar:limpiar`.
+- El `.env` que genera `pnpm revisar` solo apunta a la base de revisión; no copia
+  secretos ni escribe credenciales fuera del worktree.
 - `scripts/sembrar-base.ts` crea un mundo coherente de demo (cuentas por rol
   con clave = su nombre, sedes y grupos, colaboradores, modelos, políticas,
   un período abierto y uno cerrado, y una semana con los cuatro estados de
