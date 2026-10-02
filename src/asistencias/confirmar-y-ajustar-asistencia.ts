@@ -1,7 +1,7 @@
 import type { Actor } from "@/colaboradores/registrar-colaborador";
 import { calcularTardanza, type PoliticaDePenalizacionPorTardanzas, type TardanzaCalculada } from "@/tardanzas/politica-de-penalizacion";
 
-import { calcularHoraExtra, type EstadoDeHoraExtra, type HoraExtraCalculada } from "./calcular-hora-extra";
+import type { EstadoDeHoraExtra } from "./calcular-hora-extra";
 import { nombreDelMotivoPlanificado, type MotivoPlanificadoDeNoAsistencia, type TipoDeEstadoManualRegistrable } from "./estado-manual";
 
 export type { TipoDeEstadoManual } from "./estado-manual";
@@ -33,7 +33,6 @@ export interface AsistenciaConfirmada {
   confirmadoPorId: string;
   confirmadoEn: Date;
   tardanza?: TardanzaCalculada;
-  horaExtra?: HoraExtraCalculada;
 }
 
 export interface SolicitudDeConfirmacion {
@@ -72,7 +71,7 @@ export interface RepositorioDeAsistencias {
   buscarTurnoPublicado(idHuellero: string, fecha: string): Promise<TurnoParaConfirmar | undefined>;
   confirmar(asistencia: AsistenciaConfirmada): Promise<void>;
   buscarInstantaneaDeTurno(idHuellero: string, fecha: string): Promise<InstantaneaDeTurno | undefined>;
-  ajustar(solicitud: AjusteDeAsistencia, responsableId: string, horaExtra: HoraExtraCalculada | undefined): Promise<void>;
+  ajustar(solicitud: AjusteDeAsistencia, responsableId: string): Promise<void>;
   decidirHoraExtra(idHuellero: string, fecha: string, estado: EstadoDeHoraExtra, responsableId: string): Promise<void>;
   registrarEstadoManual(estadoManual: EstadoManual): Promise<void>;
   buscarPoliticaVigente(sede: string, fecha: string): Promise<PoliticaDePenalizacionPorTardanzas | undefined>;
@@ -115,7 +114,6 @@ export async function confirmarAsistencia(
     confirmadoPorId: actor.id,
     confirmadoEn: new Date(),
     tardanza,
-    horaExtra: calcularHoraExtra(turno.salidaProgramada, solicitud.salidaReal),
   });
 }
 
@@ -133,7 +131,7 @@ export async function ajustarAsistencia(
     ...solicitud,
     motivo: solicitud.motivo.trim(),
     minutosTrabajados: calcularMinutosTrabajados(solicitud.entradaReal, solicitud.salidaReal),
-  }, actor.id, calcularHoraExtra(instantaneaDeTurno.salidaProgramada, solicitud.salidaReal));
+  }, actor.id);
 }
 
 export async function aprobarHoraExtra(
