@@ -4,6 +4,8 @@ import path from "node:path";
 
 import { Client } from "pg";
 
+import { resumenDeRevision, type IssueDeGitHub } from "../src/qa/checklist-qa";
+
 // `pnpm revisar` / `pnpm revisar:limpiar`: levanta (o baja) un entorno de revisión aislado
 // para la rama del worktree actual. Ver docs/agents/agent-workflow.md.
 
@@ -13,6 +15,24 @@ interface Opciones {
   numero: number;
   nombreBase: string;
   puerto: number;
+}
+
+function traerIssue(numero: number): IssueDeGitHub | undefined {
+  const salida = spawnSync("gh", ["issue", "view", String(numero), "--repo", "diego-valdettaro/gestor-planilla-patty", "--json", "title,body,url"], {
+    encoding: "utf8",
+    timeout: 8000,
+    env: { ...process.env, GH_PROMPT_DISABLED: "1" },
+  });
+  if (salida.error || salida.status !== 0) return undefined;
+  try {
+    const issue: unknown = JSON.parse(salida.stdout);
+    if (!issue || typeof issue !== "object") return undefined;
+    const datos = issue as Partial<IssueDeGitHub>;
+    if (typeof datos.title !== "string" || typeof datos.body !== "string" || typeof datos.url !== "string") return undefined;
+    return { title: datos.title, body: datos.body, url: datos.url };
+  } catch {
+    return undefined;
+  }
 }
 
 function git(args: string[]): string {
@@ -177,12 +197,14 @@ async function main(): Promise<void> {
   }
 
   console.log("");
-  console.log("Entorno de revisión listo:");
-  console.log(`  Rama:    ${git(["rev-parse", "--abbrev-ref", "HEAD"])}`);
-  console.log(`  Base:    ${opciones.nombreBase}`);
-  console.log(`  URL:     http://localhost:${opciones.puerto}`);
-  console.log("  Cuentas: operaciones/operaciones · admin/admin · finanzas/finanzas");
-  console.log("  Ctrl+C corta el servidor. Al terminar la revisión: pnpm revisar:limpiar");
+  const issue = traerIssue(opciones.numero);
+  for (const linea of resumenDeRevision({
+    numero: opciones.numero,
+    rama: git(["rev-parse", "--abbrev-ref", "HEAD"]),
+    nombreBase: opciones.nombreBase,
+    puerto: opciones.puerto,
+    issue,
+  })) console.log(linea);
   console.log("");
 
   await pnpm(["exec", "next", "dev", "-p", String(opciones.puerto)], envHijo);
