@@ -1,7 +1,7 @@
 import type { Actor } from "@/colaboradores/registrar-colaborador";
 
 export interface ColaboradorParaConfirmar {
-  idHuellero: string;
+  dni: string;
   nombre: string;
 }
 
@@ -11,7 +11,7 @@ export interface BloqueoDeConfirmacion {
 }
 
 export interface EvaluacionDeColaborador {
-  idHuellero: string;
+  dni: string;
   nombre: string;
   seleccionable: boolean;
   jornadasPendientes: number;
@@ -28,7 +28,7 @@ export interface SolicitudDeEvaluacionPorRango {
 export interface SolicitudDeConfirmacionPorRango {
   inicio: string;
   fin: string;
-  idsHuellero: string[];
+  dnis: string[];
 }
 
 export interface RepositorioDeConfirmacionPorRango {
@@ -43,7 +43,7 @@ export async function evaluarColaboradoresPorRango(
 ): Promise<EvaluacionDeColaborador[]> {
   autorizarRevision(actor);
   validarRango(solicitud.inicio, solicitud.fin);
-  const colaboradores = [...new Map(solicitud.colaboradores.filter(({ idHuellero }) => idHuellero).map((item) => [item.idHuellero, item])).values()];
+  const colaboradores = [...new Map(solicitud.colaboradores.filter(({ dni }) => dni).map((item) => [item.dni, item])).values()];
   if (!colaboradores.length) return [];
   return repositorio.evaluarColaboradoresPorRango({ ...solicitud, colaboradores });
 }
@@ -55,9 +55,9 @@ export async function confirmarColaboradoresPorRango(
 ): Promise<void> {
   autorizarRevision(actor);
   validarRango(solicitud.inicio, solicitud.fin);
-  const idsHuellero = [...new Set(solicitud.idsHuellero.filter(Boolean))];
-  if (!idsHuellero.length) throw new Error("Debe seleccionar al menos un colaborador.");
-  await repositorio.confirmarColaboradoresPorRango({ ...solicitud, idsHuellero }, actor.id);
+  const dnis = [...new Set(solicitud.dnis.filter(Boolean))];
+  if (!dnis.length) throw new Error("Debe seleccionar al menos un colaborador.");
+  await repositorio.confirmarColaboradoresPorRango({ ...solicitud, dnis }, actor.id);
 }
 
 function validarRango(inicio: string, fin: string): void {

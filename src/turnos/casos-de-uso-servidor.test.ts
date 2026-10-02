@@ -21,21 +21,21 @@ function crearRepositorioEnMemoria(): {
     asistenciasEsperadas,
     historial,
     repositorio: {
-      buscarPublicado: async (idHuellero, fecha) => turnos.get(`${idHuellero}:${fecha}`),
+      buscarPublicado: async (dni, fecha) => turnos.get(`${dni}:${fecha}`),
       publicar: async (turno) => {
-        turnos.set(`${turno.idHuellero}:${turno.fecha}`, turno);
+        turnos.set(`${turno.dni}:${turno.fecha}`, turno);
         historial.push(turno);
         asistenciasEsperadas.push({
-          idHuellero: turno.idHuellero,
+          dni: turno.dni,
           fecha: turno.fecha,
           estado: "pendiente",
         });
       },
       publicarEnLote: async (turnosParaPublicar) => {
         for (const turno of turnosParaPublicar) {
-          turnos.set(`${turno.idHuellero}:${turno.fecha}`, turno);
+          turnos.set(`${turno.dni}:${turno.fecha}`, turno);
           historial.push(turno);
-          asistenciasEsperadas.push({ idHuellero: turno.idHuellero, fecha: turno.fecha, estado: "pendiente" });
+          asistenciasEsperadas.push({ dni: turno.dni, fecha: turno.fecha, estado: "pendiente" });
         }
       },
       perteneceAPeriodoAbierto: async (fecha) => fecha >= "2026-08-26" && fecha <= "2026-09-25",
@@ -44,7 +44,7 @@ function crearRepositorioEnMemoria(): {
       buscarModeloDeHorario: async () => undefined,
       asistenciaEstaProcesada: async () => false,
       reemplazarSemanaPublicada: async () => undefined,
-      listarSemanaPublicada: async (_idHuellero, semana) => ["2026-08-31", "2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04", "2026-09-05", "2026-09-06"]
+      listarSemanaPublicada: async (_dni, semana) => ["2026-08-31", "2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04", "2026-09-05", "2026-09-06"]
         .filter((fecha) => fecha >= semana).map((fecha) => ({ fecha, descanso: false })),
       asistenciasLaboralesEstanProcesadas: async () => true,
       obtenerEquipoOperativo: async () => "tiendas",
@@ -61,7 +61,7 @@ describe("casos de uso de turnos en el servidor", () => {
     });
 
     await casosDeUso.publicar({
-      idHuellero: "HU-1024",
+      dni: "00001024",
       fecha: "2026-09-01",
       sede: "Lima",
       entradaProgramada: "09:00",
@@ -71,7 +71,7 @@ describe("casos de uso de turnos en el servidor", () => {
 
     expect(historial).toEqual([
       expect.objectContaining({
-        idHuellero: "HU-1024",
+        dni: "00001024",
         fecha: "2026-09-01",
         sede: "Lima",
         entradaProgramada: "09:00",
@@ -81,7 +81,7 @@ describe("casos de uso de turnos en el servidor", () => {
     ]);
     expect(asistenciasEsperadas).toEqual([
       {
-        idHuellero: "HU-1024",
+        dni: "00001024",
         fecha: "2026-09-01",
         estado: "pendiente",
       },
@@ -94,7 +94,7 @@ describe("casos de uso de turnos en el servidor", () => {
       obtenerActorActual: async () => ({ id: "operaciones-1", rol: "operaciones" }),
     });
     const turno = {
-      idHuellero: "HU-1024",
+      dni: "00001024",
       fecha: "2026-09-01",
       sede: "Lima",
       entradaProgramada: "09:00",
@@ -118,7 +118,7 @@ describe("casos de uso de turnos en el servidor", () => {
 
     await expect(
       casosDeUso.publicar({
-        idHuellero: "HU-1024",
+        dni: "00001024",
         fecha: "2026-09-26",
         sede: "Lima",
         entradaProgramada: "09:00",
@@ -138,7 +138,7 @@ describe("casos de uso de turnos en el servidor", () => {
     });
 
     await casosDeUso.publicar({
-      idHuellero: "HU-1024",
+      dni: "00001024",
       fecha: "2026-09-01",
       sede: "Lima",
       entradaProgramada: "09:00",
@@ -158,7 +158,7 @@ describe("casos de uso de turnos en el servidor", () => {
 
     await expect(
       casosDeUso.publicar({
-        idHuellero: "HU-1024",
+        dni: "00001024",
         fecha: "2026-09-01",
         sede: "Lima",
         entradaProgramada: "09:00",
@@ -177,6 +177,6 @@ describe("casos de uso de turnos en el servidor", () => {
       obtenerActorActual: async () => ({ id: "finanzas-1", rol: "finanzas" }),
     });
 
-    await expect(casosDeUso.procesar("HU-1024", "2026-08-31")).resolves.toBeUndefined();
+    await expect(casosDeUso.procesar("00001024", "2026-08-31")).resolves.toBeUndefined();
   });
 });

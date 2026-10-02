@@ -1,7 +1,7 @@
 import { estadoDeCeldaAsistencia, etiquetaDeCeldaAsistencia, type EstadoDeCeldaAsistencia, type EvidenciaDeCeldaAsistencia } from "./estado-de-celda";
 
 export interface AsistenciaSemanal extends EvidenciaDeCeldaAsistencia {
-  idHuellero: string;
+  dni: string;
   fecha: string;
   entrada: string | null;
   salida: string | null;
@@ -20,14 +20,14 @@ export interface JornadaSemanal {
 }
 
 export function resumirAsistenciasSemanales(
-  colaboradores: Array<{ idHuellero: string; nombre: string }>,
+  colaboradores: Array<{ dni: string; nombre: string }>,
   dias: string[],
   asistencias: AsistenciaSemanal[],
-): Array<{ idHuellero: string; nombre: string; jornadas: JornadaSemanal[] }> {
-  const porClave = new Map(asistencias.map((asistencia) => [`${asistencia.idHuellero}:${asistencia.fecha}`, asistencia]));
+): Array<{ dni: string; nombre: string; jornadas: JornadaSemanal[] }> {
+  const porClave = new Map(asistencias.map((asistencia) => [`${asistencia.dni}:${asistencia.fecha}`, asistencia]));
   return [...colaboradores].sort((a, b) => a.nombre.localeCompare(b.nombre)).map((colaborador) => ({
     ...colaborador,
-    jornadas: dias.map((fecha) => resumirJornada(fecha, porClave.get(`${colaborador.idHuellero}:${fecha}`))),
+    jornadas: dias.map((fecha) => resumirJornada(fecha, porClave.get(`${colaborador.dni}:${fecha}`))),
   }));
 }
 

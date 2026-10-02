@@ -8,21 +8,21 @@ function crearRepositorioEnMemoria(colaboradorInicial: Colaborador, borradoresAb
   repositorio: RepositorioParaCambiarGrupo;
   colaboradores: Map<string, Colaborador>;
 } {
-  const colaboradores = new Map<string, Colaborador>([[colaboradorInicial.idHuellero, colaboradorInicial]]);
+  const colaboradores = new Map<string, Colaborador>([[colaboradorInicial.dni, colaboradorInicial]]);
 
   return {
     repositorio: {
-      buscarPorIdHuellero: async (idHuellero) => colaboradores.get(idHuellero),
-      guardar: async (colaborador) => { colaboradores.set(colaborador.idHuellero, colaborador); },
-      actualizar: async (colaborador) => { colaboradores.set(colaborador.idHuellero, colaborador); },
-      tieneBorradorAbiertoEnGrupo: async (_idHuellero, grupo) => borradoresAbiertos.includes(grupo),
+      buscarPorDni: async (dni) => colaboradores.get(dni),
+      guardar: async (colaborador) => { colaboradores.set(colaborador.dni, colaborador); },
+      actualizar: async (colaborador) => { colaboradores.set(colaborador.dni, colaborador); },
+      tieneBorradorAbiertoEnGrupo: async (_dni, grupo) => borradoresAbiertos.includes(grupo),
     },
     colaboradores,
   };
 }
 
 const colaboradorBase: Colaborador = {
-  idHuellero: "HU-1024",
+  dni: "00001024",
   nombre: "Ana Rojas",
   sede: "Lima",
   grupo: "Tiendas",
@@ -36,11 +36,11 @@ describe("cambiarGrupoDeColaborador", () => {
     await cambiarGrupoDeColaborador(
       repositorio,
       { id: "admin-1", rol: "administracion" },
-      "HU-1024",
+      "00001024",
       "Taller",
     );
 
-    expect(colaboradores.get("HU-1024")).toMatchObject({ grupo: "Taller" });
+    expect(colaboradores.get("00001024")).toMatchObject({ grupo: "Taller" });
   });
 
   it("permite a Finanzas cambiar el grupo", async () => {
@@ -49,54 +49,54 @@ describe("cambiarGrupoDeColaborador", () => {
     await cambiarGrupoDeColaborador(
       repositorio,
       { id: "finanzas-1", rol: "finanzas" },
-      "HU-1024",
+      "00001024",
       "Taller",
     );
 
-    expect(colaboradores.get("HU-1024")).toMatchObject({ grupo: "Taller" });
+    expect(colaboradores.get("00001024")).toMatchObject({ grupo: "Taller" });
   });
 
   it("rechaza a Operaciones antes de cambiar el grupo", async () => {
     const { repositorio, colaboradores } = crearRepositorioEnMemoria(colaboradorBase);
 
     await expect(
-      cambiarGrupoDeColaborador(repositorio, { id: "operaciones-1", rol: "operaciones" }, "HU-1024", "Taller"),
+      cambiarGrupoDeColaborador(repositorio, { id: "operaciones-1", rol: "operaciones" }, "00001024", "Taller"),
     ).rejects.toThrow("No tiene permiso para administrar colaboradores.");
 
-    expect(colaboradores.get("HU-1024")).toMatchObject({ grupo: "Tiendas" });
+    expect(colaboradores.get("00001024")).toMatchObject({ grupo: "Tiendas" });
   });
 
-  it("rechaza el cambio si no existe un colaborador con ese ID de huellero", async () => {
+  it("rechaza el cambio si no existe un colaborador con ese DNI", async () => {
     const { repositorio } = crearRepositorioEnMemoria(colaboradorBase);
 
     await expect(
-      cambiarGrupoDeColaborador(repositorio, { id: "admin-1", rol: "administracion" }, "HU-9999", "Taller"),
-    ).rejects.toThrow("No existe un colaborador con ese ID de huellero.");
+      cambiarGrupoDeColaborador(repositorio, { id: "admin-1", rol: "administracion" }, "00009999", "Taller"),
+    ).rejects.toThrow("No existe un colaborador con ese DNI.");
   });
 
   it("rechaza el cambio si el colaborador tiene un borrador abierto en su grupo actual", async () => {
     const { repositorio, colaboradores } = crearRepositorioEnMemoria(colaboradorBase, ["Tiendas"]);
 
     await expect(
-      cambiarGrupoDeColaborador(repositorio, { id: "admin-1", rol: "administracion" }, "HU-1024", "Taller"),
+      cambiarGrupoDeColaborador(repositorio, { id: "admin-1", rol: "administracion" }, "00001024", "Taller"),
     ).rejects.toThrow("No se puede cambiar de grupo: el colaborador tiene un plan semanal en borrador en su grupo actual.");
 
-    expect(colaboradores.get("HU-1024")).toMatchObject({ grupo: "Tiendas" });
+    expect(colaboradores.get("00001024")).toMatchObject({ grupo: "Tiendas" });
   });
 
   it("no revisa borradores abiertos cuando el grupo nuevo es igual al actual", async () => {
     const { repositorio, colaboradores } = crearRepositorioEnMemoria(colaboradorBase, ["Tiendas"]);
 
-    await cambiarGrupoDeColaborador(repositorio, { id: "admin-1", rol: "administracion" }, "HU-1024", "Tiendas");
+    await cambiarGrupoDeColaborador(repositorio, { id: "admin-1", rol: "administracion" }, "00001024", "Tiendas");
 
-    expect(colaboradores.get("HU-1024")).toMatchObject({ grupo: "Tiendas" });
+    expect(colaboradores.get("00001024")).toMatchObject({ grupo: "Tiendas" });
   });
 
   it("rechaza un grupo vacío", async () => {
     const { repositorio } = crearRepositorioEnMemoria(colaboradorBase);
 
     await expect(
-      cambiarGrupoDeColaborador(repositorio, { id: "admin-1", rol: "administracion" }, "HU-1024", "   "),
+      cambiarGrupoDeColaborador(repositorio, { id: "admin-1", rol: "administracion" }, "00001024", "   "),
     ).rejects.toThrow("El grupo operativo es obligatorio.");
   });
 });

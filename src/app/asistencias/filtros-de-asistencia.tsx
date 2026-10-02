@@ -5,7 +5,7 @@ import { rutaDeImportacion } from "./ruta-de-importacion";
 
 type VistaDeAsistencias = "semanal" | "mensual";
 
-interface Colaborador { idHuellero: string; nombre: string; }
+interface Colaborador { dni: string; nombre: string; }
 
 export function FiltrosDeAsistencia({
   colaborador,
@@ -30,7 +30,7 @@ export function FiltrosDeAsistencia({
     <input name="vista" type="hidden" value={vista} />
     {vista === "semanal" && colaborador && <input name="colaborador" type="hidden" value={colaborador} />}
     <label>Grupo operativo<select defaultValue={grupo} name="grupo">{grupos.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-    {vista === "mensual" && <label>Colaborador<select defaultValue={colaborador} disabled={!colaboradores.length} name="colaborador">{colaboradores.map((item) => <option key={item.idHuellero} value={item.idHuellero}>{item.nombre} · {item.idHuellero}</option>)}</select></label>}
+    {vista === "mensual" && <label>Colaborador<select defaultValue={colaborador} disabled={!colaboradores.length} name="colaborador">{colaboradores.map((item) => <option key={item.dni} value={item.dni}>{item.nombre} · {item.dni}</option>)}</select></label>}
     <label>Fecha de referencia<input defaultValue={fecha} name="fecha" suppressHydrationWarning type="date" /></label>
     <button type="submit">Actualizar vista</button>
     <Link className="boton-secundario" href={`/asistencias?${parametros.toString()}`}>Vista {otraVista}</Link>

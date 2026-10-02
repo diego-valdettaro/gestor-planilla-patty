@@ -4,28 +4,28 @@ import type { DatosDeJornadaPlanificada, RepositorioParaValidarJornadaPlanificad
 import { validarJornadaPlanificada } from "./jornada-planificada";
 
 export interface TurnoPublicado extends DatosDeJornadaPlanificada {
-  idHuellero: string;
+  dni: string;
   fecha: string;
   grupo?: Grupo;
 }
 
 export interface AsistenciaEsperada {
-  idHuellero: string;
+  dni: string;
   fecha: string;
   estado: "pendiente";
 }
 
 export interface RepositorioDeTurnos extends RepositorioParaValidarJornadaPlanificada {
   buscarPublicado(
-    idHuellero: string,
+    dni: string,
     fecha: string,
   ): Promise<TurnoPublicado | undefined>;
   publicar(turno: TurnoPublicado, actor?: Actor): Promise<void>;
   publicarEnLote(turnos: TurnoPublicado[], actor?: Actor): Promise<void>;
-  asistenciaEstaProcesada(idHuellero: string, fecha: string): Promise<boolean>;
+  asistenciaEstaProcesada(dni: string, fecha: string): Promise<boolean>;
   reemplazarSemanaPublicada(turnos: TurnoPublicado[], actor: Actor, motivo: string): Promise<void>;
   perteneceAPeriodoAbierto(fecha: string): Promise<boolean>;
-  obtenerGrupoDelColaborador(idHuellero: string): Promise<Grupo | undefined>;
+  obtenerGrupoDelColaborador(dni: string): Promise<Grupo | undefined>;
 }
 
 export async function publicarTurnoSemanal(
@@ -41,11 +41,11 @@ export async function publicarTurnoSemanal(
     throw new Error("La fecha no pertenece a un período de planilla abierto.");
   }
 
-  if (await repositorio.buscarPublicado(turno.idHuellero, turno.fecha)) {
+  if (await repositorio.buscarPublicado(turno.dni, turno.fecha)) {
     throw new Error("Ya existe un turno publicado para este colaborador y fecha.");
   }
 
-  const grupo = await repositorio.obtenerGrupoDelColaborador(turno.idHuellero);
+  const grupo = await repositorio.obtenerGrupoDelColaborador(turno.dni);
   if (!grupo) throw new Error("El colaborador activo no existe.");
   await validarJornadaPlanificada(repositorio, grupo, turno);
 

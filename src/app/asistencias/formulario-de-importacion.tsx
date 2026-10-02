@@ -17,8 +17,8 @@ const etiquetaDeCategoria: Record<CategoriaDeFila, string> = {
 
 function ListaDeFilas({ filas }: { filas: FilaClasificada[] }) {
   return <ul className="filas-importacion">
-    {filas.map((fila) => <li key={`${fila.fila}-${fila.idHuellero}-${fila.fecha}`}>
-      Fila {fila.fila} · {fila.idHuellero} · {fila.fecha}: {etiquetaDeCategoria[fila.categoria]}
+    {filas.map((fila) => <li key={`${fila.fila}-${fila.dni}-${fila.fecha}`}>
+      Fila {fila.fila} · {fila.dni} · {fila.fecha}: {etiquetaDeCategoria[fila.categoria]}
     </li>)}
   </ul>;
 }
@@ -61,7 +61,7 @@ export function FormularioDeImportacion() {
   }, [estado.vistaPrevia]);
 
   return <section className="tarjeta importacion-asistencia">
-    <header className="encabezado-seccion"><div><h2>Importar asistencias</h2><p>Use un XLSX con la hoja Asistencias y las columnas ID de huellero, Sede, Fecha, Entrada y Salida.</p></div></header>
+    <header className="encabezado-seccion"><div><h2>Importar asistencias</h2><p>Use un XLSX con la hoja Asistencias y las columnas DNI, Sede, Fecha, Entrada y Salida.</p></div></header>
     <form action={accion} className="filtros">
       <label>Archivo XLSX de asistencias<input
         accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -87,7 +87,7 @@ export function FormularioDeImportacion() {
       </dialog>
     </form>
     {estado.error && <p className="mensaje-operacion error" role="alert">{estado.error}</p>}
-    {estado.errores && <section className="mensaje-operacion error" role="alert"><p>La importación no se guardó. Corrija el XLSX o el horario publicado y vuelva a intentarlo.</p><ul className="errores-importacion">{estado.errores.map((error, indice) => <li key={`${error.fila}-${error.idHuellero}-${error.fecha}-${indice}`}>Fila {error.fila}{error.idHuellero ? ` · ${error.idHuellero}` : ""}{error.fecha ? ` · ${error.fecha}` : ""}: {error.motivo}</li>)}</ul></section>}
+    {estado.errores && <section className="mensaje-operacion error" role="alert"><p>La importación no se guardó. Corrija el XLSX o el horario publicado y vuelva a intentarlo.</p><ul className="errores-importacion">{estado.errores.map((error, indice) => <li key={`${error.fila}-${error.dni}-${error.fecha}-${indice}`}>Fila {error.fila}{error.dni ? ` · ${error.dni}` : ""}{error.fecha ? ` · ${error.fecha}` : ""}: {error.motivo}</li>)}</ul></section>}
     {estado.resultado && <section className="mensaje-operacion listo" role="status">
       <p>Se importaron {estado.resultado.jornadas} jornadas. Quedan pendientes de revisión.</p>
       {estado.vistaPrevia && <ResumenDeVistaPrevia vistaPrevia={estado.vistaPrevia} />}

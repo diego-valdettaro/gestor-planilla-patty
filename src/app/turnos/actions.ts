@@ -18,7 +18,7 @@ export async function publicarTurnoDesdeGrilla(formData: FormData): Promise<void
     obtenerActorActual,
   });
   await casosDeUso.publicar({
-    idHuellero: obtenerTexto(formData, "idHuellero"),
+    dni: obtenerTexto(formData, "dni"),
     fecha: obtenerTexto(formData, "fecha"),
     sede: obtenerTexto(formData, "sede"),
     entradaProgramada: datosDelHorario?.entrada ?? obtenerTexto(formData, "entradaProgramada"),
@@ -34,7 +34,7 @@ export async function guardarCeldaDelBorrador(formData: FormData): Promise<void>
   const datosDelHorario = await interpretarHorarioParaSede(obtenerTexto(formData, "horario"), sede);
   if (!datosDelHorario) throw new Error("El horario seleccionado no es válido.");
   await casosDeUsoDePlanesSemanales().guardarCelda(obtenerTexto(formData, "planId"), {
-    idHuellero: obtenerTexto(formData, "idHuellero"), fecha: obtenerTexto(formData, "fecha"), sede,
+    dni: obtenerTexto(formData, "dni"), fecha: obtenerTexto(formData, "fecha"), sede,
     modeloHorarioId: datosDelHorario.modeloHorarioId,
     entradaProgramada: datosDelHorario.entrada, salidaProgramada: datosDelHorario.salida,
     descanso: datosDelHorario.descanso,
@@ -43,7 +43,7 @@ export async function guardarCeldaDelBorrador(formData: FormData): Promise<void>
 }
 
 export async function guardarBorradorDesdeGrilla(planId: string, celdasJson: string): Promise<void> {
-  let celdas: Array<{ idHuellero: string; fecha: string; sede: string | null; modeloHorarioId?: string | null; entradaProgramada: string | null; salidaProgramada: string | null; descanso?: boolean; motivoNoAsistencia?: MotivoPlanificadoDeNoAsistencia | null }>;
+  let celdas: Array<{ dni: string; fecha: string; sede: string | null; modeloHorarioId?: string | null; entradaProgramada: string | null; salidaProgramada: string | null; descanso?: boolean; motivoNoAsistencia?: MotivoPlanificadoDeNoAsistencia | null }>;
   try {
     celdas = JSON.parse(celdasJson);
   } catch {
@@ -51,7 +51,7 @@ export async function guardarBorradorDesdeGrilla(planId: string, celdasJson: str
   }
   if (!Array.isArray(celdas)) throw new Error("El borrador contiene datos inv\u00e1lidos.");
   for (const celda of celdas) {
-    if (!celda || typeof celda.idHuellero !== "string" || typeof celda.fecha !== "string" || (celda.sede !== null && typeof celda.sede !== "string")
+    if (!celda || typeof celda.dni !== "string" || typeof celda.fecha !== "string" || (celda.sede !== null && typeof celda.sede !== "string")
       || (celda.descanso !== undefined && typeof celda.descanso !== "boolean") || (celda.entradaProgramada !== null && typeof celda.entradaProgramada !== "string")
       || (celda.salidaProgramada !== null && typeof celda.salidaProgramada !== "string")) throw new Error("El borrador contiene datos inv\u00e1lidos.");
     if (celda.motivoNoAsistencia != null && (typeof celda.motivoNoAsistencia !== "string" || !esMotivoPlanificadoDeNoAsistencia(celda.motivoNoAsistencia))) {
@@ -69,7 +69,7 @@ export async function guardarBorradorDesdeGrilla(planId: string, celdasJson: str
 }
 
 export async function borrarCeldaDelBorrador(formData: FormData): Promise<void> {
-  await casosDeUsoDePlanesSemanales().borrarCelda(obtenerTexto(formData, "planId"), obtenerTexto(formData, "idHuellero"), obtenerTexto(formData, "fecha"));
+  await casosDeUsoDePlanesSemanales().borrarCelda(obtenerTexto(formData, "planId"), obtenerTexto(formData, "dni"), obtenerTexto(formData, "fecha"));
   revalidatePath("/turnos");
 }
 
@@ -84,9 +84,9 @@ export async function aplicarHorarioEnLoteAlBorrador(formData: FormData): Promis
   const seleccion = formData.getAll("celda").flatMap((valor) => {
     if (typeof valor !== "string") return [];
     try {
-      const celda = JSON.parse(valor) as { idHuellero?: unknown; fecha?: unknown; sede?: unknown };
-      return typeof celda.idHuellero === "string" && typeof celda.fecha === "string" && typeof celda.sede === "string"
-        ? [{ idHuellero: celda.idHuellero, fecha: celda.fecha, sede: celda.sede }]
+      const celda = JSON.parse(valor) as { dni?: unknown; fecha?: unknown; sede?: unknown };
+      return typeof celda.dni === "string" && typeof celda.fecha === "string" && typeof celda.sede === "string"
+        ? [{ dni: celda.dni, fecha: celda.fecha, sede: celda.sede }]
         : [];
     } catch {
       return [];
@@ -101,10 +101,10 @@ export async function aplicarHorarioEnLoteAlBorrador(formData: FormData): Promis
 }
 
 export async function publicarPlanSemanalDesdeGrilla(formData: FormData): Promise<void> {
-  const seleccion = formData.getAll("idHuellero").filter((valor): valor is string => typeof valor === "string" && valor.trim().length > 0);
+  const seleccion = formData.getAll("dni").filter((valor): valor is string => typeof valor === "string" && valor.trim().length > 0);
   if (!seleccion.length) throw new Error("Seleccione al menos un colaborador para publicar.");
   const resultado = await publicarPlanSemanal(repositorioDeTurnos, await obtenerActorActual(), obtenerTexto(formData, "planId"), seleccion);
-  if (resultado.errores.length) throw new Error(resultado.errores.map(({ idHuellero, fecha, mensaje }) => `${idHuellero} ${fecha}: ${mensaje}`).join(" "));
+  if (resultado.errores.length) throw new Error(resultado.errores.map(({ dni, fecha, mensaje }) => `${dni} ${fecha}: ${mensaje}`).join(" "));
   revalidatePath("/turnos");
 }
 
@@ -113,7 +113,7 @@ export async function republicarPlanSemanalDesdeGrilla(formData: FormData): Prom
     repositorioDeTurnos,
     await obtenerActorActual(),
     obtenerTexto(formData, "planId"),
-    obtenerTexto(formData, "idHuellero"),
+    obtenerTexto(formData, "dni"),
     obtenerTexto(formData, "motivo"),
   );
   revalidatePath("/turnos");

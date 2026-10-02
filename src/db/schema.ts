@@ -16,7 +16,7 @@ import type { ResumenDePeriodo } from "@/periodos/periodo-planilla";
 
 export const colaboradores = pgTable("colaboradores", {
   id: uuid("id").primaryKey().defaultRandom(),
-  idHuellero: text("id_huellero").notNull().unique(),
+  dni: text("dni").notNull().unique(),
   nombre: text("nombre").notNull(),
   sede: text("sede").notNull(),
   grupo: text("grupo").notNull().references(() => grupos.nombre),
@@ -125,9 +125,9 @@ export const turnosPublicados = pgTable(
   "turnos_publicados",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    idHuellero: text("id_huellero")
+    dni: text("dni")
       .notNull()
-      .references(() => colaboradores.idHuellero),
+      .references(() => colaboradores.dni),
     fecha: date("fecha", { mode: "string" }).notNull(),
     grupo: text("grupo").notNull().references(() => grupos.nombre),
     sede: text("sede"),
@@ -138,7 +138,7 @@ export const turnosPublicados = pgTable(
     motivoNoAsistencia: text("motivo_no_asistencia", { enum: ["descanso", "feriado", "vacaciones", "permiso", "suspension"] }),
     publicadoEn: timestamp("publicado_en", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [uniqueIndex("turnos_publicados_colaborador_fecha").on(table.idHuellero, table.fecha)],
+  (table) => [uniqueIndex("turnos_publicados_colaborador_fecha").on(table.dni, table.fecha)],
 );
 
 export const historialDeTurnosPublicados = pgTable("historial_turnos_publicados", {
@@ -148,7 +148,7 @@ export const historialDeTurnosPublicados = pgTable("historial_turnos_publicados"
     .references(() => turnosPublicados.id),
   publicadoEn: timestamp("publicado_en", { withTimezone: true }).notNull().defaultNow(),
   horario: jsonb("horario").$type<{
-    idHuellero: string;
+    dni: string;
     fecha: string;
     grupo: string;
     sede: string | null;
@@ -183,7 +183,7 @@ export const celdasDePlanesSemanalesEnBorrador = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     planId: uuid("plan_id").notNull().references(() => planesSemanalesEnBorrador.id),
-    idHuellero: text("id_huellero").notNull().references(() => colaboradores.idHuellero),
+    dni: text("dni").notNull().references(() => colaboradores.dni),
     fecha: date("fecha", { mode: "string" }).notNull(),
     grupo: text("grupo").notNull().references(() => grupos.nombre),
     sede: text("sede"),
@@ -193,16 +193,16 @@ export const celdasDePlanesSemanalesEnBorrador = pgTable(
     descanso: boolean("descanso").notNull(),
     motivoNoAsistencia: text("motivo_no_asistencia", { enum: ["descanso", "feriado", "vacaciones", "permiso", "suspension"] }),
   },
-  (table) => [uniqueIndex("celdas_borrador_plan_colaborador_fecha").on(table.planId, table.idHuellero, table.fecha)],
+  (table) => [uniqueIndex("celdas_borrador_plan_colaborador_fecha").on(table.planId, table.dni, table.fecha)],
 );
 
 export const asistenciasEsperadas = pgTable(
   "asistencias_esperadas",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    idHuellero: text("id_huellero")
+    dni: text("dni")
       .notNull()
-      .references(() => colaboradores.idHuellero),
+      .references(() => colaboradores.dni),
     fecha: date("fecha", { mode: "string" }).notNull(),
     estado: text("estado", { enum: ["pendiente", "confirmada", "manual"] }).notNull().default("pendiente"),
     entradaPropuesta: text("entrada_propuesta"),
@@ -221,7 +221,7 @@ export const asistenciasEsperadas = pgTable(
     creadaEn: timestamp("creada_en", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex("asistencias_esperadas_colaborador_fecha").on(table.idHuellero, table.fecha),
+    uniqueIndex("asistencias_esperadas_colaborador_fecha").on(table.dni, table.fecha),
   ],
 );
 
@@ -229,13 +229,13 @@ export const horariosSemanalesProcesados = pgTable(
   "horarios_semanales_procesados",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    idHuellero: text("id_huellero").notNull().references(() => colaboradores.idHuellero),
+    dni: text("dni").notNull().references(() => colaboradores.dni),
     semana: date("semana", { mode: "string" }).notNull(),
     equipo: text("equipo").notNull(),
     responsableId: uuid("responsable_id").notNull().references(() => cuentasLocales.id),
     procesadoEn: timestamp("procesado_en", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [uniqueIndex("horarios_semanales_procesados_colaborador_semana").on(table.idHuellero, table.semana)],
+  (table) => [uniqueIndex("horarios_semanales_procesados_colaborador_semana").on(table.dni, table.semana)],
 );
 
 export const ajustesDeAsistencia = pgTable(
@@ -326,7 +326,7 @@ export const marcasCrudas = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     importacionId: uuid("importacion_id").notNull().references(() => importacionesSemanales.id),
-    idHuellero: text("id_huellero").notNull(),
+    dni: text("dni").notNull(),
     sede: text("sede"),
     fecha: date("fecha", { mode: "string" }).notNull(),
     instante: text("instante").notNull(),
@@ -339,7 +339,7 @@ export const incidenciasDeImportacion = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     importacionId: uuid("importacion_id").notNull().references(() => importacionesSemanales.id),
-    idHuellero: text("id_huellero").notNull(),
+    dni: text("dni").notNull(),
     fecha: date("fecha", { mode: "string" }).notNull(),
     motivo: text("motivo").notNull(),
   },

@@ -1,3 +1,4 @@
+import { dniDePrueba } from "../colaboradores/dni-de-prueba";
 import { randomUUID } from "node:crypto";
 
 import { and, eq, inArray } from "drizzle-orm";
@@ -27,7 +28,7 @@ describe.skipIf(!databaseUrl)("republicarPlanSemanal (atomicidad, integración P
   const repositorio = new RepositorioPostgresDeTurnos(db);
   const grupo = `Grupo republicacion ${randomUUID()}`;
   const sede = `Sede republicacion ${randomUUID()}`;
-  const huId = `HU-${randomUUID()}`;
+  const huId = dniDePrueba();
   const cuentaId = randomUUID();
   const semana = inicioDeSemana("2032-04-05");
   const dias = diasDeLaSemana(semana);
@@ -40,12 +41,12 @@ describe.skipIf(!databaseUrl)("republicarPlanSemanal (atomicidad, integración P
     await db.delete(schema.planesSemanalesEnBorrador).where(and(eq(schema.planesSemanalesEnBorrador.semana, semana), eq(schema.planesSemanalesEnBorrador.equipo, grupo)));
 
     const publicados = await db.select({ id: schema.turnosPublicados.id }).from(schema.turnosPublicados)
-      .where(and(eq(schema.turnosPublicados.idHuellero, huId), inArray(schema.turnosPublicados.fecha, dias)));
+      .where(and(eq(schema.turnosPublicados.dni, huId), inArray(schema.turnosPublicados.fecha, dias)));
     if (publicados.length) await db.delete(schema.historialDeTurnosPublicados).where(inArray(schema.historialDeTurnosPublicados.turnoPublicadoId, publicados.map(({ id }) => id)));
-    await db.delete(schema.turnosPublicados).where(and(eq(schema.turnosPublicados.idHuellero, huId), inArray(schema.turnosPublicados.fecha, dias)));
-    await db.delete(schema.asistenciasEsperadas).where(and(eq(schema.asistenciasEsperadas.idHuellero, huId), inArray(schema.asistenciasEsperadas.fecha, dias)));
+    await db.delete(schema.turnosPublicados).where(and(eq(schema.turnosPublicados.dni, huId), inArray(schema.turnosPublicados.fecha, dias)));
+    await db.delete(schema.asistenciasEsperadas).where(and(eq(schema.asistenciasEsperadas.dni, huId), inArray(schema.asistenciasEsperadas.fecha, dias)));
 
-    await db.delete(schema.colaboradores).where(eq(schema.colaboradores.idHuellero, huId));
+    await db.delete(schema.colaboradores).where(eq(schema.colaboradores.dni, huId));
     await db.delete(schema.sedes).where(eq(schema.sedes.nombre, sede));
     await db.delete(schema.periodosPlanilla).where(eq(schema.periodosPlanilla.inicio, dias[0]));
     await db.delete(schema.cuentasLocales).where(eq(schema.cuentasLocales.id, cuentaId));
@@ -56,11 +57,11 @@ describe.skipIf(!databaseUrl)("republicarPlanSemanal (atomicidad, integración P
   it("no corrige ningún día de la semana si uno de ellos ya fue confirmado concurrentemente", async () => {
     await db.insert(schema.grupos).values({ nombre: grupo });
     await db.insert(schema.sedes).values({ nombre: sede, grupo, activa: true });
-    await db.insert(schema.colaboradores).values({ idHuellero: huId, nombre: "Colaborador republicación", sede, grupo, activo: true });
+    await db.insert(schema.colaboradores).values({ dni: huId, nombre: "Colaborador republicación", sede, grupo, activo: true });
     await db.insert(schema.periodosPlanilla).values({ inicio: dias[0], fin: dias[6], estado: "abierto" });
     await db.insert(schema.cuentasLocales).values({ id: cuentaId, nombreUsuario: `republicacion-${cuentaId}`, hashContrasena: "prueba", rol: "finanzas" });
 
-    const originales = dias.map((fecha) => ({ idHuellero: huId, fecha, sede, entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false }));
+    const originales = dias.map((fecha) => ({ dni: huId, fecha, sede, entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false }));
     await repositorio.publicarEnLote(originales, actor);
 
     // Entre que se arma la corrección y se confirma la republicación, otra vía (p. ej. una
@@ -70,13 +71,13 @@ describe.skipIf(!databaseUrl)("republicarPlanSemanal (atomicidad, integración P
     // ejercer la verificación real que hace la transacción de `reemplazarSemanaPublicada`.
     const fechaEnConflicto = dias[3];
     const [asistenciaEnConflicto] = await db.select({ id: schema.asistenciasEsperadas.id }).from(schema.asistenciasEsperadas)
-      .where(and(eq(schema.asistenciasEsperadas.idHuellero, huId), eq(schema.asistenciasEsperadas.fecha, fechaEnConflicto)));
+      .where(and(eq(schema.asistenciasEsperadas.dni, huId), eq(schema.asistenciasEsperadas.fecha, fechaEnConflicto)));
     await db.update(schema.asistenciasEsperadas).set({ estado: "confirmada" }).where(eq(schema.asistenciasEsperadas.id, asistenciaEnConflicto.id));
     repositorio.asistenciaEstaProcesada = async () => false;
 
     const plan = await repositorio.obtenerOCrear(semana, grupo);
     await repositorio.guardarCeldas(dias.map((fecha) => ({
-      planId: plan.id, idHuellero: huId, fecha, sede, entradaProgramada: "10:00", salidaProgramada: "19:00", descanso: false,
+      planId: plan.id, dni: huId, fecha, sede, entradaProgramada: "10:00", salidaProgramada: "19:00", descanso: false,
     })));
 
     await expect(republicarPlanSemanal(repositorio, actor, plan.id, huId, "Corrige entrada pactada"))
@@ -88,7 +89,7 @@ describe.skipIf(!databaseUrl)("republicarPlanSemanal (atomicidad, integración P
       await expect(repositorio.buscarPublicado(huId, fecha)).resolves.toMatchObject({ entradaProgramada: "09:00", salidaProgramada: "18:00" });
     }
     const publicados = await db.select({ id: schema.turnosPublicados.id }).from(schema.turnosPublicados)
-      .where(and(eq(schema.turnosPublicados.idHuellero, huId), inArray(schema.turnosPublicados.fecha, dias)));
+      .where(and(eq(schema.turnosPublicados.dni, huId), inArray(schema.turnosPublicados.fecha, dias)));
     const historial = await db.select({ motivo: schema.historialDeTurnosPublicados.motivo }).from(schema.historialDeTurnosPublicados)
       .where(inArray(schema.historialDeTurnosPublicados.turnoPublicadoId, publicados.map(({ id }) => id)));
     // Solo queda el historial de la publicación inicial: ninguna fila de "Corrige entrada

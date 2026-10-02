@@ -176,7 +176,7 @@ async function construirResumen(
   filtros: FiltrosDeResumen,
 ): Promise<ResumenDePeriodo> {
   const jornadas = await conexion.select({
-    idHuellero: asistenciasEsperadas.idHuellero,
+    dni: asistenciasEsperadas.dni,
     nombre: colaboradores.nombre,
     grupoActual: colaboradores.grupo,
     fecha: asistenciasEsperadas.fecha,
@@ -197,9 +197,9 @@ async function construirResumen(
     estadoExtra: horasExtra.estado,
   })
     .from(asistenciasEsperadas)
-    .innerJoin(colaboradores, eq(asistenciasEsperadas.idHuellero, colaboradores.idHuellero))
+    .innerJoin(colaboradores, eq(asistenciasEsperadas.dni, colaboradores.dni))
     .innerJoin(turnosPublicados, and(
-      eq(turnosPublicados.idHuellero, asistenciasEsperadas.idHuellero),
+      eq(turnosPublicados.dni, asistenciasEsperadas.dni),
       eq(turnosPublicados.fecha, asistenciasEsperadas.fecha),
     ))
     .leftJoin(estadosManuales, eq(estadosManuales.asistenciaId, asistenciasEsperadas.id))
@@ -210,10 +210,10 @@ async function construirResumen(
   const agrupadas = new Map<string, FilaDeResumen>();
   const bloqueos: BloqueoDePeriodo[] = [];
   for (const jornada of jornadas) {
-    const clave = `${jornada.grupo}:${jornada.idHuellero}`;
-    const fila = agrupadas.get(clave) ?? crearFilaVacia(jornada.idHuellero, jornada.nombre, jornada.grupo);
+    const clave = `${jornada.grupo}:${jornada.dni}`;
+    const fila = agrupadas.get(clave) ?? crearFilaVacia(jornada.dni, jornada.nombre, jornada.grupo);
     const resultado = jornada.estado === "pendiente" ? "pendiente" : jornada.estado === "manual" ? jornada.motivoReal : "trabajada";
-    if (!resultado) throw new Error(`La jornada manual de ${jornada.idHuellero} del ${jornada.fecha} no tiene motivo real.`);
+    if (!resultado) throw new Error(`La jornada manual de ${jornada.dni} del ${jornada.fecha} no tiene motivo real.`);
     const detalle: DetalleDeJornada = {
       fecha: jornada.fecha,
       sede: jornada.estado === "confirmada"
@@ -242,8 +242,8 @@ async function construirResumen(
     fila.cantidadTardanzas += jornada.tardanza === null ? 0 : 1;
     fila.minutosPenalizados += detalle.minutosPenalizados;
     if (detalle.horaExtra) sumarHoraExtra(fila, detalle.horaExtra.estado, detalle.horaExtra.minutosAl25, detalle.horaExtra.minutosAl35);
-    if (resultado === "pendiente") bloqueos.push({ tipo: "asistencia", idHuellero: jornada.idHuellero, nombre: jornada.nombre, grupo: jornada.grupoActual, fecha: jornada.fecha });
-    if (jornada.estadoExtra === "pendiente") bloqueos.push({ tipo: "hora-extra", idHuellero: jornada.idHuellero, nombre: jornada.nombre, grupo: jornada.grupoActual, fecha: jornada.fecha });
+    if (resultado === "pendiente") bloqueos.push({ tipo: "asistencia", dni: jornada.dni, nombre: jornada.nombre, grupo: jornada.grupoActual, fecha: jornada.fecha });
+    if (jornada.estadoExtra === "pendiente") bloqueos.push({ tipo: "hora-extra", dni: jornada.dni, nombre: jornada.nombre, grupo: jornada.grupoActual, fecha: jornada.fecha });
     agrupadas.set(clave, fila);
   }
 
@@ -263,15 +263,15 @@ function filtrarResumen(resumen: ResumenDePeriodo, filtros: FiltrosDeResumen): R
 }
 
 function cumpleFiltros(fila: FilaDeResumen, filtros: FiltrosDeResumen): boolean {
-  return (!filtros.idHuellero || fila.idHuellero === filtros.idHuellero)
+  return (!filtros.dni || fila.dni === filtros.dni)
     && (!filtros.sede || fila.jornadas.some(({ sede }) => sede === filtros.sede));
 }
 
 const MOTIVOS_DE_NO_ASISTENCIA: MotivoDeNoAsistencia[] = ["falta", "descanso", "feriado", "vacaciones", "permiso", "suspension"];
 const ESTADOS_DE_HORA_EXTRA: EstadoDeHoraExtra[] = ["pendiente", "aprobada", "rechazada"];
 
-function crearFilaVacia(idHuellero: string, nombre: string, grupo: string): FilaDeResumen {
-  return { idHuellero, nombre, grupo, ...crearResumenVacio().totales, jornadas: [] };
+function crearFilaVacia(dni: string, nombre: string, grupo: string): FilaDeResumen {
+  return { dni, nombre, grupo, ...crearResumenVacio().totales, jornadas: [] };
 }
 
 function esMotivoDeNoAsistencia(resultado: DetalleDeJornada["resultado"]): resultado is MotivoDeNoAsistencia {

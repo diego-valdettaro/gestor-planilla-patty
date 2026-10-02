@@ -7,7 +7,7 @@ export interface Actor {
 }
 
 export interface Colaborador {
-  idHuellero: string;
+  dni: string;
   nombre: string;
   sede: string;
   grupo: string;
@@ -15,7 +15,7 @@ export interface Colaborador {
 }
 
 export interface RepositorioDeColaboradores {
-  buscarPorIdHuellero(idHuellero: string): Promise<Colaborador | undefined>;
+  buscarPorDni(dni: string): Promise<Colaborador | undefined>;
   guardar(colaborador: Colaborador): Promise<void>;
   actualizar(colaborador: Colaborador): Promise<void>;
 }
@@ -26,9 +26,10 @@ export async function registrarColaborador(
   colaborador: Colaborador,
 ): Promise<void> {
   verificarPermiso(actor);
+  validarDni(colaborador.dni);
 
-  if (await repositorio.buscarPorIdHuellero(colaborador.idHuellero)) {
-    throw new Error("El ID de huellero ya pertenece a un colaborador.");
+  if (await repositorio.buscarPorDni(colaborador.dni)) {
+    throw new Error("El DNI ya pertenece a un colaborador.");
   }
 
   await repositorio.guardar(colaborador);
@@ -37,11 +38,11 @@ export async function registrarColaborador(
 export async function consultarColaborador(
   repositorio: RepositorioDeColaboradores,
   actor: Actor,
-  idHuellero: string,
+  dni: string,
 ): Promise<Colaborador | undefined> {
   verificarPermiso(actor);
 
-  return repositorio.buscarPorIdHuellero(idHuellero);
+  return repositorio.buscarPorDni(dni);
 }
 
 export async function actualizarColaborador(
@@ -51,11 +52,16 @@ export async function actualizarColaborador(
 ): Promise<void> {
   verificarPermiso(actor);
 
-  if (!(await repositorio.buscarPorIdHuellero(colaborador.idHuellero))) {
-    throw new Error("No existe un colaborador con ese ID de huellero.");
+  if (!(await repositorio.buscarPorDni(colaborador.dni))) {
+    throw new Error("No existe un colaborador con ese DNI.");
   }
 
   await repositorio.actualizar(colaborador);
+}
+
+export function validarDni(dni: string): void {
+  if (!dni.trim()) throw new Error("El DNI es obligatorio.");
+  if (!/^[0-9]{8}$/.test(dni)) throw new Error("El DNI debe tener exactamente 8 dígitos.");
 }
 
 export function verificarPermiso(actor: Actor): void {

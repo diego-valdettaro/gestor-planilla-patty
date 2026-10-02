@@ -49,17 +49,17 @@ const CUENTAS = [
 ] as const;
 
 const COLABORADORES = [
-  { idHuellero: "DEMO-ANA", nombre: "Ana Borrador", sede: SEDES.benavides, grupo: GRUPOS.tiendas, activo: true },
-  { idHuellero: "DEMO-BETO", nombre: "Beto Publicado", sede: SEDES.benavides, grupo: GRUPOS.tiendas, activo: true },
-  { idHuellero: "DEMO-CARLA", nombre: "Carla Cambios", sede: SEDES.benavides, grupo: GRUPOS.tiendas, activo: true },
-  { idHuellero: "DEMO-DARIO", nombre: "Darío Liquidado", sede: SEDES.sanIsidro, grupo: GRUPOS.tiendas, activo: true },
-  { idHuellero: "DEMO-ELENA", nombre: "Elena Sotelo", sede: SEDES.sanIsidro, grupo: GRUPOS.tiendas, activo: true },
-  { idHuellero: "DEMO-EVA", nombre: "Eva Confirmable", sede: SEDES.benavides, grupo: GRUPOS.tiendas, activo: true },
-  { idHuellero: "DEMO-FRANCO", nombre: "Franco Díaz", sede: SEDES.taller, grupo: GRUPOS.taller, activo: true },
-  { idHuellero: "DEMO-GABI", nombre: "Gabriela Pérez", sede: SEDES.taller, grupo: GRUPOS.taller, activo: true },
-  { idHuellero: "DEMO-HUGO", nombre: "Hugo Marín", sede: SEDES.administracion, grupo: GRUPOS.administracion, activo: true },
-  { idHuellero: "DEMO-INES", nombre: "Inés Quispe", sede: SEDES.administracion, grupo: GRUPOS.administracion, activo: true },
-  { idHuellero: "DEMO-NICO", nombre: "Nico Inactivo", sede: SEDES.benavides, grupo: GRUPOS.tiendas, activo: false },
+  { dni: "99900001", nombre: "Ana Borrador", sede: SEDES.benavides, grupo: GRUPOS.tiendas, activo: true },
+  { dni: "99900002", nombre: "Beto Publicado", sede: SEDES.benavides, grupo: GRUPOS.tiendas, activo: true },
+  { dni: "99900003", nombre: "Carla Cambios", sede: SEDES.benavides, grupo: GRUPOS.tiendas, activo: true },
+  { dni: "99900004", nombre: "Darío Liquidado", sede: SEDES.sanIsidro, grupo: GRUPOS.tiendas, activo: true },
+  { dni: "99900005", nombre: "Elena Sotelo", sede: SEDES.sanIsidro, grupo: GRUPOS.tiendas, activo: true },
+  { dni: "99900006", nombre: "Eva Confirmable", sede: SEDES.benavides, grupo: GRUPOS.tiendas, activo: true },
+  { dni: "99900007", nombre: "Franco Díaz", sede: SEDES.taller, grupo: GRUPOS.taller, activo: true },
+  { dni: "99900008", nombre: "Gabriela Pérez", sede: SEDES.taller, grupo: GRUPOS.taller, activo: true },
+  { dni: "99900009", nombre: "Hugo Marín", sede: SEDES.administracion, grupo: GRUPOS.administracion, activo: true },
+  { dni: "99900010", nombre: "Inés Quispe", sede: SEDES.administracion, grupo: GRUPOS.administracion, activo: true },
+  { dni: "99900011", nombre: "Nico Inactivo", sede: SEDES.benavides, grupo: GRUPOS.tiendas, activo: false },
 ];
 
 const MODELOS = [
@@ -124,25 +124,25 @@ async function limpiar(pool: Pool): Promise<void> {
   const sedes = NOMBRES_DE_SEDE.map((nombre) => `'${nombre.replace(/'/g, "''")}'`).join(", ");
   await pool.query(`
     BEGIN;
-    DELETE FROM horas_extra WHERE asistencia_id IN (SELECT id FROM asistencias_esperadas WHERE id_huellero LIKE 'DEMO-%');
-    DELETE FROM tardanzas WHERE asistencia_id IN (SELECT id FROM asistencias_esperadas WHERE id_huellero LIKE 'DEMO-%');
-    DELETE FROM estados_manuales WHERE asistencia_id IN (SELECT id FROM asistencias_esperadas WHERE id_huellero LIKE 'DEMO-%');
-    DELETE FROM ajustes_de_asistencia WHERE asistencia_id IN (SELECT id FROM asistencias_esperadas WHERE id_huellero LIKE 'DEMO-%');
-    DELETE FROM asistencias_esperadas WHERE id_huellero LIKE 'DEMO-%';
-    DELETE FROM incidencias_de_importacion WHERE id_huellero LIKE 'DEMO-%';
-    DELETE FROM marcas_crudas WHERE id_huellero LIKE 'DEMO-%';
+    DELETE FROM horas_extra WHERE asistencia_id IN (SELECT id FROM asistencias_esperadas WHERE dni LIKE '999000__');
+    DELETE FROM tardanzas WHERE asistencia_id IN (SELECT id FROM asistencias_esperadas WHERE dni LIKE '999000__');
+    DELETE FROM estados_manuales WHERE asistencia_id IN (SELECT id FROM asistencias_esperadas WHERE dni LIKE '999000__');
+    DELETE FROM ajustes_de_asistencia WHERE asistencia_id IN (SELECT id FROM asistencias_esperadas WHERE dni LIKE '999000__');
+    DELETE FROM asistencias_esperadas WHERE dni LIKE '999000__';
+    DELETE FROM incidencias_de_importacion WHERE dni LIKE '999000__';
+    DELETE FROM marcas_crudas WHERE dni LIKE '999000__';
     DELETE FROM importaciones_semanales WHERE sede IN (${sedes});
-    DELETE FROM historial_turnos_publicados WHERE turno_publicado_id IN (SELECT id FROM turnos_publicados WHERE id_huellero LIKE 'DEMO-%');
-    DELETE FROM turnos_publicados WHERE id_huellero LIKE 'DEMO-%';
-    DELETE FROM horarios_semanales_procesados WHERE id_huellero LIKE 'DEMO-%';
-    DELETE FROM celdas_planes_semanales_en_borrador WHERE id_huellero LIKE 'DEMO-%';
+    DELETE FROM historial_turnos_publicados WHERE turno_publicado_id IN (SELECT id FROM turnos_publicados WHERE dni LIKE '999000__');
+    DELETE FROM turnos_publicados WHERE dni LIKE '999000__';
+    DELETE FROM horarios_semanales_procesados WHERE dni LIKE '999000__';
+    DELETE FROM celdas_planes_semanales_en_borrador WHERE dni LIKE '999000__';
     DELETE FROM planes_semanales_en_borrador WHERE semana IN ('${SEMANA_ACTUAL}', '${SEMANA_ANTERIOR}');
     DELETE FROM auditoria_modelos_de_horario WHERE modelo_id IN (SELECT id FROM modelos_de_horario WHERE sede IN (${sedes}));
     DELETE FROM modelos_de_horario WHERE sede IN (${sedes});
     DELETE FROM politicas_de_penalizacion_por_tardanzas WHERE sede IN (${sedes});
     DELETE FROM auditoria_periodos_planilla WHERE periodo_id IN (SELECT id FROM periodos_planilla WHERE inicio IN ('${PERIODO_ACTUAL.inicio}', '${PERIODO_ANTERIOR.inicio}'));
     DELETE FROM periodos_planilla WHERE inicio IN ('${PERIODO_ACTUAL.inicio}', '${PERIODO_ANTERIOR.inicio}');
-    DELETE FROM colaboradores WHERE id_huellero LIKE 'DEMO-%';
+    DELETE FROM colaboradores WHERE dni LIKE '999000__';
     DELETE FROM sedes WHERE nombre IN (${sedes});
     DELETE FROM grupos WHERE nombre IN (${NOMBRES_DE_GRUPO.map((nombre) => `'${nombre.replace(/'/g, "''")}'`).join(", ")});
     DELETE FROM sesiones WHERE cuenta_id IN (SELECT id FROM cuentas_locales WHERE nombre_usuario IN (${usuarios}));
@@ -151,16 +151,16 @@ async function limpiar(pool: Pool): Promise<void> {
   `);
 }
 
-function turnosDeSemana(idHuellero: string, sede: string, semana: string) {
+function turnosDeSemana(dni: string, sede: string, semana: string) {
   const modelo = modeloApertura(sede);
   return diasDeLaSemana(semana).map((fecha, indice) => indice === 6
-    ? { idHuellero, fecha, sede: null, modeloHorarioId: null, entradaProgramada: null, salidaProgramada: null, descanso: true, motivoNoAsistencia: "descanso" as const }
-    : { idHuellero, fecha, sede, modeloHorarioId: modelo.id, entradaProgramada: modelo.entrada, salidaProgramada: modelo.salida, descanso: false, motivoNoAsistencia: null });
+    ? { dni, fecha, sede: null, modeloHorarioId: null, entradaProgramada: null, salidaProgramada: null, descanso: true, motivoNoAsistencia: "descanso" as const }
+    : { dni, fecha, sede, modeloHorarioId: modelo.id, entradaProgramada: modelo.entrada, salidaProgramada: modelo.salida, descanso: false, motivoNoAsistencia: null });
 }
 
 async function marcarConfirmada(
   db: Db,
-  idHuellero: string,
+  dni: string,
   fecha: string,
   modelo: { entrada: string; salida: string },
   extras: { tardanzaMin?: number; horaExtra?: "pendiente" | "aprobada" },
@@ -173,7 +173,7 @@ async function marcarConfirmada(
       salidaReal: `${fecha}T${modelo.salida}:00`,
       minutosTrabajados: minutosEntre(entradaReal, modelo.salida),
     })
-    .where(and(eq(schema.asistenciasEsperadas.idHuellero, idHuellero), eq(schema.asistenciasEsperadas.fecha, fecha)))
+    .where(and(eq(schema.asistenciasEsperadas.dni, dni), eq(schema.asistenciasEsperadas.fecha, fecha)))
     .returning({ id: schema.asistenciasEsperadas.id });
   if (!fila) return;
   if (extras.tardanzaMin) {
@@ -184,22 +184,22 @@ async function marcarConfirmada(
   }
 }
 
-async function confirmarSemanaLaboral(db: Db, idHuellero: string, modelo: { entrada: string; salida: string }, semana: string): Promise<void> {
+async function confirmarSemanaLaboral(db: Db, dni: string, modelo: { entrada: string; salida: string }, semana: string): Promise<void> {
   for (const fecha of diasDeLaSemana(semana).slice(0, 6)) {
-    await marcarConfirmada(db, idHuellero, fecha, modelo, {});
+    await marcarConfirmada(db, dni, fecha, modelo, {});
   }
 }
 
 async function marcarManual(
   db: Db,
-  idHuellero: string,
+  dni: string,
   fecha: string,
   tipo: "falta" | "descanso" | "feriado" | "vacaciones" | "permiso" | "suspension",
   responsableId: string,
 ): Promise<void> {
   const [fila] = await db.update(schema.asistenciasEsperadas)
     .set({ estado: "manual" })
-    .where(and(eq(schema.asistenciasEsperadas.idHuellero, idHuellero), eq(schema.asistenciasEsperadas.fecha, fecha)))
+    .where(and(eq(schema.asistenciasEsperadas.dni, dni), eq(schema.asistenciasEsperadas.fecha, fecha)))
     .returning({ id: schema.asistenciasEsperadas.id });
   if (!fila) return;
   await db.insert(schema.estadosManuales).values({ asistenciaId: fila.id, tipo, comentario: "Sembrado por sembrar-base", responsableId });
@@ -208,12 +208,12 @@ async function marcarManual(
 // Marcas del huellero incompletas para un día que sigue `pendiente`: en el calendario
 // de asistencias se ve como "Pendiente de revisión" (hay marcas, pero no permiten
 // proponer entrada y salida completas).
-async function marcarPendienteDeRevision(db: Db, idHuellero: string, fecha: string, sede: string, usuarioId: string): Promise<void> {
+async function marcarPendienteDeRevision(db: Db, dni: string, fecha: string, sede: string, usuarioId: string): Promise<void> {
   const [importacion] = await db.insert(schema.importacionesSemanales).values({
     sede, semana: SEMANA_ACTUAL, archivoNombre: "demo-huellero.xlsx",
     archivoUbicacion: "demo/demo-huellero.xlsx", archivoHashSha256: "0".repeat(64), usuarioId,
   }).returning({ id: schema.importacionesSemanales.id });
-  await db.insert(schema.marcasCrudas).values({ importacionId: importacion.id, idHuellero, fecha, instante: `${fecha}T08:57:00` });
+  await db.insert(schema.marcasCrudas).values({ importacionId: importacion.id, dni, fecha, instante: `${fecha}T08:57:00` });
 }
 
 async function verificarInvariantes(pool: Pool): Promise<void> {
@@ -237,16 +237,16 @@ async function verificarInvariantes(pool: Pool): Promise<void> {
   );
   if (anterior?.estado !== "cerrado") fallos.push("el período del mes anterior no quedó cerrado");
 
-  for (const idHuellero of ["DEMO-BETO", "DEMO-CARLA", "DEMO-DARIO", "DEMO-EVA"]) {
+  for (const dni of ["99900002", "99900003", "99900004", "99900006"]) {
     const { rows: [turnos] } = await pool.query<{ n: string }>(
-      "SELECT count(*)::text AS n FROM turnos_publicados WHERE id_huellero = $1 AND fecha >= $2 AND fecha <= $3",
-      [idHuellero, SEMANA_ACTUAL, ultimoDiaSemana],
+      "SELECT count(*)::text AS n FROM turnos_publicados WHERE dni = $1 AND fecha >= $2 AND fecha <= $3",
+      [dni, SEMANA_ACTUAL, ultimoDiaSemana],
     );
-    if (Number(turnos.n) !== 7) fallos.push(`${idHuellero} debería tener 7 turnos en la semana actual, tiene ${turnos.n}`);
+    if (Number(turnos.n) !== 7) fallos.push(`${dni} debería tener 7 turnos en la semana actual, tiene ${turnos.n}`);
   }
 
   const { rows: [procesados] } = await pool.query<{ n: string }>(
-    "SELECT count(*)::text AS n FROM horarios_semanales_procesados WHERE id_huellero IN ('DEMO-DARIO', 'DEMO-ELENA')",
+    "SELECT count(*)::text AS n FROM horarios_semanales_procesados WHERE dni IN ('99900004', '99900005')",
   );
   if (Number(procesados.n) !== 2) fallos.push(`se esperaban 2 semanas procesadas, hay ${procesados.n}`);
 
@@ -334,19 +334,19 @@ async function main(): Promise<void> {
 
     // --- Actividad: semana del mes actual, grupo tiendas ---
     // Beto -> Publicado ; Carla -> Publicado con una celda editada ; Darío -> Liquidado
-    await turnos.publicarEnLote(turnosDeSemana("DEMO-BETO", SEDES.benavides, SEMANA_ACTUAL), actorOperaciones);
-    await turnos.publicarEnLote(turnosDeSemana("DEMO-CARLA", SEDES.benavides, SEMANA_ACTUAL), actorOperaciones);
-    await turnos.publicarEnLote(turnosDeSemana("DEMO-DARIO", SEDES.sanIsidro, SEMANA_ACTUAL), actorOperaciones);
-    await turnos.publicarEnLote(turnosDeSemana("DEMO-EVA", SEDES.benavides, SEMANA_ACTUAL), actorOperaciones);
+    await turnos.publicarEnLote(turnosDeSemana("99900002", SEDES.benavides, SEMANA_ACTUAL), actorOperaciones);
+    await turnos.publicarEnLote(turnosDeSemana("99900003", SEDES.benavides, SEMANA_ACTUAL), actorOperaciones);
+    await turnos.publicarEnLote(turnosDeSemana("99900004", SEDES.sanIsidro, SEMANA_ACTUAL), actorOperaciones);
+    await turnos.publicarEnLote(turnosDeSemana("99900006", SEDES.benavides, SEMANA_ACTUAL), actorOperaciones);
     for (const fecha of diasDeLaSemana(SEMANA_ACTUAL).slice(0, 6)) {
       await db.update(schema.asistenciasEsperadas).set({
         entradaPropuesta: `${fecha}T08:02:00`,
         salidaPropuesta: `${fecha}T16:20:00`,
-      }).where(and(eq(schema.asistenciasEsperadas.idHuellero, "DEMO-EVA"), eq(schema.asistenciasEsperadas.fecha, fecha)));
+      }).where(and(eq(schema.asistenciasEsperadas.dni, "99900006"), eq(schema.asistenciasEsperadas.fecha, fecha)));
     }
     // `registrarProcesamiento` exige la semana con las asistencias laborales resueltas.
-    await confirmarSemanaLaboral(db, "DEMO-DARIO", modeloApertura(SEDES.sanIsidro), SEMANA_ACTUAL);
-    await turnos.registrarProcesamiento({ idHuellero: "DEMO-DARIO", semana: SEMANA_ACTUAL, equipo: "Tiendas", responsableId: finanzas.id });
+    await confirmarSemanaLaboral(db, "99900004", modeloApertura(SEDES.sanIsidro), SEMANA_ACTUAL);
+    await turnos.registrarProcesamiento({ dni: "99900004", semana: SEMANA_ACTUAL, equipo: "Tiendas", responsableId: finanzas.id });
 
     // Plan borrador del grupo tiendas: Ana (6 celdas, sin publicar -> Borrador editable) y
     // Carla (6 celdas = publicado salvo el miércoles con otro modelo -> Cambios sin publicar).
@@ -355,22 +355,22 @@ async function main(): Promise<void> {
     const aperturaBenavides = modeloApertura(SEDES.benavides);
     const cierreBenavides = modeloCierre(SEDES.benavides);
     const celdasAna = diasActual.slice(0, 6).map((fecha) => ({
-      planId: plan.id, idHuellero: "DEMO-ANA", fecha, sede: SEDES.benavides,
+      planId: plan.id, dni: "99900001", fecha, sede: SEDES.benavides,
       modeloHorarioId: aperturaBenavides.id, entradaProgramada: aperturaBenavides.entrada, salidaProgramada: aperturaBenavides.salida, descanso: false,
     }));
     const celdasCarla = diasActual.slice(0, 6).map((fecha, indice) => {
       const modelo = indice === 2 ? cierreBenavides : aperturaBenavides; // miércoles editado
       return {
-        planId: plan.id, idHuellero: "DEMO-CARLA", fecha, sede: SEDES.benavides,
+        planId: plan.id, dni: "99900003", fecha, sede: SEDES.benavides,
         modeloHorarioId: modelo.id, entradaProgramada: modelo.entrada, salidaProgramada: modelo.salida, descanso: false,
       };
     });
     await turnos.guardarCeldas([...celdasAna, ...celdasCarla]);
 
     // --- Mes anterior con período cerrado (Elena publicada + procesada, luego se cierra) ---
-    await turnos.publicarEnLote(turnosDeSemana("DEMO-ELENA", SEDES.sanIsidro, SEMANA_ANTERIOR), actorOperaciones);
-    await confirmarSemanaLaboral(db, "DEMO-ELENA", modeloApertura(SEDES.sanIsidro), SEMANA_ANTERIOR);
-    await turnos.registrarProcesamiento({ idHuellero: "DEMO-ELENA", semana: SEMANA_ANTERIOR, equipo: "Tiendas", responsableId: finanzas.id });
+    await turnos.publicarEnLote(turnosDeSemana("99900005", SEDES.sanIsidro, SEMANA_ANTERIOR), actorOperaciones);
+    await confirmarSemanaLaboral(db, "99900005", modeloApertura(SEDES.sanIsidro), SEMANA_ANTERIOR);
+    await turnos.registrarProcesamiento({ dni: "99900005", semana: SEMANA_ANTERIOR, equipo: "Tiendas", responsableId: finanzas.id });
     await db.update(schema.periodosPlanilla)
       .set({ estado: "cerrado", cerradoPorId: finanzas.id, cerradoEn: new Date() })
       .where(eq(schema.periodosPlanilla.inicio, PERIODO_ANTERIOR.inicio));
@@ -378,11 +378,11 @@ async function main(): Promise<void> {
     // --- Asistencias en sus estados actuales (pendiente / confirmada / manual) + tardanza + hora extra.
     // Sin caso de uso limpio para fabricar estos estados; escritura directa.
     const [lun, mar, mie] = diasActual;
-    await marcarConfirmada(db, "DEMO-BETO", lun, aperturaBenavides, { tardanzaMin: 18 });
-    await marcarConfirmada(db, "DEMO-BETO", mar, aperturaBenavides, { horaExtra: "aprobada" });
-    await marcarConfirmada(db, "DEMO-CARLA", lun, aperturaBenavides, { horaExtra: "pendiente" });
-    await marcarManual(db, "DEMO-BETO", mie, "feriado", finanzas.id);
-    await marcarPendienteDeRevision(db, "DEMO-BETO", diasActual[3], SEDES.benavides, finanzas.id);
+    await marcarConfirmada(db, "99900002", lun, aperturaBenavides, { tardanzaMin: 18 });
+    await marcarConfirmada(db, "99900002", mar, aperturaBenavides, { horaExtra: "aprobada" });
+    await marcarConfirmada(db, "99900003", lun, aperturaBenavides, { horaExtra: "pendiente" });
+    await marcarManual(db, "99900002", mie, "feriado", finanzas.id);
+    await marcarPendienteDeRevision(db, "99900002", diasActual[3], SEDES.benavides, finanzas.id);
     // Beto: lun/mar Registrada, mié Registrada (feriado), jue Pendiente de revisión, vie/sáb Esperada.
     // Darío ya quedó todo confirmado (semana liquidada).
 

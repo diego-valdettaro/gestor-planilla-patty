@@ -15,7 +15,7 @@ export interface PoliticaDePenalizacionPorTardanzas extends SolicitudDePoliticaD
 }
 
 export interface SolicitudDeCalculoDeTardanza {
-  idHuellero: string;
+  dni: string;
   sede: string;
   fecha: string;
   entradaProgramada: string;
@@ -31,7 +31,7 @@ export interface TardanzaCalculada {
 export interface RepositorioDeTardanzas {
   guardarPolitica(politica: PoliticaDePenalizacionPorTardanzas): Promise<void>;
   buscarPoliticaVigente(sede: string, fecha: string): Promise<PoliticaDePenalizacionPorTardanzas | undefined>;
-  contarTardanzas(idHuellero: string, inicio: string, fin: string): Promise<number>;
+  contarTardanzas(dni: string, inicio: string, fin: string): Promise<number>;
 }
 
 export type RepositorioParaCalcularTardanzas = Pick<RepositorioDeTardanzas, "buscarPoliticaVigente" | "contarTardanzas">;
@@ -55,7 +55,7 @@ export async function calcularTardanza(
   const minutosDeTardanza = calcularMinutosDeTardanza(solicitud.entradaProgramada, solicitud.entradaReal);
   if (minutosDeTardanza <= politica.toleranciaEnMinutos) return undefined;
   const periodo = obtenerPeriodoDePlanilla(solicitud.fecha);
-  const tardanzasAnteriores = await repositorio.contarTardanzas(solicitud.idHuellero, periodo.inicio, periodo.fin);
+  const tardanzasAnteriores = await repositorio.contarTardanzas(solicitud.dni, periodo.inicio, periodo.fin);
   return {
     minutosDeTardanza,
     minutosPenalizados: calcularMinutosPenalizados(tardanzasAnteriores + 1, politica),
