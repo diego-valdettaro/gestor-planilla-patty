@@ -16,7 +16,7 @@ export type MotivoDeNoAsistencia = "falta" | "descanso" | "feriado" | "vacacione
 export type EstadoDeHoraExtra = "pendiente" | "aprobada" | "rechazada";
 export type TipoDeBloqueoDePeriodo = "asistencia" | "hora-extra";
 
-export interface FiltrosDeResumen { periodoId: string; sede?: string; idHuellero?: string; }
+export interface FiltrosDeResumen { periodoId: string; sede?: string; dni?: string; }
 export interface TotalesDeHorasExtra { minutosAl25: number; minutosAl35: number; }
 export type ConteosDeNoAsistencia = Record<MotivoDeNoAsistencia, number>;
 export interface DetalleDeJornada {
@@ -33,13 +33,13 @@ export interface DetalleDeJornada {
 }
 export interface BloqueoDePeriodo {
   tipo: TipoDeBloqueoDePeriodo;
-  idHuellero: string;
+  dni: string;
   nombre: string;
   grupo: string;
   fecha: string;
 }
 export interface FilaDeResumen {
-  idHuellero: string;
+  dni: string;
   nombre: string;
   grupo: string;
   jornadasTrabajadas: number;
@@ -52,7 +52,7 @@ export interface FilaDeResumen {
 }
 export interface ResumenDePeriodo {
   filas: FilaDeResumen[];
-  totales: Omit<FilaDeResumen, "idHuellero" | "nombre" | "grupo" | "jornadas">;
+  totales: Omit<FilaDeResumen, "dni" | "nombre" | "grupo" | "jornadas">;
   bloqueos: BloqueoDePeriodo[];
 }
 

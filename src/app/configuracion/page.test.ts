@@ -126,7 +126,7 @@ describe("página de Configuración (/configuracion)", () => {
     filasDeSedes.mockReturnValue([{ nombre: "Centro", grupo: "Tiendas" }]);
     listarGrupos.mockResolvedValue(["Tiendas", "Bodega"]);
     listarColaboradores.mockResolvedValue([
-      { idHuellero: "H-1", nombre: "Ana", sede: "Centro", grupo: "Tiendas", activo: true },
+      { dni: "00000001", nombre: "Ana", sede: "Centro", grupo: "Tiendas", activo: true },
     ]);
 
     const html = await render({ grupo: "Bodega" });

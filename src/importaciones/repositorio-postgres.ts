@@ -22,9 +22,9 @@ import type { AsistenciaExistente, ImportacionDeAsistencias, RepositorioDeImport
 export class RepositorioPostgresDeImportaciones implements RepositorioDeImportaciones {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}
 
-  async buscarColaborador(idHuellero: string): Promise<{ idHuellero: string } | undefined> {
-    const [colaborador] = await this.db.select({ idHuellero: colaboradores.idHuellero })
-      .from(colaboradores).where(eq(colaboradores.idHuellero, idHuellero));
+  async buscarColaborador(dni: string): Promise<{ dni: string } | undefined> {
+    const [colaborador] = await this.db.select({ dni: colaboradores.dni })
+      .from(colaboradores).where(eq(colaboradores.dni, dni));
     return colaborador;
   }
 
@@ -34,21 +34,21 @@ export class RepositorioPostgresDeImportaciones implements RepositorioDeImportac
     return sedesCoincidentes.length === 1 ? sedesCoincidentes[0].nombre : undefined;
   }
 
-  async buscarTurnoPublicado(idHuellero: string, fecha: string): Promise<{
-    idHuellero: string;
+  async buscarTurnoPublicado(dni: string, fecha: string): Promise<{
+    dni: string;
     fecha: string;
     sede: string | null;
     descanso: boolean;
     motivoNoAsistencia: MotivoPlanificadoDeNoAsistencia | null;
   } | undefined> {
     const [turno] = await this.db.select({
-      idHuellero: turnosPublicados.idHuellero,
+      dni: turnosPublicados.dni,
       fecha: turnosPublicados.fecha,
       sede: turnosPublicados.sede,
       descanso: turnosPublicados.descanso,
       motivoNoAsistencia: turnosPublicados.motivoNoAsistencia,
     })
-      .from(turnosPublicados).where(and(eq(turnosPublicados.idHuellero, idHuellero), eq(turnosPublicados.fecha, fecha)));
+      .from(turnosPublicados).where(and(eq(turnosPublicados.dni, dni), eq(turnosPublicados.fecha, fecha)));
     return turno;
   }
 
@@ -58,26 +58,26 @@ export class RepositorioPostgresDeImportaciones implements RepositorioDeImportac
     return Boolean(periodo);
   }
 
-  async buscarAsistenciasExistentes(identidades: Array<{ idHuellero: string; fecha: string }>): Promise<AsistenciaExistente[]> {
+  async buscarAsistenciasExistentes(identidades: Array<{ dni: string; fecha: string }>): Promise<AsistenciaExistente[]> {
     if (!identidades.length) return [];
     const filas = await this.db.select({
       id: asistenciasEsperadas.id,
-      idHuellero: asistenciasEsperadas.idHuellero,
+      dni: asistenciasEsperadas.dni,
       fecha: asistenciasEsperadas.fecha,
       estado: asistenciasEsperadas.estado,
       entradaPropuesta: asistenciasEsperadas.entradaPropuesta,
       salidaPropuesta: asistenciasEsperadas.salidaPropuesta,
       entradaReal: asistenciasEsperadas.entradaReal,
       salidaReal: asistenciasEsperadas.salidaReal,
-    }).from(asistenciasEsperadas).where(or(...identidades.map(({ idHuellero, fecha }) =>
-      and(eq(asistenciasEsperadas.idHuellero, idHuellero), eq(asistenciasEsperadas.fecha, fecha)),
+    }).from(asistenciasEsperadas).where(or(...identidades.map(({ dni, fecha }) =>
+      and(eq(asistenciasEsperadas.dni, dni), eq(asistenciasEsperadas.fecha, fecha)),
     )));
 
     const idsManuales = filas.filter((fila) => fila.estado === "manual").map((fila) => fila.id);
     const estadosManualesPorAsistencia = await this.buscarUltimoEstadoManualPorAsistencia(idsManuales);
 
     return filas.map((fila) => ({
-      idHuellero: fila.idHuellero,
+      dni: fila.dni,
       fecha: fila.fecha,
       asistenciaId: fila.id,
       estado: fila.estado,
@@ -119,12 +119,12 @@ export class RepositorioPostgresDeImportaciones implements RepositorioDeImportac
       }
       for (const propuesta of importacion.propuestas) {
         const [actualizada] = await tx.insert(asistenciasEsperadas).values(propuesta).onConflictDoUpdate({
-          target: [asistenciasEsperadas.idHuellero, asistenciasEsperadas.fecha],
+          target: [asistenciasEsperadas.dni, asistenciasEsperadas.fecha],
           set: { entradaPropuesta: propuesta.entradaPropuesta, salidaPropuesta: propuesta.salidaPropuesta },
           where: eq(asistenciasEsperadas.estado, "pendiente"),
         }).returning({ id: asistenciasEsperadas.id });
         if (!actualizada) {
-          throw new Error(`La asistencia de ${propuesta.idHuellero} el ${propuesta.fecha} cambió mientras se aplicaba la importación.`);
+          throw new Error(`La asistencia de ${propuesta.dni} el ${propuesta.fecha} cambió mientras se aplicaba la importación.`);
         }
       }
       for (const reemplazo of importacion.reemplazos) {
@@ -153,20 +153,20 @@ export class RepositorioPostgresDeImportaciones implements RepositorioDeImportac
           eq(asistenciasEsperadas.estado, reemplazo.estadoAnterior),
         )).returning({ id: asistenciasEsperadas.id });
         if (!actualizada) {
-          throw new Error(`La asistencia de ${reemplazo.idHuellero} el ${reemplazo.fecha} cambió mientras se aplicaba la importación.`);
+          throw new Error(`La asistencia de ${reemplazo.dni} el ${reemplazo.fecha} cambió mientras se aplicaba la importación.`);
         }
       }
     });
   }
 
   async listarAsistenciasPendientes(): Promise<Array<{
-    idHuellero: string;
+    dni: string;
     fecha: string;
     entradaPropuesta: string | null;
     salidaPropuesta: string | null;
   }>> {
     return this.db.select({
-      idHuellero: asistenciasEsperadas.idHuellero,
+      dni: asistenciasEsperadas.dni,
       fecha: asistenciasEsperadas.fecha,
       entradaPropuesta: asistenciasEsperadas.entradaPropuesta,
       salidaPropuesta: asistenciasEsperadas.salidaPropuesta,
@@ -174,18 +174,18 @@ export class RepositorioPostgresDeImportaciones implements RepositorioDeImportac
   }
 
   async listarAsistenciasConfirmadas(): Promise<Array<{
-    idHuellero: string;
+    dni: string;
     fecha: string;
     entradaReal: string;
     salidaReal: string;
   }>> {
     return this.db.select({
-      idHuellero: asistenciasEsperadas.idHuellero,
+      dni: asistenciasEsperadas.dni,
       fecha: asistenciasEsperadas.fecha,
       entradaReal: asistenciasEsperadas.entradaReal,
       salidaReal: asistenciasEsperadas.salidaReal,
     }).from(asistenciasEsperadas).where(eq(asistenciasEsperadas.estado, "confirmada")).then((asistencias) =>
-      asistencias.filter((asistencia): asistencia is { idHuellero: string; fecha: string; entradaReal: string; salidaReal: string } =>
+      asistencias.filter((asistencia): asistencia is { dni: string; fecha: string; entradaReal: string; salidaReal: string } =>
         asistencia.entradaReal !== null && asistencia.salidaReal !== null,
       ),
     );
@@ -193,24 +193,24 @@ export class RepositorioPostgresDeImportaciones implements RepositorioDeImportac
 
   async listarMarcasSinTurno(): Promise<Array<{
     importacionId: string;
-    idHuellero: string;
+    dni: string;
     fecha: string;
     entradaPropuesta?: string;
     salidaPropuesta?: string;
   }>> {
     const marcas = await this.db.select({
       importacionId: marcasCrudas.importacionId,
-      idHuellero: marcasCrudas.idHuellero,
+      dni: marcasCrudas.dni,
       fecha: marcasCrudas.fecha,
       instante: marcasCrudas.instante,
     })
       .from(marcasCrudas)
-      .innerJoin(colaboradores, eq(marcasCrudas.idHuellero, colaboradores.idHuellero))
-      .leftJoin(turnosPublicados, and(eq(marcasCrudas.idHuellero, turnosPublicados.idHuellero), eq(marcasCrudas.fecha, turnosPublicados.fecha)))
+      .innerJoin(colaboradores, eq(marcasCrudas.dni, colaboradores.dni))
+      .leftJoin(turnosPublicados, and(eq(marcasCrudas.dni, turnosPublicados.dni), eq(marcasCrudas.fecha, turnosPublicados.fecha)))
       .where(isNull(turnosPublicados.id));
     const agrupadas = new Map<string, typeof marcas>();
     for (const marca of marcas) {
-      const clave = `${marca.importacionId}:${marca.idHuellero}:${marca.fecha}`;
+      const clave = `${marca.importacionId}:${marca.dni}:${marca.fecha}`;
       agrupadas.set(clave, [...(agrupadas.get(clave) ?? []), marca]);
     }
     return [...agrupadas.values()].map((marcasDelDia) => {
@@ -218,7 +218,7 @@ export class RepositorioPostgresDeImportaciones implements RepositorioDeImportac
       const propuesta = marcasDelDia.length > 1 && marcasDelDia.length % 2 === 0;
       return {
         importacionId: marcasDelDia[0].importacionId,
-        idHuellero: marcasDelDia[0].idHuellero,
+        dni: marcasDelDia[0].dni,
         fecha: marcasDelDia[0].fecha,
         ...(propuesta ? { entradaPropuesta: marcasDelDia[0].instante, salidaPropuesta: marcasDelDia.at(-1)!.instante } : {}),
       };

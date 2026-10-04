@@ -12,12 +12,12 @@ function crearRepositorioEnMemoria(): {
 
   return {
     repositorio: {
-      buscarPorIdHuellero: async (idHuellero) => colaboradores.get(idHuellero),
+      buscarPorDni: async (dni) => colaboradores.get(dni),
       guardar: async (colaborador) => {
-        colaboradores.set(colaborador.idHuellero, colaborador);
+        colaboradores.set(colaborador.dni, colaborador);
       },
       actualizar: async (colaborador) => {
-        colaboradores.set(colaborador.idHuellero, colaborador);
+        colaboradores.set(colaborador.dni, colaborador);
       },
       tieneBorradorAbiertoEnGrupo: async () => false,
     },
@@ -34,7 +34,7 @@ describe("casos de uso de colaboradores en el servidor", () => {
 
     await expect(
       casosDeUso.registrar({
-        idHuellero: "HU-1024",
+        dni: "00001024",
         nombre: "Ana Rojas",
         sede: "Lima",
         grupo: "Tiendas",
@@ -45,15 +45,15 @@ describe("casos de uso de colaboradores en el servidor", () => {
 
   it("cambia el grupo de un colaborador usando el actor de la sesión del servidor", async () => {
     const { repositorio, colaboradores } = crearRepositorioEnMemoria();
-    colaboradores.set("HU-1024", {
-      idHuellero: "HU-1024", nombre: "Ana Rojas", sede: "Lima", grupo: "Tiendas", activo: true,
+    colaboradores.set("00001024", {
+      dni: "00001024", nombre: "Ana Rojas", sede: "Lima", grupo: "Tiendas", activo: true,
     });
     const casosDeUso = crearCasosDeUsoDeColaboradores(repositorio, {
       obtenerActorActual: async () => ({ id: "admin-1", rol: "administracion" }),
     });
 
-    await casosDeUso.cambiarGrupo("HU-1024", "Taller");
+    await casosDeUso.cambiarGrupo("00001024", "Taller");
 
-    expect(colaboradores.get("HU-1024")).toMatchObject({ grupo: "Taller" });
+    expect(colaboradores.get("00001024")).toMatchObject({ grupo: "Taller" });
   });
 });

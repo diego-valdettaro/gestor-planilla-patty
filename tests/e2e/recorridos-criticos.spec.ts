@@ -315,7 +315,7 @@ test("confirma colaboradores por un rango que corta la semana desde las vistas m
   await expect(page).toHaveURL(/\/turnos$/);
 
   const semana = fechaDeLaSemanaDeDemo(0);
-  await page.goto(`/asistencias?vista=mensual&grupo=Tiendas&fecha=${semana}&colaborador=DEMO-EVA`);
+  await page.goto(`/asistencias?vista=mensual&grupo=Tiendas&fecha=${semana}&colaborador=99900006`);
   await page.getByRole("button", { name: "Confirmar por rango" }).click();
   let dialogo = page.getByRole("dialog", { name: "Confirmar asistencias por rango" });
   await expect(dialogo.getByText("Eva Confirmable")).toBeVisible();
@@ -446,7 +446,7 @@ test("Administración confirma o cancela el ajuste de una asistencia confirmada"
 
   // Eva queda confirmada con instantánea de turno por el recorrido de confirmación por rango anterior.
   const martes = fechaDeLaSemanaDeDemo(1);
-  await page.goto(`/asistencias?vista=mensual&grupo=Tiendas&fecha=${martes}&colaborador=DEMO-EVA`);
+  await page.goto(`/asistencias?vista=mensual&grupo=Tiendas&fecha=${martes}&colaborador=99900006`);
   const celda = page.getByRole("button", { name: new RegExp(`Asistencia del ${martes}`) });
   await celda.click();
   const dialogo = page.getByRole("dialog", { name: "Ajustar asistencia" });

@@ -7,7 +7,7 @@ import { CalendarioDeAsistencias } from "./calendario-de-asistencias";
 describe("calendario mensual de asistencias", () => {
   it("muestra la sede de una jornada laboral y el motivo de una no asistencia", () => {
     const html = renderToStaticMarkup(createElement(CalendarioDeAsistencias, {
-      idHuellero: "HU-1",
+      dni: "00000011",
       nombreColaborador: "Ana Pérez",
       dias: ["2031-03-10", "2031-03-11"],
       desfase: 0,

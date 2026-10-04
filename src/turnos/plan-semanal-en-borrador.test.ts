@@ -26,22 +26,22 @@ function crearRepositorioEnMemoria(): {
         const existente = [...planes.values()].find((item) => item.id === id);
         return existente ? { ...existente, celdas: [...celdas.values()].filter((celda) => celda.planId === id) } : undefined;
       },
-      guardarCelda: async (celda) => { celdas.set(`${celda.planId}:${celda.idHuellero}:${celda.fecha}`, celda); },
-      guardarCeldas: async (celdasParaGuardar) => { celdasParaGuardar.forEach((celda) => celdas.set(`${celda.planId}:${celda.idHuellero}:${celda.fecha}`, celda)); },
+      guardarCelda: async (celda) => { celdas.set(`${celda.planId}:${celda.dni}:${celda.fecha}`, celda); },
+      guardarCeldas: async (celdasParaGuardar) => { celdasParaGuardar.forEach((celda) => celdas.set(`${celda.planId}:${celda.dni}:${celda.fecha}`, celda)); },
       reemplazarCeldasDelPlan: async (planId, celdasParaGuardar) => {
         [...celdas.keys()].filter((clave) => clave.startsWith(`${planId}:`)).forEach((clave) => celdas.delete(clave));
-        celdasParaGuardar.forEach((celda) => celdas.set(`${celda.planId}:${celda.idHuellero}:${celda.fecha}`, celda));
+        celdasParaGuardar.forEach((celda) => celdas.set(`${celda.planId}:${celda.dni}:${celda.fecha}`, celda));
       },
-      borrarCelda: async (planId, idHuellero, fecha) => { celdas.delete(`${planId}:${idHuellero}:${fecha}`); },
+      borrarCelda: async (planId, dni, fecha) => { celdas.delete(`${planId}:${dni}:${fecha}`); },
       buscarPublicado: async () => undefined,
-      colaboradorPerteneceAEquipo: async (idHuellero, equipo) => (idHuellero === "HU-1024" || idHuellero === "HU-2048") && equipo === "tiendas",
+      colaboradorPerteneceAEquipo: async (dni, equipo) => (dni === "00001024" || dni === "00002048") && equipo === "tiendas",
       sedeActivaPerteneceAlGrupo: async (sede, equipo) => sede === "Lima" && equipo === "tiendas",
       buscarModeloDeHorario: async (id) => id === "modelo-apertura"
         ? { id, sede: "Lima", nombre: "Apertura", entrada: "09:00", salida: "18:00", activo: true }
         : undefined,
       listarColaboradoresActivosPorEquipo: async () => [],
       listarHorariosPublicadosDelEquipoEnSemana: async () => [{
-        idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima",
+        dni: "00001024", fecha: "2026-09-01", sede: "Lima",
         entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false,
       }],
     },
@@ -57,13 +57,13 @@ describe("casos de uso de planes semanales en borrador", () => {
 
     const plan = await casosDeUso.obtenerOCrear("2026-08-31", "tiendas");
     await casosDeUso.guardarCelda(plan.id, {
-      idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima",
+      dni: "00001024", fecha: "2026-09-01", sede: "Lima",
       modeloHorarioId: "modelo-apertura",
       entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false,
     });
 
     const recuperado = await casosDeUso.obtenerOCrear("2026-08-31", "tiendas");
-    expect(recuperado.celdas).toEqual([expect.objectContaining({ idHuellero: "HU-1024", fecha: "2026-09-01", modeloHorarioId: "modelo-apertura", descanso: false })]);
+    expect(recuperado.celdas).toEqual([expect.objectContaining({ dni: "00001024", fecha: "2026-09-01", modeloHorarioId: "modelo-apertura", descanso: false })]);
     expect(turnosPublicados).toHaveLength(0);
     expect(asistenciasEsperadas).toHaveLength(0);
   });
@@ -76,10 +76,10 @@ describe("casos de uso de planes semanales en borrador", () => {
     const plan = await casosDeUso.obtenerOCrear("2026-08-31", "tiendas");
 
     await casosDeUso.guardarCelda(plan.id, {
-      idHuellero: "HU-1024", fecha: "2026-09-01", sede: null,
+      dni: "00001024", fecha: "2026-09-01", sede: null,
       entradaProgramada: null, salidaProgramada: null, descanso: true, motivoNoAsistencia: "descanso",
     });
-    await casosDeUso.borrarCelda(plan.id, "HU-1024", "2026-09-01");
+    await casosDeUso.borrarCelda(plan.id, "00001024", "2026-09-01");
 
     expect((await casosDeUso.obtenerOCrear("2026-08-31", "tiendas")).celdas).toEqual([]);
   });
@@ -98,10 +98,10 @@ describe("casos de uso de planes semanales en borrador", () => {
     const plan = await casosDeUso.obtenerOCrear("2026-08-31", "tiendas");
 
     await casosDeUso.guardarBorrador(plan.id, [{
-      idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima",
+      dni: "00001024", fecha: "2026-09-01", sede: "Lima",
       entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false,
     }, {
-      idHuellero: "HU-1024", fecha: "2026-09-02", sede: null,
+      dni: "00001024", fecha: "2026-09-02", sede: null,
       entradaProgramada: null, salidaProgramada: null, descanso: true, motivoNoAsistencia: "descanso",
     }]);
 
@@ -117,10 +117,10 @@ describe("casos de uso de planes semanales en borrador", () => {
     const plan = await casosDeUso.obtenerOCrear("2026-08-31", "tiendas");
 
     await expect(casosDeUso.guardarBorrador(plan.id, [{
-      idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima",
+      dni: "00001024", fecha: "2026-09-01", sede: "Lima",
       entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false,
     }, {
-      idHuellero: "HU-1024", fecha: "2026-09-07", sede: "Lima",
+      dni: "00001024", fecha: "2026-09-07", sede: "Lima",
       entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false,
     }])).rejects.toThrow("La fecha no pertenece a la semana del plan.");
 
@@ -137,7 +137,7 @@ describe("casos de uso de planes semanales en borrador", () => {
     await casosDeUso.copiarSemanaAnterior(plan.id);
 
     expect((await casosDeUso.obtenerOCrear("2026-09-07", "tiendas")).celdas).toEqual([
-      expect.objectContaining({ idHuellero: "HU-1024", fecha: "2026-09-08", descanso: false }),
+      expect.objectContaining({ dni: "00001024", fecha: "2026-09-08", descanso: false }),
     ]);
     expect(turnosPublicados).toEqual([]);
     expect(asistenciasEsperadas).toEqual([]);
@@ -177,14 +177,14 @@ describe("casos de uso de planes semanales en borrador", () => {
     });
     const plan = await casosDeUso.obtenerOCrear("2026-09-07", "tiendas");
     await repositorio.guardarCelda({
-      planId: plan.id, idHuellero: "HU-2048", fecha: "2026-09-08", sede: "Lima",
+      planId: plan.id, dni: "00002048", fecha: "2026-09-08", sede: "Lima",
       entradaProgramada: "10:00", salidaProgramada: "19:00", descanso: false,
     });
 
     await casosDeUso.copiarSemanaAnterior(plan.id);
 
     expect((await casosDeUso.obtenerOCrear("2026-09-07", "tiendas")).celdas).toEqual([
-      expect.objectContaining({ idHuellero: "HU-1024", fecha: "2026-09-08", entradaProgramada: "09:00", salidaProgramada: "18:00" }),
+      expect.objectContaining({ dni: "00001024", fecha: "2026-09-08", entradaProgramada: "09:00", salidaProgramada: "18:00" }),
     ]);
   });
 
@@ -195,11 +195,11 @@ describe("casos de uso de planes semanales en borrador", () => {
     });
     const plan = await casosDeUso.obtenerOCrear("2026-09-07", "tiendas");
     const celdaProcesada = {
-      planId: plan.id, idHuellero: "HU-1024", fecha: "2026-09-08", sede: "Lima",
+      planId: plan.id, dni: "00001024", fecha: "2026-09-08", sede: "Lima",
       entradaProgramada: "10:00", salidaProgramada: "19:00", descanso: false,
     };
     await repositorio.guardarCelda(celdaProcesada);
-    repositorio.horarioSemanalEstaProcesado = async (idHuellero) => idHuellero === "HU-1024";
+    repositorio.horarioSemanalEstaProcesado = async (dni) => dni === "00001024";
 
     await casosDeUso.copiarSemanaAnterior(plan.id);
 
@@ -216,8 +216,8 @@ describe("casos de uso de planes semanales en borrador", () => {
     const plan = await casosDeUso.obtenerOCrear("2026-08-31", "tiendas");
 
     await casosDeUso.aplicarHorarioACeldas(plan.id, [
-      { idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima" },
-      { idHuellero: "HU-1024", fecha: "2026-09-02", sede: "Lima" },
+      { dni: "00001024", fecha: "2026-09-01", sede: "Lima" },
+      { dni: "00001024", fecha: "2026-09-02", sede: "Lima" },
     ], { entradaProgramada: null, salidaProgramada: null, descanso: true });
 
     expect((await casosDeUso.obtenerOCrear("2026-08-31", "tiendas")).celdas).toEqual([
@@ -234,10 +234,10 @@ describe("casos de uso de planes semanales en borrador", () => {
 
     const plan = await finanzas.obtenerOCrear("2026-08-31", "tiendas");
     await finanzas.guardarCelda(plan.id, {
-      idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima",
+      dni: "00001024", fecha: "2026-09-01", sede: "Lima",
       entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false,
     });
-    await finanzas.borrarCelda(plan.id, "HU-1024", "2026-09-01");
+    await finanzas.borrarCelda(plan.id, "00001024", "2026-09-01");
 
     expect((await finanzas.obtenerOCrear("2026-08-31", "tiendas")).celdas).toEqual([]);
   });
@@ -248,28 +248,28 @@ describe("casos de uso de planes semanales en borrador", () => {
       obtenerActorActual: async () => ({ id: "administracion-1", rol: "administracion" }),
     });
     const plan = await administracion.obtenerOCrear("2026-08-31", "tiendas");
-    const celda = { idHuellero: "HU-1024", fecha: "2026-09-07", sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false };
+    const celda = { dni: "00001024", fecha: "2026-09-07", sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false };
 
     await expect(administracion.guardarCelda(plan.id, celda)).rejects.toThrow("La fecha no pertenece a la semana del plan.");
-    await expect(administracion.guardarCelda(plan.id, { ...celda, fecha: "2026-09-01", idHuellero: "HU-9999" })).rejects.toThrow("El colaborador no pertenece al equipo operativo del plan.");
+    await expect(administracion.guardarCelda(plan.id, { ...celda, fecha: "2026-09-01", dni: "00009999" })).rejects.toThrow("El colaborador no pertenece al equipo operativo del plan.");
     await expect(administracion.guardarCelda(plan.id, { ...celda, fecha: "2026-09-01", sede: "Tienda Norte" })).rejects.toThrow("La sede debe estar activa y pertenecer al grupo del colaborador.");
   });
 
   it("impide corregir en el borrador una jornada publicada que ya fue procesada", async () => {
     const { repositorio } = crearRepositorioEnMemoria();
-    repositorio.buscarPublicado = async (idHuellero, fecha) => idHuellero === "HU-1024" && fecha === "2026-09-01"
-      ? { idHuellero, fecha, sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false }
+    repositorio.buscarPublicado = async (dni, fecha) => dni === "00001024" && fecha === "2026-09-01"
+      ? { dni, fecha, sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false }
       : undefined;
     repositorio.asistenciaEstaProcesada = async () => true;
     const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio, {
       obtenerActorActual: async () => ({ id: "operaciones-1", rol: "operaciones" }),
     });
     const plan = await casosDeUso.obtenerOCrear("2026-08-31", "tiendas");
-    const celda = { idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima", entradaProgramada: "10:00", salidaProgramada: "19:00", descanso: false };
+    const celda = { dni: "00001024", fecha: "2026-09-01", sede: "Lima", entradaProgramada: "10:00", salidaProgramada: "19:00", descanso: false };
 
     await expect(casosDeUso.guardarCelda(plan.id, celda)).rejects.toThrow("El horario semanal ya fue procesado y no se puede corregir.");
     await expect(casosDeUso.aplicarHorarioACeldas(plan.id, [celda], celda)).rejects.toThrow("El horario semanal ya fue procesado y no se puede corregir.");
-    await expect(casosDeUso.borrarCelda(plan.id, celda.idHuellero, celda.fecha)).rejects.toThrow("El horario semanal ya fue publicado y no se puede editar desde el borrador.");
+    await expect(casosDeUso.borrarCelda(plan.id, celda.dni, celda.fecha)).rejects.toThrow("El horario semanal ya fue publicado y no se puede editar desde el borrador.");
   });
 
   it("bloquea guardar el borrador completo cuando el horario semanal fue procesado", async () => {
@@ -281,7 +281,7 @@ describe("casos de uso de planes semanales en borrador", () => {
     const plan = await casosDeUso.obtenerOCrear("2026-08-31", "tiendas");
 
     await expect(casosDeUso.guardarBorrador(plan.id, [{
-      idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false,
+      dni: "00001024", fecha: "2026-09-01", sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false,
     }])).rejects.toThrow("El horario semanal ya fue procesado y no se puede editar.");
   });
 
@@ -291,10 +291,10 @@ describe("casos de uso de planes semanales en borrador", () => {
       obtenerActorActual: async () => ({ id: "operaciones-1", rol: "operaciones" }),
     });
     const plan = await casosDeUso.obtenerOCrear("2026-08-31", "tiendas");
-    const celdaProcesada = { planId: plan.id, idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false };
-    const celdaEditable = { planId: plan.id, idHuellero: "HU-2048", fecha: "2026-09-01", sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false };
+    const celdaProcesada = { planId: plan.id, dni: "00001024", fecha: "2026-09-01", sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false };
+    const celdaEditable = { planId: plan.id, dni: "00002048", fecha: "2026-09-01", sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false };
     await repositorio.guardarCeldas([celdaProcesada, celdaEditable]);
-    repositorio.horarioSemanalEstaProcesado = async (idHuellero) => idHuellero === "HU-1024";
+    repositorio.horarioSemanalEstaProcesado = async (dni) => dni === "00001024";
 
     await casosDeUso.guardarBorrador(plan.id, [celdaProcesada, { ...celdaEditable, entradaProgramada: "10:00", salidaProgramada: "19:00" }]);
 
@@ -305,8 +305,8 @@ describe("casos de uso de planes semanales en borrador", () => {
 
   it("no copia la semana anterior sobre una jornada ya publicada", async () => {
     const { repositorio } = crearRepositorioEnMemoria();
-    repositorio.buscarPublicado = async (idHuellero, fecha) => idHuellero === "HU-1024" && fecha === "2026-09-08"
-      ? { idHuellero, fecha, sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false }
+    repositorio.buscarPublicado = async (dni, fecha) => dni === "00001024" && fecha === "2026-09-08"
+      ? { dni, fecha, sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false }
       : undefined;
     const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio, {
       obtenerActorActual: async () => ({ id: "operaciones-1", rol: "operaciones" }),

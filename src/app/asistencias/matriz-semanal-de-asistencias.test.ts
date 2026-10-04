@@ -9,10 +9,10 @@ describe("matriz semanal de asistencias", () => {
     const dias = ["2031-03-10", "2031-03-11", "2031-03-12", "2031-03-13", "2031-03-14", "2031-03-15", "2031-03-16"];
     const html = renderToStaticMarkup(createElement(MatrizSemanalDeAsistencias, {
       dias,
-      colaboradores: [{ idHuellero: "HU-1", nombre: "Ana Torres" }],
+      colaboradores: [{ dni: "00000011", nombre: "Ana Torres" }],
       asistencias: [
-        { idHuellero: "HU-1", fecha: dias[0], estado: "confirmada", estadoManual: null, entrada: `${dias[0]}T09:00`, salida: `${dias[0]}T18:00`, sedeProgramada: "Centro", entradaPropuesta: null, salidaPropuesta: null, hayMarcasCrudas: true, enPeriodoCerrado: false },
-        { idHuellero: "HU-1", fecha: dias[1], estado: "manual", estadoManual: "feriado", entrada: null, salida: null, sedeProgramada: null, entradaPropuesta: null, salidaPropuesta: null, hayMarcasCrudas: false, enPeriodoCerrado: false },
+        { dni: "00000011", fecha: dias[0], estado: "confirmada", estadoManual: null, entrada: `${dias[0]}T09:00`, salida: `${dias[0]}T18:00`, sedeProgramada: "Centro", entradaPropuesta: null, salidaPropuesta: null, hayMarcasCrudas: true, enPeriodoCerrado: false },
+        { dni: "00000011", fecha: dias[1], estado: "manual", estadoManual: "feriado", entrada: null, salida: null, sedeProgramada: null, entradaPropuesta: null, salidaPropuesta: null, hayMarcasCrudas: false, enPeriodoCerrado: false },
       ],
     }));
 

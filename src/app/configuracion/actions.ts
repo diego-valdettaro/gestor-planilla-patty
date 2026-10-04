@@ -77,7 +77,7 @@ export async function asignarEquipoOperativoASede(
 export async function guardarColaborador(formData: FormData): Promise<void> {
   const casos = crearCasosDeUsoDeColaboradores(repositorioDeColaboradores, { obtenerActorActual });
   await casos.registrar({
-    idHuellero: texto(formData, "idHuellero"),
+    dni: texto(formData, "dni"),
     nombre: texto(formData, "nombre"),
     sede: texto(formData, "sede"),
     grupo: texto(formData, "grupo"),
@@ -99,7 +99,7 @@ export async function cambiarGrupoDeColaboradorDeConfiguracion(
 ): Promise<EstadoDeCambioDeGrupoDeColaborador> {
   try {
     const casos = crearCasosDeUsoDeColaboradores(repositorioDeColaboradores, { obtenerActorActual });
-    await casos.cambiarGrupo(texto(formData, "idHuellero"), texto(formData, "grupo"));
+    await casos.cambiarGrupo(texto(formData, "dni"), texto(formData, "grupo"));
     revalidatePath("/configuracion");
     revalidatePath("/turnos");
     revalidatePath("/asistencias");
@@ -112,9 +112,9 @@ export async function cambiarGrupoDeColaboradorDeConfiguracion(
 export async function desactivarColaborador(formData: FormData): Promise<void> {
   await exigirAdministracion();
   const casos = crearCasosDeUsoDeColaboradores(repositorioDeColaboradores, { obtenerActorActual });
-  const idHuellero = texto(formData, "idHuellero");
-  const colaborador = await casos.consultar(idHuellero);
-  if (!colaborador) throw new Error("No existe un colaborador con ese ID de huellero.");
+  const dni = texto(formData, "dni");
+  const colaborador = await casos.consultar(dni);
+  if (!colaborador) throw new Error("No existe un colaborador con ese DNI.");
   await casos.actualizar({ ...colaborador, activo: false });
   revalidatePath("/configuracion");
   revalidatePath("/turnos");
@@ -124,9 +124,9 @@ export async function desactivarColaborador(formData: FormData): Promise<void> {
 export async function reactivarColaborador(formData: FormData): Promise<void> {
   await exigirAdministracion();
   const casos = crearCasosDeUsoDeColaboradores(repositorioDeColaboradores, { obtenerActorActual });
-  const idHuellero = texto(formData, "idHuellero");
-  const colaborador = await casos.consultar(idHuellero);
-  if (!colaborador) throw new Error("No existe un colaborador con ese ID de huellero.");
+  const dni = texto(formData, "dni");
+  const colaborador = await casos.consultar(dni);
+  if (!colaborador) throw new Error("No existe un colaborador con ese DNI.");
   await casos.actualizar({ ...colaborador, activo: true });
   revalidatePath("/configuracion");
   revalidatePath("/turnos");

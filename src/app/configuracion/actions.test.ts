@@ -71,13 +71,13 @@ describe("cambiar el grupo de un colaborador desde Configuración", () => {
     simulacro.actor.mockResolvedValue(actor);
     simulacro.cambiarGrupoDeColaborador.mockResolvedValue(undefined);
 
-    const primerEstado = await cambiarGrupoDeColaboradorDeConfiguracion({}, formulario({ idHuellero: "HU-1024", grupo: "Taller" }));
-    const segundoEstado = await cambiarGrupoDeColaboradorDeConfiguracion(primerEstado, formulario({ idHuellero: "HU-1024", grupo: "Tiendas" }));
+    const primerEstado = await cambiarGrupoDeColaboradorDeConfiguracion({}, formulario({ dni: "00001024", grupo: "Taller" }));
+    const segundoEstado = await cambiarGrupoDeColaboradorDeConfiguracion(primerEstado, formulario({ dni: "00001024", grupo: "Tiendas" }));
 
     expect(primerEstado).toEqual({ listo: 1 });
     expect(segundoEstado).toEqual({ listo: 2 });
-    expect(simulacro.cambiarGrupoDeColaborador).toHaveBeenNthCalledWith(1, "HU-1024", "Taller");
-    expect(simulacro.cambiarGrupoDeColaborador).toHaveBeenNthCalledWith(2, "HU-1024", "Tiendas");
+    expect(simulacro.cambiarGrupoDeColaborador).toHaveBeenNthCalledWith(1, "00001024", "Taller");
+    expect(simulacro.cambiarGrupoDeColaborador).toHaveBeenNthCalledWith(2, "00001024", "Tiendas");
     expect(simulacro.revalidar).toHaveBeenCalledWith("/configuracion");
     expect(simulacro.revalidar).toHaveBeenCalledWith("/turnos");
     expect(simulacro.revalidar).toHaveBeenCalledWith("/asistencias");
@@ -87,7 +87,7 @@ describe("cambiar el grupo de un colaborador desde Configuración", () => {
     simulacro.actor.mockResolvedValue({ id: "admin-1", rol: "administracion" });
     simulacro.cambiarGrupoDeColaborador.mockRejectedValue(new Error("No se puede cambiar de grupo: el colaborador tiene un plan semanal en borrador en su grupo actual."));
 
-    await expect(cambiarGrupoDeColaboradorDeConfiguracion({}, formulario({ idHuellero: "HU-1024", grupo: "Taller" })))
+    await expect(cambiarGrupoDeColaboradorDeConfiguracion({}, formulario({ dni: "00001024", grupo: "Taller" })))
       .resolves.toEqual({ error: "No se puede cambiar de grupo: el colaborador tiene un plan semanal en borrador en su grupo actual." });
     expect(simulacro.revalidar).not.toHaveBeenCalled();
   });

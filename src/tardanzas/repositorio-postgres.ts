@@ -17,10 +17,10 @@ export class RepositorioPostgresDeTardanzas implements RepositorioDeTardanzas {
     return buscarPoliticaVigente(this.db, sede, fecha);
   }
 
-  async contarTardanzas(idHuellero: string, inicio: string, fin: string): Promise<number> {
+  async contarTardanzas(dni: string, inicio: string, fin: string): Promise<number> {
     const filas = await this.db.select({ id: tardanzas.id }).from(tardanzas)
       .innerJoin(asistenciasEsperadas, eq(tardanzas.asistenciaId, asistenciasEsperadas.id))
-      .where(and(eq(asistenciasEsperadas.idHuellero, idHuellero), gte(asistenciasEsperadas.fecha, inicio), lte(asistenciasEsperadas.fecha, fin)));
+      .where(and(eq(asistenciasEsperadas.dni, dni), gte(asistenciasEsperadas.fecha, inicio), lte(asistenciasEsperadas.fecha, fin)));
     return filas.length;
   }
 }

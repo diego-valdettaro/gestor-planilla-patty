@@ -70,6 +70,6 @@ export function resumenDeRevision(datos: {
   } else {
     lineas.push("  QA manual: sin pasos disponibles; consultá la issue directamente.");
   }
-  lineas.push("  Ctrl+C corta el servidor. Al terminar la revisión: pnpm revisar:limpiar");
+  lineas.push("  Ctrl+C corta el servidor; el contenedor de PostgreSQL sigue activo. Al terminar la revisión: pnpm revisar:limpiar");
   return lineas;
 }

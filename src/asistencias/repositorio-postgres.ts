@@ -37,7 +37,7 @@ export interface FilaDeResumenMensual extends EvidenciaDeCeldaAsistencia {
 }
 
 export interface FilaDeResumenSemanal extends FilaDeResumenMensual {
-  idHuellero: string;
+  dni: string;
 }
 
 export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencias, RepositorioDeConfirmacionPorRango {
@@ -48,9 +48,9 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
   }
 
   async evaluarColaboradoresPorRango(solicitud: SolicitudDeEvaluacionPorRango): Promise<EvaluacionDeColaborador[]> {
-    const idsHuellero = solicitud.colaboradores.map(({ idHuellero }) => idHuellero);
-    if (!idsHuellero.length) return [];
-    const filas = await consultaJornadasDelRango(this.db, idsHuellero, solicitud.inicio, solicitud.fin);
+    const dnis = solicitud.colaboradores.map(({ dni }) => dni);
+    if (!dnis.length) return [];
+    const filas = await consultaJornadasDelRango(this.db, dnis, solicitud.inicio, solicitud.fin);
     return evaluarJornadasDelRango(solicitud, filas);
   }
 
@@ -61,26 +61,26 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
           lte(periodosPlanilla.inicio, solicitud.fin),
           gte(periodosPlanilla.fin, solicitud.inicio),
         )).for("update");
-        const filas = await consultaJornadasDelRango(tx, solicitud.idsHuellero, solicitud.inicio, solicitud.fin)
+        const filas = await consultaJornadasDelRango(tx, solicitud.dnis, solicitud.inicio, solicitud.fin)
           .for("update", { of: asistenciasEsperadas });
         const evaluacion = evaluarJornadasDelRango({
           inicio: solicitud.inicio,
           fin: solicitud.fin,
-          colaboradores: solicitud.idsHuellero.map((idHuellero) => ({ idHuellero, nombre: idHuellero })),
+          colaboradores: solicitud.dnis.map((dni) => ({ dni, nombre: dni })),
         }, filas);
         const noSeleccionable = evaluacion.find(({ seleccionable }) => !seleccionable);
         if (noSeleccionable) {
           const bloqueo = noSeleccionable.bloqueos[0];
           throw new Error(bloqueo
-            ? `${noSeleccionable.idHuellero}, ${bloqueo.fecha}: ${bloqueo.causa}`
-            : `${noSeleccionable.idHuellero} ya no tiene asistencias por registrar en el rango.`);
+            ? `${noSeleccionable.dni}, ${bloqueo.fecha}: ${bloqueo.causa}`
+            : `${noSeleccionable.dni} ya no tiene asistencias por registrar en el rango.`);
         }
 
         const jornadasPendientes = filas.filter(({ estado }) => estado === "pendiente").sort((a, b) => a.fecha.localeCompare(b.fecha));
         for (const fila of jornadasPendientes) {
           if (fila.motivoNoAsistencia || fila.descanso) {
             const [actualizada] = await tx.update(asistenciasEsperadas).set({ estado: "manual" }).where(and(
-              eq(asistenciasEsperadas.idHuellero, fila.idHuellero),
+              eq(asistenciasEsperadas.dni, fila.dni),
               eq(asistenciasEsperadas.fecha, fila.fecha),
               eq(asistenciasEsperadas.estado, "pendiente"),
             )).returning({ id: asistenciasEsperadas.id });
@@ -110,7 +110,7 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
             confirmadoPorId: responsableId,
             confirmadoEn: new Date(),
           }).where(and(
-            eq(asistenciasEsperadas.idHuellero, fila.idHuellero),
+            eq(asistenciasEsperadas.dni, fila.dni),
             eq(asistenciasEsperadas.fecha, fila.fecha),
             eq(asistenciasEsperadas.estado, "pendiente"),
           )).returning({ id: asistenciasEsperadas.id });
@@ -129,14 +129,14 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
         }
         const semanas = new Map(jornadasPendientes
           .filter(({ motivoNoAsistencia, descanso }) => !motivoNoAsistencia && !descanso)
-          .map(({ idHuellero, fecha }) => [`${idHuellero}:${lunesDeLaSemana(fecha)}`, { idHuellero, fecha }]));
-        for (const { idHuellero, fecha } of semanas.values()) await recalcularHorasExtraDeSemana(tx, idHuellero, fecha);
+          .map(({ dni, fecha }) => [`${dni}:${lunesDeLaSemana(fecha)}`, { dni, fecha }]));
+        for (const { dni, fecha } of semanas.values()) await recalcularHorasExtraDeSemana(tx, dni, fecha);
 
-        const recalculos = new Map<string, { idHuellero: string; inicio: string; fin: string }>();
+        const recalculos = new Map<string, { dni: string; inicio: string; fin: string }>();
         for (const fila of jornadasPendientes) {
           const periodo = periodos.find(({ inicio, fin }) => inicio <= fila.fecha && fin >= fila.fecha);
           if (!periodo) throw new Error(`La jornada de ${fila.fecha} ya no pertenece a un período abierto.`);
-          recalculos.set(`${fila.idHuellero}:${periodo.inicio}:${periodo.fin}`, { idHuellero: fila.idHuellero, inicio: periodo.inicio, fin: periodo.fin });
+          recalculos.set(`${fila.dni}:${periodo.inicio}:${periodo.fin}`, { dni: fila.dni, inicio: periodo.inicio, fin: periodo.fin });
         }
         for (const recalculo of recalculos.values()) await recalcularPenalizaciones(tx, recalculo);
       }, { isolationLevel: "serializable" });
@@ -146,12 +146,12 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
     }
   }
 
-  async buscarTurnoPublicado(idHuellero: string, fecha: string): Promise<TurnoParaConfirmar | undefined> {
+  async buscarTurnoPublicado(dni: string, fecha: string): Promise<TurnoParaConfirmar | undefined> {
     const [turno] = await this.db.select({
-      idHuellero: turnosPublicados.idHuellero, fecha: turnosPublicados.fecha, sede: turnosPublicados.sede,
+      dni: turnosPublicados.dni, fecha: turnosPublicados.fecha, sede: turnosPublicados.sede,
       entradaProgramada: turnosPublicados.entradaProgramada, salidaProgramada: turnosPublicados.salidaProgramada,
       descanso: turnosPublicados.descanso, motivoNoAsistencia: turnosPublicados.motivoNoAsistencia,
-    }).from(turnosPublicados).where(and(eq(turnosPublicados.idHuellero, idHuellero), eq(turnosPublicados.fecha, fecha)));
+    }).from(turnosPublicados).where(and(eq(turnosPublicados.dni, dni), eq(turnosPublicados.fecha, fecha)));
     return turno;
   }
 
@@ -162,17 +162,17 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
         minutosTrabajados: asistencia.minutosTrabajados,
         instantaneaDeTurno: asistencia.instantaneaDeTurno, confirmadoPorId: asistencia.confirmadoPorId,
         confirmadoEn: asistencia.confirmadoEn,
-      }).where(and(eq(asistenciasEsperadas.idHuellero, asistencia.idHuellero), eq(asistenciasEsperadas.fecha, asistencia.fecha), eq(asistenciasEsperadas.estado, "pendiente"))).returning({ id: asistenciasEsperadas.id });
+      }).where(and(eq(asistenciasEsperadas.dni, asistencia.dni), eq(asistenciasEsperadas.fecha, asistencia.fecha), eq(asistenciasEsperadas.estado, "pendiente"))).returning({ id: asistenciasEsperadas.id });
       if (!resultado.length) throw new Error("La asistencia no está pendiente de revisión.");
       if (asistencia.tardanza) await tx.insert(tardanzas).values({ asistenciaId: resultado[0].id, ...asistencia.tardanza });
-      await recalcularHorasExtraDeSemana(tx, asistencia.idHuellero, asistencia.fecha);
+      await recalcularHorasExtraDeSemana(tx, asistencia.dni, asistencia.fecha);
     });
   }
 
-  async buscarInstantaneaDeTurno(idHuellero: string, fecha: string): Promise<InstantaneaDeTurno | undefined> {
+  async buscarInstantaneaDeTurno(dni: string, fecha: string): Promise<InstantaneaDeTurno | undefined> {
     const [asistencia] = await this.db.select({ instantaneaDeTurno: asistenciasEsperadas.instantaneaDeTurno })
       .from(asistenciasEsperadas)
-      .where(and(eq(asistenciasEsperadas.idHuellero, idHuellero), eq(asistenciasEsperadas.fecha, fecha), eq(asistenciasEsperadas.estado, "confirmada")));
+      .where(and(eq(asistenciasEsperadas.dni, dni), eq(asistenciasEsperadas.fecha, fecha), eq(asistenciasEsperadas.estado, "confirmada")));
     return asistencia?.instantaneaDeTurno ?? undefined;
   }
 
@@ -180,21 +180,21 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
     await this.db.transaction(async (tx) => {
       const [asistencia] = await tx.update(asistenciasEsperadas).set({
         entradaReal: solicitud.entradaReal, salidaReal: solicitud.salidaReal, minutosTrabajados: solicitud.minutosTrabajados,
-      }).where(and(eq(asistenciasEsperadas.idHuellero, solicitud.idHuellero), eq(asistenciasEsperadas.fecha, solicitud.fecha), eq(asistenciasEsperadas.estado, "confirmada"))).returning({ id: asistenciasEsperadas.id });
+      }).where(and(eq(asistenciasEsperadas.dni, solicitud.dni), eq(asistenciasEsperadas.fecha, solicitud.fecha), eq(asistenciasEsperadas.estado, "confirmada"))).returning({ id: asistenciasEsperadas.id });
       if (!asistencia) throw new Error("La asistencia debe estar confirmada para ajustarla.");
       await tx.insert(ajustesDeAsistencia).values({
         asistenciaId: asistencia.id, entradaReal: solicitud.entradaReal, salidaReal: solicitud.salidaReal,
         motivo: solicitud.motivo, responsableId,
       });
-      await recalcularHorasExtraDeSemana(tx, solicitud.idHuellero, solicitud.fecha, solicitud.fecha);
+      await recalcularHorasExtraDeSemana(tx, solicitud.dni, solicitud.fecha, solicitud.fecha);
     });
   }
 
-  async decidirHoraExtra(idHuellero: string, fecha: string, estado: EstadoDeHoraExtra, responsableId: string): Promise<void> {
+  async decidirHoraExtra(dni: string, fecha: string, estado: EstadoDeHoraExtra, responsableId: string): Promise<void> {
     if (estado === "pendiente") throw new Error("La hora extra debe aprobarse o rechazarse.");
     const resultado = await this.db.update(horasExtra).set({ estado, decididaPorId: responsableId, decididaEn: new Date() })
       .from(asistenciasEsperadas)
-      .where(and(eq(horasExtra.asistenciaId, asistenciasEsperadas.id), eq(asistenciasEsperadas.idHuellero, idHuellero), eq(asistenciasEsperadas.fecha, fecha), eq(horasExtra.estado, "pendiente")))
+      .where(and(eq(horasExtra.asistenciaId, asistenciasEsperadas.id), eq(asistenciasEsperadas.dni, dni), eq(asistenciasEsperadas.fecha, fecha), eq(horasExtra.estado, "pendiente")))
       .returning({ id: horasExtra.id });
     if (!resultado.length) throw new Error("La hora extra debe estar pendiente para decidirla.");
   }
@@ -202,7 +202,7 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
   async registrarEstadoManual(estadoManual: EstadoManual): Promise<void> {
     await this.db.transaction(async (tx) => {
       const [asistencia] = await tx.update(asistenciasEsperadas).set({ estado: "manual" })
-        .where(and(eq(asistenciasEsperadas.idHuellero, estadoManual.idHuellero), eq(asistenciasEsperadas.fecha, estadoManual.fecha), eq(asistenciasEsperadas.estado, "pendiente")))
+        .where(and(eq(asistenciasEsperadas.dni, estadoManual.dni), eq(asistenciasEsperadas.fecha, estadoManual.fecha), eq(asistenciasEsperadas.estado, "pendiente")))
         .returning({ id: asistenciasEsperadas.id });
       if (!asistencia) throw new Error("La asistencia debe estar pendiente de revisión para registrar un estado manual.");
       await tx.insert(estadosManuales).values({
@@ -213,30 +213,30 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
   }
 
   async listarEstadosManuales(): Promise<Array<{
-    idHuellero: string; fecha: string; tipo: string; comentario: string; responsableId: string;
+    dni: string; fecha: string; tipo: string; comentario: string; responsableId: string;
   }>> {
     return this.db.select({
-      idHuellero: asistenciasEsperadas.idHuellero, fecha: asistenciasEsperadas.fecha,
+      dni: asistenciasEsperadas.dni, fecha: asistenciasEsperadas.fecha,
       tipo: estadosManuales.tipo, comentario: estadosManuales.comentario, responsableId: estadosManuales.responsableId,
     }).from(estadosManuales).innerJoin(asistenciasEsperadas, eq(estadosManuales.asistenciaId, asistenciasEsperadas.id));
   }
 
   async listarHorasExtra(): Promise<Array<{
-    idHuellero: string; fecha: string; minutosAl25: number; minutosAl35: number; estado: string;
+    dni: string; fecha: string; minutosAl25: number; minutosAl35: number; estado: string;
   }>> {
     return this.db.select({
-      idHuellero: asistenciasEsperadas.idHuellero, fecha: asistenciasEsperadas.fecha,
+      dni: asistenciasEsperadas.dni, fecha: asistenciasEsperadas.fecha,
       minutosAl25: horasExtra.minutosAl25, minutosAl35: horasExtra.minutosAl35, estado: horasExtra.estado,
     }).from(horasExtra).innerJoin(asistenciasEsperadas, eq(horasExtra.asistenciaId, asistenciasEsperadas.id));
   }
 
-  async listarMarcasCrudasPorAsistencia(): Promise<Array<{ idHuellero: string; fecha: string; instante: string }>> {
+  async listarMarcasCrudasPorAsistencia(): Promise<Array<{ dni: string; fecha: string; instante: string }>> {
     return this.db.select({
-      idHuellero: marcasCrudas.idHuellero, fecha: marcasCrudas.fecha, instante: marcasCrudas.instante,
+      dni: marcasCrudas.dni, fecha: marcasCrudas.fecha, instante: marcasCrudas.instante,
     }).from(marcasCrudas);
   }
 
-  async listarResumenMensual(idHuellero: string, inicio: string, fin: string): Promise<FilaDeResumenMensual[]> {
+  async listarResumenMensual(dni: string, inicio: string, fin: string): Promise<FilaDeResumenMensual[]> {
     return this.db.select({
       fecha: asistenciasEsperadas.fecha,
       estado: asistenciasEsperadas.estado,
@@ -246,19 +246,19 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
       estadoManual: estadosManuales.tipo,
       entradaPropuesta: asistenciasEsperadas.entradaPropuesta,
       salidaPropuesta: asistenciasEsperadas.salidaPropuesta,
-      hayMarcasCrudas: sql<boolean>`exists (select 1 from ${marcasCrudas} where ${marcasCrudas.idHuellero} = ${asistenciasEsperadas.idHuellero} and ${marcasCrudas.fecha} = ${asistenciasEsperadas.fecha})`,
+      hayMarcasCrudas: sql<boolean>`exists (select 1 from ${marcasCrudas} where ${marcasCrudas.dni} = ${asistenciasEsperadas.dni} and ${marcasCrudas.fecha} = ${asistenciasEsperadas.fecha})`,
       enPeriodoCerrado: sql<boolean>`exists (select 1 from ${periodosPlanilla} where ${periodosPlanilla.estado} = 'cerrado' and ${asistenciasEsperadas.fecha} between ${periodosPlanilla.inicio} and ${periodosPlanilla.fin})`,
     }).from(asistenciasEsperadas).leftJoin(turnosPublicados, and(
-      eq(turnosPublicados.idHuellero, asistenciasEsperadas.idHuellero), eq(turnosPublicados.fecha, asistenciasEsperadas.fecha),
+      eq(turnosPublicados.dni, asistenciasEsperadas.dni), eq(turnosPublicados.fecha, asistenciasEsperadas.fecha),
     )).leftJoin(estadosManuales, eq(estadosManuales.asistenciaId, asistenciasEsperadas.id))
-      .where(and(eq(asistenciasEsperadas.idHuellero, idHuellero), gte(asistenciasEsperadas.fecha, inicio), lte(asistenciasEsperadas.fecha, fin)))
+      .where(and(eq(asistenciasEsperadas.dni, dni), gte(asistenciasEsperadas.fecha, inicio), lte(asistenciasEsperadas.fecha, fin)))
       .then((filas) => filas as FilaDeResumenMensual[]);
   }
 
-  async listarResumenSemanal(idsHuellero: string[], inicio: string, fin: string): Promise<FilaDeResumenSemanal[]> {
-    if (!idsHuellero.length) return [];
+  async listarResumenSemanal(dnis: string[], inicio: string, fin: string): Promise<FilaDeResumenSemanal[]> {
+    if (!dnis.length) return [];
     return this.db.select({
-      idHuellero: asistenciasEsperadas.idHuellero,
+      dni: asistenciasEsperadas.dni,
       fecha: asistenciasEsperadas.fecha,
       estado: asistenciasEsperadas.estado,
       entrada: asistenciasEsperadas.entradaReal,
@@ -267,12 +267,12 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
       estadoManual: estadosManuales.tipo,
       entradaPropuesta: asistenciasEsperadas.entradaPropuesta,
       salidaPropuesta: asistenciasEsperadas.salidaPropuesta,
-      hayMarcasCrudas: sql<boolean>`exists (select 1 from ${marcasCrudas} where ${marcasCrudas.idHuellero} = ${asistenciasEsperadas.idHuellero} and ${marcasCrudas.fecha} = ${asistenciasEsperadas.fecha})`,
+      hayMarcasCrudas: sql<boolean>`exists (select 1 from ${marcasCrudas} where ${marcasCrudas.dni} = ${asistenciasEsperadas.dni} and ${marcasCrudas.fecha} = ${asistenciasEsperadas.fecha})`,
       enPeriodoCerrado: sql<boolean>`exists (select 1 from ${periodosPlanilla} where ${periodosPlanilla.estado} = 'cerrado' and ${asistenciasEsperadas.fecha} between ${periodosPlanilla.inicio} and ${periodosPlanilla.fin})`,
     }).from(asistenciasEsperadas).leftJoin(turnosPublicados, and(
-      eq(turnosPublicados.idHuellero, asistenciasEsperadas.idHuellero), eq(turnosPublicados.fecha, asistenciasEsperadas.fecha),
+      eq(turnosPublicados.dni, asistenciasEsperadas.dni), eq(turnosPublicados.fecha, asistenciasEsperadas.fecha),
     )).leftJoin(estadosManuales, eq(estadosManuales.asistenciaId, asistenciasEsperadas.id))
-      .where(and(inArray(asistenciasEsperadas.idHuellero, idsHuellero), gte(asistenciasEsperadas.fecha, inicio), lte(asistenciasEsperadas.fecha, fin)))
+      .where(and(inArray(asistenciasEsperadas.dni, dnis), gte(asistenciasEsperadas.fecha, inicio), lte(asistenciasEsperadas.fecha, fin)))
       .then((filas) => filas as FilaDeResumenSemanal[]);
   }
 
@@ -280,13 +280,13 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
     return this.repositorioDeTardanzas.buscarPoliticaVigente(sede, fecha);
   }
 
-  async contarTardanzas(idHuellero: string, inicio: string, fin: string): Promise<number> {
-    return this.repositorioDeTardanzas.contarTardanzas(idHuellero, inicio, fin);
+  async contarTardanzas(dni: string, inicio: string, fin: string): Promise<number> {
+    return this.repositorioDeTardanzas.contarTardanzas(dni, inicio, fin);
   }
 }
 
 interface FilaParaConfirmarPorRango {
-  idHuellero: string;
+  dni: string;
   fecha: string;
   estado: "pendiente" | "confirmada" | "manual";
   entradaPropuesta: string | null;
@@ -304,12 +304,12 @@ type FuenteDeConsultaDeAsistencias = Pick<NodePgDatabase<typeof schema>, "select
 
 function consultaJornadasDelRango(
   db: FuenteDeConsultaDeAsistencias,
-  idsHuellero: string[],
+  dnis: string[],
   inicio: string,
   fin: string,
 ) {
   return db.select({
-    idHuellero: asistenciasEsperadas.idHuellero,
+    dni: asistenciasEsperadas.dni,
     fecha: asistenciasEsperadas.fecha,
     estado: asistenciasEsperadas.estado,
     entradaPropuesta: asistenciasEsperadas.entradaPropuesta,
@@ -322,10 +322,10 @@ function consultaJornadasDelRango(
     enPeriodoCerrado: sql<boolean>`exists (select 1 from ${periodosPlanilla} where ${periodosPlanilla.estado} = 'cerrado' and ${asistenciasEsperadas.fecha} between ${periodosPlanilla.inicio} and ${periodosPlanilla.fin})`,
     enPeriodoAbierto: sql<boolean>`exists (select 1 from ${periodosPlanilla} where ${periodosPlanilla.estado} = 'abierto' and ${asistenciasEsperadas.fecha} between ${periodosPlanilla.inicio} and ${periodosPlanilla.fin})`,
   }).from(asistenciasEsperadas).innerJoin(turnosPublicados, and(
-    eq(turnosPublicados.idHuellero, asistenciasEsperadas.idHuellero),
+    eq(turnosPublicados.dni, asistenciasEsperadas.dni),
     eq(turnosPublicados.fecha, asistenciasEsperadas.fecha),
   )).where(and(
-    inArray(asistenciasEsperadas.idHuellero, idsHuellero),
+    inArray(asistenciasEsperadas.dni, dnis),
     gte(asistenciasEsperadas.fecha, inicio),
     lte(asistenciasEsperadas.fecha, fin),
   ));
@@ -339,7 +339,7 @@ function evaluarJornadasDelRango(
     let jornadasPendientes = 0;
     let jornadasRegistradas = 0;
     const bloqueos: Array<{ fecha: string; causa: string }> = [];
-    const jornadas = filas.filter(({ idHuellero }) => idHuellero === colaborador.idHuellero).sort((a, b) => a.fecha.localeCompare(b.fecha));
+    const jornadas = filas.filter(({ dni }) => dni === colaborador.dni).sort((a, b) => a.fecha.localeCompare(b.fecha));
     for (const fila of jornadas) {
       if (fila.estado !== "pendiente") {
         jornadasRegistradas += 1;
@@ -387,14 +387,14 @@ type TransaccionDeAsistencias = Parameters<NodePgDatabase<typeof schema>["transa
 
 async function recalcularPenalizaciones(
   tx: TransaccionDeAsistencias,
-  alcance: { idHuellero: string; inicio: string; fin: string },
+  alcance: { dni: string; inicio: string; fin: string },
 ): Promise<void> {
   const filas = await tx.select({
     tardanzaId: tardanzas.id,
     fecha: asistenciasEsperadas.fecha,
     instantanea: asistenciasEsperadas.instantaneaDeTurno,
   }).from(tardanzas).innerJoin(asistenciasEsperadas, eq(tardanzas.asistenciaId, asistenciasEsperadas.id)).where(and(
-    eq(asistenciasEsperadas.idHuellero, alcance.idHuellero),
+    eq(asistenciasEsperadas.dni, alcance.dni),
     gte(asistenciasEsperadas.fecha, alcance.inicio),
     lte(asistenciasEsperadas.fecha, alcance.fin),
   )).orderBy(asc(asistenciasEsperadas.fecha));

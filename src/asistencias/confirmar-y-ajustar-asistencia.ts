@@ -14,7 +14,7 @@ export interface InstantaneaDeTurno {
 }
 
 export interface TurnoParaConfirmar {
-  idHuellero: string;
+  dni: string;
   fecha: string;
   sede: string | null;
   entradaProgramada: string | null;
@@ -24,7 +24,7 @@ export interface TurnoParaConfirmar {
 }
 
 export interface AsistenciaConfirmada {
-  idHuellero: string;
+  dni: string;
   fecha: string;
   entradaReal: string;
   salidaReal: string;
@@ -36,7 +36,7 @@ export interface AsistenciaConfirmada {
 }
 
 export interface SolicitudDeConfirmacion {
-  idHuellero: string;
+  dni: string;
   fecha: string;
   sede: string;
   entradaReal: string;
@@ -44,7 +44,7 @@ export interface SolicitudDeConfirmacion {
 }
 
 export interface SolicitudDeAjuste {
-  idHuellero: string;
+  dni: string;
   fecha: string;
   entradaReal: string;
   salidaReal: string;
@@ -52,7 +52,7 @@ export interface SolicitudDeAjuste {
 }
 
 export interface SolicitudDeEstadoManual {
-  idHuellero: string;
+  dni: string;
   fecha: string;
   tipo: TipoDeEstadoManualRegistrable;
   comentario: string;
@@ -68,18 +68,18 @@ export interface AjusteDeAsistencia extends SolicitudDeAjuste {
 }
 
 export interface RepositorioDeAsistencias {
-  buscarTurnoPublicado(idHuellero: string, fecha: string): Promise<TurnoParaConfirmar | undefined>;
+  buscarTurnoPublicado(dni: string, fecha: string): Promise<TurnoParaConfirmar | undefined>;
   confirmar(asistencia: AsistenciaConfirmada): Promise<void>;
-  buscarInstantaneaDeTurno(idHuellero: string, fecha: string): Promise<InstantaneaDeTurno | undefined>;
+  buscarInstantaneaDeTurno(dni: string, fecha: string): Promise<InstantaneaDeTurno | undefined>;
   ajustar(solicitud: AjusteDeAsistencia, responsableId: string): Promise<void>;
-  decidirHoraExtra(idHuellero: string, fecha: string, estado: EstadoDeHoraExtra, responsableId: string): Promise<void>;
+  decidirHoraExtra(dni: string, fecha: string, estado: EstadoDeHoraExtra, responsableId: string): Promise<void>;
   registrarEstadoManual(estadoManual: EstadoManual): Promise<void>;
   buscarPoliticaVigente(sede: string, fecha: string): Promise<PoliticaDePenalizacionPorTardanzas | undefined>;
-  contarTardanzas(idHuellero: string, inicio: string, fin: string): Promise<number>;
+  contarTardanzas(dni: string, inicio: string, fin: string): Promise<number>;
 }
 
 export interface SolicitudDeDecisionDeHoraExtra {
-  idHuellero: string;
+  dni: string;
   fecha: string;
 }
 
@@ -89,7 +89,7 @@ export async function confirmarAsistencia(
   solicitud: SolicitudDeConfirmacion,
 ): Promise<void> {
   autorizarRevision(actor);
-  const turno = await repositorio.buscarTurnoPublicado(solicitud.idHuellero, solicitud.fecha);
+  const turno = await repositorio.buscarTurnoPublicado(solicitud.dni, solicitud.fecha);
   if (!turno) throw new Error("No existe un turno publicado para confirmar esta asistencia.");
   if (turno.motivoNoAsistencia || turno.descanso) {
     throw new Error(`El horario semanal tiene ${nombreDelMotivoPlanificado(turno.motivoNoAsistencia ?? "descanso")} planificado. Corrija y republique el horario antes de registrar la asistencia.`);
@@ -99,7 +99,7 @@ export async function confirmarAsistencia(
     throw new Error(`La sede registrada no coincide con la sede planificada (${turno.sede}). Corrija y republique el horario semanal.`);
   }
   const tardanza = await calcularTardanza(repositorio, {
-    idHuellero: solicitud.idHuellero, sede: turno.sede, fecha: solicitud.fecha,
+    dni: solicitud.dni, sede: turno.sede, fecha: solicitud.fecha,
     entradaProgramada: turno.entradaProgramada, entradaReal: solicitud.entradaReal,
   });
   await repositorio.confirmar({
@@ -124,7 +124,7 @@ export async function ajustarAsistencia(
 ): Promise<void> {
   autorizarRevision(actor);
   if (!solicitud.motivo.trim()) throw new Error("El ajuste de asistencia requiere un motivo.");
-  const instantaneaDeTurno = await repositorio.buscarInstantaneaDeTurno(solicitud.idHuellero, solicitud.fecha);
+  const instantaneaDeTurno = await repositorio.buscarInstantaneaDeTurno(solicitud.dni, solicitud.fecha);
   if (!instantaneaDeTurno) throw new Error("La asistencia debe estar confirmada para ajustarla.");
   if (instantaneaDeTurno.descanso || !instantaneaDeTurno.salidaProgramada) throw new Error("Un descanso no puede ajustarse como asistencia.");
   await repositorio.ajustar({
@@ -140,7 +140,7 @@ export async function aprobarHoraExtra(
   solicitud: SolicitudDeDecisionDeHoraExtra,
 ): Promise<void> {
   autorizarFinanzas(actor);
-  await repositorio.decidirHoraExtra(solicitud.idHuellero, solicitud.fecha, "aprobada", actor.id);
+  await repositorio.decidirHoraExtra(solicitud.dni, solicitud.fecha, "aprobada", actor.id);
 }
 
 export async function rechazarHoraExtra(
@@ -149,7 +149,7 @@ export async function rechazarHoraExtra(
   solicitud: SolicitudDeDecisionDeHoraExtra,
 ): Promise<void> {
   autorizarFinanzas(actor);
-  await repositorio.decidirHoraExtra(solicitud.idHuellero, solicitud.fecha, "rechazada", actor.id);
+  await repositorio.decidirHoraExtra(solicitud.dni, solicitud.fecha, "rechazada", actor.id);
 }
 
 export async function registrarEstadoManual(
@@ -160,7 +160,7 @@ export async function registrarEstadoManual(
   autorizarRevision(actor);
   const comentario = solicitud.comentario.trim();
   if (!comentario) throw new Error("El estado manual requiere un comentario.");
-  const turno = await repositorio.buscarTurnoPublicado(solicitud.idHuellero, solicitud.fecha);
+  const turno = await repositorio.buscarTurnoPublicado(solicitud.dni, solicitud.fecha);
   if (!turno) throw new Error("No existe un turno publicado para registrar este resultado.");
   if (turno.motivoNoAsistencia || turno.descanso) {
     throw new Error(`El horario semanal tiene ${nombreDelMotivoPlanificado(turno.motivoNoAsistencia ?? "descanso")} planificado. No puede reemplazarse con otro estado manual.`);

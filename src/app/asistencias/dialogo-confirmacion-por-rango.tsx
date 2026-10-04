@@ -56,7 +56,7 @@ export function DialogoConfirmacionPorRango({
   async function confirmar() {
     setConfirmando(true);
     setError(undefined);
-    const resultado = await confirmarSeleccionPorRango({ inicio, fin, idsHuellero: [...seleccionados] });
+    const resultado = await confirmarSeleccionPorRango({ inicio, fin, dnis: [...seleccionados] });
     setConfirmando(false);
     if (resultado.error) {
       await evaluar();
@@ -66,11 +66,11 @@ export function DialogoConfirmacionPorRango({
     dialogo.current?.close();
   }
 
-  function alternar(idHuellero: string, marcado: boolean) {
+  function alternar(dni: string, marcado: boolean) {
     setSeleccionados((actuales) => {
       const siguientes = new Set(actuales);
-      if (marcado) siguientes.add(idHuellero);
-      else siguientes.delete(idHuellero);
+      if (marcado) siguientes.add(dni);
+      else siguientes.delete(dni);
       return siguientes;
     });
   }
@@ -91,8 +91,8 @@ export function DialogoConfirmacionPorRango({
         </div>
         {!evaluando && opciones.length === 0 && !error ? <p className="estado-vacio">No hay colaboradores para revisar en esta vista.</p> : null}
         <ul aria-label="Colaboradores del rango" className="opciones-confirmacion-rango">
-          {opciones.map((opcion) => <li key={opcion.idHuellero}>
-            <label><input checked={seleccionados.has(opcion.idHuellero)} disabled={!opcion.seleccionable || evaluando || confirmando} onChange={(evento) => alternar(opcion.idHuellero, evento.target.checked)} type="checkbox" /><span><strong>{opcion.nombre}</strong><small>{opcion.idHuellero}</small>{opcion.detalles.map((detalle) => <small className={opcion.bloqueos.length ? "causa-bloqueo-rango" : undefined} key={detalle}>{detalle}</small>)}</span></label>
+          {opciones.map((opcion) => <li key={opcion.dni}>
+            <label><input checked={seleccionados.has(opcion.dni)} disabled={!opcion.seleccionable || evaluando || confirmando} onChange={(evento) => alternar(opcion.dni, evento.target.checked)} type="checkbox" /><span><strong>{opcion.nombre}</strong><small>{opcion.dni}</small>{opcion.detalles.map((detalle) => <small className={opcion.bloqueos.length ? "causa-bloqueo-rango" : undefined} key={detalle}>{detalle}</small>)}</span></label>
           </li>)}
         </ul>
         {error && <p className="mensaje-operacion error" role="alert">{error}</p>}

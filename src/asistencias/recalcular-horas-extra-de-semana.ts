@@ -16,14 +16,14 @@ type Transaccion = Parameters<NodePgDatabase<typeof schema>["transaction"]>[0] e
  */
 export async function recalcularHorasExtraDeSemana(
   tx: Transaccion,
-  idHuellero: string,
+  dni: string,
   fecha: string,
   fechaAjustada?: string,
 ): Promise<void> {
   const lunes = lunesDeLaSemana(fecha);
   const domingo = sumarDias(lunes, 6);
   // Serializa los recálculos de una misma persona y semana: cada uno debe ver las jornadas que otro acaba de confirmar.
-  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${idHuellero}), hashtext(${lunes}))`);
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${dni}), hashtext(${lunes}))`);
   const jornadas = await tx.select({
     id: asistenciasEsperadas.id,
     fecha: asistenciasEsperadas.fecha,
@@ -31,7 +31,7 @@ export async function recalcularHorasExtraDeSemana(
     salidaReal: asistenciasEsperadas.salidaReal,
     instantaneaDeTurno: asistenciasEsperadas.instantaneaDeTurno,
   }).from(asistenciasEsperadas).where(and(
-    eq(asistenciasEsperadas.idHuellero, idHuellero),
+    eq(asistenciasEsperadas.dni, dni),
     eq(asistenciasEsperadas.estado, "confirmada"),
     gte(asistenciasEsperadas.fecha, lunes),
     lte(asistenciasEsperadas.fecha, domingo),
@@ -53,7 +53,7 @@ export async function recalcularHorasExtraDeSemana(
       eq(periodosPlanilla.estado, "cerrado"), lte(periodosPlanilla.inicio, domingo), gte(periodosPlanilla.fin, lunes),
     ));
   const existentes = await tx.select().from(horasExtra).innerJoin(asistenciasEsperadas, eq(horasExtra.asistenciaId, asistenciasEsperadas.id))
-    .where(and(eq(asistenciasEsperadas.idHuellero, idHuellero), gte(asistenciasEsperadas.fecha, lunes), lte(asistenciasEsperadas.fecha, domingo)));
+    .where(and(eq(asistenciasEsperadas.dni, dni), gte(asistenciasEsperadas.fecha, lunes), lte(asistenciasEsperadas.fecha, domingo)));
   const existentePorAsistencia = new Map(existentes.map((fila) => [fila.horas_extra.asistenciaId, fila.horas_extra]));
 
   for (const jornada of medibles) {

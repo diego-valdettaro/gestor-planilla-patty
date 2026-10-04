@@ -19,7 +19,7 @@ vi.mock("@/importaciones/casos-de-uso-servidor", () => ({
 }));
 vi.mock("@/importaciones/parsear-archivo-huellero", () => ({
   parsearArchivoHuellero: vi.fn(async () => ({
-    filas: [{ fila: 2, idHuellero: "HU-1024", sede: "Centro", fecha: "2026-09-01", entrada: "09:00", salida: "18:00" }],
+    filas: [{ fila: 2, dni: "00001024", sede: "Centro", fecha: "2026-09-01", entrada: "09:00", salida: "18:00" }],
     errores: [],
   })),
 }));
@@ -37,14 +37,14 @@ describe("importarAsistencia", () => {
 
   it("no conserva el archivo cuando la vista previa rechaza la carga", async () => {
     previsualizar.mockResolvedValue({ errores: [
-      { fila: 2, idHuellero: "HU-1024", fecha: "2026-09-01", motivo: "No tiene horario publicado." },
+      { fila: 2, dni: "00001024", fecha: "2026-09-01", motivo: "No tiene horario publicado." },
     ] });
     const { importarAsistencia } = await import("./actions");
     const formData = new FormData();
     formData.set("archivo", new File(["contenido"], "asistencias.xlsx"));
 
     await expect(importarAsistencia({}, formData)).resolves.toEqual({ errores: [
-      { fila: 2, idHuellero: "HU-1024", fecha: "2026-09-01", motivo: "No tiene horario publicado." },
+      { fila: 2, dni: "00001024", fecha: "2026-09-01", motivo: "No tiene horario publicado." },
     ] });
     expect(conservarArchivoFuente).not.toHaveBeenCalled();
     expect(descartarArchivoFuente).not.toHaveBeenCalled();
@@ -106,13 +106,13 @@ describe("importarAsistencia", () => {
   it("descarta el archivo conservado cuando aplicar lanza errores de importación", async () => {
     previsualizar.mockResolvedValue({ errores: [], vistaPrevia: { conteos: conteosSinConfirmadas, filas: [] } });
     const { ErroresDeImportacion } = await import("@/importaciones/importar-semana-por-sede");
-    aplicar.mockRejectedValue(new ErroresDeImportacion([{ fila: 2, idHuellero: "HU-1024", fecha: "2026-09-01", motivo: "El período de planilla está cerrado. Pida a Finanzas que lo reabra." }]));
+    aplicar.mockRejectedValue(new ErroresDeImportacion([{ fila: 2, dni: "00001024", fecha: "2026-09-01", motivo: "El período de planilla está cerrado. Pida a Finanzas que lo reabra." }]));
     const { importarAsistencia } = await import("./actions");
     const formData = new FormData();
     formData.set("archivo", new File(["contenido"], "asistencias.xlsx"));
 
     await expect(importarAsistencia({}, formData)).resolves.toEqual({ errores: [
-      { fila: 2, idHuellero: "HU-1024", fecha: "2026-09-01", motivo: "El período de planilla está cerrado. Pida a Finanzas que lo reabra." },
+      { fila: 2, dni: "00001024", fecha: "2026-09-01", motivo: "El período de planilla está cerrado. Pida a Finanzas que lo reabra." },
     ] });
     expect(descartarArchivoFuente).toHaveBeenCalledTimes(1);
   });
