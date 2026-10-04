@@ -26,10 +26,10 @@ export default async function PaginaDeTurnos({ searchParams }: { searchParams: P
   const dias = diasDeLaSemana(semana);
   const colaboradoresActivos = await repositorioDeTurnos.listarColaboradoresActivosPorEquipo(equipo);
   const colaboradoresProcesados = await repositorioDeTurnos.listarColaboradoresProcesadosPorSemanaYEquipo(semana, equipo);
-  const colaboradores = [...new Map([...colaboradoresActivos, ...colaboradoresProcesados].map((colaborador) => [colaborador.idHuellero, colaborador])).values()]
+  const colaboradores = [...new Map([...colaboradoresActivos, ...colaboradoresProcesados].map((colaborador) => [colaborador.dni, colaborador])).values()]
     .sort((a, b) => a.nombre.localeCompare(b.nombre));
   const plan = await crearCasosDeUsoDePlanesSemanales(repositorioDeTurnos, { obtenerActorActual }).obtenerOCrear(semana, equipo);
-  const publicados = await repositorioDeTurnos.listarPublicadosPorColaboradoresYSemana(colaboradores.map(({ idHuellero }) => idHuellero), dias[0], dias.at(-1)!);
+  const publicados = await repositorioDeTurnos.listarPublicadosPorColaboradoresYSemana(colaboradores.map(({ dni }) => dni), dias[0], dias.at(-1)!);
   const procesados = await repositorioDeTurnos.listarProcesamientosDeSemana(semana, equipo);
   const sedes = await repositorioDeTurnos.listarSedesActivasPorGrupo(equipo);
   const modelos = (await Promise.all(sedes.map((sede) => repositorioDeModelosDeHorario.listarPorSede(sede)))).flat();

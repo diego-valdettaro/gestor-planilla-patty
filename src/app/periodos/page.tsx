@@ -12,7 +12,7 @@ import { CreadorDePeriodo } from "./creador-de-periodo";
 
 export const dynamic = "force-dynamic";
 
-export default async function PaginaDePeriodos({ searchParams }: { searchParams: Promise<{ periodoId?: string; sede?: string; idHuellero?: string }> }) {
+export default async function PaginaDePeriodos({ searchParams }: { searchParams: Promise<{ periodoId?: string; sede?: string; dni?: string }> }) {
   const actor = await obtenerActorActual().catch(() => undefined);
   if (!actor) redirect("/iniciar-sesion");
   if (actor.rol !== "administracion" && actor.rol !== "finanzas") return <main className="centrado"><section className="estado-vacio"><h1>Sin permiso</h1><p>Su rol no permite consultar períodos de planilla.</p></section></main>;
@@ -20,9 +20,9 @@ export default async function PaginaDePeriodos({ searchParams }: { searchParams:
   const query = await searchParams;
   const periodos = await repositorioDePeriodos.listar();
   const periodo = periodos.find((item) => item.id === query.periodoId) ?? periodos.find((item) => item.estado === "abierto") ?? periodos[0];
-  const resumen = periodo ? await repositorioDePeriodos.listarResumen({ periodoId: periodo.id, sede: query.sede, idHuellero: query.idHuellero }) : crearResumenVacio();
+  const resumen = periodo ? await repositorioDePeriodos.listarResumen({ periodoId: periodo.id, sede: query.sede, dni: query.dni }) : crearResumenVacio();
   const sedes = [...new Set(resumen.filas.flatMap(({ jornadas }) => jornadas.map(({ sede }) => sede).filter((sede): sede is string => Boolean(sede))))].sort();
-  const colaboradores = [...new Map(resumen.filas.map(({ idHuellero, nombre }) => [idHuellero, { idHuellero, nombre }])).values()].sort((a, b) => a.nombre.localeCompare(b.nombre));
+  const colaboradores = [...new Map(resumen.filas.map(({ dni, nombre }) => [dni, { dni, nombre }])).values()].sort((a, b) => a.nombre.localeCompare(b.nombre));
   const sugerencia = calcularSugerenciaDePeriodo(periodos, new Date());
 
   return <main className="contenido pagina">
@@ -35,7 +35,7 @@ export default async function PaginaDePeriodos({ searchParams }: { searchParams:
       <form className="filtros panel-filtros periodos-filtros" method="get">
         <label>Período<select name="periodoId" defaultValue={periodo.id}>{periodos.map((item) => <option key={item.id} value={item.id}>{item.inicio} a {item.fin} ({item.estado})</option>)}</select></label>
         <label>Sede<select name="sede" defaultValue={query.sede ?? ""}><option value="">Todas las sedes</option>{sedes.map((sede) => <option key={sede} value={sede}>{sede}</option>)}</select></label>
-        <label>Colaborador<select name="idHuellero" defaultValue={query.idHuellero ?? ""}><option value="">Todos los colaboradores</option>{colaboradores.map((item) => <option key={item.idHuellero} value={item.idHuellero}>{item.nombre} · {item.idHuellero}</option>)}</select></label>
+        <label>Colaborador<select name="dni" defaultValue={query.dni ?? ""}><option value="">Todos los colaboradores</option>{colaboradores.map((item) => <option key={item.dni} value={item.dni}>{item.nombre} · {item.dni}</option>)}</select></label>
         <button type="submit">Filtrar</button>
         <a className="boton-secundario" href={`/api/periodos/${periodo.id}/exportar`}>Exportar XLSX completo</a>
       </form>
@@ -86,13 +86,13 @@ function TotalesGenerales({ resumen }: { resumen: ResumenDePeriodo }) {
 
 function Bloqueos({ bloqueos }: { bloqueos: BloqueoDePeriodo[] }) {
   if (!bloqueos.length) return <p className="mensaje-operacion listo" role="status">El período no tiene asistencias ni horas extra pendientes.</p>;
-  return <section className="mensaje-operacion advertencia" role="status"><h3>Bloqueos del período completo</h3><ul>{bloqueos.map((bloqueo) => <li key={`${bloqueo.tipo}-${bloqueo.idHuellero}-${bloqueo.fecha}`}><a href={enlaceDelBloqueo(bloqueo)}>{bloqueo.tipo === "asistencia" ? "Asistencia pendiente" : "Hora extra pendiente"}: {bloqueo.nombre}, {bloqueo.fecha}</a></li>)}</ul></section>;
+  return <section className="mensaje-operacion advertencia" role="status"><h3>Bloqueos del período completo</h3><ul>{bloqueos.map((bloqueo) => <li key={`${bloqueo.tipo}-${bloqueo.dni}-${bloqueo.fecha}`}><a href={enlaceDelBloqueo(bloqueo)}>{bloqueo.tipo === "asistencia" ? "Asistencia pendiente" : "Hora extra pendiente"}: {bloqueo.nombre}, {bloqueo.fecha}</a></li>)}</ul></section>;
 }
 
 function ResumenPorGrupos({ filas }: { filas: FilaDeResumen[] }) {
   const grupos = new Map<string, FilaDeResumen[]>();
   for (const fila of filas) grupos.set(fila.grupo, [...(grupos.get(fila.grupo) ?? []), fila]);
-  return <>{[...grupos].map(([grupo, colaboradores]) => <section key={grupo}><h3>{grupo}</h3>{colaboradores.map((fila) => <article className="tarjeta" key={`${grupo}-${fila.idHuellero}`}><h4>{fila.nombre} ({fila.idHuellero})</h4><TablaDeTotales totales={fila} /><TablaDeHorasExtra horasExtra={fila.horasExtra} /><DetalleDiario fila={fila} /></article>)}</section>)}</>;
+  return <>{[...grupos].map(([grupo, colaboradores]) => <section key={grupo}><h3>{grupo}</h3>{colaboradores.map((fila) => <article className="tarjeta" key={`${grupo}-${fila.dni}`}><h4>{fila.nombre} ({fila.dni})</h4><TablaDeTotales totales={fila} /><TablaDeHorasExtra horasExtra={fila.horasExtra} /><DetalleDiario fila={fila} /></article>)}</section>)}</>;
 }
 
 function TablaDeTotales({ totales }: { totales: ResumenDePeriodo["totales"] }) {
@@ -104,12 +104,12 @@ function TablaDeHorasExtra({ horasExtra }: { horasExtra: FilaDeResumen["horasExt
 }
 
 function DetalleDiario({ fila }: { fila: FilaDeResumen }) {
-  return <details><summary>Ver detalle diario</summary><div className="panel-tabla"><table><thead><tr><th>Fecha</th><th>Sede de la jornada</th><th>Resultado real</th><th>Horario real</th><th>Tiempo trabajado</th><th>Tardanza</th><th>Penalización</th><th>Hora extra</th></tr></thead><tbody>{fila.jornadas.map((jornada) => <tr id={`jornada-${fila.idHuellero}-${jornada.fecha}`} key={jornada.fecha}><td>{jornada.fecha}</td><td>{jornada.sede ?? "Sin sede"}</td><td>{nombreDelResultado(jornada.resultado)}</td><td>{horarioReal(jornada)}</td><td>{formatearDuracion(jornada.minutosTrabajados)}</td><td>{formatearDuracion(jornada.tardanzaEnMinutos)}</td><td>{formatearDuracion(jornada.minutosPenalizados)}</td><td>{jornada.horaExtra ? `${nombreDelEstadoExtra(jornada.horaExtra.estado)}: 25% ${formatearDuracion(jornada.horaExtra.minutosAl25)}, 35% ${formatearDuracion(jornada.horaExtra.minutosAl35)}` : "Sin hora extra"}</td></tr>)}</tbody></table></div></details>;
+  return <details><summary>Ver detalle diario</summary><div className="panel-tabla"><table><thead><tr><th>Fecha</th><th>Sede de la jornada</th><th>Resultado real</th><th>Horario real</th><th>Tiempo trabajado</th><th>Tardanza</th><th>Penalización</th><th>Hora extra</th></tr></thead><tbody>{fila.jornadas.map((jornada) => <tr id={`jornada-${fila.dni}-${jornada.fecha}`} key={jornada.fecha}><td>{jornada.fecha}</td><td>{jornada.sede ?? "Sin sede"}</td><td>{nombreDelResultado(jornada.resultado)}</td><td>{horarioReal(jornada)}</td><td>{formatearDuracion(jornada.minutosTrabajados)}</td><td>{formatearDuracion(jornada.tardanzaEnMinutos)}</td><td>{formatearDuracion(jornada.minutosPenalizados)}</td><td>{jornada.horaExtra ? `${nombreDelEstadoExtra(jornada.horaExtra.estado)}: 25% ${formatearDuracion(jornada.horaExtra.minutosAl25)}, 35% ${formatearDuracion(jornada.horaExtra.minutosAl35)}` : "Sin hora extra"}</td></tr>)}</tbody></table></div></details>;
 }
 
 function enlaceDelBloqueo(bloqueo: BloqueoDePeriodo): string {
-  if (bloqueo.tipo === "hora-extra") return `#jornada-${bloqueo.idHuellero}-${bloqueo.fecha}`;
-  return `/asistencias?vista=mensual&grupo=${encodeURIComponent(bloqueo.grupo)}&fecha=${bloqueo.fecha}&colaborador=${encodeURIComponent(bloqueo.idHuellero)}`;
+  if (bloqueo.tipo === "hora-extra") return `#jornada-${bloqueo.dni}-${bloqueo.fecha}`;
+  return `/asistencias?vista=mensual&grupo=${encodeURIComponent(bloqueo.grupo)}&fecha=${bloqueo.fecha}&colaborador=${encodeURIComponent(bloqueo.dni)}`;
 }
 
 function nombreDelResultado(resultado: DetalleDeJornada["resultado"]): string {

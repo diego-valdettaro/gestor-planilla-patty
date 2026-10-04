@@ -1,3 +1,4 @@
+import { dniDePrueba } from "../colaboradores/dni-de-prueba";
 import { randomUUID } from "node:crypto";
 
 import { eq, inArray } from "drizzle-orm";
@@ -25,7 +26,7 @@ describe.skipIf(!databaseUrl)("persistencia de planificación diaria por grupo",
   const sedeNorte = `Norte ${sufijo}`;
   const sedeSur = `Sur ${sufijo}`;
   const sedeNueva = `Nueva ${sufijo}`;
-  const idHuellero = `HU-${sufijo}`;
+  const dni = dniDePrueba();
   const modeloId = randomUUID();
   const cuentaId = randomUUID();
   const semana = "2034-09-04";
@@ -38,7 +39,7 @@ describe.skipIf(!databaseUrl)("persistencia de planificación diaria por grupo",
       { nombre: sedeSur, grupo, activa: true },
       { nombre: sedeNueva, grupo: otroGrupo, activa: true },
     ]);
-    await db.insert(schema.colaboradores).values({ idHuellero, nombre: "Ana Grupo", sede: sedeNorte, grupo, activo: true });
+    await db.insert(schema.colaboradores).values({ dni, nombre: "Ana Grupo", sede: sedeNorte, grupo, activo: true });
     await db.insert(schema.modelosDeHorario).values({ id: modeloId, sede: sedeNorte, nombre: "Apertura", entrada: "09:00", salida: "18:00", activo: true });
     await db.insert(schema.cuentasLocales).values({ id: cuentaId, nombreUsuario: `plan-${sufijo}`, hashContrasena: "prueba", rol: "operaciones" });
     await db.insert(schema.periodosPlanilla).values({ inicio: "2034-08-26", fin: "2034-09-25", estado: "abierto" });
@@ -46,16 +47,16 @@ describe.skipIf(!databaseUrl)("persistencia de planificación diaria por grupo",
 
   afterAll(async () => {
     const publicados = await db.select({ id: schema.turnosPublicados.id }).from(schema.turnosPublicados)
-      .where(eq(schema.turnosPublicados.idHuellero, idHuellero));
-    await db.delete(schema.asistenciasEsperadas).where(eq(schema.asistenciasEsperadas.idHuellero, idHuellero));
+      .where(eq(schema.turnosPublicados.dni, dni));
+    await db.delete(schema.asistenciasEsperadas).where(eq(schema.asistenciasEsperadas.dni, dni));
     if (publicados.length) await db.delete(schema.historialDeTurnosPublicados)
       .where(inArray(schema.historialDeTurnosPublicados.turnoPublicadoId, publicados.map(({ id }) => id)));
-    await db.delete(schema.turnosPublicados).where(eq(schema.turnosPublicados.idHuellero, idHuellero));
-    await db.delete(schema.celdasDePlanesSemanalesEnBorrador).where(eq(schema.celdasDePlanesSemanalesEnBorrador.idHuellero, idHuellero));
+    await db.delete(schema.turnosPublicados).where(eq(schema.turnosPublicados.dni, dni));
+    await db.delete(schema.celdasDePlanesSemanalesEnBorrador).where(eq(schema.celdasDePlanesSemanalesEnBorrador.dni, dni));
     await db.delete(schema.planesSemanalesEnBorrador).where(eq(schema.planesSemanalesEnBorrador.semana, semana));
     await db.delete(schema.modelosDeHorario).where(eq(schema.modelosDeHorario.id, modeloId));
     await db.delete(schema.periodosPlanilla).where(eq(schema.periodosPlanilla.inicio, "2034-08-26"));
-    await db.delete(schema.colaboradores).where(eq(schema.colaboradores.idHuellero, idHuellero));
+    await db.delete(schema.colaboradores).where(eq(schema.colaboradores.dni, dni));
     await db.delete(schema.cuentasLocales).where(eq(schema.cuentasLocales.id, cuentaId));
     await db.delete(schema.sedes).where(inArray(schema.sedes.nombre, [sedeNorte, sedeSur, sedeNueva]));
     await db.delete(schema.grupos).where(inArray(schema.grupos.nombre, [grupo, otroGrupo]));
@@ -68,10 +69,10 @@ describe.skipIf(!databaseUrl)("persistencia de planificación diaria por grupo",
     });
     const plan = await casosDeUso.obtenerOCrear(semana, grupo);
     await casosDeUso.guardarBorrador(plan.id, [
-      { idHuellero, fecha: fechas[0], sede: sedeNorte, modeloHorarioId: modeloId, entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false, motivoNoAsistencia: null },
-      { idHuellero, fecha: fechas[1], sede: sedeSur, modeloHorarioId: null, entradaProgramada: "10:00", salidaProgramada: "19:00", descanso: false, motivoNoAsistencia: null },
+      { dni, fecha: fechas[0], sede: sedeNorte, modeloHorarioId: modeloId, entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false, motivoNoAsistencia: null },
+      { dni, fecha: fechas[1], sede: sedeSur, modeloHorarioId: null, entradaProgramada: "10:00", salidaProgramada: "19:00", descanso: false, motivoNoAsistencia: null },
       ...(["descanso", "feriado", "vacaciones", "permiso", "suspension"] as const).map((motivo, indice) => ({
-        idHuellero,
+        dni,
         fecha: fechas[indice + 2],
         sede: null,
         modeloHorarioId: null,
@@ -82,21 +83,21 @@ describe.skipIf(!databaseUrl)("persistencia de planificación diaria por grupo",
       })),
     ]);
 
-    await expect(publicarPlanSemanal(repositorio, { id: cuentaId, rol: "operaciones" }, plan.id, [idHuellero]))
+    await expect(publicarPlanSemanal(repositorio, { id: cuentaId, rol: "operaciones" }, plan.id, [dni]))
       .resolves.toEqual({ publicados: 1, errores: [] });
-    await db.update(schema.colaboradores).set({ grupo: otroGrupo, sede: sedeNueva }).where(eq(schema.colaboradores.idHuellero, idHuellero));
+    await db.update(schema.colaboradores).set({ grupo: otroGrupo, sede: sedeNueva }).where(eq(schema.colaboradores.dni, dni));
 
     const { rows: jornadas } = await pool.query<{
       grupo: string;
       sede: string | null;
       motivo_no_asistencia: string | null;
-    }>("SELECT grupo, sede, motivo_no_asistencia FROM turnos_publicados WHERE id_huellero = $1 ORDER BY fecha", [idHuellero]);
+    }>("SELECT grupo, sede, motivo_no_asistencia FROM turnos_publicados WHERE dni = $1 ORDER BY fecha", [dni]);
     expect(jornadas).toEqual([
       { grupo, sede: sedeNorte, motivo_no_asistencia: null },
       { grupo, sede: sedeSur, motivo_no_asistencia: null },
       ...["descanso", "feriado", "vacaciones", "permiso", "suspension"].map((motivo_no_asistencia) => ({ grupo, sede: null, motivo_no_asistencia })),
     ]);
-    await expect(db.select().from(schema.asistenciasEsperadas).where(eq(schema.asistenciasEsperadas.idHuellero, idHuellero)))
+    await expect(db.select().from(schema.asistenciasEsperadas).where(eq(schema.asistenciasEsperadas.dni, dni)))
       .resolves.toHaveLength(2);
   });
 });

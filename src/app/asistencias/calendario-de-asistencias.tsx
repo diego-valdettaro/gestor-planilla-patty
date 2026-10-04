@@ -30,13 +30,13 @@ export function CalendarioDeAsistencias({
   asistencias,
   dias,
   desfase,
-  idHuellero,
+  dni,
   nombreColaborador,
 }: {
   asistencias: Asistencia[];
   dias: string[];
   desfase: number;
-  idHuellero: string;
+  dni: string;
   nombreColaborador: string;
 }) {
   const porFecha = new Map(asistencias.map((asistencia) => [asistencia.fecha, asistencia]));
@@ -106,7 +106,7 @@ export function CalendarioDeAsistencias({
           <p>{resumen.consecuencia}</p>
         </section> : null}
         <div hidden={Boolean(resumen)}>
-        <input name="idHuellero" type="hidden" value={idHuellero} />
+        <input name="dni" type="hidden" value={dni} />
         <input name="fecha" type="hidden" value={fechaSeleccionada} />
         <input name="estadoActual" type="hidden" value={asistencia.estado} />
         {asistencia.estado === "confirmada" ? <><input name="tipoDeAsistencia" type="hidden" value="trabajo" /><p>Asistencia confirmada: Jornada laboral</p></> : <label>Tipo de asistencia<select name="tipoDeAsistencia" onChange={(evento) => setTipoDeAsistencia(evento.target.value as TipoDeAsistencia)} value={tipoDeAsistencia}>{TIPOS_DE_ASISTENCIA.map((opcion) => <option key={opcion} value={opcion}>{etiquetaTipoDeAsistencia(opcion)}</option>)}</select></label>}

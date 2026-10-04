@@ -16,12 +16,12 @@ function crearRepositorioEnMemoria(): {
 
   return {
     repositorio: {
-      buscarPorIdHuellero: async (idHuellero) => colaboradores.get(idHuellero),
+      buscarPorDni: async (dni) => colaboradores.get(dni),
       guardar: async (colaborador) => {
-        colaboradores.set(colaborador.idHuellero, colaborador);
+        colaboradores.set(colaborador.dni, colaborador);
       },
       actualizar: async (colaborador) => {
-        colaboradores.set(colaborador.idHuellero, colaborador);
+        colaboradores.set(colaborador.dni, colaborador);
       },
     },
     colaboradores,
@@ -29,7 +29,7 @@ function crearRepositorioEnMemoria(): {
 }
 
 describe("registrarColaborador", () => {
-  it("permite a Administración crear un colaborador y consultarlo por su ID de huellero", async () => {
+  it("permite a Administración crear un colaborador y consultarlo por su DNI", async () => {
     const { colaboradores, repositorio } = crearRepositorioEnMemoria();
     const actor = { id: "admin-1", rol: "administracion" as const };
 
@@ -37,7 +37,7 @@ describe("registrarColaborador", () => {
       repositorio,
       actor,
       {
-        idHuellero: "HU-1024",
+        dni: "00001024",
         nombre: "Ana Rojas",
         sede: "Lima",
         grupo: "Tiendas",
@@ -46,9 +46,9 @@ describe("registrarColaborador", () => {
     );
 
     await expect(
-      consultarColaborador(repositorio, actor, "HU-1024"),
+      consultarColaborador(repositorio, actor, "00001024"),
     ).resolves.toMatchObject({
-      idHuellero: "HU-1024",
+      dni: "00001024",
       nombre: "Ana Rojas",
       sede: "Lima",
       grupo: "Tiendas",
@@ -64,7 +64,7 @@ describe("registrarColaborador", () => {
         repositorio,
         { id: "operaciones-1", rol: "operaciones" },
         {
-          idHuellero: "HU-1024",
+          dni: "00001024",
           nombre: "Ana Rojas",
           sede: "Lima",
           grupo: "Tiendas",
@@ -87,7 +87,7 @@ describe("registrarColaborador", () => {
           rol: "operaciones";
         },
         {
-          idHuellero: "HU-1024",
+          dni: "00001024",
           nombre: "Ana Rojas",
           sede: "Lima",
           grupo: "Tiendas",
@@ -97,11 +97,28 @@ describe("registrarColaborador", () => {
     ).rejects.toThrow("No tiene permiso para administrar colaboradores.");
   });
 
-  it("impide registrar el mismo ID de huellero para dos colaboradores", async () => {
+  it.each([
+    ["", "El DNI es obligatorio."],
+    ["   ", "El DNI es obligatorio."],
+    ["1234567", "El DNI debe tener exactamente 8 dígitos."],
+    ["123456789", "El DNI debe tener exactamente 8 dígitos."],
+    ["1234567A", "El DNI debe tener exactamente 8 dígitos."],
+    ["H-1024", "El DNI debe tener exactamente 8 dígitos."],
+  ])("rechaza el alta con DNI %j sin guardar nada", async (dni, mensaje) => {
+    const { colaboradores, repositorio } = crearRepositorioEnMemoria();
+    const actor = { id: "admin-1", rol: "administracion" as const };
+
+    await expect(
+      registrarColaborador(repositorio, actor, { dni, nombre: "Ana Rojas", sede: "Lima", grupo: "Tiendas", activo: true }),
+    ).rejects.toThrow(mensaje);
+    expect(colaboradores.size).toBe(0);
+  });
+
+  it("impide registrar el mismo DNI para dos colaboradores", async () => {
     const { repositorio } = crearRepositorioEnMemoria();
     const actor = { id: "finanzas-1", rol: "finanzas" as const };
     const primeraColaboradora = {
-      idHuellero: "HU-1024",
+      dni: "00001024",
       nombre: "Ana Rojas",
       sede: "Lima",
       grupo: "Tiendas",
@@ -115,7 +132,7 @@ describe("registrarColaborador", () => {
         ...primeraColaboradora,
         nombre: "Brenda Soto",
       }),
-    ).rejects.toThrow("El ID de huellero ya pertenece a un colaborador.");
+    ).rejects.toThrow("El DNI ya pertenece a un colaborador.");
   });
 
   it("permite a Finanzas actualizar los datos operativos y desactivar un colaborador", async () => {
@@ -123,7 +140,7 @@ describe("registrarColaborador", () => {
     const actor = { id: "finanzas-1", rol: "finanzas" as const };
 
     await registrarColaborador(repositorio, actor, {
-      idHuellero: "HU-1024",
+      dni: "00001024",
       nombre: "Ana Rojas",
       sede: "Lima",
       grupo: "Tiendas",
@@ -131,7 +148,7 @@ describe("registrarColaborador", () => {
     });
 
     await actualizarColaborador(repositorio, actor, {
-      idHuellero: "HU-1024",
+      dni: "00001024",
       nombre: "Ana Rojas",
       sede: "Callao",
       grupo: "Taller",
@@ -139,7 +156,7 @@ describe("registrarColaborador", () => {
     });
 
     await expect(
-      consultarColaborador(repositorio, actor, "HU-1024"),
+      consultarColaborador(repositorio, actor, "00001024"),
     ).resolves.toMatchObject({
       sede: "Callao",
       grupo: "Taller",

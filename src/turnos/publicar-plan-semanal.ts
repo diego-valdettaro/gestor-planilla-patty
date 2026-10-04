@@ -6,7 +6,7 @@ import { validarJornadaPlanificada } from "./jornada-planificada";
 import { diasDeLaSemana } from "./semana";
 
 export interface ErrorDePublicacionDePlan {
-  idHuellero: string;
+  dni: string;
   fecha: string;
   mensaje: string;
 }
@@ -27,12 +27,12 @@ export async function publicarPlanSemanal(
   if (errores.length) return { publicados: 0, errores };
 
   const turnos = plan.celdas
-    .filter((celda) => idsSeleccionados.includes(celda.idHuellero))
+    .filter((celda) => idsSeleccionados.includes(celda.dni))
     .map(({ planId: _planId, ...turno }) => turno);
   try {
     await repositorio.publicarEnLote(turnos, actor);
   } catch (error) {
-    const revisionPosterior = (await Promise.all(idsSeleccionados.map((idHuellero) => validarPersona(repositorio, plan, idHuellero)))).flat();
+    const revisionPosterior = (await Promise.all(idsSeleccionados.map((dni) => validarPersona(repositorio, plan, dni)))).flat();
     if (revisionPosterior.length) return { publicados: 0, errores: revisionPosterior };
     throw error;
   }
@@ -49,36 +49,36 @@ export async function revisarPlanSemanal(
   const plan = await repositorio.buscarPorId(planId);
   if (!plan) throw new Error("El plan semanal en borrador no existe.");
   const idsSeleccionados = [...new Set(personasSeleccionadas)];
-  const errores = (await Promise.all(idsSeleccionados.map((idHuellero) => validarPersona(repositorio, plan, idHuellero)))).flat();
+  const errores = (await Promise.all(idsSeleccionados.map((dni) => validarPersona(repositorio, plan, dni)))).flat();
   return { idsSeleccionados, plan, errores };
 }
 
 async function validarPersona(
   repositorio: RepositorioParaPublicarPlan,
   plan: PlanSemanalEnBorrador,
-  idHuellero: string,
+  dni: string,
 ): Promise<ErrorDePublicacionDePlan[]> {
   const errores: ErrorDePublicacionDePlan[] = [];
   const fechas = diasDeLaSemana(plan.semana);
-  const celdasPorFecha = new Map(plan.celdas.filter((celda) => celda.idHuellero === idHuellero).map((celda) => [celda.fecha, celda]));
+  const celdasPorFecha = new Map(plan.celdas.filter((celda) => celda.dni === dni).map((celda) => [celda.fecha, celda]));
 
-  if (!(await repositorio.colaboradorPerteneceAEquipo(idHuellero, plan.equipo))) {
-    return fechas.map((fecha) => ({ idHuellero, fecha, mensaje: "El colaborador no pertenece al equipo operativo del plan." }));
+  if (!(await repositorio.colaboradorPerteneceAEquipo(dni, plan.equipo))) {
+    return fechas.map((fecha) => ({ dni, fecha, mensaje: "El colaborador no pertenece al equipo operativo del plan." }));
   }
 
   for (const fecha of fechas) {
     const celda = celdasPorFecha.get(fecha);
     if (!celda) {
-      errores.push({ idHuellero, fecha, mensaje: "La celda está sin definir." });
+      errores.push({ dni, fecha, mensaje: "La celda está sin definir." });
       continue;
     }
     try {
       await validarJornadaPlanificada(repositorio, plan.equipo, celda);
     } catch (error) {
-      errores.push({ idHuellero, fecha, mensaje: error instanceof Error ? error.message : "El horario semanal no es válido." });
+      errores.push({ dni, fecha, mensaje: error instanceof Error ? error.message : "El horario semanal no es válido." });
     }
-    if (!(await repositorio.perteneceAPeriodoAbierto(fecha))) errores.push({ idHuellero, fecha, mensaje: "La fecha no pertenece a un período de planilla abierto." });
-    if (await repositorio.buscarPublicado(idHuellero, fecha)) errores.push({ idHuellero, fecha, mensaje: "Ya existe un horario semanal publicado para este colaborador y fecha." });
+    if (!(await repositorio.perteneceAPeriodoAbierto(fecha))) errores.push({ dni, fecha, mensaje: "La fecha no pertenece a un período de planilla abierto." });
+    if (await repositorio.buscarPublicado(dni, fecha)) errores.push({ dni, fecha, mensaje: "Ya existe un horario semanal publicado para este colaborador y fecha." });
   }
   return errores;
 }

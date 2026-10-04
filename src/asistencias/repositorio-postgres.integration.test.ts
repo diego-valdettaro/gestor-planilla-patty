@@ -1,3 +1,4 @@
+import { dniDePrueba } from "../colaboradores/dni-de-prueba";
 import { randomUUID } from "node:crypto";
 
 import { and, eq, inArray } from "drizzle-orm";
@@ -19,7 +20,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeAsistencias · resumen mensu
   const db = drizzle({ client: pool, schema });
   const repositorio = new RepositorioPostgresDeAsistencias(db);
 
-  const idHuellero = `TEST-${randomUUID()}`;
+  const dni = dniDePrueba();
   const cuentaId = randomUUID();
   const importacionId = randomUUID();
 
@@ -35,7 +36,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeAsistencias · resumen mensu
   const periodoCerrado = { inicio: "2031-01-26", fin: "2031-02-25" } as const;
 
   beforeAll(async () => {
-    await db.insert(schema.colaboradores).values({ idHuellero, nombre: "Nora Prueba", sede: "Lima", grupo: "Tiendas", activo: true });
+    await db.insert(schema.colaboradores).values({ dni, nombre: "Nora Prueba", sede: "Lima", grupo: "Tiendas", activo: true });
     await db.insert(schema.cuentasLocales).values({ id: cuentaId, nombreUsuario: `asis-${cuentaId}`, hashContrasena: "prueba", rol: "administracion" });
     await db.insert(schema.periodosPlanilla).values([
       { inicio: periodoAbierto.inicio, fin: periodoAbierto.fin, estado: "abierto" },
@@ -43,15 +44,15 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeAsistencias · resumen mensu
     ]);
 
     await db.insert(schema.asistenciasEsperadas).values([
-      { idHuellero, fecha: fechaEsperada, estado: "pendiente" },
-      { idHuellero, fecha: fechaPendienteDeRevision, estado: "pendiente" },
-      { idHuellero, fecha: fechaConfirmada, estado: "confirmada", entradaReal: `${fechaConfirmada}T09:00`, salidaReal: `${fechaConfirmada}T18:00`, minutosTrabajados: 540 },
-      { idHuellero, fecha: fechaManual, estado: "manual" },
-      { idHuellero, fecha: fechaLiquidada, estado: "pendiente" },
+      { dni, fecha: fechaEsperada, estado: "pendiente" },
+      { dni, fecha: fechaPendienteDeRevision, estado: "pendiente" },
+      { dni, fecha: fechaConfirmada, estado: "confirmada", entradaReal: `${fechaConfirmada}T09:00`, salidaReal: `${fechaConfirmada}T18:00`, minutosTrabajados: 540 },
+      { dni, fecha: fechaManual, estado: "manual" },
+      { dni, fecha: fechaLiquidada, estado: "pendiente" },
     ]);
 
     const [manual] = await db.select({ id: schema.asistenciasEsperadas.id }).from(schema.asistenciasEsperadas)
-      .where(and(eq(schema.asistenciasEsperadas.idHuellero, idHuellero), eq(schema.asistenciasEsperadas.fecha, fechaManual)));
+      .where(and(eq(schema.asistenciasEsperadas.dni, dni), eq(schema.asistenciasEsperadas.fecha, fechaManual)));
     await db.insert(schema.estadosManuales).values({ asistenciaId: manual.id, tipo: "feriado", comentario: "Prueba de integración", responsableId: cuentaId });
 
     await db.insert(schema.importacionesSemanales).values({
@@ -59,26 +60,26 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeAsistencias · resumen mensu
       archivoUbicacion: "prueba/prueba.xlsx", archivoHashSha256: "0".repeat(64), usuarioId: cuentaId,
     });
     // Una sola marca del día: no permite proponer entrada y salida completas.
-    await db.insert(schema.marcasCrudas).values({ importacionId, idHuellero, fecha: fechaPendienteDeRevision, instante: `${fechaPendienteDeRevision}T09:03` });
+    await db.insert(schema.marcasCrudas).values({ importacionId, dni, fecha: fechaPendienteDeRevision, instante: `${fechaPendienteDeRevision}T09:03` });
   });
 
   afterAll(async () => {
     const asistencias = await db.select({ id: schema.asistenciasEsperadas.id }).from(schema.asistenciasEsperadas)
-      .where(and(eq(schema.asistenciasEsperadas.idHuellero, idHuellero), inArray(schema.asistenciasEsperadas.fecha, todasLasFechas)));
+      .where(and(eq(schema.asistenciasEsperadas.dni, dni), inArray(schema.asistenciasEsperadas.fecha, todasLasFechas)));
     if (asistencias.length) {
       await db.delete(schema.estadosManuales).where(inArray(schema.estadosManuales.asistenciaId, asistencias.map(({ id }) => id)));
     }
     await db.delete(schema.marcasCrudas).where(eq(schema.marcasCrudas.importacionId, importacionId));
     await db.delete(schema.importacionesSemanales).where(eq(schema.importacionesSemanales.id, importacionId));
-    await db.delete(schema.asistenciasEsperadas).where(and(eq(schema.asistenciasEsperadas.idHuellero, idHuellero), inArray(schema.asistenciasEsperadas.fecha, todasLasFechas)));
+    await db.delete(schema.asistenciasEsperadas).where(and(eq(schema.asistenciasEsperadas.dni, dni), inArray(schema.asistenciasEsperadas.fecha, todasLasFechas)));
     await db.delete(schema.periodosPlanilla).where(inArray(schema.periodosPlanilla.inicio, [periodoAbierto.inicio, periodoCerrado.inicio]));
-    await db.delete(schema.colaboradores).where(eq(schema.colaboradores.idHuellero, idHuellero));
+    await db.delete(schema.colaboradores).where(eq(schema.colaboradores.dni, dni));
     await db.delete(schema.cuentasLocales).where(eq(schema.cuentasLocales.id, cuentaId));
     await pool.end();
   });
 
   it("un día con horario y sin marcas se deriva como 'esperada'", async () => {
-    const filas = await repositorio.listarResumenMensual(idHuellero, "2031-03-01", "2031-03-31");
+    const filas = await repositorio.listarResumenMensual(dni, "2031-03-01", "2031-03-31");
     const fila = filas.find(({ fecha }) => fecha === fechaEsperada)!;
     expect(fila.hayMarcasCrudas).toBe(false);
     expect(fila.enPeriodoCerrado).toBe(false);
@@ -86,7 +87,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeAsistencias · resumen mensu
   });
 
   it("un día pendiente con marcas que no permiten proponer entrada/salida se deriva como 'pendiente-de-revision'", async () => {
-    const filas = await repositorio.listarResumenMensual(idHuellero, "2031-03-01", "2031-03-31");
+    const filas = await repositorio.listarResumenMensual(dni, "2031-03-01", "2031-03-31");
     const fila = filas.find(({ fecha }) => fecha === fechaPendienteDeRevision)!;
     expect(fila.hayMarcasCrudas).toBe(true);
     expect(Boolean(fila.entradaPropuesta && fila.salidaPropuesta)).toBe(false);
@@ -94,13 +95,13 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeAsistencias · resumen mensu
   });
 
   it("un día confirmado se deriva como 'registrada'", async () => {
-    const filas = await repositorio.listarResumenMensual(idHuellero, "2031-03-01", "2031-03-31");
+    const filas = await repositorio.listarResumenMensual(dni, "2031-03-01", "2031-03-31");
     const fila = filas.find(({ fecha }) => fecha === fechaConfirmada)!;
     expect(estadoDeCeldaAsistencia(fila)).toBe("registrada");
   });
 
   it("un día con designación manual se deriva como 'registrada' y se etiqueta con el tipo", async () => {
-    const filas = await repositorio.listarResumenMensual(idHuellero, "2031-03-01", "2031-03-31");
+    const filas = await repositorio.listarResumenMensual(dni, "2031-03-01", "2031-03-31");
     const fila = filas.find(({ fecha }) => fecha === fechaManual)!;
     const estado = estadoDeCeldaAsistencia(fila);
     expect(estado).toBe("registrada");
@@ -108,18 +109,18 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeAsistencias · resumen mensu
   });
 
   it("un día dentro de un período de planilla cerrado se deriva como 'liquidado'", async () => {
-    const filas = await repositorio.listarResumenMensual(idHuellero, "2031-02-01", "2031-02-28");
+    const filas = await repositorio.listarResumenMensual(dni, "2031-02-01", "2031-02-28");
     const fila = filas.find(({ fecha }) => fecha === fechaLiquidada)!;
     expect(fila.enPeriodoCerrado).toBe(true);
     expect(estadoDeCeldaAsistencia(fila)).toBe("liquidado");
   });
 
   it("devuelve las jornadas semanales solicitadas sin agrupar al colaborador por sede", async () => {
-    const filas = await repositorio.listarResumenSemanal([idHuellero], "2031-03-10", "2031-03-16");
+    const filas = await repositorio.listarResumenSemanal([dni], "2031-03-10", "2031-03-16");
 
     expect(filas).toEqual(expect.arrayContaining([
-      expect.objectContaining({ idHuellero, fecha: fechaEsperada }),
-      expect.objectContaining({ idHuellero, fecha: fechaManual, estadoManual: "feriado" }),
+      expect.objectContaining({ dni, fecha: fechaEsperada }),
+      expect.objectContaining({ dni, fecha: fechaManual, estadoManual: "feriado" }),
     ]));
   });
 });

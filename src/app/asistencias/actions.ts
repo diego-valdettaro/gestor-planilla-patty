@@ -87,7 +87,7 @@ export async function importarAsistencia(_estadoAnterior: EstadoDeImportacion, f
 export async function confirmarAsistencia(formData: FormData): Promise<void> {
   const casosDeUso = crearCasosDeUsoDeAsistencias(repositorioDeAsistencias, { obtenerActorActual });
   await casosDeUso.confirmar({
-    idHuellero: obtenerTexto(formData, "idHuellero"),
+    dni: obtenerTexto(formData, "dni"),
     fecha: obtenerTexto(formData, "fecha"),
     sede: obtenerTexto(formData, "sede"),
     entradaReal: obtenerTexto(formData, "entradaReal"),
@@ -108,7 +108,7 @@ export async function registrarAsistenciaManual(
     const tipoDeAsistencia = obtenerTexto(formData, "tipoDeAsistencia");
     if (esTipoDeEstadoManualRegistrable(tipoDeAsistencia)) {
       await casosDeUso.registrarEstadoManual({
-        idHuellero: obtenerTexto(formData, "idHuellero"), fecha, tipo: tipoDeAsistencia, comentario: obtenerTexto(formData, "comentario"),
+        dni: obtenerTexto(formData, "dni"), fecha, tipo: tipoDeAsistencia, comentario: obtenerTexto(formData, "comentario"),
       });
       revalidatePath("/asistencias");
       return { listo: "El estado manual quedó registrado." };
@@ -118,7 +118,7 @@ export async function registrarAsistenciaManual(
     const entrada = obtenerTexto(formData, "entrada");
     const salida = obtenerTexto(formData, "salida");
     if (!/^\d{2}:\d{2}$/.test(entrada) || !/^\d{2}:\d{2}$/.test(salida)) throw new Error("Las horas deben usar el formato HH:MM.");
-    const solicitud = { idHuellero: obtenerTexto(formData, "idHuellero"), fecha, entradaReal: `${fecha}T${entrada}`, salidaReal: `${fecha}T${salida}` };
+    const solicitud = { dni: obtenerTexto(formData, "dni"), fecha, entradaReal: `${fecha}T${entrada}`, salidaReal: `${fecha}T${salida}` };
     if (formData.get("estadoActual") === "confirmada") {
       await casosDeUso.ajustar({ ...solicitud, motivo: obtenerTexto(formData, "motivo") });
     } else {
@@ -134,7 +134,7 @@ export async function registrarAsistenciaManual(
 export async function ajustarAsistencia(formData: FormData): Promise<void> {
   const casosDeUso = crearCasosDeUsoDeAsistencias(repositorioDeAsistencias, { obtenerActorActual });
   await casosDeUso.ajustar({
-    idHuellero: obtenerTexto(formData, "idHuellero"),
+    dni: obtenerTexto(formData, "dni"),
     fecha: obtenerTexto(formData, "fecha"),
     entradaReal: obtenerTexto(formData, "entradaReal"),
     salidaReal: obtenerTexto(formData, "salidaReal"),
@@ -146,7 +146,7 @@ export async function ajustarAsistencia(formData: FormData): Promise<void> {
 export async function aprobarHoraExtra(formData: FormData): Promise<void> {
   const casosDeUso = crearCasosDeUsoDeAsistencias(repositorioDeAsistencias, { obtenerActorActual });
   await casosDeUso.aprobarHoraExtra({
-    idHuellero: obtenerTexto(formData, "idHuellero"),
+    dni: obtenerTexto(formData, "dni"),
     fecha: obtenerTexto(formData, "fecha"),
   });
   revalidatePath("/asistencias");
@@ -155,7 +155,7 @@ export async function aprobarHoraExtra(formData: FormData): Promise<void> {
 export async function rechazarHoraExtra(formData: FormData): Promise<void> {
   const casosDeUso = crearCasosDeUsoDeAsistencias(repositorioDeAsistencias, { obtenerActorActual });
   await casosDeUso.rechazarHoraExtra({
-    idHuellero: obtenerTexto(formData, "idHuellero"),
+    dni: obtenerTexto(formData, "dni"),
     fecha: obtenerTexto(formData, "fecha"),
   });
   revalidatePath("/asistencias");
@@ -166,7 +166,7 @@ export async function registrarEstadoManual(formData: FormData): Promise<void> {
   const tipo = obtenerTexto(formData, "tipo");
   if (!esTipoDeEstadoManualRegistrable(tipo)) throw new Error("El tipo de estado manual no es válido.");
   await casosDeUso.registrarEstadoManual({
-    idHuellero: obtenerTexto(formData, "idHuellero"),
+    dni: obtenerTexto(formData, "dni"),
     fecha: obtenerTexto(formData, "fecha"),
     tipo,
     comentario: obtenerTexto(formData, "comentario"),
@@ -178,7 +178,7 @@ export async function procesarHorarioSemanal(formData: FormData): Promise<void> 
   const semana = obtenerTexto(formData, "semana");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(semana)) throw new Error("La semana no es válida.");
   const casosDeUso = crearCasosDeUsoDeTurnos(repositorioDeTurnos, { obtenerActorActual });
-  await casosDeUso.procesar(obtenerTexto(formData, "idHuellero"), semana);
+  await casosDeUso.procesar(obtenerTexto(formData, "dni"), semana);
   revalidatePath("/asistencias");
   revalidatePath("/turnos");
 }

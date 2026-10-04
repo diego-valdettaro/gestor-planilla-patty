@@ -2,14 +2,14 @@ import * as XLSX from "xlsx";
 
 export interface ErrorDeImportacion {
   fila: number;
-  idHuellero: string;
+  dni: string;
   fecha: string;
   motivo: string;
 }
 
 export interface FilaDeAsistenciaImportada {
   fila: number;
-  idHuellero: string;
+  dni: string;
   sede: string;
   fecha: string;
   entrada: string;
@@ -21,7 +21,8 @@ export interface ResultadoDelParser {
   errores: ErrorDeImportacion[];
 }
 
-const encabezadosRequeridos = ["ID de huellero", "Sede", "Fecha", "Entrada", "Salida"] as const;
+const encabezadoHistoricoDeDni = "ID de huellero";
+const encabezadosRequeridos = ["DNI", "Sede", "Fecha", "Entrada", "Salida"] as const;
 
 export async function parsearArchivoHuellero(archivo: File): Promise<ResultadoDelParser> {
   if (!archivo.name.toLowerCase().endsWith(".xlsx")) return resultadoConError("El archivo debe tener extensión .xlsx.");
@@ -39,6 +40,8 @@ export async function parsearArchivoHuellero(archivo: File): Promise<ResultadoDe
   const matriz = XLSX.utils.sheet_to_json<unknown[]>(hoja, { header: 1, defval: "", raw: true });
   const encabezados = matriz[0]?.map(texto) ?? [];
   const columnas = encabezadosRequeridos.map((encabezado) => encabezados.indexOf(encabezado));
+  // Los archivos anteriores nombraban «ID de huellero» a la columna que ahora es el DNI.
+  if (columnas[0] === -1) columnas[0] = encabezados.indexOf(encabezadoHistoricoDeDni);
   const faltantes = encabezadosRequeridos.filter((_, indice) => columnas[indice] === -1);
   if (faltantes.length) {
     return { filas: [], errores: faltantes.map((encabezado) => errorEstructural(`Falta el encabezado obligatorio "${encabezado}".`)) };
@@ -50,7 +53,7 @@ export async function parsearArchivoHuellero(archivo: File): Promise<ResultadoDe
   for (const [indice, valores] of matriz.slice(1).entries()) {
     if (valores.every((valor) => texto(valor) === "")) continue;
     const fila = indice + 2;
-    const idHuellero = texto(valores[columnas[0]]);
+    const dni = texto(valores[columnas[0]]);
     const sede = texto(valores[columnas[1]]);
     const fechaOriginal = texto(valores[columnas[2]]);
     const entradaOriginal = texto(valores[columnas[3]]);
@@ -58,22 +61,22 @@ export async function parsearArchivoHuellero(archivo: File): Promise<ResultadoDe
     const fecha = fechaIso(valores[columnas[2]]);
     const entrada = horaIso(valores[columnas[3]]);
     const salida = horaIso(valores[columnas[4]]);
-    const contexto = { fila, idHuellero, fecha: fecha ?? fechaOriginal };
+    const contexto = { fila, dni, fecha: fecha ?? fechaOriginal };
 
-    if (!idHuellero) errores.push({ ...contexto, motivo: "ID de huellero es obligatorio." });
+    if (!dni) errores.push({ ...contexto, motivo: "DNI es obligatorio." });
     if (!sede) errores.push({ ...contexto, motivo: "Sede es obligatoria." });
     if (!fecha) errores.push({ ...contexto, motivo: fechaOriginal ? "Fecha debe ser una fecha Excel o usar YYYY-MM-DD." : "Fecha es obligatoria." });
     if (!entrada) errores.push({ ...contexto, motivo: entradaOriginal ? "Entrada debe ser una hora Excel o usar HH:MM." : "Entrada es obligatoria." });
     if (!salida) errores.push({ ...contexto, motivo: salidaOriginal ? "Salida debe ser una hora Excel o usar HH:MM." : "Salida es obligatoria." });
-    if (idHuellero && fecha) {
-      const clave = `${idHuellero}\u0000${fecha}`;
+    if (dni && fecha) {
+      const clave = `${dni}\u0000${fecha}`;
       const primeraFila = primerasFilasPorJornada.get(clave);
       if (primeraFila) errores.push({ ...contexto, fecha, motivo: `La jornada duplica la fila ${primeraFila}.` });
       else primerasFilasPorJornada.set(clave, fila);
     }
-    if (!idHuellero || !sede || !fecha || !entrada || !salida) continue;
+    if (!dni || !sede || !fecha || !entrada || !salida) continue;
 
-    filas.push({ fila, idHuellero, sede, fecha, entrada, salida });
+    filas.push({ fila, dni, sede, fecha, entrada, salida });
   }
   if (!filas.length && !errores.length) errores.push(errorEstructural("El libro no tiene jornadas para importar."));
   return { filas, errores };
@@ -84,7 +87,7 @@ function resultadoConError(motivo: string): ResultadoDelParser {
 }
 
 function errorEstructural(motivo: string): ErrorDeImportacion {
-  return { fila: 1, idHuellero: "", fecha: "", motivo };
+  return { fila: 1, dni: "", fecha: "", motivo };
 }
 
 function texto(valor: unknown): string {

@@ -10,7 +10,7 @@ export function crearModeloDelDialogo(evaluaciones: EvaluacionDeColaborador[]): 
 } {
   return {
     opciones: evaluaciones.map((evaluacion) => ({ ...evaluacion, detalles: describirEvaluacion(evaluacion) })),
-    seleccionados: evaluaciones.filter(({ seleccionable }) => seleccionable).map(({ idHuellero }) => idHuellero),
+    seleccionados: evaluaciones.filter(({ seleccionable }) => seleccionable).map(({ dni }) => dni),
   };
 }
 

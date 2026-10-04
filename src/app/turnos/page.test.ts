@@ -67,7 +67,7 @@ describe("página de Horarios (/turnos)", () => {
 
   it("carga colaboradores y sedes activas por el grupo operativo", async () => {
     listarColaboradoresActivosPorEquipo.mockResolvedValue([
-      { idHuellero: "HU-1", nombre: "Ana", sede: "Norte" },
+      { dni: "00000011", nombre: "Ana", sede: "Norte" },
     ]);
     listarSedesActivasPorGrupo.mockResolvedValue(["Norte", "Sur"]);
     listarModelosPorSede.mockResolvedValue([]);

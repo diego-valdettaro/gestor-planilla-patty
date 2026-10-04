@@ -5,9 +5,9 @@ import { crearModeloDelDialogo } from "./modelo-dialogo-confirmacion";
 describe("modelo del diálogo de confirmación por rango", () => {
   it("selecciona los colaboradores elegibles y explica cada bloqueo", () => {
     const modelo = crearModeloDelDialogo([
-      { idHuellero: "HU-1", nombre: "Ana", seleccionable: true, jornadasPendientes: 2, jornadasRegistradas: 1, bloqueos: [] },
+      { dni: "00000011", nombre: "Ana", seleccionable: true, jornadasPendientes: 2, jornadasRegistradas: 1, bloqueos: [] },
       {
-        idHuellero: "HU-2",
+        dni: "00000012",
         nombre: "Bruno",
         seleccionable: false,
         jornadasPendientes: 3,
@@ -17,17 +17,17 @@ describe("modelo del diálogo de confirmación por rango", () => {
           { fecha: "2031-03-26", causa: "La jornada pertenece a un período cerrado." },
         ],
       },
-      { idHuellero: "HU-3", nombre: "Carla", seleccionable: false, jornadasPendientes: 0, jornadasRegistradas: 3, bloqueos: [] },
+      { dni: "00000013", nombre: "Carla", seleccionable: false, jornadasPendientes: 0, jornadasRegistradas: 3, bloqueos: [] },
     ]);
 
-    expect(modelo.seleccionados).toEqual(["HU-1"]);
+    expect(modelo.seleccionados).toEqual(["00000011"]);
     expect(modelo.opciones).toEqual([
-      expect.objectContaining({ idHuellero: "HU-1", detalles: ["2 asistencias por registrar · 1 ya registrada"] }),
-      expect.objectContaining({ idHuellero: "HU-2", detalles: [
+      expect.objectContaining({ dni: "00000011", detalles: ["2 asistencias por registrar · 1 ya registrada"] }),
+      expect.objectContaining({ dni: "00000012", detalles: [
         "25 mar 2031: Falta la marca de salida.",
         "26 mar 2031: La jornada pertenece a un período cerrado.",
       ] }),
-      expect.objectContaining({ idHuellero: "HU-3", detalles: ["No hay asistencias por registrar en el rango."] }),
+      expect.objectContaining({ dni: "00000013", detalles: ["No hay asistencias por registrar en el rango."] }),
     ]);
   });
 });

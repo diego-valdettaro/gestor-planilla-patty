@@ -7,16 +7,16 @@ describe("consulta semanal por equipo", () => {
     const consulta = crearConsultaSemanalPorEquipo({
       dias: ["2026-09-01", "2026-09-02"],
       colaboradores: [
-        { idHuellero: "HU-1", nombre: "Ana", sede: "Tienda Centro" },
-        { idHuellero: "HU-2", nombre: "Bea", sede: "Tienda Norte" },
+        { dni: "00000011", nombre: "Ana", sede: "Tienda Centro" },
+        { dni: "00000012", nombre: "Bea", sede: "Tienda Norte" },
       ],
       turnos: [
         {
-          idHuellero: "HU-1", fecha: "2026-09-01", sede: "Tienda Centro",
+          dni: "00000011", fecha: "2026-09-01", sede: "Tienda Centro",
           entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false,
         },
         {
-          idHuellero: "HU-2", fecha: "2026-09-02", sede: "Tienda Norte",
+          dni: "00000012", fecha: "2026-09-02", sede: "Tienda Norte",
           entradaProgramada: null, salidaProgramada: null, descanso: true,
         },
       ],
@@ -26,7 +26,7 @@ describe("consulta semanal por equipo", () => {
       {
         sede: "Tienda Centro",
         colaboradores: [{
-          idHuellero: "HU-1",
+          dni: "00000011",
           nombre: "Ana",
           celdas: [{ estado: "publicado", sede: "Tienda Centro", entradaProgramada: "09:00", salidaProgramada: "18:00" }, { estado: "sin-publicacion" }],
         }],
@@ -34,7 +34,7 @@ describe("consulta semanal por equipo", () => {
       {
         sede: "Tienda Norte",
         colaboradores: [{
-          idHuellero: "HU-2",
+          dni: "00000012",
           nombre: "Bea",
           celdas: [{ estado: "sin-publicacion" }, { estado: "descanso", sede: "Tienda Norte" }],
         }],

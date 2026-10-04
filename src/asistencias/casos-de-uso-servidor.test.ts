@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { calcularHoraExtra, type HoraExtraCalculada } from "./calcular-hora-extra";
 import { crearCasosDeUsoDeAsistencias } from "./casos-de-uso-servidor";
 import type {
   AsistenciaConfirmada,
@@ -8,20 +9,22 @@ import type {
   TurnoParaConfirmar,
 } from "./confirmar-y-ajustar-asistencia";
 
+type AsistenciaEnMemoria = AsistenciaConfirmada & { horaExtra?: HoraExtraCalculada };
+
 function crearRepositorioEnMemoria(): {
-  asistencias: AsistenciaConfirmada[];
+  asistencias: AsistenciaEnMemoria[];
   ajustes: Array<{ motivo: string; responsableId: string }>;
   estadosManuales: EstadoManual[];
   marcasCrudas: string[];
   repositorio: RepositorioDeAsistencias;
 } {
-  const asistencias: AsistenciaConfirmada[] = [];
+  const asistencias: AsistenciaEnMemoria[] = [];
   const ajustes: Array<{ motivo: string; responsableId: string }> = [];
   const estadosManuales: EstadoManual[] = [];
   const marcasCrudas = ["2026-09-01T09:04:00-05:00", "2026-09-01T18:02:00-05:00"];
   const turnos = new Map<string, TurnoParaConfirmar>([
-    ["HU-1024:2026-09-01", {
-      idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima", entradaProgramada: "09:00",
+    ["00001024:2026-09-01", {
+      dni: "00001024", fecha: "2026-09-01", sede: "Lima", entradaProgramada: "09:00",
       salidaProgramada: "18:00", descanso: false, motivoNoAsistencia: null,
     }],
   ]);
@@ -31,19 +34,24 @@ function crearRepositorioEnMemoria(): {
     estadosManuales,
     marcasCrudas,
     repositorio: {
-      buscarTurnoPublicado: async (idHuellero, fecha) => turnos.get(`${idHuellero}:${fecha}`),
-      confirmar: async (asistencia) => { asistencias.push(asistencia); },
-      buscarInstantaneaDeTurno: async (idHuellero, fecha) => {
-        const turno = turnos.get(`${idHuellero}:${fecha}`);
+      buscarTurnoPublicado: async (dni, fecha) => turnos.get(`${dni}:${fecha}`),
+      // El cálculo real (con el límite semanal) vive en el repositorio PostgreSQL; aquí se imita para probar decisiones.
+      confirmar: async (asistencia) => {
+        const { entradaProgramada, salidaProgramada } = asistencia.instantaneaDeTurno;
+        const horaExtra = entradaProgramada && salidaProgramada
+          ? calcularHoraExtra({ entradaProgramada, salidaProgramada, entradaReal: asistencia.entradaReal, salidaReal: asistencia.salidaReal })
+          : undefined;
+        asistencias.push({ ...asistencia, horaExtra });
+      },
+      buscarInstantaneaDeTurno: async (dni, fecha) => {
+        const turno = turnos.get(`${dni}:${fecha}`);
         return turno?.sede ? { ...turno, sede: turno.sede } : undefined;
       },
-      ajustar: async (solicitud, responsableId, horaExtra) => {
+      ajustar: async (solicitud, responsableId) => {
         ajustes.push({ motivo: solicitud.motivo, responsableId });
-        const asistencia = asistencias.find((item) => item.idHuellero === solicitud.idHuellero && item.fecha === solicitud.fecha);
-        if (asistencia) asistencia.horaExtra = horaExtra;
       },
-      decidirHoraExtra: async (idHuellero, fecha, estado) => {
-        const asistencia = asistencias.find((item) => item.idHuellero === idHuellero && item.fecha === fecha);
+      decidirHoraExtra: async (dni, fecha, estado) => {
+        const asistencia = asistencias.find((item) => item.dni === dni && item.fecha === fecha);
         if (asistencia?.horaExtra) asistencia.horaExtra.estado = estado;
       },
       registrarEstadoManual: async (estadoManual) => { estadosManuales.push(estadoManual); },
@@ -64,12 +72,12 @@ describe("casos de uso de asistencias en el servidor", () => {
     });
 
     await casosDeUso.confirmar({
-      idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima", entradaReal: "2026-09-01T09:04:00-05:00",
+      dni: "00001024", fecha: "2026-09-01", sede: "Lima", entradaReal: "2026-09-01T09:04:00-05:00",
       salidaReal: "2026-09-01T18:02:00-05:00",
     });
 
     expect(asistencias).toEqual([expect.objectContaining({
-      idHuellero: "HU-1024", fecha: "2026-09-01", confirmadoPorId: "administracion-1",
+      dni: "00001024", fecha: "2026-09-01", confirmadoPorId: "administracion-1",
       minutosTrabajados: 538,
       instantaneaDeTurno: {
         sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00",
@@ -85,7 +93,7 @@ describe("casos de uso de asistencias en el servidor", () => {
     });
 
     await casosDeUso.ajustar({
-      idHuellero: "HU-1024", fecha: "2026-09-01", entradaReal: "2026-09-01T09:00:00-05:00",
+      dni: "00001024", fecha: "2026-09-01", entradaReal: "2026-09-01T09:00:00-05:00",
       salidaReal: "2026-09-01T18:15:00-05:00", motivo: "Olvidó registrar la entrada.",
     });
 
@@ -100,29 +108,11 @@ describe("casos de uso de asistencias en el servidor", () => {
     });
 
     await casosDeUso.confirmar({
-      idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima", entradaReal: "2026-09-01T09:11:00-05:00",
+      dni: "00001024", fecha: "2026-09-01", sede: "Lima", entradaReal: "2026-09-01T09:11:00-05:00",
       salidaReal: "2026-09-01T18:02:00-05:00",
     });
 
     expect(asistencias[0].tardanza).toEqual({ minutosDeTardanza: 11, minutosPenalizados: 0, politicaVersion: 1 });
-  });
-
-  it("calcula la hora extra diaria y separa los tramos 25% y 35%", async () => {
-    const { asistencias, repositorio } = crearRepositorioEnMemoria();
-    const casosDeUso = crearCasosDeUsoDeAsistencias(repositorio, {
-      obtenerActorActual: async () => ({ id: "administracion-1", rol: "administracion" }),
-    });
-
-    await casosDeUso.confirmar({
-      idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima", entradaReal: "2026-09-01T09:00:00-05:00",
-      salidaReal: "2026-09-01T20:30:00-05:00",
-    });
-
-    expect(asistencias[0].horaExtra).toEqual({
-      minutosAl25: 120,
-      minutosAl35: 30,
-      estado: "pendiente",
-    });
   });
 
   it("permite que Finanzas apruebe una hora extra pendiente", async () => {
@@ -131,11 +121,11 @@ describe("casos de uso de asistencias en el servidor", () => {
       obtenerActorActual: async () => ({ id: "finanzas-1", rol: "finanzas" }),
     });
     await casosDeUso.confirmar({
-      idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima", entradaReal: "2026-09-01T09:00:00-05:00",
+      dni: "00001024", fecha: "2026-09-01", sede: "Lima", entradaReal: "2026-09-01T09:00:00-05:00",
       salidaReal: "2026-09-01T18:30:00-05:00",
     });
 
-    await casosDeUso.aprobarHoraExtra({ idHuellero: "HU-1024", fecha: "2026-09-01" });
+    await casosDeUso.aprobarHoraExtra({ dni: "00001024", fecha: "2026-09-01" });
 
     expect(asistencias[0].horaExtra?.estado).toBe("aprobada");
   });
@@ -146,11 +136,11 @@ describe("casos de uso de asistencias en el servidor", () => {
       obtenerActorActual: async () => ({ id: "finanzas-1", rol: "finanzas" }),
     });
     await casosDeUso.confirmar({
-      idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima", entradaReal: "2026-09-01T09:00:00-05:00",
+      dni: "00001024", fecha: "2026-09-01", sede: "Lima", entradaReal: "2026-09-01T09:00:00-05:00",
       salidaReal: "2026-09-01T18:30:00-05:00",
     });
 
-    await casosDeUso.rechazarHoraExtra({ idHuellero: "HU-1024", fecha: "2026-09-01" });
+    await casosDeUso.rechazarHoraExtra({ dni: "00001024", fecha: "2026-09-01" });
 
     expect(asistencias[0].horaExtra?.estado).toBe("rechazada");
   });
@@ -161,27 +151,8 @@ describe("casos de uso de asistencias en el servidor", () => {
       obtenerActorActual: async () => ({ id: "administracion-1", rol: "administracion" }),
     });
 
-    await expect(casosDeUso.aprobarHoraExtra({ idHuellero: "HU-1024", fecha: "2026-09-01" }))
+    await expect(casosDeUso.aprobarHoraExtra({ dni: "00001024", fecha: "2026-09-01" }))
       .rejects.toThrow("No tiene permiso para decidir horas extra.");
-  });
-
-  it("devuelve una hora extra aprobada a pendiente al ajustar la asistencia", async () => {
-    const { asistencias, repositorio } = crearRepositorioEnMemoria();
-    const casosDeUso = crearCasosDeUsoDeAsistencias(repositorio, {
-      obtenerActorActual: async () => ({ id: "finanzas-1", rol: "finanzas" }),
-    });
-    await casosDeUso.confirmar({
-      idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima", entradaReal: "2026-09-01T09:00:00-05:00",
-      salidaReal: "2026-09-01T18:30:00-05:00",
-    });
-    await casosDeUso.aprobarHoraExtra({ idHuellero: "HU-1024", fecha: "2026-09-01" });
-
-    await casosDeUso.ajustar({
-      idHuellero: "HU-1024", fecha: "2026-09-01", entradaReal: "2026-09-01T09:00:00-05:00",
-      salidaReal: "2026-09-01T19:00:00-05:00", motivo: "Salida corregida.",
-    });
-
-    expect(asistencias[0].horaExtra).toEqual({ minutosAl25: 60, minutosAl35: 0, estado: "pendiente" });
   });
 
   it("registra un estado manual auditable que prevalece sobre las marcas crudas", async () => {
@@ -191,11 +162,11 @@ describe("casos de uso de asistencias en el servidor", () => {
     });
 
     await casosDeUso.registrarEstadoManual({
-      idHuellero: "HU-1024", fecha: "2026-09-01", tipo: "vacaciones", comentario: "Vacaciones aprobadas.",
+      dni: "00001024", fecha: "2026-09-01", tipo: "vacaciones", comentario: "Vacaciones aprobadas.",
     });
 
     expect(estadosManuales).toEqual([{
-      idHuellero: "HU-1024", fecha: "2026-09-01", tipo: "vacaciones", comentario: "Vacaciones aprobadas.",
+      dni: "00001024", fecha: "2026-09-01", tipo: "vacaciones", comentario: "Vacaciones aprobadas.",
       responsableId: "administracion-1", registradoEn: expect.any(Date),
     }]);
     expect(marcasCrudas).toEqual(["2026-09-01T09:04:00-05:00", "2026-09-01T18:02:00-05:00"]);
@@ -208,7 +179,7 @@ describe("casos de uso de asistencias en el servidor", () => {
     });
 
     await casosDeUso.registrarEstadoManual({
-      idHuellero: "HU-1024", fecha: "2026-09-01", tipo: "falta", comentario: "No asistió por enfermedad.",
+      dni: "00001024", fecha: "2026-09-01", tipo: "falta", comentario: "No asistió por enfermedad.",
     });
 
     expect(estadosManuales).toEqual([expect.objectContaining({ tipo: "falta", comentario: "No asistió por enfermedad." })]);
@@ -221,7 +192,7 @@ describe("casos de uso de asistencias en el servidor", () => {
     });
 
     await expect(casosDeUso.confirmar({
-      idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Callao", entradaReal: "2026-09-01T09:00:00-05:00",
+      dni: "00001024", fecha: "2026-09-01", sede: "Callao", entradaReal: "2026-09-01T09:00:00-05:00",
       salidaReal: "2026-09-01T18:00:00-05:00",
     })).rejects.toThrow("La sede registrada no coincide con la sede planificada (Lima). Corrija y republique el horario semanal.");
   });
@@ -231,7 +202,7 @@ describe("casos de uso de asistencias en el servidor", () => {
     const casosDeUso = crearCasosDeUsoDeAsistencias(repositorio, {
       obtenerActorActual: async () => ({ id: "administracion-1", rol: "administracion" }),
     });
-    const turno = await repositorio.buscarTurnoPublicado("HU-1024", "2026-09-01");
+    const turno = await repositorio.buscarTurnoPublicado("00001024", "2026-09-01");
     if (!turno) throw new Error("Falta el turno de prueba.");
     Object.assign(turno, {
       sede: null,
@@ -242,7 +213,7 @@ describe("casos de uso de asistencias en el servidor", () => {
     });
 
     await expect(casosDeUso.confirmar({
-      idHuellero: "HU-1024", fecha: "2026-09-01", sede: "Lima", entradaReal: "2026-09-01T09:00:00-05:00",
+      dni: "00001024", fecha: "2026-09-01", sede: "Lima", entradaReal: "2026-09-01T09:00:00-05:00",
       salidaReal: "2026-09-01T18:00:00-05:00",
     })).rejects.toThrow("El horario semanal tiene Feriado planificado. Corrija y republique el horario antes de registrar la asistencia.");
   });
@@ -254,7 +225,7 @@ describe("casos de uso de asistencias en el servidor", () => {
     });
 
     await expect(casosDeUso.registrarEstadoManual({
-      idHuellero: "HU-1024", fecha: "2026-09-01", tipo: "falta", comentario: "  ",
+      dni: "00001024", fecha: "2026-09-01", tipo: "falta", comentario: "  ",
     })).rejects.toThrow("El estado manual requiere un comentario.");
   });
 
@@ -265,7 +236,7 @@ describe("casos de uso de asistencias en el servidor", () => {
     });
 
     await expect(casosDeUso.registrarEstadoManual({
-      idHuellero: "HU-1024", fecha: "2026-09-01", tipo: "falta", comentario: "Ausencia real.",
+      dni: "00001024", fecha: "2026-09-01", tipo: "falta", comentario: "Ausencia real.",
     })).rejects.toThrow("No tiene permiso para revisar asistencias.");
   });
 });

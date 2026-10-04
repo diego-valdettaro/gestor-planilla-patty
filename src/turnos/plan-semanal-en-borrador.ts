@@ -3,7 +3,7 @@ import type { DatosDeJornadaPlanificada, RepositorioParaValidarJornadaPlanificad
 
 export interface CeldaDePlanSemanalEnBorrador extends DatosDeJornadaPlanificada {
   planId: string;
-  idHuellero: string;
+  dni: string;
   fecha: string;
   grupo?: Grupo;
 }
@@ -17,7 +17,7 @@ export interface PlanSemanalEnBorrador {
 }
 
 export interface HorarioSemanalParaCopiar extends DatosDeJornadaPlanificada {
-  idHuellero: string;
+  dni: string;
   fecha: string;
   grupo?: Grupo;
 }
@@ -28,11 +28,11 @@ export interface RepositorioDePlanesSemanales extends RepositorioParaValidarJorn
   guardarCelda(celda: CeldaDePlanSemanalEnBorrador): Promise<void>;
   guardarCeldas(celdas: CeldaDePlanSemanalEnBorrador[]): Promise<void>;
   reemplazarCeldasDelPlan(planId: string, celdas: CeldaDePlanSemanalEnBorrador[]): Promise<void>;
-  borrarCelda(planId: string, idHuellero: string, fecha: string): Promise<void>;
-  colaboradorPerteneceAEquipo(idHuellero: string, equipo: Grupo): Promise<boolean>;
-  buscarPublicado(idHuellero: string, fecha: string): Promise<HorarioSemanalParaCopiar | undefined>;
+  borrarCelda(planId: string, dni: string, fecha: string): Promise<void>;
+  colaboradorPerteneceAEquipo(dni: string, equipo: Grupo): Promise<boolean>;
+  buscarPublicado(dni: string, fecha: string): Promise<HorarioSemanalParaCopiar | undefined>;
   listarHorariosPublicadosDelEquipoEnSemana(semana: string, equipo: Grupo): Promise<HorarioSemanalParaCopiar[]>;
-  listarColaboradoresActivosPorEquipo(equipo: Grupo): Promise<Array<{ idHuellero: string; nombre: string; sede: string }>>;
-  asistenciaEstaProcesada?(idHuellero: string, fecha: string): Promise<boolean>;
-  horarioSemanalEstaProcesado?(idHuellero: string, semana: string): Promise<boolean>;
+  listarColaboradoresActivosPorEquipo(equipo: Grupo): Promise<Array<{ dni: string; nombre: string; sede: string }>>;
+  asistenciaEstaProcesada?(dni: string, fecha: string): Promise<boolean>;
+  horarioSemanalEstaProcesado?(dni: string, semana: string): Promise<boolean>;
 }

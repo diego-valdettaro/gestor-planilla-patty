@@ -9,8 +9,8 @@ function crearRepositorio(procesada = false, cambiaSoloMotivo = false) {
   const celdas = Array.from({ length: 7 }, (_, indice) => {
     const fecha = new Date(Date.UTC(2026, 7, 31 + indice)).toISOString().slice(0, 10);
     const turno = cambiaSoloMotivo && indice === 0
-      ? { idHuellero: "HU-1", fecha, sede: null, modeloHorarioId: null, entradaProgramada: null, salidaProgramada: null, descanso: true, motivoNoAsistencia: "descanso" as const }
-      : { idHuellero: "HU-1", fecha, sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false };
+      ? { dni: "00000011", fecha, sede: null, modeloHorarioId: null, entradaProgramada: null, salidaProgramada: null, descanso: true, motivoNoAsistencia: "descanso" as const }
+      : { dni: "00000011", fecha, sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false };
     publicados.set(fecha, turno);
     return cambiaSoloMotivo && indice === 0
       ? { ...turno, planId: "plan-1", motivoNoAsistencia: "feriado" as const }
@@ -31,7 +31,7 @@ function crearRepositorio(procesada = false, cambiaSoloMotivo = false) {
     buscarModeloDeHorario: async () => undefined,
     listarColaboradoresActivosPorEquipo: async () => [],
     listarHorariosPublicadosDelEquipoEnSemana: async () => [],
-    buscarPublicado: async (_idHuellero, fecha) => publicados.get(fecha),
+    buscarPublicado: async (_dni, fecha) => publicados.get(fecha),
     publicar: async () => undefined,
     publicarEnLote: async () => undefined,
     perteneceAPeriodoAbierto: async () => true,
@@ -45,7 +45,7 @@ describe("republicar plan semanal", () => {
   it("reemplaza los siete días corregidos con un motivo auditado", async () => {
     const { reemplazos, repositorio } = crearRepositorio();
 
-    await republicarPlanSemanal(repositorio, { id: "operaciones-1", rol: "operaciones" }, "plan-1", "HU-1", "  Corrige entrada pactada  ");
+    await republicarPlanSemanal(repositorio, { id: "operaciones-1", rol: "operaciones" }, "plan-1", "00000011", "  Corrige entrada pactada  ");
 
     expect(reemplazos).toEqual([expect.objectContaining({
       motivo: "Corrige entrada pactada",
@@ -57,7 +57,7 @@ describe("republicar plan semanal", () => {
   it("no permite corregir una semana cuya asistencia ya fue procesada", async () => {
     const { reemplazos, repositorio } = crearRepositorio(true);
 
-    await expect(republicarPlanSemanal(repositorio, { id: "administracion-1", rol: "administracion" }, "plan-1", "HU-1", "Corrige entrada pactada"))
+    await expect(republicarPlanSemanal(repositorio, { id: "administracion-1", rol: "administracion" }, "plan-1", "00000011", "Corrige entrada pactada"))
       .rejects.toThrow("No se puede corregir un horario semanal que ya fue procesado.");
     expect(reemplazos).toEqual([]);
   });
@@ -65,7 +65,7 @@ describe("republicar plan semanal", () => {
   it("republica cuando el único cambio es el motivo planificado", async () => {
     const { reemplazos, repositorio } = crearRepositorio(false, true);
 
-    await republicarPlanSemanal(repositorio, { id: "operaciones-1", rol: "operaciones" }, "plan-1", "HU-1", "Cambia descanso por feriado");
+    await republicarPlanSemanal(repositorio, { id: "operaciones-1", rol: "operaciones" }, "plan-1", "00000011", "Cambia descanso por feriado");
 
     expect(reemplazos[0].turnos[0]).toMatchObject({ motivoNoAsistencia: "feriado" });
   });
@@ -73,7 +73,7 @@ describe("republicar plan semanal", () => {
   it("permite a Finanzas republicar con las mismas reglas que Operaciones", async () => {
     const { reemplazos, repositorio } = crearRepositorio();
 
-    await republicarPlanSemanal(repositorio, { id: "finanzas-1", rol: "finanzas" }, "plan-1", "HU-1", "Corrige entrada pactada");
+    await republicarPlanSemanal(repositorio, { id: "finanzas-1", rol: "finanzas" }, "plan-1", "00000011", "Corrige entrada pactada");
 
     expect(reemplazos).toEqual([expect.objectContaining({ motivo: "Corrige entrada pactada" })]);
     expect(reemplazos[0].turnos).toHaveLength(7);

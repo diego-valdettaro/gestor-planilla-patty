@@ -16,9 +16,9 @@ export function crearCasosDeUsoDeTurnos(
         turno,
       );
     },
-    async procesar(idHuellero: string, semana: string): Promise<void> {
+    async procesar(dni: string, semana: string): Promise<void> {
       if (!esRepositorioParaProcesarHorarioSemanal(repositorio)) throw new Error("El repositorio no permite procesar horarios semanales.");
-      await procesarHorarioSemanal(repositorio, await sesion.obtenerActorActual(), idHuellero, semana);
+      await procesarHorarioSemanal(repositorio, await sesion.obtenerActorActual(), dni, semana);
     },
   };
 }

@@ -19,7 +19,7 @@ import type { MotivoPlanificadoDeNoAsistencia } from "@/turnos/jornada-planifica
 import { PlanificadorSemanal, celdasDeSemanaCompleta, valorDe } from "./planificador-semanal";
 
 const jornadaPersonalizada = {
-  idHuellero: "HU-1024",
+  dni: "00001024",
   fecha: "2026-09-07",
   sede: "Tienda Norte",
   modeloHorarioId: null,
@@ -38,10 +38,10 @@ describe("planificador semanal", () => {
       planId: "plan-1",
       semana: "2026-09-07",
       equipo: "tiendas",
-      colaboradores: [{ idHuellero: "HU-1024", nombre: "Ana Pérez", sede: "Sede fija anterior" }],
+      colaboradores: [{ dni: "00001024", nombre: "Ana Pérez", sede: "Sede fija anterior" }],
       dias: ["2026-09-07", "2026-09-08"],
       celdasIniciales: [jornadaPersonalizada, {
-        idHuellero: "HU-1024", fecha: "2026-09-08", sede: null, modeloHorarioId: null,
+        dni: "00001024", fecha: "2026-09-08", sede: null, modeloHorarioId: null,
         entradaProgramada: null, salidaProgramada: null, descanso: true, motivoNoAsistencia: "vacaciones" as const,
       }],
       publicados: [],
@@ -75,11 +75,11 @@ describe("planificador semanal", () => {
       planId: "plan-1",
       semana: "2026-09-07",
       equipo: "tiendas",
-      colaboradores: [{ idHuellero: "HU-1024", nombre: "Ana Pérez", sede: "Tienda Norte" }],
+      colaboradores: [{ dni: "00001024", nombre: "Ana Pérez", sede: "Tienda Norte" }],
       dias: ["2026-09-07", "2026-09-08"],
       celdasIniciales: [],
       publicados: [],
-      procesados: ["HU-1024"],
+      procesados: ["00001024"],
       modelos: [modeloApertura],
       sedes: ["Tienda Norte", "Tienda Sur"],
     }));
@@ -94,34 +94,34 @@ describe("planificador semanal", () => {
 
   it("completa la semana con el modelo por defecto en los días laborales y el motivo elegido en el resto", () => {
     const dias = ["2026-09-07", "2026-09-08", "2026-09-09"];
-    const celdas = celdasDeSemanaCompleta("HU-1024", dias, {
+    const celdas = celdasDeSemanaCompleta("00001024", dias, {
       "2026-09-07": "laboral",
       "2026-09-08": "vacaciones",
       "2026-09-09": "laboral",
     }, modeloApertura);
 
     expect(celdas).toEqual([
-      { idHuellero: "HU-1024", fecha: "2026-09-07", sede: "Tienda Sur", modeloHorarioId: "modelo-1", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false, motivoNoAsistencia: null },
-      { idHuellero: "HU-1024", fecha: "2026-09-08", sede: null, modeloHorarioId: null, entradaProgramada: null, salidaProgramada: null, descanso: true, motivoNoAsistencia: "vacaciones" },
-      { idHuellero: "HU-1024", fecha: "2026-09-09", sede: "Tienda Sur", modeloHorarioId: "modelo-1", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false, motivoNoAsistencia: null },
+      { dni: "00001024", fecha: "2026-09-07", sede: "Tienda Sur", modeloHorarioId: "modelo-1", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false, motivoNoAsistencia: null },
+      { dni: "00001024", fecha: "2026-09-08", sede: null, modeloHorarioId: null, entradaProgramada: null, salidaProgramada: null, descanso: true, motivoNoAsistencia: "vacaciones" },
+      { dni: "00001024", fecha: "2026-09-09", sede: "Tienda Sur", modeloHorarioId: "modelo-1", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false, motivoNoAsistencia: null },
     ]);
   });
 
   it("exige un modelo por defecto cuando algún día queda laboral", () => {
-    expect(() => celdasDeSemanaCompleta("HU-1024", ["2026-09-07"], { "2026-09-07": "laboral" }, undefined))
+    expect(() => celdasDeSemanaCompleta("00001024", ["2026-09-07"], { "2026-09-07": "laboral" }, undefined))
       .toThrow("Seleccione un modelo de horario por defecto.");
   });
 
   it("no exige modelo por defecto cuando todos los días tienen un motivo de no asistencia", () => {
-    const celdas = celdasDeSemanaCompleta("HU-1024", ["2026-09-07"], { "2026-09-07": "descanso" }, undefined);
+    const celdas = celdasDeSemanaCompleta("00001024", ["2026-09-07"], { "2026-09-07": "descanso" }, undefined);
     expect(celdas).toEqual([
-      { idHuellero: "HU-1024", fecha: "2026-09-07", sede: null, modeloHorarioId: null, entradaProgramada: null, salidaProgramada: null, descanso: true, motivoNoAsistencia: "descanso" },
+      { dni: "00001024", fecha: "2026-09-07", sede: null, modeloHorarioId: null, entradaProgramada: null, salidaProgramada: null, descanso: true, motivoNoAsistencia: "descanso" },
     ]);
   });
 });
 
-function celdaLaboral(idHuellero: string, fecha: string, sede: string) {
-  return { idHuellero, fecha, sede, modeloHorarioId: null, entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false, motivoNoAsistencia: null };
+function celdaLaboral(dni: string, fecha: string, sede: string) {
+  return { dni, fecha, sede, modeloHorarioId: null, entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false, motivoNoAsistencia: null };
 }
 
 // Acota el HTML a la primera celda-día de la tabla, para no confundir su contenido con el de
@@ -132,14 +132,14 @@ function pastillaDe(html: string): string {
 }
 
 describe("pastillas diarias compactas y accesibles", () => {
-  const colaborador = { idHuellero: "HU-1024", nombre: "Ana Pérez", sede: "Tienda Sur" };
-  const celdaConModelo = { idHuellero: "HU-1024", fecha: "2026-09-07", sede: "Tienda Sur", modeloHorarioId: "modelo-1", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false, motivoNoAsistencia: null };
+  const colaborador = { dni: "00001024", nombre: "Ana Pérez", sede: "Tienda Sur" };
+  const celdaConModelo = { dni: "00001024", fecha: "2026-09-07", sede: "Tienda Sur", modeloHorarioId: "modelo-1", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false, motivoNoAsistencia: null };
   const propsBase = {
     equipos: ["tiendas"], planId: "plan-1", semana: "2026-09-07", equipo: "tiendas",
     colaboradores: [colaborador], dias: ["2026-09-07"],
     publicados: [], procesados: [], modelos: [modeloApertura], sedes: ["Tienda Sur"],
   };
-  type CeldaDePrueba = { idHuellero: string; fecha: string; sede: string | null; modeloHorarioId: string | null; entradaProgramada: string | null; salidaProgramada: string | null; descanso: boolean; motivoNoAsistencia: MotivoPlanificadoDeNoAsistencia | null };
+  type CeldaDePrueba = { dni: string; fecha: string; sede: string | null; modeloHorarioId: string | null; entradaProgramada: string | null; salidaProgramada: string | null; descanso: boolean; motivoNoAsistencia: MotivoPlanificadoDeNoAsistencia | null };
   function renderConUnaCelda(celda: CeldaDePrueba, procesados: string[] = []) {
     return renderToStaticMarkup(createElement(PlanificadorSemanal, { ...propsBase, celdasIniciales: [celda], procesados }));
   }
@@ -153,7 +153,7 @@ describe("pastillas diarias compactas y accesibles", () => {
   });
 
   it("la pastilla no laboral muestra solo el motivo, sin sede ni horas", () => {
-    const celdaDeMotivo = { idHuellero: "HU-1024", fecha: "2026-09-07", sede: null, modeloHorarioId: null, entradaProgramada: null, salidaProgramada: null, descanso: true, motivoNoAsistencia: "vacaciones" as const };
+    const celdaDeMotivo = { dni: "00001024", fecha: "2026-09-07", sede: null, modeloHorarioId: null, entradaProgramada: null, salidaProgramada: null, descanso: true, motivoNoAsistencia: "vacaciones" as const };
     const celdaHtml = pastillaDe(renderConUnaCelda(celdaDeMotivo));
     expect(celdaHtml).toContain("Vacaciones");
     expect(celdaHtml).not.toContain("Tienda Sur");
@@ -186,7 +186,7 @@ describe("pastillas diarias compactas y accesibles", () => {
   it("mantiene señales que no dependen solo del color: la marca de edición y el bloqueo de una semana liquidada", () => {
     expect(renderConUnaCelda(celdaConModelo)).toContain('class="marca-edit"');
 
-    const htmlLiquidado = renderConUnaCelda(celdaConModelo, ["HU-1024"]);
+    const htmlLiquidado = renderConUnaCelda(celdaConModelo, ["00001024"]);
     expect(htmlLiquidado).toContain("disabled=\"\"");
     expect(htmlLiquidado).not.toContain('class="marca-edit"');
   });
@@ -195,8 +195,8 @@ describe("pastillas diarias compactas y accesibles", () => {
 describe("selección de publicación", () => {
   const dias = ["2026-09-07", "2026-09-08"];
   const colaboradores = [
-    { idHuellero: "HU-1", nombre: "Ana Pérez", sede: "Tienda Norte" },
-    { idHuellero: "HU-2", nombre: "Beto Ruiz", sede: "Tienda Norte" },
+    { dni: "00000011", nombre: "Ana Pérez", sede: "Tienda Norte" },
+    { dni: "00000012", nombre: "Beto Ruiz", sede: "Tienda Norte" },
   ];
 
   it("muestra un checkbox marcado por defecto solo en la fila completa, sin publicar y sin liquidar", () => {
@@ -204,8 +204,8 @@ describe("selección de publicación", () => {
       equipos: ["tiendas"], planId: "plan-1", semana: "2026-09-07", equipo: "tiendas",
       colaboradores, dias,
       celdasIniciales: [
-        celdaLaboral("HU-1", "2026-09-07", "Tienda Norte"), celdaLaboral("HU-1", "2026-09-08", "Tienda Norte"),
-        celdaLaboral("HU-2", "2026-09-07", "Tienda Norte"), // a HU-2 le falta el segundo día
+        celdaLaboral("00000011", "2026-09-07", "Tienda Norte"), celdaLaboral("00000011", "2026-09-08", "Tienda Norte"),
+        celdaLaboral("00000012", "2026-09-07", "Tienda Norte"), // a 00000012 le falta el segundo día
       ],
       publicados: [], procesados: [], modelos: [modeloApertura], sedes: ["Tienda Norte"],
     }));
@@ -218,9 +218,9 @@ describe("selección de publicación", () => {
     const html = renderToStaticMarkup(createElement(PlanificadorSemanal, {
       equipos: ["tiendas"], planId: "plan-1", semana: "2026-09-07", equipo: "tiendas",
       colaboradores, dias,
-      celdasIniciales: [celdaLaboral("HU-2", "2026-09-07", "Tienda Norte"), celdaLaboral("HU-2", "2026-09-08", "Tienda Norte")],
-      publicados: [celdaLaboral("HU-1", "2026-09-07", "Tienda Norte"), celdaLaboral("HU-1", "2026-09-08", "Tienda Norte")],
-      procesados: ["HU-2"], modelos: [modeloApertura], sedes: ["Tienda Norte"],
+      celdasIniciales: [celdaLaboral("00000012", "2026-09-07", "Tienda Norte"), celdaLaboral("00000012", "2026-09-08", "Tienda Norte")],
+      publicados: [celdaLaboral("00000011", "2026-09-07", "Tienda Norte"), celdaLaboral("00000011", "2026-09-08", "Tienda Norte")],
+      procesados: ["00000012"], modelos: [modeloApertura], sedes: ["Tienda Norte"],
     }));
 
     expect(html).not.toContain('type="checkbox"');
@@ -234,14 +234,14 @@ describe("selección de publicación", () => {
     };
 
     const sinElegibles = renderToStaticMarkup(createElement(PlanificadorSemanal, {
-      ...base, celdasIniciales: [celdaLaboral("HU-1", "2026-09-07", "Tienda Norte")], // incompleta
+      ...base, celdasIniciales: [celdaLaboral("00000011", "2026-09-07", "Tienda Norte")], // incompleta
     }));
     expect(sinElegibles).toContain('<button aria-describedby="motivo-acciones-plan" class="boton-principal" disabled="" type="button">Publicar planificación</button>');
     expect(sinElegibles).toContain('id="motivo-acciones-plan"');
     expect(sinElegibles).toContain("Publicar planificación está deshabilitado porque no hay colaboradores marcados para publicar.");
 
     const conUnaElegible = renderToStaticMarkup(createElement(PlanificadorSemanal, {
-      ...base, celdasIniciales: [celdaLaboral("HU-1", "2026-09-07", "Tienda Norte"), celdaLaboral("HU-1", "2026-09-08", "Tienda Norte")],
+      ...base, celdasIniciales: [celdaLaboral("00000011", "2026-09-07", "Tienda Norte"), celdaLaboral("00000011", "2026-09-08", "Tienda Norte")],
     }));
     expect(conUnaElegible).not.toContain('<button aria-describedby="motivo-acciones-plan" class="boton-principal" disabled="" type="button">Publicar planificación</button>');
     expect(conUnaElegible).not.toContain("Publicar planificación está deshabilitado");
@@ -269,7 +269,7 @@ describe("selección de publicación", () => {
     const html = renderToStaticMarkup(createElement(PlanificadorSemanal, {
       equipos: ["tiendas"], planId: "plan-1", semana: "2026-09-07", equipo: "tiendas",
       colaboradores, dias,
-      celdasIniciales: [celdaLaboral("HU-1", "2026-09-07", "Tienda Norte"), celdaLaboral("HU-1", "2026-09-08", "Tienda Norte")],
+      celdasIniciales: [celdaLaboral("00000011", "2026-09-07", "Tienda Norte"), celdaLaboral("00000011", "2026-09-08", "Tienda Norte")],
       publicados: [], procesados: [], modelos: [modeloApertura], sedes: ["Tienda Norte"], soloLectura: true,
     }));
 

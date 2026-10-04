@@ -12,10 +12,10 @@ describe("ruta de importación de asistencias", () => {
 
   it("muestra un enlace secundario al formulario en la fila de filtros", () => {
     const html = renderToStaticMarkup(createElement(FiltrosDeAsistencia, {
-      colaborador: "HU-1",
+      colaborador: "00000011",
       grupo: "Tiendas",
       grupos: ["Tiendas"],
-      colaboradores: [{ idHuellero: "HU-1", nombre: "Ana Torres" }],
+      colaboradores: [{ dni: "00000011", nombre: "Ana Torres" }],
       fecha: "2026-09-14",
       vista: "semanal",
     }));
@@ -24,6 +24,6 @@ describe("ruta de importación de asistencias", () => {
     expect(html).toContain('class="boton-secundario importar-archivo"');
     expect(html).toContain("Importar archivo");
     expect(html).toContain("Vista mensual");
-    expect(html).toContain('name="colaborador" value="HU-1"');
+    expect(html).toContain('name="colaborador" value="00000011"');
   });
 });

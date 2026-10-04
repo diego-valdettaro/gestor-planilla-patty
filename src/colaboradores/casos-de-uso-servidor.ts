@@ -23,11 +23,11 @@ export function crearCasosDeUsoDeColaboradores(
         colaborador,
       );
     },
-    async consultar(idHuellero: string): Promise<Colaborador | undefined> {
+    async consultar(dni: string): Promise<Colaborador | undefined> {
       return consultarColaborador(
         repositorio,
         await sesion.obtenerActorActual(),
-        idHuellero,
+        dni,
       );
     },
     async actualizar(colaborador: Colaborador): Promise<void> {
@@ -37,11 +37,11 @@ export function crearCasosDeUsoDeColaboradores(
         colaborador,
       );
     },
-    async cambiarGrupo(idHuellero: string, grupoNuevo: string): Promise<void> {
+    async cambiarGrupo(dni: string, grupoNuevo: string): Promise<void> {
       await cambiarGrupoDeColaborador(
         repositorio,
         await sesion.obtenerActorActual(),
-        idHuellero,
+        dni,
         grupoNuevo,
       );
     },
