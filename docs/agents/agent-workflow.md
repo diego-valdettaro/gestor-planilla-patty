@@ -78,7 +78,9 @@ falla con un mensaje que explica cómo instalarlo o iniciarlo.
 
 - El agente puede crear worktrees, ramas locales y commits.
 - Solo puede hacer push o abrir un pull request cuando el usuario lo autorice.
-- El pull request debe enlazar la issue, listar la evidencia de cada criterio,
+- El pull request debe enlazar la issue con `Closes #N` (en inglés: GitHub no
+  reconoce «Cierra» y la issue quedaría abierta al fusionar; en una épica,
+  usar «Parte de #N»), listar la evidencia de cada criterio,
   incluir el resultado de `pnpm validate`, capturas de las rutas modificadas y
   riesgos o comprobaciones pendientes.
 - No fusionar pull requests salvo instrucción expresa del usuario.
