@@ -55,7 +55,7 @@ test("Administración abre los recorridos críticos sin errores de navegador", a
     { ruta: "/configuracion", titulo: "Configuración" },
     { ruta: "/turnos", titulo: "Planificación de horarios" },
     { ruta: "/asistencias", titulo: "Asistencias" },
-    { ruta: "/periodos", titulo: "Liquidaciones" },
+    { ruta: "/periodos", titulo: "Períodos de planilla" },
   ];
 
   for (const recorrido of recorridos) {
@@ -81,7 +81,7 @@ test("un horario personalizado conserva sede y horas al reabrirlo", async ({ pag
   await expect(celda).toContainText("Tienda Benavides");
   await expect(celda).toContainText("08:00–16:00");
   await celda.click();
-  const dialogoDeCelda = page.getByRole("dialog", { name: "Turno de Ana Borrador" });
+  const dialogoDeCelda = page.getByRole("dialog", { name: "Horario semanal de Ana Borrador" });
   await dialogoDeCelda.getByLabel("Horario personalizado…").check();
   await dialogoDeCelda.getByRole("button", { name: "Usar" }).click();
 
@@ -154,7 +154,7 @@ test("completar semana reemplaza los siete días con el modelo por defecto y los
 
   const primerCelda = celdas.nth(0);
   await primerCelda.click();
-  const dialogoCelda = page.getByRole("dialog", { name: "Turno de Ana Borrador" });
+  const dialogoCelda = page.getByRole("dialog", { name: "Horario semanal de Ana Borrador" });
   await dialogoCelda.getByLabel("Permiso").check();
   await dialogoCelda.getByRole("button", { name: "Usar" }).click();
   await expect(dialogoCelda).toBeHidden();
@@ -190,7 +190,7 @@ test("completar semana no exige un modelo por defecto cuando todos los días que
   expect(errores).toEqual([]);
 });
 
-test("completar semana sobre una fila publicada deja cambios sin publicar en vez de modificar el turno publicado", async ({ page }) => {
+test("completar semana sobre una fila publicada deja cambios sin publicar en vez de modificar el horario semanal publicado", async ({ page }) => {
   test.setTimeout(60_000);
   const errores = observarErroresDelNavegador(page);
 
@@ -214,7 +214,7 @@ test("completar semana sobre una fila publicada deja cambios sin publicar en vez
   await dialogo.getByRole("button", { name: "Completar semana" }).click();
   await expect(dialogo).toBeHidden();
 
-  // El cambio queda pendiente de republicación: no se sobrescribe el turno publicado en silencio.
+  // El cambio queda pendiente de republicación: no se sobrescribe el horario semanal publicado en silencio.
   await expect(estadoDeLaFila).toHaveText("Cambios sin publicar");
   await expect(filaBeto.getByRole("button", { name: "Republicar cambios" })).toBeVisible();
   expect(errores).toEqual([]);
@@ -238,7 +238,7 @@ test("publicar selección solo publica la fila marcada y respeta una deselecció
   const filaCarla = page.locator("tr", { hasText: "Carla Cambios" });
   const checkboxAna = filaAna.locator('input[type="checkbox"]');
   const botonPublicar = page.getByRole("button", { name: "Publicar planificación" }).first();
-  const dialogoCelda = page.getByRole("dialog", { name: "Turno de Ana Borrador" });
+  const dialogoCelda = page.getByRole("dialog", { name: "Horario semanal de Ana Borrador" });
 
   // A Ana le falta el último día: todavía no hay ninguna fila elegible para publicar.
   await expect(checkboxAna).toHaveCount(0);
@@ -444,7 +444,7 @@ test("Administración confirma o cancela el ajuste de una asistencia confirmada"
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page).toHaveURL(/\/turnos$/);
 
-  // Eva queda confirmada con instantánea de turno por el recorrido de confirmación por rango anterior.
+  // Eva queda confirmada con instantánea de horario semanal por el recorrido de confirmación por rango anterior.
   const martes = fechaDeLaSemanaDeDemo(1);
   await page.goto(`/asistencias?vista=mensual&grupo=Tiendas&fecha=${martes}&colaborador=99900006`);
   const celda = page.getByRole("button", { name: new RegExp(`Asistencia del ${martes}`) });
