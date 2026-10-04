@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { calcularHoraExtra, type HoraExtraCalculada } from "./calcular-hora-extra";
 import { crearCasosDeUsoDeAsistencias } from "./casos-de-uso-servidor";
 import type {
   AsistenciaConfirmada,
@@ -8,14 +9,16 @@ import type {
   TurnoParaConfirmar,
 } from "./confirmar-y-ajustar-asistencia";
 
+type AsistenciaEnMemoria = AsistenciaConfirmada & { horaExtra?: HoraExtraCalculada };
+
 function crearRepositorioEnMemoria(): {
-  asistencias: AsistenciaConfirmada[];
+  asistencias: AsistenciaEnMemoria[];
   ajustes: Array<{ motivo: string; responsableId: string }>;
   estadosManuales: EstadoManual[];
   marcasCrudas: string[];
   repositorio: RepositorioDeAsistencias;
 } {
-  const asistencias: AsistenciaConfirmada[] = [];
+  const asistencias: AsistenciaEnMemoria[] = [];
   const ajustes: Array<{ motivo: string; responsableId: string }> = [];
   const estadosManuales: EstadoManual[] = [];
   const marcasCrudas = ["2026-09-01T09:04:00-05:00", "2026-09-01T18:02:00-05:00"];
@@ -32,15 +35,20 @@ function crearRepositorioEnMemoria(): {
     marcasCrudas,
     repositorio: {
       buscarTurnoPublicado: async (dni, fecha) => turnos.get(`${dni}:${fecha}`),
-      confirmar: async (asistencia) => { asistencias.push(asistencia); },
+      // El cálculo real (con el límite semanal) vive en el repositorio PostgreSQL; aquí se imita para probar decisiones.
+      confirmar: async (asistencia) => {
+        const { entradaProgramada, salidaProgramada } = asistencia.instantaneaDeTurno;
+        const horaExtra = entradaProgramada && salidaProgramada
+          ? calcularHoraExtra({ entradaProgramada, salidaProgramada, entradaReal: asistencia.entradaReal, salidaReal: asistencia.salidaReal })
+          : undefined;
+        asistencias.push({ ...asistencia, horaExtra });
+      },
       buscarInstantaneaDeTurno: async (dni, fecha) => {
         const turno = turnos.get(`${dni}:${fecha}`);
         return turno?.sede ? { ...turno, sede: turno.sede } : undefined;
       },
-      ajustar: async (solicitud, responsableId, horaExtra) => {
+      ajustar: async (solicitud, responsableId) => {
         ajustes.push({ motivo: solicitud.motivo, responsableId });
-        const asistencia = asistencias.find((item) => item.dni === solicitud.dni && item.fecha === solicitud.fecha);
-        if (asistencia) asistencia.horaExtra = horaExtra;
       },
       decidirHoraExtra: async (dni, fecha, estado) => {
         const asistencia = asistencias.find((item) => item.dni === dni && item.fecha === fecha);
@@ -107,24 +115,6 @@ describe("casos de uso de asistencias en el servidor", () => {
     expect(asistencias[0].tardanza).toEqual({ minutosDeTardanza: 11, minutosPenalizados: 0, politicaVersion: 1 });
   });
 
-  it("calcula la hora extra diaria y separa los tramos 25% y 35%", async () => {
-    const { asistencias, repositorio } = crearRepositorioEnMemoria();
-    const casosDeUso = crearCasosDeUsoDeAsistencias(repositorio, {
-      obtenerActorActual: async () => ({ id: "administracion-1", rol: "administracion" }),
-    });
-
-    await casosDeUso.confirmar({
-      dni: "00001024", fecha: "2026-09-01", sede: "Lima", entradaReal: "2026-09-01T09:00:00-05:00",
-      salidaReal: "2026-09-01T20:30:00-05:00",
-    });
-
-    expect(asistencias[0].horaExtra).toEqual({
-      minutosAl25: 120,
-      minutosAl35: 30,
-      estado: "pendiente",
-    });
-  });
-
   it("permite que Finanzas apruebe una hora extra pendiente", async () => {
     const { asistencias, repositorio } = crearRepositorioEnMemoria();
     const casosDeUso = crearCasosDeUsoDeAsistencias(repositorio, {
@@ -163,25 +153,6 @@ describe("casos de uso de asistencias en el servidor", () => {
 
     await expect(casosDeUso.aprobarHoraExtra({ dni: "00001024", fecha: "2026-09-01" }))
       .rejects.toThrow("No tiene permiso para decidir horas extra.");
-  });
-
-  it("devuelve una hora extra aprobada a pendiente al ajustar la asistencia", async () => {
-    const { asistencias, repositorio } = crearRepositorioEnMemoria();
-    const casosDeUso = crearCasosDeUsoDeAsistencias(repositorio, {
-      obtenerActorActual: async () => ({ id: "finanzas-1", rol: "finanzas" }),
-    });
-    await casosDeUso.confirmar({
-      dni: "00001024", fecha: "2026-09-01", sede: "Lima", entradaReal: "2026-09-01T09:00:00-05:00",
-      salidaReal: "2026-09-01T18:30:00-05:00",
-    });
-    await casosDeUso.aprobarHoraExtra({ dni: "00001024", fecha: "2026-09-01" });
-
-    await casosDeUso.ajustar({
-      dni: "00001024", fecha: "2026-09-01", entradaReal: "2026-09-01T09:00:00-05:00",
-      salidaReal: "2026-09-01T19:00:00-05:00", motivo: "Salida corregida.",
-    });
-
-    expect(asistencias[0].horaExtra).toEqual({ minutosAl25: 60, minutosAl35: 0, estado: "pendiente" });
   });
 
   it("registra un estado manual auditable que prevalece sobre las marcas crudas", async () => {

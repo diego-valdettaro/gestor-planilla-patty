@@ -16,7 +16,9 @@ import type {
   TurnoParaConfirmar,
 } from "./confirmar-y-ajustar-asistencia";
 import { calcularMinutosTrabajados } from "./confirmar-y-ajustar-asistencia";
-import { calcularHoraExtra, type EstadoDeHoraExtra, type HoraExtraCalculada } from "./calcular-hora-extra";
+import type { EstadoDeHoraExtra } from "./calcular-hora-extra";
+import { lunesDeLaSemana } from "./calcular-hora-extra";
+import { recalcularHorasExtraDeSemana } from "./recalcular-horas-extra-de-semana";
 import type {
   EvaluacionDeColaborador,
   RepositorioDeConfirmacionPorRango,
@@ -124,9 +126,11 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
               politicaVersion: politica.version,
             });
           }
-          const horaExtra = calcularHoraExtra(fila.salidaProgramada, fila.salidaPropuesta);
-          if (horaExtra) await tx.insert(horasExtra).values({ asistenciaId: actualizada.id, ...horaExtra });
         }
+        const semanas = new Map(jornadasPendientes
+          .filter(({ motivoNoAsistencia, descanso }) => !motivoNoAsistencia && !descanso)
+          .map(({ dni, fecha }) => [`${dni}:${lunesDeLaSemana(fecha)}`, { dni, fecha }]));
+        for (const { dni, fecha } of semanas.values()) await recalcularHorasExtraDeSemana(tx, dni, fecha);
 
         const recalculos = new Map<string, { dni: string; inicio: string; fin: string }>();
         for (const fila of jornadasPendientes) {
@@ -161,7 +165,7 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
       }).where(and(eq(asistenciasEsperadas.dni, asistencia.dni), eq(asistenciasEsperadas.fecha, asistencia.fecha), eq(asistenciasEsperadas.estado, "pendiente"))).returning({ id: asistenciasEsperadas.id });
       if (!resultado.length) throw new Error("La asistencia no está pendiente de revisión.");
       if (asistencia.tardanza) await tx.insert(tardanzas).values({ asistenciaId: resultado[0].id, ...asistencia.tardanza });
-      if (asistencia.horaExtra) await tx.insert(horasExtra).values({ asistenciaId: resultado[0].id, ...asistencia.horaExtra });
+      await recalcularHorasExtraDeSemana(tx, asistencia.dni, asistencia.fecha);
     });
   }
 
@@ -172,7 +176,7 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
     return asistencia?.instantaneaDeTurno ?? undefined;
   }
 
-  async ajustar(solicitud: AjusteDeAsistencia, responsableId: string, horaExtra: HoraExtraCalculada | undefined): Promise<void> {
+  async ajustar(solicitud: AjusteDeAsistencia, responsableId: string): Promise<void> {
     await this.db.transaction(async (tx) => {
       const [asistencia] = await tx.update(asistenciasEsperadas).set({
         entradaReal: solicitud.entradaReal, salidaReal: solicitud.salidaReal, minutosTrabajados: solicitud.minutosTrabajados,
@@ -182,14 +186,7 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
         asistenciaId: asistencia.id, entradaReal: solicitud.entradaReal, salidaReal: solicitud.salidaReal,
         motivo: solicitud.motivo, responsableId,
       });
-      if (horaExtra) {
-        await tx.insert(horasExtra).values({ asistenciaId: asistencia.id, ...horaExtra }).onConflictDoUpdate({
-          target: horasExtra.asistenciaId,
-          set: { ...horaExtra, decididaPorId: null, decididaEn: null },
-        });
-      } else {
-        await tx.delete(horasExtra).where(eq(horasExtra.asistenciaId, asistencia.id));
-      }
+      await recalcularHorasExtraDeSemana(tx, solicitud.dni, solicitud.fecha, solicitud.fecha);
     });
   }
 
