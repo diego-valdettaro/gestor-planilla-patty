@@ -88,7 +88,7 @@ Finanzas finaliza el mes completo o no finaliza a nadie. La operación exige cob
 El [diseño de interacción de Pagos](diseno-interaccion-pagos.md) fue aprobado por Diego el 2026-10-05 y añade estos comportamientos, que este diseño y #96 recogen:
 
 - Confirmar un tipo de fuente es reversible antes de finalizar: Finanzas puede devolverlo a «Pendiente». Importar otro archivo del mismo tipo y mes reemplaza al anterior y devuelve la fuente a «Pendiente». Una importación con errores no carga ninguna fila.
-- Ajustes de preliquidación, abonos anticipados de remuneración vacacional y descansos sustitutorios previstos se cargan como tipos de fuente de Pagos. Las condiciones laborales con vigencia y las reglas legales se mantienen en una pantalla de configuración aparte, cuya interacción se diseña en otro ticket.
+- Ajustes de preliquidación, abonos anticipados de remuneración vacacional y descansos sustitutorios previstos se cargan como tipos de fuente de Pagos. Las condiciones laborales con vigencia y las reglas legales son secciones de Pagos solo para Finanzas (tickets #116 y #117). Un valor mal registrado se corrige reemplazándolo con motivo, solo si ningún mes finalizado lo usa; si lo usó, se corrige con un ajuste de preliquidación.
 - Las versiones finalizadas anteriores se consultan completas en solo lectura.
 - Con personas bloqueadas, los totales del mes suman solo las calculadas y se rotulan «Incompleto».
 - Antes de confirmar el pago, si cambió solo una fuente o una regla y la asistencia no cambió, se puede crear otra versión desde un borrador recalculado y revisado, sin reabrir períodos. Cambió la asistencia: se aplica el recorrido de reapertura, corrección, nueva aprobación y nuevo cierre.
@@ -99,7 +99,7 @@ El [diseño de interacción de Pagos](diseno-interaccion-pagos.md) fue aprobado 
 
 1. Introducir DNI único, asignaciones de gerente por grupo, rol de Recursos Humanos y relaciones laborales confirmadas. Adaptar altas y publicación de horarios a esas reglas.
 2. Incorporar aprobación por grupo y período, cobertura de todas las personas y corrección del cálculo de asistencia que alimentará Pagos. Exponer el contrato lógico de revisiones.
-3. Añadir condiciones y reglas con vigencia, catálogo de conceptos y fuentes externas confirmadas, incluida la importación normalizada. Incluir la pantalla de configuración de condiciones laborales y reglas legales (ticket de interfaz propio).
+3. Añadir condiciones y reglas con vigencia, catálogo de conceptos y fuentes externas confirmadas, incluida la importación normalizada.
 4. Construir la preparación de datos y el cálculo reproducible del borrador con bloqueos por persona y por mes.
 5. Añadir finalización atómica, historial de versiones, constancia de pago realizado y exportación XLSX.
 6. Contrastar un mes de referencia con el Excel anterior y documentar cada diferencia antes de uso real.

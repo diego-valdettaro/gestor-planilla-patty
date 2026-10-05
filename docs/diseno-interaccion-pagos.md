@@ -1,6 +1,6 @@
 # Diseño de interacción de Pagos
 
-Estado: aprobado por Diego el 2026-10-05, con las decisiones de producto de la sección 9. Fuente de alcance: [issue #96](https://github.com/diego-valdettaro/gestor-planilla-patty/issues/96). Ticket que lo produce: [issue #106](https://github.com/diego-valdettaro/gestor-planilla-patty/issues/106).
+Estado: aprobado por Diego el 2026-10-05, con las decisiones de producto de la sección 9. Las secciones 4.9 y 4.10 (condiciones laborales y reglas legales), 6.6, 6.7 y V7 se añadieron después de esa aprobación y esperan su revisión. Fuente de alcance: [issue #96](https://github.com/diego-valdettaro/gestor-planilla-patty/issues/96). Ticket que lo produce: [issue #106](https://github.com/diego-valdettaro/gestor-planilla-patty/issues/106).
 
 Este documento describe cómo se usan las pantallas de Pagos antes de construirlas. No añade roles ni capacidades por su cuenta: lo que no está en #96, en [`diseno-software-pagos.md`](diseno-software-pagos.md) o en los ADR 0007, 0009, 0012, 0013 y 0014 se preguntó a Diego y consta como decisión en la sección 9; lo que obliga a actualizar la especificación se lista allí como consecuencia abierta. Usa el vocabulario de [`CONTEXT.md`](../CONTEXT.md) y el contrato visual de [`agents/diseno.md`](agents/diseno.md).
 
@@ -61,7 +61,7 @@ Cada pantalla de la sección 4 hereda estos seis estados y solo detalla lo que c
 
 Las referencias «(Dn)» remiten a la decisión correspondiente de la sección 9.
 
-Estructura de páginas (D2): un acceso «Pagos» en la navegación abre la lista de meses (4.1); cada mes tiene su propia página (4.2) y el detalle por persona es otra página enlazable dentro de ese mes (4.3). Las fuentes externas, la importación, la finalización, la constancia de pago y la exportación se alcanzan desde la página del mes; si son un panel, una subpágina o un diálogo lo decide el ticket que las construya, respetando lo descrito aquí. Las URL exactas también las fija el primer ticket con interfaz. Los enlaces entre pantallas se describen por nombre.
+Estructura de páginas (D2): un acceso «Pagos» en la navegación abre la lista de meses (4.1); cada mes tiene su propia página (4.2) y el detalle por persona es otra página enlazable dentro de ese mes (4.3). Las fuentes externas, la importación, la finalización, la constancia de pago y la exportación se alcanzan desde la página del mes. Las condiciones laborales con vigencia (4.9) y las reglas legales (4.10) también son secciones de Pagos, visibles solo para Finanzas, y se alcanzan desde la navegación secundaria de Pagos (V7); si son un panel, una subpágina o un diálogo lo decide el ticket que las construya, respetando lo descrito aquí. Las URL exactas también las fija el primer ticket con interfaz. Los enlaces entre pantallas se describen por nombre.
 
 ```mermaid
 flowchart LR
@@ -72,6 +72,8 @@ flowchart LR
     M --> Z["4.6 Finalización"]
     Z --> C["4.7 Pago realizado confirmado"]
     M --> E["4.8 Exportación"]
+    L --> K["4.9 Condiciones laborales"]
+    L --> G["4.10 Reglas legales"]
 ```
 
 ### 4.1 Lista de meses de pago
@@ -244,6 +246,74 @@ La finalización no es una pantalla propia: se dispara desde 4.2 con «Finalizar
 - Decisión (D11): se puede exportar el borrador, rotulado «Borrador, no definitivo» en el encabezado del archivo, y cualquier versión finalizada.
 - *Estados:* *cargando* — botón «Preparando archivo…», deshabilitado; *error* — `role="alert"` «No se pudo generar el archivo» junto al botón; *deshabilitado* — en un mes sin personas, con «No hay datos para exportar: revise las relaciones laborales confirmadas por Recursos Humanos»; *sin permiso* — la ruta de descarga responde sin permiso y la pantalla no muestra el botón; *vacío* — igual que deshabilitado en un mes sin personas. Ancho estrecho: botón a todo el ancho.
 
+### 4.9 Condiciones laborales con vigencia
+
+**Para qué sirve.** Que Finanzas mantenga, por relación laboral y con fecha de vigencia, los datos de los que depende el cálculo: sueldo, jornada ordinaria diaria, régimen laboral (general o REMYPE pequeña empresa), afiliación pensionaria y esquema de comisión, elegibilidad familiar y sede de adscripción (ticket #116; #96, historias 5, 6, 22 y 34; ADR 0008). Un valor nuevo no reescribe la historia. Es una sección de Pagos, solo para Finanzas.
+
+**Orden del contenido.**
+1. **Lista.** Cabecera «Condiciones laborales» con la navegación secundaria de Pagos (V7). Criterios (`.panel-filtros`): Grupo operativo, Sede de adscripción, Persona (nombre o DNI) y «Solo con datos faltantes». `.panel-tabla` con una fila por relación laboral confirmada por Recursos Humanos:
+
+| Columna | Contenido |
+| --- | --- |
+| Persona | Nombre y DNI (enlace al detalle). Fija en ancho estrecho. |
+| Relación laboral | `Ingreso 02/03/2025 – vigente` o `… – cese 30/09/2026`. |
+| Sueldo vigente hoy | `S/ 1.800,00` o «Pendiente». |
+| Jornada diaria | `8 h` o «Pendiente». |
+| Régimen | «General» o «REMYPE pequeña empresa». |
+| Afiliación pensionaria | Texto del valor vigente o «Pendiente». |
+| Sede de adscripción | Una de las sedes existentes (Taller, Administración, tiendas); no se crea otro catálogo de centros de costo. |
+| Estado | «Completa» o «Falta: sueldo, régimen» con texto. |
+
+2. **Detalle de una relación laboral.** Objeto (nombre, DNI, fechas de la relación laboral), después un `.panel` por dato con su historial de vigencias:
+
+| Columna | Contenido |
+| --- | --- |
+| Valor | `S/ 1.800,00`, «REMYPE pequeña empresa», «Elegible». |
+| Vigente desde | `01/03/2025`. |
+| Vigente hasta | Fecha, o «Vigente». El valor siguiente cierra al anterior el día previo. |
+| Registrado por | Responsable y fecha de registro. |
+| Estado | «Vigente», «Anterior» o «Reemplazado» (corrección, con su motivo). |
+
+Un cambio de sueldo dentro de un mes aparece como dos filas con vigencias contiguas; el detalle de 4.3 muestra ambas al explicar el prorrateo.
+
+**Acciones.**
+- Acción principal del detalle: **Registrar nuevo valor** (dato, valor, «Vigente desde»). Abre el diálogo 6.6.
+- Acción secundaria en una fila: **Corregir** (D20). Registra otro valor con la misma fecha de vigencia y un motivo obligatorio; el anterior queda «Reemplazado». Solo se permite si ningún mes finalizado usa ese valor; si lo usó, la pantalla lo dice («Lo usa la versión 2 de 09/2026; corríjalo con un ajuste de preliquidación») y enlaza a 4.4. Las versiones finalizadas no cambian nunca.
+- Los datos bancarios, si se guardan, son maestros protegidos: no aparecen en la lista ni en las exportaciones y solo Finanzas puede verlos en el detalle de la persona.
+
+**Estados específicos.**
+- *Vacío:* `.estado-vacio` «Todavía no hay relaciones laborales confirmadas. Recursos Humanos las registra y confirma.» (sin acciones). Un dato sin ningún valor se muestra «Pendiente», nunca como `S/ 0,00`.
+- *Cargando / error:* según la sección 3. En error del registro, el mensaje queda en el diálogo con `role="alert"`.
+- *Sin permiso:* un rol distinto de Finanzas ve «Sin permiso», y el servidor rechaza cualquier registro o lectura.
+- *Deshabilitado:* «Corregir» deshabilitado con la causa visible cuando un mes finalizado ya usa el valor. «Registrar nuevo valor» queda deshabilitado mientras se guarda.
+- *Ancho estrecho:* la lista y el historial se desplazan horizontalmente con la primera columna fija (V2); el formulario de registro va en una columna.
+
+### 4.10 Reglas legales versionadas
+
+**Para qué sirve.** Que Finanzas registre y active tasas, topes, remuneración mínima vital (RMV) y demás valores legales como configuración versionada, con vigencia, fuente oficial y responsable de activación (ticket #117; #96, historia 23; ADR 0008). Ninguna tasa monetaria vive en el código. Es una sección de Pagos, solo para Finanzas.
+
+**Orden del contenido.**
+1. **Lista.** Cabecera «Reglas legales» con la navegación secundaria de Pagos. `.panel-tabla` con una fila por valor legal:
+
+| Columna | Contenido |
+| --- | --- |
+| Valor legal | Nombre (por ejemplo «Tasa de EsSalud», «RMV»). Fija en ancho estrecho. |
+| Valor vigente hoy | `9,00 %` o `S/ 1.130,00`; «Sin regla vigente» con insignia «Pendiente» si no hay. |
+| Vigente desde | Fecha. |
+| Fuente oficial | Referencia (norma o enlace), obligatoria. |
+| Activado por | Responsable y fecha de activación. |
+
+2. **Historial de un valor.** Una fila por versión: valor, vigente desde, vigente hasta, fuente oficial, activado por, estado («Vigente», «Anterior», «Reemplazado»). Consultar una fecha devuelve la versión vigente entonces. Una fecha sin regla vigente muestra el faltante de forma explícita y enlaza al bloqueo del mes (5.1).
+
+**Acciones.**
+- Acción principal: **Activar nuevo valor** (valor, «Vigente desde», fuente oficial). Abre el diálogo 6.7. Quien lo activa queda como responsable.
+- Acción secundaria en una fila: **Corregir** (D20), con el mismo comportamiento que en 4.9: otro valor con la misma vigencia, motivo obligatorio, y solo si ningún mes finalizado lo usa.
+
+**Estados específicos.**
+- *Vacío:* `.estado-vacio` «No hay reglas legales activas. Sin ellas el cálculo de aportes queda bloqueado.» con el botón «Activar nuevo valor».
+- *Cargando / error / sin permiso / ancho estrecho:* según la sección 3 y V2; el servidor rechaza a cualquier rol distinto de Finanzas.
+- *Deshabilitado:* «Corregir» con causa visible cuando un mes finalizado usa el valor.
+
 ## 5. Bloqueos por persona y por mes
 
 Un bloqueo siempre tiene **causa**, **alcance** y **siguiente paso**, y un enlace al lugar donde se resuelve. Se muestran como `.mensaje-operacion advertencia` con `role="status"`, agrupados por mes y por persona. Mientras exista alguno, el mes no se puede finalizar.
@@ -257,7 +327,7 @@ Un bloqueo siempre tiene **causa**, **alcance** y **siguiente paso**, y un enlac
 | Período que cruza el día 25 | «El período del 20/10 al 30/10 cruza el día 25.» | Dividirlo en Períodos. |
 | Período sin cerrar o grupo sin aprobar | «El período 26/09–25/10 no está cerrado: falta la aprobación del grupo Tiendas.» | «Pida al gerente de Tiendas que apruebe» (Finanzas no aprueba por el gerente). |
 | Fuente sin confirmar | «Comisiones sin confirmar.» | «Confirme el listado» (enlace a 4.4). |
-| Regla o valor legal sin vigencia | «No hay tasa de EsSalud vigente para 10/2026.» | Activarla en la pantalla de configuración de reglas legales (D12). |
+| Regla o valor legal sin vigencia | «No hay tasa de EsSalud vigente para 10/2026.» | «Activar nuevo valor» en Reglas legales (4.10). |
 | Cese sin conciliar | «El cese de [persona] no tiene su liquidación conciliada.» | Cargar la conciliación en la fuente correspondiente. |
 | Trabajo nocturno | «Hay trabajo entre las 22:00 y las 06:00 el 07/10 (3 personas). Aún no se calcula.» | «Caso no soportado todavía: la finalización queda bloqueada hasta definir y validar la regla.» No hay forma de resolverlo desde la app. |
 
@@ -265,7 +335,7 @@ Un bloqueo siempre tiene **causa**, **alcance** y **siguiente paso**, y un enlac
 
 | Causa | Texto de ejemplo | Siguiente paso |
 | --- | --- | --- |
-| Dato laboral sin vigencia | «Sin sueldo vigente el 02/10.» | Completarlo en la pantalla de configuración de condiciones laborales (D12). |
+| Dato laboral sin vigencia | «Sin sueldo vigente el 02/10.» | «Registrar nuevo valor» en Condiciones laborales (4.9). |
 | Caso no soportado | «Trabajo entre 22:00 y 06:00 el 07/10.» | Igual que arriba. |
 | Neto negativo | «Neto de S/ −85,00.» | Revisar deducciones y adelantos, o registrar un ajuste de preliquidación. No se arrastra la deducción al mes siguiente. |
 | Incidencia de tienda sin sustento | «Incidencia de tienda sin sustento ni autorización.» | Registrar sustento y autorización, o «No descontar en este pago». |
@@ -325,6 +395,24 @@ No es irreversible, pero cambia el significado de las filas ausentes, así que u
 - *Cancelación:* «Cancelar deja la fuente confirmada.»
 - *Botones:* Cancelar y **Volver a pendiente**.
 
+### 6.6 Registrar nuevo valor de una condición laboral
+
+- *Título:* «¿Registrar el nuevo sueldo de [persona] desde el 01/10/2026?»
+- *Alcance:* «Solo la relación laboral de [persona] y solo el dato Sueldo. El valor anterior queda vigente hasta el 30/09/2026 y no se reescribe.»
+- *Consecuencia:* «Los borradores desde esa fecha usarán el nuevo valor. Las versiones finalizadas no cambian. Si necesita corregir un mes ya finalizado, use un ajuste de preliquidación.»
+- *Cancelación:* «Cancelar no registra nada.»
+- *Botones:* Cancelar y **Registrar valor**.
+
+### 6.7 Activar un valor legal
+
+- *Título:* «¿Activar la Tasa de EsSalud de 9,00 % desde el 01/10/2026?»
+- *Alcance:* «Aplica a todas las personas con cálculo desde esa fecha. Fuente oficial: [referencia].»
+- *Consecuencia:* «Los borradores usarán este valor desde esa fecha. Las versiones finalizadas conservan el valor que aplicaron. Quedará registrado a nombre de [usuario].»
+- *Cancelación:* «Cancelar no activa nada.»
+- *Botones:* Cancelar y **Activar valor**.
+
+Las correcciones (D20) usan los mismos diálogos con el título «¿Reemplazar…?», el motivo como campo obligatorio y la consecuencia «El valor anterior queda en el historial como Reemplazado».
+
 ## 7. Cómo se lee cada tabla en ancho estrecho
 
 Aplica a 375 px y hasta 900 px.
@@ -340,6 +428,8 @@ Aplica a 375 px y hasta 900 px.
 | Vacaciones del mes (4.3) | Mes | Desplazamiento. | |
 | Tipos de fuente (4.4) | Tipo de fuente | Desplazamiento. | Las acciones van en un `<details>` «Acciones». |
 | Filas de una fuente (4.4) | Persona | Desplazamiento. | |
+| Condiciones laborales y su historial (4.9) | Persona; en el historial, Valor | Desplazamiento. | |
+| Reglas legales y su historial (4.10) | Valor legal | Desplazamiento. | |
 | Errores de importación (4.5) | No aplica | Lista de líneas. | «Fila 14 · DNI · motivo». |
 
 La página no se desplaza horizontalmente; solo lo hace el contenedor de cada tabla. Las cifras siguen alineadas a la derecha dentro de su columna.
@@ -357,6 +447,8 @@ Cada una se justifica porque ningún patrón actual cubre la necesidad. Hasta qu
 | V5 | Modo «El cálculo cambió» en el diálogo de finalizar (6.1.b). | `BotonDeAccionConfirmada` solo muestra una descripción fija y envía un formulario; aquí el diálogo debe calcular un resumen y no enviar. Se resuelve como componente nuevo o extensión del existente, a decidir en el ticket. | 4.6. |
 
 | V6 | Filas desplegables `<details>` dentro de una tabla («Ver base», «Acciones»), encabezados de sección dentro de `.panel-tabla` (los cinco grupos de conceptos) y la tabla que pasa a lista rótulo/valor en ancho estrecho (las bases). | El detalle por persona debe poder explicar cada importe sin salir de la fila, y los conceptos tienen cinco naturalezas que no se deben mezclar. Hoy `/periodos` usa `<details>` solo fuera de las tablas. | 4.3, 4.4. |
+
+| V7 | Navegación secundaria de Pagos: enlaces «Meses de pago», «Condiciones laborales» y «Reglas legales» bajo el título, con la sección actual identificada por texto además de color. | Pagos tiene tres secciones y la navegación lateral solo ofrece un acceso por área; dos secciones fuera de la lista de meses quedarían ocultas. Reutiliza el criterio de «(sección actual)» del menú. | 4.1, 4.9, 4.10. |
 
 No se propone ninguna otra variante: no hay gráficos, no hay rutas anidadas nuevas y se mantiene la paleta de `global.css`.
 
@@ -377,22 +469,23 @@ Estas decisiones cierran las dudas que dejó el borrador. Las recomendaciones se
 | D9 | Errores en el archivo | Todo o nada. | 4.5 |
 | D10 | «Reabrir período» tras el pago | Se bloquea en el mismo ticket que registra el pago. | 4.7 |
 | D11 | Exportar | Se exporta el borrador, rotulado, y cualquier versión finalizada. | 4.8 |
-| D12 | Dónde se registran los datos base | Ajustes, abonos vacacionales y descansos sustitutorios previstos, como tipos de fuente en Pagos. Condiciones laborales con vigencia y reglas legales, en una pantalla de configuración aparte. | 4.4, 5 |
+| D12 | Dónde se registran los datos base | Todo dentro de Pagos. Ajustes, abonos vacacionales y descansos sustitutorios previstos, como tipos de fuente (4.4). Condiciones laborales con vigencia y reglas legales, como secciones de Pagos solo para Finanzas (4.9 y 4.10). Primera decisión («pantalla aparte») cambiada el 2026-10-05 al ver que #116 y #117 ya los ubican en Pagos. | 4.4, 4.9, 4.10, 5 |
 | D13 | Horas extra candidatas | Se siguen decidiendo en Períodos; Pagos no las duplica. | 5.1 |
 | D14 | Fecha del pago realizado | Finanzas escribe la fecha del pago (no futura) y la app guarda la fecha de la confirmación. | 6.2 |
 | D15 | Versiones anteriores | Consultables completas, en solo lectura. | 4.2 |
 | D16 | Recursos Humanos y gerentes | Sin pantallas en Pagos; su trabajo se diseña en otro ticket. | 2 |
 | D17 | Qué es un cambio desde el borrador revisado | Cualquier dato de entrada del cálculo, aunque el neto no cambie. | 6.1.b |
+| D20 | Corregir un valor con vigencia ya registrado | Reemplazar con motivo: otro valor con la misma vigencia, el anterior queda «Reemplazado». Solo si ningún mes finalizado lo usa; si lo usó, se corrige con un ajuste de preliquidación. | 4.9, 4.10, 6.6, 6.7 |
 | D18 | Totales con bloqueos | Se suman las personas calculadas, rotulado «Incompleto» con el conteo excluido. | 4.2 |
 | D19 | Otra versión sin cambio de asistencia | Se permite desde un borrador recalculado y revisado, sin reabrir períodos. | 4.6 |
 
 ### Consecuencias que quedan abiertas
 
-- **P1. Pantalla de configuración de condiciones laborales y reglas legales (D12).** Este documento no diseña su interacción: es un ticket aparte. Mientras no exista, los bloqueos «Sin sueldo vigente» y «Sin tasa vigente» no tienen dónde resolverse.
-- **P2. Actualizar la especificación (hecho).** El diseño de software exige actualizar #96 antes de crear tickets si el diseño añade comportamiento. Afectaba a D4 y D5, D12, D15, D18 y D19. Se incorporó en `diseno-software-pagos.md` y en #96 el 2026-10-05.
+- **P1. Actualizar la especificación (hecho).** El diseño de software exige actualizar #96 si el diseño añade comportamiento. Afectaba a D4 y D5, D12, D15, D18, D19 y D20. Se incorporó en `diseno-software-pagos.md` y en #96 el 2026-10-05.
+- **P2. Tickets existentes.** No hacen falta tickets nuevos: #116 y #117 construyen 4.9 y 4.10, y los demás tickets de Pagos de #96 ya citan este documento.
 
 ## 10. Cómo se verifica este diseño
 
 - Cada pantalla de la sección 4 cubre los seis estados de la sección 3 y el comportamiento en ancho estrecho, y se traduce a la prueba de interfaz de su ticket (carga sin error, consola limpia, 375 px sin desplazamiento horizontal de la página).
 - Los textos de bloqueo, de diálogo y de estado son contrato: los tickets deben usarlos o proponer cambios aquí antes de implementarlos.
-- Los tickets de interfaz de Pagos pueden crearse con este documento aprobado; queda por diseñar la pantalla de configuración (P1).
+- Los tickets de interfaz de Pagos ya existen en #96 y citan este documento; cada uno debe revisar su pantalla contra la sección que le corresponde.
