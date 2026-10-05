@@ -1,6 +1,6 @@
 # Diseño de interacción de Pagos
 
-Estado: borrador con las decisiones de producto de Diego del 2026-10-05 (sección 9); pendiente de su aprobación final. Fuente de alcance: [issue #96](https://github.com/diego-valdettaro/gestor-planilla-patty/issues/96). Ticket que lo produce: [issue #106](https://github.com/diego-valdettaro/gestor-planilla-patty/issues/106).
+Estado: aprobado por Diego el 2026-10-05, con las decisiones de producto de la sección 9. Fuente de alcance: [issue #96](https://github.com/diego-valdettaro/gestor-planilla-patty/issues/96). Ticket que lo produce: [issue #106](https://github.com/diego-valdettaro/gestor-planilla-patty/issues/106).
 
 Este documento describe cómo se usan las pantallas de Pagos antes de construirlas. No añade roles ni capacidades por su cuenta: lo que no está en #96, en [`diseno-software-pagos.md`](diseno-software-pagos.md) o en los ADR 0007, 0009, 0012, 0013 y 0014 se preguntó a Diego y consta como decisión en la sección 9; lo que obliga a actualizar la especificación se lista allí como consecuencia abierta. Usa el vocabulario de [`CONTEXT.md`](../CONTEXT.md) y el contrato visual de [`agents/diseno.md`](agents/diseno.md).
 
@@ -389,10 +389,10 @@ Estas decisiones cierran las dudas que dejó el borrador. Las recomendaciones se
 ### Consecuencias que quedan abiertas
 
 - **P1. Pantalla de configuración de condiciones laborales y reglas legales (D12).** Este documento no diseña su interacción: es un ticket aparte. Mientras no exista, los bloqueos «Sin sueldo vigente» y «Sin tasa vigente» no tienen dónde resolverse.
-- **P2. Actualizar la especificación.** El diseño de software exige actualizar #96 antes de crear tickets si el diseño añade comportamiento. Esto afecta a D4 y D5 (volver a «Pendiente» y reemplazo), D12 (la pantalla de configuración), D15 (consulta de versiones anteriores), D18 y D19.
+- **P2. Actualizar la especificación (hecho).** El diseño de software exige actualizar #96 antes de crear tickets si el diseño añade comportamiento. Afectaba a D4 y D5, D12, D15, D18 y D19. Se incorporó en `diseno-software-pagos.md` y en #96 el 2026-10-05.
 
 ## 10. Cómo se verifica este diseño
 
 - Cada pantalla de la sección 4 cubre los seis estados de la sección 3 y el comportamiento en ancho estrecho, y se traduce a la prueba de interfaz de su ticket (carga sin error, consola limpia, 375 px sin desplazamiento horizontal de la página).
 - Los textos de bloqueo, de diálogo y de estado son contrato: los tickets deben usarlos o proponer cambios aquí antes de implementarlos.
-- Los tickets de interfaz de Pagos dependen de que Diego apruebe este documento y de cerrar P1 y P2 (sección 9).
+- Los tickets de interfaz de Pagos pueden crearse con este documento aprobado; queda por diseñar la pantalla de configuración (P1).

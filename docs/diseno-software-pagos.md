@@ -83,11 +83,23 @@ El cálculo aplica las decisiones de #96 para prorrateos, vacaciones, sobretiemp
 
 Finanzas finaliza el mes completo o no finaliza a nadie. La operación exige cobertura exacta del corte, aprobaciones, fuentes completas, reglas disponibles, casos soportados y netos válidos. Si los datos relevantes cambiaron desde el borrador revisado, solicita revisar el cálculo actualizado. Guarda una versión inmutable con importes, bases, reglas, fuentes y actor. Antes de pagar puede crear una nueva versión final sin editar las anteriores. Finanzas confirma cuál versión se pagó realmente; se registra fecha y responsable. No se añade un bloqueo automático distinto del circuito explícito de reapertura y nueva aprobación.
 
+## Decisiones del diseño de interacción incorporadas
+
+El [diseño de interacción de Pagos](diseno-interaccion-pagos.md) fue aprobado por Diego el 2026-10-05 y añade estos comportamientos, que este diseño y #96 recogen:
+
+- Confirmar un tipo de fuente es reversible antes de finalizar: Finanzas puede devolverlo a «Pendiente». Importar otro archivo del mismo tipo y mes reemplaza al anterior y devuelve la fuente a «Pendiente». Una importación con errores no carga ninguna fila.
+- Ajustes de preliquidación, abonos anticipados de remuneración vacacional y descansos sustitutorios previstos se cargan como tipos de fuente de Pagos. Las condiciones laborales con vigencia y las reglas legales se mantienen en una pantalla de configuración aparte, cuya interacción se diseña en otro ticket.
+- Las versiones finalizadas anteriores se consultan completas en solo lectura.
+- Con personas bloqueadas, los totales del mes suman solo las calculadas y se rotulan «Incompleto».
+- Antes de confirmar el pago, si cambió solo una fuente o una regla y la asistencia no cambió, se puede crear otra versión desde un borrador recalculado y revisado, sin reabrir períodos. Cambió la asistencia: se aplica el recorrido de reapertura, corrección, nueva aprobación y nuevo cierre.
+- Un cambio desde el borrador revisado es cualquier dato de entrada del cálculo, aunque el neto no varíe.
+- Al confirmar el pago, Finanzas registra la fecha del pago y la app guarda la fecha de la confirmación. Bloquear «Reabrir período» de los períodos fuente se implementa en el mismo ticket que registra el pago.
+
 ## Secuencia de integración
 
 1. Introducir DNI único, asignaciones de gerente por grupo, rol de Recursos Humanos y relaciones laborales confirmadas. Adaptar altas y publicación de horarios a esas reglas.
 2. Incorporar aprobación por grupo y período, cobertura de todas las personas y corrección del cálculo de asistencia que alimentará Pagos. Exponer el contrato lógico de revisiones.
-3. Añadir condiciones y reglas con vigencia, catálogo de conceptos y fuentes externas confirmadas, incluida la importación normalizada.
+3. Añadir condiciones y reglas con vigencia, catálogo de conceptos y fuentes externas confirmadas, incluida la importación normalizada. Incluir la pantalla de configuración de condiciones laborales y reglas legales (ticket de interfaz propio).
 4. Construir la preparación de datos y el cálculo reproducible del borrador con bloqueos por persona y por mes.
 5. Añadir finalización atómica, historial de versiones, constancia de pago realizado y exportación XLSX.
 6. Contrastar un mes de referencia con el Excel anterior y documentar cada diferencia antes de uso real.
