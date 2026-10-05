@@ -1,8 +1,8 @@
 # Diseño de interacción de Pagos
 
-Estado: borrador para revisión de Diego. Fuente de alcance: [issue #96](https://github.com/diego-valdettaro/gestor-planilla-patty/issues/96). Ticket que lo produce: [issue #106](https://github.com/diego-valdettaro/gestor-planilla-patty/issues/106).
+Estado: borrador con las decisiones de producto de Diego del 2026-10-05 (sección 9); pendiente de su aprobación final. Fuente de alcance: [issue #96](https://github.com/diego-valdettaro/gestor-planilla-patty/issues/96). Ticket que lo produce: [issue #106](https://github.com/diego-valdettaro/gestor-planilla-patty/issues/106).
 
-Este documento describe cómo se usan las pantallas de Pagos antes de construirlas. No añade rutas, roles ni capacidades: si algo no está en #96, en [`diseno-software-pagos.md`](diseno-software-pagos.md) o en los ADR 0007, 0009, 0012, 0013 y 0014, aparece en «Dudas de producto» y no se resuelve aquí. Usa el vocabulario de [`CONTEXT.md`](../CONTEXT.md) y el contrato visual de [`agents/diseno.md`](agents/diseno.md).
+Este documento describe cómo se usan las pantallas de Pagos antes de construirlas. No añade roles ni capacidades por su cuenta: lo que no está en #96, en [`diseno-software-pagos.md`](diseno-software-pagos.md) o en los ADR 0007, 0009, 0012, 0013 y 0014 se preguntó a Diego y consta como decisión en la sección 9; lo que obliga a actualizar la especificación se lista allí como consecuencia abierta. Usa el vocabulario de [`CONTEXT.md`](../CONTEXT.md) y el contrato visual de [`agents/diseno.md`](agents/diseno.md).
 
 ## 1. Punto de partida
 
@@ -27,7 +27,7 @@ Se revisó el código de las pantallas existentes (`/periodos`, `/asistencias`, 
 
 - No hay estados de **cargando** ni de **error de carga**: las páginas se renderizan en el servidor (`force-dynamic`), no existen `loading` ni `error` de ruta y los errores solo se muestran en la acción que los produjo. Pagos necesita ambos (criterio de #106) y se documenta como variante V1.
 - No hay formato de importes monetarios: hoy solo hay minutos y conteos. El contrato visual ya fija `S/ 120,00` como unidad.
-- No se encontró la maqueta local de `propuesta-visual` que menciona el ticket (duda D1). Este diseño no depende de ella.
+- La maqueta de `propuesta-visual` que mencionaba el ticket no existe; Diego confirmó el 2026-10-05 que no hay tal maqueta (D1). Este diseño parte solo de las pantallas reales, el contrato visual y #96.
 
 ## 2. Principios transversales
 
@@ -59,9 +59,9 @@ Cada pantalla de la sección 4 hereda estos seis estados y solo detalla lo que c
 
 ## 4. Pantallas
 
-**Convención «provisional».** Donde una decisión de producto está abierta (sección 9), el texto describe un comportamiento por defecto marcado «provisional (Dn)». Es solo para poder dibujar la pantalla; Diego lo confirma o lo cambia al resolver la duda.
+Las referencias «(Dn)» remiten a la decisión correspondiente de la sección 9.
 
-Rutas: #96 y el diseño de software no fijan rutas ni cuántas pantallas son páginas distintas. Este documento habla de **pantallas** y de un acceso «Pagos» en la navegación; la decisión de URLs la toma el primer ticket con interfaz (duda D2). Los enlaces entre pantallas se describen por nombre.
+Estructura de páginas (D2): un acceso «Pagos» en la navegación abre la lista de meses (4.1); cada mes tiene su propia página (4.2) y el detalle por persona es otra página enlazable dentro de ese mes (4.3). Las fuentes externas, la importación, la finalización, la constancia de pago y la exportación se alcanzan desde la página del mes; si son un panel, una subpágina o un diálogo lo decide el ticket que las construya, respetando lo descrito aquí. Las URL exactas también las fija el primer ticket con interfaz. Los enlaces entre pantallas se describen por nombre.
 
 ```mermaid
 flowchart LR
@@ -94,7 +94,7 @@ flowchart LR
 Acción por fila: solo el enlace del mes. No hay acciones de cambio en la lista.
 
 **Estados específicos.**
-- *Vacío:* «Todavía no hay meses de pago. Un mes aparece cuando existe al menos una relación laboral confirmada por Recursos Humanos dentro de su corte.» No se ofrece crear meses a mano (provisional, D3).
+- *Vacío:* «Todavía no hay meses de pago. Un mes aparece cuando existe al menos una relación laboral confirmada por Recursos Humanos dentro de su corte.» No se ofrece crear meses a mano (D3).
 - *Deshabilitado:* la lista no tiene acciones de cambio, así que no hay controles que deshabilitar; un mes siempre se puede abrir en consulta.
 - *Cargando, error y sin permiso:* según la sección 3. En error, «No se pudo cargar la lista de meses de pago.» con «Reintentar».
 - *Ancho estrecho:* tabla con desplazamiento; la primera columna (Mes de pago) queda fija (V2).
@@ -109,7 +109,7 @@ Acción por fila: solo el enlace del mes. No hay acciones de cambio en la lista.
 2. **Panel «Bloqueos del mes».** Ver 5. Si no hay: `.mensaje-operacion listo` «El mes no tiene bloqueos. Puede finalizarlo.». Los bloqueos del mes aparecen antes que los de personas.
 3. **Panel «Fuentes externas».** Una fila por tipo de fuente con su estado (resumen de 4.4), con enlace «Revisar fuente».
 4. **Criterios.** `.panel-filtros`: Sede de adscripción, Grupo operativo y Persona (nombre o DNI). Estos criterios cambian la tabla de personas, no los totales.
-5. **Totales del mes completo.** `.panel-tabla` de una fila: ingresos remunerativos, ingresos no remunerativos, reducciones, deducciones del trabajador, **neto** y aportes patronales (EsSalud). Cada columna con `S/`. Si hay bloqueos, «Incompleto» y una nota que indica cuántas personas tienen bloqueos (provisional, D18).
+5. **Totales del mes completo.** `.panel-tabla` de una fila: ingresos remunerativos, ingresos no remunerativos, reducciones, deducciones del trabajador, **neto** y aportes patronales (EsSalud). Cada columna con `S/`. Si hay bloqueos, «Incompleto» y una nota que indica cuántas personas tienen bloqueos (D18).
 6. **Imputación por sede de adscripción.** `.panel-tabla` con una fila por sede (Taller, Administración, tiendas) y las mismas columnas de totales. Rótulo «Por sede de adscripción»; no se llama «centro de costo» (CONTEXT.md).
 7. **Personas del mes.** `.panel-tabla`, una fila por persona.
 
@@ -123,7 +123,7 @@ Acción por fila: solo el enlace del mes. No hay acciones de cambio en la lista.
 | Neto | `S/` o «Incompleto». |
 | Estado | «Calculada» o «Bloqueada» (con el motivo corto: «Neto negativo»). |
 
-Debajo de las personas hay un bloque «Historial de versiones» (solo si existe alguna versión finalizada): una fila por versión con número, fecha, responsable y estado («Reemplazada», «Vigente», «Pago realizado confirmado»). Es solo lectura.
+Debajo de las personas hay un bloque «Historial de versiones» (solo si existe alguna versión finalizada): una fila por versión con número, fecha, responsable y estado («Reemplazada», «Vigente», «Pago realizado confirmado»). Cada fila abre esa versión completa, con su detalle por persona, en solo lectura (D15).
 
 **Estados específicos.**
 - *Vacío:* si el mes no tiene personas incluidas, `.estado-vacio` «Este mes no incluye personas. Revise las relaciones laborales confirmadas por Recursos Humanos.».
@@ -169,7 +169,7 @@ Cada fila tiene «Ver base», que despliega con `<details>` el cálculo: valor d
 
 **Orden del contenido.**
 1. Título «Fuentes externas del mes de pago 10/2026» y el recordatorio «Una persona sin fila cuenta como cero solo cuando confirma el tipo de fuente.».
-2. **Tabla de tipos de fuente**, una fila por tipo (comisiones de ventas, movilidad supeditada a asistencia, adelantos, préstamos, incidencias de tienda, retención de quinta categoría, gratificación legal y bonificación extraordinaria, conciliación de liquidación por cese, ajustes de preliquidación y los demás del catálogo ADR 0009).
+2. **Tabla de tipos de fuente**, una fila por tipo (comisiones de ventas, movilidad supeditada a asistencia, adelantos, préstamos, incidencias de tienda, retención de quinta categoría, gratificación legal y bonificación extraordinaria, conciliación de liquidación por cese, ajustes de preliquidación, abonos anticipados de remuneración vacacional, descansos sustitutorios previstos y los demás del catálogo ADR 0009 (D12)).
 
 | Columna | Contenido |
 | --- | --- |
@@ -180,11 +180,11 @@ Cada fila tiene «Ver base», que despliega con `<details>` el cálculo: valor d
 | Último archivo fuente | Nombre, fecha y responsable, o «Carga manual». |
 | Acciones | «Ver filas», «Importar XLSX» (4.5), «Confirmar listado completo». |
 
-3. **Detalle de un tipo** (al elegir «Ver filas»): tabla de conceptos con Persona (DNI), Fecha del hecho, Mes de devengue, Mes de aplicación, Importe, Origen. Filas duplicadas o inválidas se marcan con texto y no se suman (D6).
+3. **Detalle de un tipo** (al elegir «Ver filas»): tabla de conceptos con Persona (DNI), Fecha del hecho, Mes de devengue, Mes de aplicación, Importe, Origen. Las filas duplicadas o inválidas se marcan con texto, no se suman y bloquean a su persona hasta corregir la fuente (D6, 5.2).
 
-**Confirmar listado completo.** Acción secundaria por fila. Abre un diálogo (6.3). En una fuente sin filas el botón dice «Confirmar sin importes» y el diálogo lo dice. Una fuente confirmada muestra la insignia «Confirmada» con fecha y responsable; no ofrece volver a «Pendiente» porque #96 no define esa acción (duda D4).
+**Confirmar listado completo.** Acción secundaria por fila. Abre un diálogo (6.3). En una fuente sin filas el botón dice «Confirmar sin importes» y el diálogo lo dice. Una fuente confirmada muestra la insignia «Confirmada» con fecha y responsable; mientras el mes no esté finalizado ofrece «Volver a pendiente» con un diálogo (6.5, D4). Cualquier cambio de filas de un tipo confirmado, incluida una importación nueva, lo devuelve a «Pendiente» (D5).
 
-**Incidencias de tienda.** Cada incidencia muestra su estado con texto (provisional, D7): «Sin sustento», «En investigación (fuera del neto)», «Descuento autorizado». Solo «Descuento autorizado» llega al neto. «En investigación» se marca con la acción «No descontar en este pago» y no bloquea al resto del personal (ADR 0009). Qué datos exige el sustento y la autorización es la duda D7.
+**Incidencias de tienda.** Cada incidencia muestra su estado con texto: «Sin sustento», «En investigación (fuera del neto)», «Descuento autorizado». Solo «Descuento autorizado» llega al neto. «En investigación» se marca con la acción «No descontar en este pago» y no bloquea al resto del personal (ADR 0009). Para pasar a «Descuento autorizado» Finanzas registra un texto de sustento, quién autoriza y la fecha de la autorización; no hay adjuntos en este incremento (D7).
 
 **Estados específicos.**
 - *Vacío:* el catálogo tiene tipos aunque no haya filas; no hay estado vacío de la tabla. El detalle de un tipo sin filas usa `.estado-vacio` «No hay filas de Comisiones para este mes. Importe un archivo o confirme el listado sin importes.».
@@ -196,16 +196,16 @@ Cada fila tiene «Ver base», que despliega con `<details>` el cálculo: valor d
 **Para qué sirve.** Cargar un **archivo fuente de preliquidación** normalizado y conservar origen, hash, responsable y validación (#96, historia 28). No interpreta el Excel histórico.
 
 **Recorrido** (mismo patrón que la importación de asistencias: archivo, vista previa, confirmar).
-1. Campo «Archivo XLSX normalizado» (etiqueta visible), selector de tipo de fuente (preseleccionado si se llegó desde una fila de 4.4) y enlace «Descargar plantilla normalizada» si el primer ticket la incluye (duda D8). Acción principal: «Validar archivo» (en este paso es la única principal).
+1. Campo «Archivo XLSX normalizado» (etiqueta visible), selector de tipo de fuente (preseleccionado si se llegó desde una fila de 4.4) y enlace «Descargar plantilla normalizada» (D8). Acción principal: «Validar archivo» (en este paso es la única principal).
 2. **Vista previa** con resultado de validación: conteos «Filas válidas», «Filas con error», «Duplicadas», «Personas desconocidas», total `S/`. Lista de errores con fila, DNI y motivo en texto. Las filas con error nunca se suman al total.
-3. Si no hay errores, «Validar archivo» pasa a secundaria y la acción principal es «Importar N filas» (nunca coexisten dos principales); abre diálogo de confirmación con alcance (tipo, mes, N filas, total) y consecuencia. Si ya hubo un archivo del mismo tipo y mes, el diálogo dice «Reemplaza las filas del archivo anterior» (provisional, D5).
+3. Si no hay errores, «Validar archivo» pasa a secundaria y la acción principal es «Importar N filas» (nunca coexisten dos principales); abre diálogo de confirmación con alcance (tipo, mes, N filas, total) y consecuencia. Si ya hubo un archivo del mismo tipo y mes, el diálogo dice «Reemplaza las filas del archivo anterior y devuelve la fuente a Pendiente» (D5).
 4. Resultado: `.mensaje-operacion listo` con nombre del archivo, hash abreviado, responsable y fecha, y el enlace «Volver a fuentes externas». Importar **no** confirma el tipo de fuente: la confirmación sigue siendo una acción aparte.
 
 **Estados específicos.**
 - *Vacío:* sin archivo seleccionado, el panel de vista previa no existe; solo el formulario.
 - *Cargando:* «Validando archivo…» con el botón deshabilitado y `role="status"`.
 - *Error:* archivo que no es XLSX, columnas ausentes o ilegible: `.mensaje-operacion error` con `role="alert"` bajo el campo de archivo, sin vista previa.
-- *Con errores de validación:* se muestra la vista previa con errores y «Importar» deshabilitado con «Corrija el archivo y vuelva a validarlo» (provisional, D9: todo o nada).
+- *Con errores de validación:* se muestra la vista previa con errores y «Importar» deshabilitado con «Corrija el archivo y vuelva a validarlo» (todo o nada: con un solo error no se importa ninguna fila, D9).
 - *Sin permiso / deshabilitado en un mes con pago realizado confirmado:* igual que 3.
 - *Ancho estrecho:* formulario en una columna; la lista de errores se muestra como lista (no tabla) con «Fila 14 · DNI · motivo».
 
@@ -220,7 +220,7 @@ La finalización no es una pantalla propia: se dispara desde 4.2 con «Finalizar
 - Sin bloqueos y sin cambios desde el borrador mostrado: diálogo de confirmación normal (6.1).
 - Sin bloqueos pero con **cambios en los datos relevantes desde el borrador mostrado**: el diálogo no guarda nada y pasa a su modo «El cálculo cambió» (6.1.b), que lista qué cambió y obliga a revisar antes de volver a finalizar.
 - Con bloqueos nuevos aparecidos tras abrir la pantalla: el diálogo muestra los bloqueos y no finaliza.
-- Éxito: el diálogo se cierra, la cabecera muestra «Finalizada, versión N», aparece `.mensaje-operacion listo` «Versión N guardada. Ya no se puede editar.» y la acción principal pasa a «Confirmar pago realizado». «Finalizar mes» desaparece. Mientras el pago realizado no esté confirmado, la pantalla explica cómo corregir sin tocar la versión guardada: si la corrección es de asistencia, Finanzas reabre el período en Períodos, el gerente corrige y vuelve a aprobar, Finanzas lo cierra de nuevo y entonces se finaliza otra versión (diseño de software, «Recorrido de asistencia a Pagos»). Si el cambio es de una fuente externa o de una regla, no se ofrece un atajo hasta resolver D19. La versión anterior nunca cambia.
+- Éxito: el diálogo se cierra, la cabecera muestra «Finalizada, versión N», aparece `.mensaje-operacion listo` «Versión N guardada. Ya no se puede editar.» y la acción principal pasa a «Confirmar pago realizado». «Finalizar mes» desaparece. Mientras el pago realizado no esté confirmado, la pantalla explica cómo corregir sin tocar la versión guardada: si la corrección es de asistencia, Finanzas reabre el período en Períodos, el gerente corrige y vuelve a aprobar, Finanzas lo cierra de nuevo y entonces se finaliza otra versión (diseño de software, «Recorrido de asistencia a Pagos»). Si el cambio es de una fuente externa o de una regla y la asistencia no cambió, Finanzas no reabre períodos: recalcula el borrador, lo revisa y finaliza otra versión (D19). La versión anterior nunca cambia.
 - Error al guardar: el diálogo permanece abierto con `role="alert"` y «No se guardó ninguna versión»; la operación es atómica, no queda un mes parcialmente finalizado.
 
 **Estados específicos.** *Normal:* los de arriba. *Vacío:* no aplica; sin personas en el mes no hay nada que finalizar y «Finalizar mes» queda deshabilitado con «Este mes no incluye personas». *Cargando:* el botón Confirmar del diálogo dice «Guardando…» y queda deshabilitado. *Error:* ver arriba (el diálogo permanece abierto). *Sin permiso:* un usuario que no es Finanzas no ve el botón y la acción del servidor responde sin permiso. *Deshabilitado:* con bloqueos o en un mes con pago realizado confirmado. *Ancho estrecho:* V3.
@@ -232,7 +232,7 @@ La finalización no es una pantalla propia: se dispara desde 4.2 con «Finalizar
 - Disponible solo en un mes con versión finalizada y sin pago confirmado, en la cabecera de 4.2 como acción principal «Confirmar pago realizado».
 - Abre el diálogo 6.2, que nombra la versión que se está declarando con pago realizado confirmado.
 - Tras confirmar: la insignia pasa a «Pago realizado confirmado», con fecha y responsable visibles en la cabecera y en el historial de versiones. Toda la pantalla pasa a solo consulta. «Crear otra versión» desaparece con la explicación «Este mes ya tiene su pago realizado confirmado; no admite una nueva versión.».
-- **Efecto en otra pantalla:** en el listado de períodos, «Reabrir período» de los períodos fuente de ese mes debe verse deshabilitado con la causa «Sustenta la preliquidación con pago realizado confirmado de 10/2026». Ese cambio toca `/periodos` (duda D10).
+- **Efecto en otra pantalla:** en el listado de períodos, «Reabrir período» de los períodos fuente de ese mes debe verse deshabilitado con la causa «Sustenta la preliquidación con pago realizado confirmado de 10/2026». Ese cambio toca `/periodos` y se hace en el mismo ticket que registra el pago, con su prueba (D10).
 - *Estados específicos.* *Normal:* los de arriba. *Vacío:* sin versión finalizada no hay nada que confirmar; se muestra el texto «Finalice el mes para poder confirmar el pago». *Cargando:* el botón del diálogo dice «Registrando…» y queda deshabilitado. *Error:* «No se registró el pago» junto al botón del diálogo, con `role="alert"`. *Sin permiso:* solo Finanzas ve la acción; el servidor rechaza a cualquier otro rol. *Deshabilitado:* tras el pago la acción no se muestra y la cabecera muestra la constancia. *Ancho estrecho:* V3.
 
 ### 4.8 Exportación
@@ -241,7 +241,7 @@ La finalización no es una pantalla propia: se dispara desde 4.2 con «Finalizar
 
 - Acción secundaria «Exportar preliquidación (XLSX)» en la cabecera de 4.2. El texto de ayuda contiguo dice «No es una planilla oficial ni sustituye PLAME. Para el resumen de asistencia, use la exportación del período.». Los dos botones nunca comparten etiqueta ni ubicación.
 - El archivo declara en su encabezado qué exportó: mes de pago, corte, estado («Borrador» o «Versión N finalizada») y fecha de generación.
-- Qué versiones o estados se pueden exportar es la duda D11. Provisional (D11): se puede exportar el borrador, rotulado como tal, y cualquier versión finalizada.
+- Decisión (D11): se puede exportar el borrador, rotulado «Borrador, no definitivo» en el encabezado del archivo, y cualquier versión finalizada.
 - *Estados:* *cargando* — botón «Preparando archivo…», deshabilitado; *error* — `role="alert"` «No se pudo generar el archivo» junto al botón; *deshabilitado* — en un mes sin personas, con «No hay datos para exportar: revise las relaciones laborales confirmadas por Recursos Humanos»; *sin permiso* — la ruta de descarga responde sin permiso y la pantalla no muestra el botón; *vacío* — igual que deshabilitado en un mes sin personas. Ancho estrecho: botón a todo el ancho.
 
 ## 5. Bloqueos por persona y por mes
@@ -257,7 +257,7 @@ Un bloqueo siempre tiene **causa**, **alcance** y **siguiente paso**, y un enlac
 | Período que cruza el día 25 | «El período del 20/10 al 30/10 cruza el día 25.» | Dividirlo en Períodos. |
 | Período sin cerrar o grupo sin aprobar | «El período 26/09–25/10 no está cerrado: falta la aprobación del grupo Tiendas.» | «Pida al gerente de Tiendas que apruebe» (Finanzas no aprueba por el gerente). |
 | Fuente sin confirmar | «Comisiones sin confirmar.» | «Confirme el listado» (enlace a 4.4). |
-| Regla o valor legal sin vigencia | «No hay tasa de EsSalud vigente para 10/2026.» | Activarla (dónde, ver D12). |
+| Regla o valor legal sin vigencia | «No hay tasa de EsSalud vigente para 10/2026.» | Activarla en la pantalla de configuración de reglas legales (D12). |
 | Cese sin conciliar | «El cese de [persona] no tiene su liquidación conciliada.» | Cargar la conciliación en la fuente correspondiente. |
 | Trabajo nocturno | «Hay trabajo entre las 22:00 y las 06:00 el 07/10 (3 personas). Aún no se calcula.» | «Caso no soportado todavía: la finalización queda bloqueada hasta definir y validar la regla.» No hay forma de resolverlo desde la app. |
 
@@ -265,7 +265,7 @@ Un bloqueo siempre tiene **causa**, **alcance** y **siguiente paso**, y un enlac
 
 | Causa | Texto de ejemplo | Siguiente paso |
 | --- | --- | --- |
-| Dato laboral sin vigencia | «Sin sueldo vigente el 02/10.» | Completar el dato laboral (dónde, ver D12). |
+| Dato laboral sin vigencia | «Sin sueldo vigente el 02/10.» | Completarlo en la pantalla de configuración de condiciones laborales (D12). |
 | Caso no soportado | «Trabajo entre 22:00 y 06:00 el 07/10.» | Igual que arriba. |
 | Neto negativo | «Neto de S/ −85,00.» | Revisar deducciones y adelantos, o registrar un ajuste de preliquidación. No se arrastra la deducción al mes siguiente. |
 | Incidencia de tienda sin sustento | «Incidencia de tienda sin sustento ni autorización.» | Registrar sustento y autorización, o «No descontar en este pago». |
@@ -276,7 +276,7 @@ La lista del mes ordena primero lo que afecta al mes completo y después por per
 
 ## 6. Diálogos de acciones irreversibles
 
-Todos son un `<dialog>` nativo con título, texto de consecuencia, texto de alcance, **Cancelar** y **Confirmar**. Cancelar cierra sin cambios y devuelve el foco al botón que abrió el diálogo. Si tras confirmar ese botón deja de existir (por ejemplo «Finalizar mes»), el foco pasa al título de la pantalla, que se marca como destino de foco, y el resultado se anuncia con `role="status"`. El foco inicial está en el título o en Cancelar, nunca en Confirmar. Escape equivale a Cancelar. La acción de Confirmar se llama con el verbo exacto («Finalizar mes», no «Aceptar»). El botón destructivo usa `.peligro`; las acciones irreversibles no destructivas usan `.boton-principal`.
+Todos (6.1 a 6.5) son un `<dialog>` nativo con título, texto de consecuencia, texto de alcance, **Cancelar** y **Confirmar**. Cancelar cierra sin cambios y devuelve el foco al botón que abrió el diálogo. Si tras confirmar ese botón deja de existir (por ejemplo «Finalizar mes»), el foco pasa al título de la pantalla, que se marca como destino de foco, y el resultado se anuncia con `role="status"`. El foco inicial está en el título o en Cancelar, nunca en Confirmar. Escape equivale a Cancelar. La acción de Confirmar se llama con el verbo exacto («Finalizar mes», no «Aceptar»). El botón destructivo usa `.peligro`; las acciones irreversibles no destructivas usan `.boton-principal`.
 
 ### 6.1 Finalizar mes
 
@@ -289,7 +289,7 @@ Todos son un `<dialog>` nativo con título, texto de consecuencia, texto de alca
 
 **b) El cálculo cambió desde el borrador revisado.** El diálogo cambia de título y de botón y no guarda nada:
 - *Título:* «El cálculo cambió desde su revisión».
-- *Cuerpo:* «Cambiaron datos desde el borrador que revisó. Revise el cálculo actualizado antes de finalizar.» Resumen del cambio: neto total anterior y actual, y lista de personas con diferencia (persona, concepto o fuente que cambió, neto anterior, neto actual).
+- *Cuerpo:* «Cambiaron datos desde el borrador que revisó. Revise el cálculo actualizado antes de finalizar.» Resumen del cambio: neto total anterior y actual, y lista de personas con diferencia (persona, concepto o fuente que cambió, neto anterior, neto actual). Cuenta como cambio cualquier dato de entrada del cálculo (asistencia, fuentes, reglas, condiciones laborales, períodos), aunque el neto no varíe; en ese caso la lista indica qué dato cambió y el neto aparece sin diferencia (D17).
 - *Botones:* Cancelar y **Revisar cálculo actualizado**. Este último cierra el diálogo, recarga el borrador, marca con la insignia «Cambió» las filas afectadas y fija el nuevo borrador como el revisado. Finanzas debe volver a pulsar «Finalizar mes»; no se guarda ninguna versión como efecto de revisar.
 
 **c) Bloqueos aparecidos.** Si al pulsar «Finalizar mes» ya existen bloqueos nuevos, no se abre el diálogo: la pantalla se actualiza, muestra el panel «Bloqueos del mes» con los nuevos y mueve el foco a ese panel. Así el diálogo conserva siempre Cancelar y Confirmar.
@@ -299,7 +299,7 @@ Todos son un `<dialog>` nativo con título, texto de consecuencia, texto de alca
 - *Título:* «¿Confirmar que se pagó 10/2026 fuera de la app?»
 - *Alcance:* «Versión 2 del mes completo, 42 personas, S/ 48.210,35.»
 - *Consecuencia:* «No se podrá reemplazar esta preliquidación ni reabrir los períodos de planilla que la sustentan. No se puede deshacer en esta versión de la app. La app no ejecuta ni verifica la transferencia: solo registra su constancia.»
-- *Campos:* fecha del pago (provisional, D14; el ADR 0013 solo exige registrar responsable y fecha de confirmación) y, de solo lectura, el responsable («Se registrará a nombre de [usuario]»).
+- *Campos:* fecha del pago (editable, no futura) y, de solo lectura, el responsable («Se registrará a nombre de [usuario]»). La app guarda además, sola, la fecha y hora de la confirmación (D14).
 - *Cancelación:* «Cancelar no registra nada.»
 - *Botones:* Cancelar y **Confirmar pago realizado**.
 
@@ -314,7 +314,16 @@ No está declarada como irreversible en #96, pero cambia el significado de las f
 
 ### 6.4 Importar archivo fuente
 
-Diálogo de confirmación del paso 3 de 4.5: tipo, mes, N filas, total, nombre y hash abreviado del archivo, y la consecuencia de reemplazo si existe una carga previa (duda D5). Botones: Cancelar e **Importar N filas**.
+Diálogo de confirmación del paso 3 de 4.5: tipo, mes, N filas, total, nombre y hash abreviado del archivo, y la consecuencia de reemplazo si existe una carga previa (D5). Botones: Cancelar e **Importar N filas**.
+
+### 6.5 Volver una fuente a Pendiente
+
+No es irreversible, pero cambia el significado de las filas ausentes, así que usa el mismo patrón (D4).
+- *Título:* «¿Volver Comisiones de 10/2026 a Pendiente?»
+- *Alcance:* «Solo esta fuente y este mes de pago.»
+- *Consecuencia:* «Mientras esté pendiente, las personas sin fila dejan de contar como S/ 0,00 y el mes no se puede finalizar.»
+- *Cancelación:* «Cancelar deja la fuente confirmada.»
+- *Botones:* Cancelar y **Volver a pendiente**.
 
 ## 7. Cómo se lee cada tabla en ancho estrecho
 
@@ -351,34 +360,39 @@ Cada una se justifica porque ningún patrón actual cubre la necesidad. Hasta qu
 
 No se propone ninguna otra variante: no hay gráficos, no hay rutas anidadas nuevas y se mantiene la paleta de `global.css`.
 
-## 9. Dudas de producto
+## 9. Decisiones de producto (Diego, 2026-10-05)
 
-Registradas para que Diego decida. Ninguna se resolvió en este documento; cuando hizo falta dibujar una pantalla se usó un comportamiento «provisional» marcado con el número de la duda. Cada una incluye una recomendación para facilitar la decisión.
+Estas decisiones cierran las dudas que dejó el borrador. Las recomendaciones se aceptaron tal como se propusieron. Cada una está reflejada en el texto indicado.
 
-| Id | Duda | Efecto en el diseño | Recomendación |
+| Id | Tema | Decisión | Dónde se aplica |
 | --- | --- | --- | --- |
-| D1 | El ticket pide partir de la maqueta local de `propuesta-visual`, pero no está en el repo ni en el VPS. ¿Dónde está? ¿Hay decisiones de esa maqueta que este diseño deba respetar? | Todo este documento parte de las pantallas reales, el contrato visual y #96. Puede haber diferencias con la maqueta. | Compartir la maqueta y revisar este documento contra ella antes de aprobarlo. |
-| D2 | #96 no fija URL ni cuántas pantallas son páginas distintas, ni el nombre del acceso en la navegación. | Se habla de pantallas y de un acceso «Pagos». | Decidirlo en el primer ticket con interfaz: «Pagos» con la lista de meses y una página por mes; el detalle por persona dentro del mes como página enlazable. |
-| D3 | ¿Los meses de pago aparecen solos o Finanzas crea el mes? | 4.1 asume que aparecen solos desde las relaciones laborales y los cortes. | Aparición automática: crear meses a mano no está en #96. |
-| D4 | ¿Se puede deshacer la confirmación de un tipo de fuente (volver a «Pendiente») cuando llega un dato nuevo? | 4.4 no ofrece deshacer. Si tampoco hay forma de agregar una fila después, Finanzas quedaría atrapada. | Permitir volver a «Pendiente» antes de finalizar, con diálogo, y ninguna reversión después de finalizar. Requiere confirmar con Diego. |
-| D5 | Importar otro archivo del mismo tipo después de uno previo, ¿reemplaza, suma o se rechaza? ¿Y qué le pasa a la confirmación del tipo? | 4.5 y 6.4 mencionan el reemplazo sin fijar la regla. | Reemplazar el archivo anterior del mismo tipo y mes, y devolver la fuente a «Pendiente». |
-| D6 | ¿Cómo se tratan en pantalla las filas duplicadas de una fuente ya cargada? | 4.4 las marca y no las suma. | Mostrarlas como bloqueo de persona (5.2) hasta corregir la fuente. |
-| D7 | Para una incidencia de tienda, ¿qué campos exige el «sustento y autorización» (texto, adjunto, quién autoriza)? | 4.4 muestra solo los estados. | Texto de sustento, nombre de quien autoriza y fecha; sin adjuntos en el primer incremento. |
-| D8 | ¿La app ofrece una plantilla XLSX normalizada descargable? | 4.5 la menciona como opcional. | Sí: sin ella la importación depende del conocimiento oral del formato. |
-| D9 | Con errores en el archivo, ¿se importan las filas válidas o no se importa nada? | 4.5 deshabilita «Importar» si hay errores. | Todo o nada: evita fuentes parcialmente cargadas. |
-| D10 | Deshabilitar «Reabrir período» tras el pago toca `/periodos`, que no es una pantalla de Pagos. ¿Entra en el ticket de pago o en otro? | 4.7 describe el efecto. | Incluirlo en el ticket de pago realizado, con prueba, para que la regla del ADR 0013 se vea en la pantalla donde se reabre. |
-| D11 | ¿Se puede exportar un borrador o solo una versión finalizada? | 4.8 no lo decide; solo exige rotular el estado. | Permitir ambos, con el estado en el encabezado del archivo, para que Finanzas pueda revisar antes de finalizar. |
-| D12 | ¿Dónde edita Finanzas los datos que hoy solo bloquean: condiciones laborales con vigencia, reglas legales y tasas, ajustes de preliquidación, abonos vacacionales y descansos sustitutorios previstos? El diseño de software los asigna a Finanzas, pero #106 lista solo las pantallas de arriba. | Los bloqueos de 5 los mencionan con «siguiente paso» sin destino. | Decidir antes de crear los tickets de interfaz. Recomendación: ajustes, abonos y sustitutorios como tipos de fuente en 4.4; condiciones y reglas en una pantalla de Configuración aparte. |
-| D13 | La decisión de horas extra candidatas hoy está en `/periodos`. ¿Se mantiene allí? | Pagos no la muestra ni la duplica; una hora extra sin decidir impide el cierre del período y llega a Pagos como «período sin cerrar» (5.1). | Mantenerla en Períodos: es un hecho de asistencia, ya cerrado antes de Pagos. |
-| D14 | En «pago realizado confirmado», ¿la fecha es la del desembolso, que Finanzas escribe, o la de la confirmación en la app? La historia 44 dice «con fecha y responsable». | 6.2 incluye un campo de fecha. | Fecha del pago editable (no futura) y la fecha de registro automática. |
-| D15 | ¿Cómo se presenta una versión «Reemplazada» si ya existe una más nueva? ¿Se puede ver el detalle por persona de una versión anterior? | 4.2 solo lista el historial. | Permitir consulta de solo lectura de cualquier versión. |
-| D17 | ¿Qué cuenta como «datos relevantes» que cambiaron desde el borrador revisado (#96, historia 45)? | 6.1.b lista las diferencias de importes, fuentes, reglas, condiciones laborales y revisiones de asistencia que alimentan el cálculo. | Comparar la entrada completa del cálculo, no solo el neto: un cambio que se compensa igualmente debe pedir revisión. |
-| D18 | ¿Cómo se suman los totales del mes cuando hay personas con bloqueos? | 4.2 muestra «Incompleto» con una nota. | Mostrar los totales de las personas calculadas con la nota del conteo excluido y no presentarlos como definitivos. |
-| D19 | Antes del pago, ¿se puede crear otra versión final sin una nueva revisión de asistencia (cambió solo una fuente externa o una regla)? El ADR 0013 permite «una nueva versión final» y el ADR 0007 habla de «nuevas revisiones». | 4.6 no ofrece atajo. | Permitirlo si no cambió la asistencia, siempre desde un borrador recalculado y revisado. |
-| D16 | El ticket pide que Recursos Humanos y el gerente de área tengan interfaz en Pagos «donde aplique». #96 dice que Pagos es solo de Finanzas. | Ninguna pantalla de este documento es para esos roles; su trabajo (altas, ingreso y cese, aprobación) pertenece a Asistencia y Configuración. | Confirmar que esas pantallas se diseñan en otro ticket. |
+| D1 | Maqueta de `propuesta-visual` | No existe; no se parte de ella. | 1.2 |
+| D2 | Estructura de páginas | Un acceso «Pagos» con la lista de meses, una página por mes y el detalle por persona como página enlazable. | 4 (inicio) |
+| D3 | Creación de meses | Aparecen solos desde las relaciones laborales; Finanzas no crea meses. | 4.1 |
+| D4 | Deshacer la confirmación de una fuente | «Volver a pendiente» con diálogo, solo antes de finalizar. | 4.4, 6.5 |
+| D5 | Importar sobre una fuente ya cargada | El archivo nuevo reemplaza al anterior del mismo tipo y mes, y la fuente vuelve a «Pendiente». | 4.4, 4.5, 6.4 |
+| D6 | Filas duplicadas | Bloquean a su persona hasta corregir la fuente. | 4.4, 5.2 |
+| D7 | Sustento de una incidencia de tienda | Texto de sustento, quién autoriza y fecha; sin adjuntos. | 4.4 |
+| D8 | Plantilla XLSX | La app ofrece una plantilla normalizada descargable. | 4.5 |
+| D9 | Errores en el archivo | Todo o nada. | 4.5 |
+| D10 | «Reabrir período» tras el pago | Se bloquea en el mismo ticket que registra el pago. | 4.7 |
+| D11 | Exportar | Se exporta el borrador, rotulado, y cualquier versión finalizada. | 4.8 |
+| D12 | Dónde se registran los datos base | Ajustes, abonos vacacionales y descansos sustitutorios previstos, como tipos de fuente en Pagos. Condiciones laborales con vigencia y reglas legales, en una pantalla de configuración aparte. | 4.4, 5 |
+| D13 | Horas extra candidatas | Se siguen decidiendo en Períodos; Pagos no las duplica. | 5.1 |
+| D14 | Fecha del pago realizado | Finanzas escribe la fecha del pago (no futura) y la app guarda la fecha de la confirmación. | 6.2 |
+| D15 | Versiones anteriores | Consultables completas, en solo lectura. | 4.2 |
+| D16 | Recursos Humanos y gerentes | Sin pantallas en Pagos; su trabajo se diseña en otro ticket. | 2 |
+| D17 | Qué es un cambio desde el borrador revisado | Cualquier dato de entrada del cálculo, aunque el neto no cambie. | 6.1.b |
+| D18 | Totales con bloqueos | Se suman las personas calculadas, rotulado «Incompleto» con el conteo excluido. | 4.2 |
+| D19 | Otra versión sin cambio de asistencia | Se permite desde un borrador recalculado y revisado, sin reabrir períodos. | 4.6 |
+
+### Consecuencias que quedan abiertas
+
+- **P1. Pantalla de configuración de condiciones laborales y reglas legales (D12).** Este documento no diseña su interacción: es un ticket aparte. Mientras no exista, los bloqueos «Sin sueldo vigente» y «Sin tasa vigente» no tienen dónde resolverse.
+- **P2. Actualizar la especificación.** El diseño de software exige actualizar #96 antes de crear tickets si el diseño añade comportamiento. Esto afecta a D4 y D5 (volver a «Pendiente» y reemplazo), D12 (la pantalla de configuración), D15 (consulta de versiones anteriores), D18 y D19.
 
 ## 10. Cómo se verifica este diseño
 
 - Cada pantalla de la sección 4 cubre los seis estados de la sección 3 y el comportamiento en ancho estrecho, y se traduce a la prueba de interfaz de su ticket (carga sin error, consola limpia, 375 px sin desplazamiento horizontal de la página).
 - Los textos de bloqueo, de diálogo y de estado son contrato: los tickets deben usarlos o proponer cambios aquí antes de implementarlos.
-- Los tickets de interfaz de Pagos dependen de que Diego apruebe este documento y resuelva, como mínimo, D1, D2, D4, D5, D7, D9, D11, D12, D14, D17 y D19.
+- Los tickets de interfaz de Pagos dependen de que Diego apruebe este documento y de cerrar P1 y P2 (sección 9).
