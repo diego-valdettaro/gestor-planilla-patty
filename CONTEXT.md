@@ -179,7 +179,7 @@ Cantidad de horas de trabajo ordinario pactadas para un día, usada como divisor
 _Evitar_: divisor fijo de ocho horas, horas efectivamente trabajadas
 
 **Descanso semanal**:
-Día de descanso remunerado asignado al colaborador dentro de la semana; no tiene que coincidir con el domingo.
+Día de descanso remunerado asignado al colaborador dentro de la semana, por vigencia: un cambio agrega una vigencia nueva y no reescribe las anteriores. No tiene que coincidir con el domingo y, mientras no se asigna uno, la persona no tiene descanso: nunca se asume el domingo. Lo registra Finanzas.
 _Evitar_: domingo, feriado
 
 **Descanso sustitutorio**:
@@ -187,8 +187,20 @@ Día de descanso efectivamente otorgado en reemplazo de un descanso semanal o fe
 _Evitar_: descanso previsto, descanso adicional, domingo no trabajado
 
 **Descanso sustitutorio previsto**:
-Día futuro acordado para reemplazar un descanso semanal o feriado trabajado, pendiente de verificar como descanso efectivo.
+Día futuro acordado para reemplazar un descanso semanal o feriado trabajado, pendiente de verificar como descanso efectivo. Finanzas lo registra y, desde su fecha prevista, lo marca como otorgado o no otorgado, una sola vez.
 _Evitar_: descanso sustitutorio ya otorgado, pago adicional autorizado
+
+**Calendario de feriados**:
+Lista global de fechas feriadas que mantiene Finanzas. Cada fecha tiene un nombre y una clase; el 1 de mayo es el único feriado con clase propia y la clase se deriva de la fecha, no se elige.
+_Evitar_: feriado por persona, feriado tecleado en cada jornada
+
+**Primero de mayo**:
+Feriado del Día del Trabajo, distinguido en el calendario porque Pagos le aplica una regla propia.
+_Evitar_: feriado común, multiplicador tecleado
+
+**Jornada trabajada en descanso o feriado**:
+Asistencia confirmada con tiempo real trabajado en un día que es feriado o el descanso semanal asignado a esa persona. Es un hecho revisable que Pagos valora después; se distingue de un estado manual de descanso o feriado, que indica que la persona no trabajó, y de un día sin resolver.
+_Evitar_: estado manual de feriado, domingo trabajado, adicional ya calculado
 
 **Incidencia de tienda**:
 Hecho registrado en una tienda, como merma o consumo, cuya existencia por sí sola no autoriza un descuento salarial.

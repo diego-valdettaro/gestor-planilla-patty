@@ -6,6 +6,7 @@ import {
   index,
   jsonb,
   pgTable,
+  smallint,
   text,
   timestamp,
   uniqueIndex,
@@ -395,5 +396,63 @@ export const reemplazosDeAsistenciaImportada = pgTable(
   (table) => [
     index("reemplazos_asistencia_importada_asistencia_id").on(table.asistenciaId),
     index("reemplazos_asistencia_importada_importacion_id").on(table.importacionId),
+  ],
+);
+
+// Descanso semanal asignado por vigencia (issue #113). `diaSemana` es ISO: 1 = lunes … 7 = domingo. Sin fila
+// vigente la persona no tiene descanso asignado: nunca se asume el domingo.
+export const descansosSemanalesAsignados = pgTable(
+  "descansos_semanales_asignados",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    dni: text("dni").notNull().references(() => colaboradores.dni),
+    diaSemana: smallint("dia_semana").notNull(),
+    vigenteDesde: date("vigente_desde", { mode: "string" }).notNull(),
+    registradoPorId: uuid("registrado_por_id").notNull().references(() => cuentasLocales.id),
+    registradoEn: timestamp("registrado_en", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("descansos_semanales_dni_vigencia").on(table.dni, table.vigenteDesde),
+    check("descansos_semanales_dia_valido", sql`${table.diaSemana} BETWEEN 1 AND 7`),
+  ],
+);
+
+// Calendario de feriados. El 1 de mayo es el único con clase propia; la base ata la clase a la fecha.
+export const feriados = pgTable(
+  "feriados",
+  {
+    fecha: date("fecha", { mode: "string" }).primaryKey(),
+    nombre: text("nombre").notNull(),
+    clase: text("clase", { enum: ["feriado", "primero_de_mayo"] }).notNull(),
+    registradoPorId: uuid("registrado_por_id").notNull().references(() => cuentasLocales.id),
+    registradoEn: timestamp("registrado_en", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    check("feriados_nombre_valido", sql`char_length(btrim(${table.nombre})) BETWEEN 1 AND 100`),
+    check("feriados_clase_segun_fecha", sql`(${table.clase} = 'primero_de_mayo') = (EXTRACT(MONTH FROM ${table.fecha}) = 5 AND EXTRACT(DAY FROM ${table.fecha}) = 1)`),
+  ],
+);
+
+// Descanso sustitutorio previsto para un descanso semanal o feriado y su verificación posterior. `origenTipo`
+// congela qué se sustituye aunque el calendario o el descanso asignado cambien después.
+export const descansosSustitutorios = pgTable(
+  "descansos_sustitutorios",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    dni: text("dni").notNull().references(() => colaboradores.dni),
+    origenFecha: date("origen_fecha", { mode: "string" }).notNull(),
+    origenTipo: text("origen_tipo", { enum: ["descanso_semanal", "feriado", "primero_de_mayo"] }).notNull(),
+    fechaPrevista: date("fecha_prevista", { mode: "string" }).notNull(),
+    estado: text("estado", { enum: ["previsto", "otorgado", "no_otorgado"] }).notNull().default("previsto"),
+    verificadoPorId: uuid("verificado_por_id").references(() => cuentasLocales.id),
+    verificadoEn: timestamp("verificado_en", { withTimezone: true }),
+    registradoPorId: uuid("registrado_por_id").notNull().references(() => cuentasLocales.id),
+    registradoEn: timestamp("registrado_en", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("descansos_sustitutorios_dni_origen").on(table.dni, table.origenFecha),
+    uniqueIndex("descansos_sustitutorios_dni_fecha_prevista").on(table.dni, table.fechaPrevista).where(sql`${table.estado} <> 'no_otorgado'`),
+    check("descansos_sustitutorios_otro_dia", sql`${table.fechaPrevista} <> ${table.origenFecha}`),
+    check("descansos_sustitutorios_verificacion_completa", sql`(${table.estado} = 'previsto' AND ${table.verificadoPorId} IS NULL AND ${table.verificadoEn} IS NULL) OR (${table.estado} <> 'previsto' AND ${table.verificadoPorId} IS NOT NULL AND ${table.verificadoEn} IS NOT NULL)`),
   ],
 );
