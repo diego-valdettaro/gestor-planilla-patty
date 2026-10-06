@@ -114,3 +114,8 @@ export function puedeGestionarRelacionesLaborales(actor: Actor): boolean {
 export function puedeConsultarRelacionesLaborales(actor: Actor): boolean {
   return puedeGestionarRelacionesLaborales(actor) || actor.rol === "finanzas";
 }
+
+/** Calendario de feriados, descanso semanal asignado y descansos sustitutorios (y su consulta): Finanzas y, como superusuario temporal, el Administrador. */
+export function puedeGestionarCalendarioLaboral(actor: Actor): boolean {
+  return actor.rol === "administrador" || actor.rol === "finanzas";
+}
