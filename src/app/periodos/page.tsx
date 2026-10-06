@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { NOMBRE_DE_ROL, puedeGestionarPeriodos } from "@/autenticacion/permisos";
 import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
 import { BotonDeAccionConfirmada } from "@/app/boton-de-accion-confirmada";
+import { CAUSAS_DE_DESCARTE, NOMBRE_DE_CAUSA_DE_DESCARTE } from "@/asistencias/descarte-de-hora-extra";
 import { calcularSugerenciaDePeriodo, crearResumenVacio } from "@/periodos/periodo-planilla";
 import type { BloqueoDePeriodo, DetalleDeJornada, FilaDeResumen, ResumenDePeriodo } from "@/periodos/periodo-planilla";
 import { repositorioDePeriodos } from "@/periodos/servicio";
@@ -73,8 +74,10 @@ function DecisionesDeHorasExtra({ periodoId, filas }: { periodoId: string; filas
       <BotonDeAccionConfirmada accion={decidirHorasExtraDesdeFormulario} confirmar="Aprobar selección" descripcion="Seleccione al menos una hora extra. La selección quedará aprobada en una sola operación." etiqueta="Aprobar horas extra" requiereSeleccion="horaExtraId" titulo="¿Aprobar estas horas extra?">
         <input name="decision" type="hidden" value="aprobada" />{campos}
       </BotonDeAccionConfirmada>
-      <BotonDeAccionConfirmada accion={decidirHorasExtraDesdeFormulario} confirmar="Rechazar selección" descripcion="Seleccione al menos una hora extra. La selección quedará rechazada en una sola operación." etiqueta="Rechazar horas extra" requiereSeleccion="horaExtraId" titulo="¿Rechazar estas horas extra?" peligro>
-        <input name="decision" type="hidden" value="rechazada" />{campos}
+      <BotonDeAccionConfirmada accion={decidirHorasExtraDesdeFormulario} confirmar="Descartar selección" descripcion="Seleccione al menos una hora extra. Solo se descarta tiempo que fue una marca errónea o una permanencia sin trabajo efectivo, con su evidencia y motivo. No se descarta por falta de autorización previa: el trabajo acreditado se paga." etiqueta="Descartar horas extra" requiereSeleccion="horaExtraId" titulo="¿Descartar estas horas extra?" peligro>
+        <input name="decision" type="hidden" value="descartada" />{campos}
+        <label>Evidencia<select name="causa" required defaultValue=""><option value="" disabled>Elija la evidencia</option>{CAUSAS_DE_DESCARTE.map((causa) => <option key={causa} value={causa}>{NOMBRE_DE_CAUSA_DE_DESCARTE[causa]}</option>)}</select></label>
+        <label>Motivo del descarte<input name="motivo" required /></label>
       </BotonDeAccionConfirmada>
     </div>
   </section>;
@@ -118,7 +121,7 @@ function TablaDeHorasExtra({ horasExtra, titulo }: { horasExtra: FilaDeResumen["
   const cifras = [
     ["Pendientes 25%", horasExtra.pendiente.minutosAl25], ["Pendientes 35%", horasExtra.pendiente.minutosAl35],
     ["Aprobadas 25%", horasExtra.aprobada.minutosAl25], ["Aprobadas 35%", horasExtra.aprobada.minutosAl35],
-    ["Rechazadas 25%", horasExtra.rechazada.minutosAl25], ["Rechazadas 35%", horasExtra.rechazada.minutosAl35],
+    ["Descartadas 25%", horasExtra.descartada.minutosAl25], ["Descartadas 35%", horasExtra.descartada.minutosAl35],
   ] as const;
   return <TablaComparable titulo={titulo}><Cabecera columnas={cifras.map(([nombre]) => ({ nombre, numerica: true }))} /><tbody><tr>{cifras.map(([nombre, minutos]) => <td key={nombre} className="numerico">{formatearDuracion(minutos)}</td>)}</tr></tbody></TablaComparable>;
 }
@@ -140,7 +143,7 @@ function nombreDelResultado(resultado: DetalleDeJornada["resultado"]): string {
 }
 
 function nombreDelEstadoExtra(estado: NonNullable<DetalleDeJornada["horaExtra"]>["estado"]): string {
-  return { pendiente: "Pendiente", aprobada: "Aprobada", rechazada: "Rechazada" }[estado];
+  return { pendiente: "Pendiente", aprobada: "Aprobada", descartada: "Descartada" }[estado];
 }
 
 function horarioReal(jornada: DetalleDeJornada): string {

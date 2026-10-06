@@ -1,5 +1,6 @@
 import type { Actor } from "@/autenticacion/permisos";
 import { exigir, puedeGestionarPeriodos } from "@/autenticacion/permisos";
+import { validarDescarteDeHoraExtra, type DecisionDeHoraExtra } from "@/asistencias/descarte-de-hora-extra";
 
 export type EstadoDePeriodo = "abierto" | "cerrado";
 export type AccionDePeriodo = "cierre" | "reapertura";
@@ -14,7 +15,7 @@ export interface PeriodoPlanilla {
 }
 
 export type MotivoDeNoAsistencia = "falta" | "descanso" | "feriado" | "vacaciones" | "permiso" | "suspension";
-export type EstadoDeHoraExtra = "pendiente" | "aprobada" | "rechazada";
+export type EstadoDeHoraExtra = "pendiente" | "aprobada" | "descartada";
 export type TipoDeBloqueoDePeriodo = "asistencia" | "hora-extra";
 
 export interface FiltrosDeResumen { periodoId: string; sede?: string; dni?: string; }
@@ -66,11 +67,14 @@ export interface RevisionDePeriodo {
   cerradaEn: Date;
 }
 
-export type DecisionDeHoraExtra = Exclude<EstadoDeHoraExtra, "pendiente">;
+export type { DecisionDeHoraExtra };
 export interface SolicitudDeDecisionDeHorasExtra {
   periodoId: string;
   horasExtraIds: string[];
-  decision: DecisionDeHoraExtra;
+  decision: "aprobada" | "descartada";
+  /** Evidencia y motivo: obligatorios cuando la decisión es descartar. */
+  causa?: string;
+  motivo?: string;
 }
 
 export function crearResumenVacio(): ResumenDePeriodo {
@@ -86,7 +90,7 @@ export function crearResumenVacio(): ResumenDePeriodo {
       horasExtra: {
         pendiente: { minutosAl25: 0, minutosAl35: 0 },
         aprobada: { minutosAl25: 0, minutosAl35: 0 },
-        rechazada: { minutosAl25: 0, minutosAl35: 0 },
+        descartada: { minutosAl25: 0, minutosAl35: 0 },
       },
     },
   };
@@ -134,7 +138,10 @@ export async function decidirHorasExtra(
   autorizarCierreDePeriodos(actor);
   const ids = [...new Set(solicitud.horasExtraIds)];
   if (!ids.length) throw new Error("Debe seleccionar al menos una hora extra.");
-  await repositorio.decidirHorasExtra(solicitud.periodoId, ids, solicitud.decision, actor.id, ahora);
+  const decision: DecisionDeHoraExtra = solicitud.decision === "descartada"
+    ? { estado: "descartada", ...validarDescarteDeHoraExtra(solicitud) }
+    : { estado: "aprobada" };
+  await repositorio.decidirHorasExtra(solicitud.periodoId, ids, decision, actor.id, ahora);
 }
 
 export async function cerrarPeriodo(repositorio: RepositorioDePeriodos, actor: Actor, id: string, ahora = new Date()): Promise<void> {

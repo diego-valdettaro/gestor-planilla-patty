@@ -1,11 +1,11 @@
-import { and, asc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import type { EvidenciaDeCeldaAsistencia } from "@/app/asistencias/estado-de-celda";
 import * as schema from "@/db/schema";
 import { ajustesDeAsistencia, asistenciasEsperadas, colaboradores, estadosManuales, horasExtra, marcasCrudas, periodosPlanilla, tardanzas, turnosPublicados } from "@/db/schema";
 import { buscarPoliticaVigente, RepositorioPostgresDeTardanzas } from "@/tardanzas/repositorio-postgres";
-import { calcularMinutosDeTardanza, calcularMinutosPenalizados } from "@/tardanzas/politica-de-penalizacion";
+import { minutosDeTardanzaFueraDeTolerancia } from "@/tardanzas/politica-de-penalizacion";
 
 import type {
   AsistenciaConfirmada,
@@ -16,10 +16,11 @@ import type {
   TurnoParaConfirmar,
 } from "./confirmar-y-ajustar-asistencia";
 import { calcularMinutosTrabajados } from "./confirmar-y-ajustar-asistencia";
+import type { DecisionDeHoraExtra } from "./descarte-de-hora-extra";
 import type { MotivoPlanificadoDeNoAsistencia } from "./estado-manual";
-import type { EstadoDeHoraExtra } from "./calcular-hora-extra";
 import { lunesDeLaSemana } from "./calcular-hora-extra";
 import { recalcularHorasExtraDeSemana } from "./recalcular-horas-extra-de-semana";
+import { recalcularPenalizaciones, recalcularTardanzaDeAsistencia } from "./recalcular-tardanza";
 import type {
   EvaluacionDeColaborador,
   RepositorioDeConfirmacionPorRango,
@@ -122,8 +123,8 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
           if (!actualizada) throw new Error("Una jornada cambió mientras se confirmaba la selección.");
           const politica = await buscarPoliticaVigente(tx, fila.sede, fila.fecha);
           if (!politica) throw new Error(`No existe una política de tardanzas vigente para ${fila.sede}.`);
-          const minutosDeTardanza = calcularMinutosDeTardanza(fila.entradaProgramada, fila.entradaPropuesta);
-          if (minutosDeTardanza > politica.toleranciaEnMinutos) {
+          const minutosDeTardanza = minutosDeTardanzaFueraDeTolerancia(politica, fila.entradaProgramada, fila.entradaPropuesta);
+          if (minutosDeTardanza !== undefined) {
             await tx.insert(tardanzas).values({
               asistenciaId: actualizada.id,
               minutosDeTardanza,
@@ -195,19 +196,29 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
     await this.db.transaction(async (tx) => {
       const [asistencia] = await tx.update(asistenciasEsperadas).set({
         entradaReal: solicitud.entradaReal, salidaReal: solicitud.salidaReal, minutosTrabajados: solicitud.minutosTrabajados,
-      }).where(and(eq(asistenciasEsperadas.dni, solicitud.dni), eq(asistenciasEsperadas.fecha, solicitud.fecha), eq(asistenciasEsperadas.estado, "confirmada"))).returning({ id: asistenciasEsperadas.id });
+      }).where(and(eq(asistenciasEsperadas.dni, solicitud.dni), eq(asistenciasEsperadas.fecha, solicitud.fecha), eq(asistenciasEsperadas.estado, "confirmada")))
+        .returning({ id: asistenciasEsperadas.id, instantaneaDeTurno: asistenciasEsperadas.instantaneaDeTurno });
       if (!asistencia) throw new Error("La asistencia debe estar confirmada para ajustarla.");
       await tx.insert(ajustesDeAsistencia).values({
         asistenciaId: asistencia.id, entradaReal: solicitud.entradaReal, salidaReal: solicitud.salidaReal,
         motivo: solicitud.motivo, responsableId,
       });
       await recalcularHorasExtraDeSemana(tx, solicitud.dni, solicitud.fecha, solicitud.fecha);
+      await recalcularTardanzaDeAsistencia(tx, {
+        id: asistencia.id, dni: solicitud.dni, fecha: solicitud.fecha, entradaReal: solicitud.entradaReal,
+        instantaneaDeTurno: asistencia.instantaneaDeTurno,
+      });
     });
   }
 
-  async decidirHoraExtra(dni: string, fecha: string, estado: EstadoDeHoraExtra, responsableId: string): Promise<void> {
-    if (estado === "pendiente") throw new Error("La hora extra debe aprobarse o rechazarse.");
-    const resultado = await this.db.update(horasExtra).set({ estado, decididaPorId: responsableId, decididaEn: new Date() })
+  async decidirHoraExtra(dni: string, fecha: string, decision: DecisionDeHoraExtra, responsableId: string): Promise<void> {
+    const resultado = await this.db.update(horasExtra).set({
+      estado: decision.estado,
+      causaDeDescarte: decision.estado === "descartada" ? decision.causa : null,
+      motivoDeDescarte: decision.estado === "descartada" ? decision.motivo : null,
+      decididaPorId: responsableId,
+      decididaEn: new Date(),
+    })
       .from(asistenciasEsperadas)
       .where(and(eq(horasExtra.asistenciaId, asistenciasEsperadas.id), eq(asistenciasEsperadas.dni, dni), eq(asistenciasEsperadas.fecha, fecha), eq(horasExtra.estado, "pendiente")))
       .returning({ id: horasExtra.id });
@@ -396,32 +407,6 @@ function marcasConsistentes(entrada: string, salida: string): boolean {
   const inicio = new Date(entrada).getTime();
   const fin = new Date(salida).getTime();
   return Number.isFinite(inicio) && Number.isFinite(fin) && fin > inicio;
-}
-
-type TransaccionDeAsistencias = Parameters<NodePgDatabase<typeof schema>["transaction"]>[0] extends (tx: infer T) => unknown ? T : never;
-
-async function recalcularPenalizaciones(
-  tx: TransaccionDeAsistencias,
-  alcance: { dni: string; inicio: string; fin: string },
-): Promise<void> {
-  const filas = await tx.select({
-    tardanzaId: tardanzas.id,
-    fecha: asistenciasEsperadas.fecha,
-    instantanea: asistenciasEsperadas.instantaneaDeTurno,
-  }).from(tardanzas).innerJoin(asistenciasEsperadas, eq(tardanzas.asistenciaId, asistenciasEsperadas.id)).where(and(
-    eq(asistenciasEsperadas.dni, alcance.dni),
-    gte(asistenciasEsperadas.fecha, alcance.inicio),
-    lte(asistenciasEsperadas.fecha, alcance.fin),
-  )).orderBy(asc(asistenciasEsperadas.fecha));
-  for (const [indice, fila] of filas.entries()) {
-    if (!fila.instantanea?.sede) throw new Error(`La tardanza de ${fila.fecha} no conserva la sede aplicada.`);
-    const politica = await buscarPoliticaVigente(tx, fila.instantanea.sede, fila.fecha);
-    if (!politica) throw new Error(`No existe una política de tardanzas vigente para ${fila.instantanea.sede}.`);
-    await tx.update(tardanzas).set({
-      minutosPenalizados: calcularMinutosPenalizados(indice + 1, politica),
-      politicaVersion: politica.version,
-    }).where(eq(tardanzas.id, fila.tardanzaId));
-  }
 }
 
 function codigoPostgres(causa: unknown): string | undefined {

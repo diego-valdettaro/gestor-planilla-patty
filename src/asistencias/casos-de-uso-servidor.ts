@@ -4,12 +4,13 @@ import {
   ajustarAsistencia,
   aprobarHoraExtra,
   confirmarAsistencia,
-  rechazarHoraExtra,
+  descartarHoraExtra,
   registrarEstadoManual,
   type RepositorioDeAsistencias,
   type SolicitudDeAjuste,
   type SolicitudDeConfirmacion,
   type SolicitudDeDecisionDeHoraExtra,
+  type SolicitudDeDescarteDeHoraExtra,
   type SolicitudDeEstadoManual,
 } from "./confirmar-y-ajustar-asistencia";
 import {
@@ -34,8 +35,8 @@ export function crearCasosDeUsoDeAsistencias(
     async aprobarHoraExtra(solicitud: SolicitudDeDecisionDeHoraExtra): Promise<void> {
       await aprobarHoraExtra(repositorio, await sesion.obtenerActorActual(), solicitud);
     },
-    async rechazarHoraExtra(solicitud: SolicitudDeDecisionDeHoraExtra): Promise<void> {
-      await rechazarHoraExtra(repositorio, await sesion.obtenerActorActual(), solicitud);
+    async descartarHoraExtra(solicitud: SolicitudDeDescarteDeHoraExtra): Promise<void> {
+      await descartarHoraExtra(repositorio, await sesion.obtenerActorActual(), solicitud);
     },
     async registrarEstadoManual(solicitud: SolicitudDeEstadoManual): Promise<void> {
       await registrarEstadoManual(repositorio, await sesion.obtenerActorActual(), solicitud);

@@ -152,11 +152,13 @@ export async function aprobarHoraExtra(formData: FormData): Promise<void> {
   revalidatePath("/asistencias");
 }
 
-export async function rechazarHoraExtra(formData: FormData): Promise<void> {
+export async function descartarHoraExtra(formData: FormData): Promise<void> {
   const casosDeUso = crearCasosDeUsoDeAsistencias(repositorioDeAsistencias, { obtenerActorActual });
-  await casosDeUso.rechazarHoraExtra({
+  await casosDeUso.descartarHoraExtra({
     dni: obtenerTexto(formData, "dni"),
     fecha: obtenerTexto(formData, "fecha"),
+    causa: formData.get("causa")?.toString(),
+    motivo: formData.get("motivo")?.toString(),
   });
   revalidatePath("/asistencias");
 }

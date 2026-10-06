@@ -9,7 +9,7 @@ import type {
   TurnoParaConfirmar,
 } from "./confirmar-y-ajustar-asistencia";
 
-type AsistenciaEnMemoria = AsistenciaConfirmada & { horaExtra?: HoraExtraCalculada };
+type AsistenciaEnMemoria = AsistenciaConfirmada & { horaExtra?: HoraExtraCalculada; descarte?: { causa: string; motivo: string } };
 
 function crearRepositorioEnMemoria(): {
   asistencias: AsistenciaEnMemoria[];
@@ -51,9 +51,11 @@ function crearRepositorioEnMemoria(): {
       ajustar: async (solicitud, responsableId) => {
         ajustes.push({ motivo: solicitud.motivo, responsableId });
       },
-      decidirHoraExtra: async (dni, fecha, estado) => {
+      decidirHoraExtra: async (dni, fecha, decision) => {
         const asistencia = asistencias.find((item) => item.dni === dni && item.fecha === fecha);
-        if (asistencia?.horaExtra) asistencia.horaExtra.estado = estado;
+        if (!asistencia?.horaExtra) return;
+        asistencia.horaExtra.estado = decision.estado;
+        if (decision.estado === "descartada") asistencia.descarte = { causa: decision.causa, motivo: decision.motivo };
       },
       registrarEstadoManual: async (estadoManual) => { estadosManuales.push(estadoManual); },
       buscarPoliticaVigente: async () => ({
@@ -133,18 +135,49 @@ describe("casos de uso de asistencias en el servidor", () => {
     expect(asistencias[0].horaExtra?.estado).toBe("aprobada");
   });
 
-  it("permite que Finanzas rechace una hora extra pendiente", async () => {
-    const { asistencias, repositorio } = crearRepositorioEnMemoria();
-    const casosDeGerente = crearCasosDeUsoDeAsistencias(repositorio, { obtenerActorActual: async () => GERENTE_DE_TIENDAS });
-    const casosDeUso = crearCasosDeUsoDeAsistencias(repositorio, { obtenerActorActual: async () => FINANZAS });
-    await casosDeGerente.confirmar({
-      dni: "00001024", fecha: "2026-09-01", sede: "Lima", entradaReal: "2026-09-01T09:00:00-05:00",
-      salidaReal: "2026-09-01T18:30:00-05:00",
+  describe("descarte de una hora extra pendiente", () => {
+    async function conHoraExtraPendiente() {
+      const { asistencias, repositorio } = crearRepositorioEnMemoria();
+      const casosDeGerente = crearCasosDeUsoDeAsistencias(repositorio, { obtenerActorActual: async () => GERENTE_DE_TIENDAS });
+      await casosDeGerente.confirmar({
+        dni: "00001024", fecha: "2026-09-01", sede: "Lima", entradaReal: "2026-09-01T09:00:00-05:00",
+        salidaReal: "2026-09-01T18:30:00-05:00",
+      });
+      const casosDeUso = crearCasosDeUsoDeAsistencias(repositorio, { obtenerActorActual: async () => FINANZAS });
+      return { asistencias, casosDeUso };
+    }
+
+    it("permite que Finanzas la descarte con evidencia y motivo, que quedan guardados", async () => {
+      const { asistencias, casosDeUso } = await conHoraExtraPendiente();
+
+      await casosDeUso.descartarHoraExtra({
+        dni: "00001024", fecha: "2026-09-01", causa: "permanencia_sin_trabajo", motivo: "  Se quedó esperando a un proveedor sin trabajar.  ",
+      });
+
+      expect(asistencias[0].horaExtra?.estado).toBe("descartada");
+      expect(asistencias[0].descarte).toEqual({ causa: "permanencia_sin_trabajo", motivo: "Se quedó esperando a un proveedor sin trabajar." });
     });
 
-    await casosDeUso.rechazarHoraExtra({ dni: "00001024", fecha: "2026-09-01" });
+    it("rechaza el descarte sin motivo, sin evidencia o con una evidencia que no sea marca errónea ni permanencia sin trabajo", async () => {
+      const { asistencias, casosDeUso } = await conHoraExtraPendiente();
+      const base = { dni: "00001024", fecha: "2026-09-01" };
 
-    expect(asistencias[0].horaExtra?.estado).toBe("rechazada");
+      await expect(casosDeUso.descartarHoraExtra({ ...base, causa: "marca_erronea", motivo: "   " })).rejects.toThrow("requiere un motivo");
+      await expect(casosDeUso.descartarHoraExtra({ ...base, motivo: "Marca duplicada" })).rejects.toThrow("requiere indicar la evidencia");
+      await expect(casosDeUso.descartarHoraExtra({ ...base, causa: "sin_autorizacion_previa", motivo: "No estaba autorizada" }))
+        .rejects.toThrow("falta de autorización previa no justifica");
+
+      expect(asistencias[0].horaExtra?.estado).toBe("pendiente");
+      expect(asistencias[0].descarte).toBeUndefined();
+    });
+
+    it("no permite que un gerente de área la descarte", async () => {
+      const { repositorio } = crearRepositorioEnMemoria();
+      const casosDeUso = crearCasosDeUsoDeAsistencias(repositorio, { obtenerActorActual: async () => GERENTE_DE_TIENDAS });
+
+      await expect(casosDeUso.descartarHoraExtra({ dni: "00001024", fecha: "2026-09-01", causa: "marca_erronea", motivo: "Marca duplicada" }))
+        .rejects.toThrow("No tiene permiso para decidir horas extra.");
+    });
   });
 
   it("no permite que un gerente de área decida una hora extra", async () => {

@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import * as schema from "@/db/schema";
 
+import { decidirHorasExtra } from "./periodo-planilla";
 import { RepositorioPostgresDePeriodos } from "./repositorio-postgres";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
@@ -92,17 +93,45 @@ describe.skipIf(!databaseUrl)("decisiones y revisiones de períodos en PostgreSQ
   });
 
   it("decide varias horas extra de forma atómica dentro del período abierto", async () => {
-    await expect(repositorio.decidirHorasExtra(periodoDecisionesId, [extraUnoId, randomUUID()], "aprobada", finanzasId, instantePrimerCierre)).rejects.toThrow("pendientes");
+    await expect(repositorio.decidirHorasExtra(periodoDecisionesId, [extraUnoId, randomUUID()], { estado: "aprobada" }, finanzasId, instantePrimerCierre)).rejects.toThrow("pendientes");
     const despuesDelFallo = await db.select({ estado: schema.horasExtra.estado }).from(schema.horasExtra).where(inArray(schema.horasExtra.id, [extraUnoId, extraDosId]));
     expect(despuesDelFallo.map(({ estado }) => estado)).toEqual(["pendiente", "pendiente"]);
 
-    await repositorio.decidirHorasExtra(periodoDecisionesId, [extraUnoId, extraDosId], "rechazada", finanzasId, instantePrimerCierre);
+    await repositorio.decidirHorasExtra(
+      periodoDecisionesId, [extraUnoId, extraDosId],
+      { estado: "descartada", causa: "marca_erronea", motivo: "Marca duplicada del huellero" }, finanzasId, instantePrimerCierre,
+    );
 
     const decididas = await db.select().from(schema.horasExtra).where(inArray(schema.horasExtra.id, [extraUnoId, extraDosId]));
+    const descartada = { estado: "descartada", causaDeDescarte: "marca_erronea", motivoDeDescarte: "Marca duplicada del huellero", decididaPorId: finanzasId, decididaEn: instantePrimerCierre };
     expect(decididas).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: extraUnoId, estado: "rechazada", decididaPorId: finanzasId, decididaEn: instantePrimerCierre }),
-      expect.objectContaining({ id: extraDosId, estado: "rechazada", decididaPorId: finanzasId, decididaEn: instantePrimerCierre }),
+      expect.objectContaining({ id: extraUnoId, ...descartada }),
+      expect.objectContaining({ id: extraDosId, ...descartada }),
     ]));
+  });
+
+  it("rechaza en el caso de uso un descarte sin motivo o sin evidencia y deja la hora extra pendiente", async () => {
+    const [pendiente] = await db.insert(schema.horasExtra).values({ asistenciaId: asistenciaPendienteId, minutosAl25: 45, minutosAl35: 0 }).returning({ id: schema.horasExtra.id });
+    const finanzas = { id: finanzasId, nombreUsuario: "finanzas", rol: "finanzas" as const };
+    const base = { periodoId: periodoCierreId, horasExtraIds: [pendiente.id], decision: "descartada" as const };
+
+    await expect(decidirHorasExtra(repositorio, finanzas, { ...base, causa: "marca_erronea", motivo: " " })).rejects.toThrow("requiere un motivo");
+    await expect(decidirHorasExtra(repositorio, finanzas, { ...base, motivo: "Marca duplicada" })).rejects.toThrow("evidencia");
+    await expect(decidirHorasExtra(repositorio, finanzas, { ...base, causa: "sin_autorizacion_previa", motivo: "No estaba autorizada" })).rejects.toThrow("no justifica");
+
+    const [fila] = await db.select().from(schema.horasExtra).where(eq(schema.horasExtra.id, pendiente.id));
+    expect(fila).toMatchObject({ estado: "pendiente", causaDeDescarte: null, motivoDeDescarte: null });
+    await db.delete(schema.horasExtra).where(eq(schema.horasExtra.id, pendiente.id));
+  });
+
+  it("la base impide descartar una hora extra sin evidencia ni motivo o dejar un descarte en otra decisión", async () => {
+    const [pendiente] = await db.insert(schema.horasExtra).values({ asistenciaId: asistenciaPendienteId, minutosAl25: 45, minutosAl35: 0 }).returning({ id: schema.horasExtra.id });
+    const actualizar = (valores: Partial<typeof schema.horasExtra.$inferInsert>) => db.update(schema.horasExtra).set(valores).where(eq(schema.horasExtra.id, pendiente.id));
+
+    await expect(actualizar({ estado: "descartada" })).rejects.toThrow();
+    await expect(actualizar({ estado: "descartada", causaDeDescarte: "marca_erronea", motivoDeDescarte: "   " })).rejects.toThrow();
+    await expect(actualizar({ estado: "aprobada", causaDeDescarte: "marca_erronea", motivoDeDescarte: "Marca duplicada" })).rejects.toThrow();
+    await db.delete(schema.horasExtra).where(eq(schema.horasExtra.id, pendiente.id));
   });
 
   it("bloquea pendientes, congela una revisión completa y conserva cierres anteriores al reabrir", async () => {
@@ -111,7 +140,7 @@ describe.skipIf(!databaseUrl)("decisiones y revisiones de períodos en PostgreSQ
     const [extraPendiente] = await db.insert(schema.horasExtra).values({ asistenciaId: asistenciaPendienteId, minutosAl25: 60, minutosAl35: 0 }).returning({ id: schema.horasExtra.id });
 
     await expect(repositorio.cerrar(periodoCierreId, finanzasId, instantePrimerCierre)).rejects.toThrow("horas extra pendientes");
-    await repositorio.decidirHorasExtra(periodoCierreId, [extraPendiente.id], "aprobada", finanzasId, instantePrimerCierre);
+    await repositorio.decidirHorasExtra(periodoCierreId, [extraPendiente.id], { estado: "aprobada" }, finanzasId, instantePrimerCierre);
     await repositorio.cerrar(periodoCierreId, finanzasId, instantePrimerCierre);
 
     const [primera] = await repositorio.listarRevisiones(periodoCierreId);

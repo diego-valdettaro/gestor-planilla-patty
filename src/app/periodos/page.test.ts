@@ -40,7 +40,7 @@ describe("página de Períodos de planilla (/periodos)", () => {
     obtenerActorActual.mockResolvedValue({ rol: "finanzas" });
     listarSedesConColaboradoresActivos.mockResolvedValue(["Centro"]);
     listarColaboradoresActivos.mockResolvedValue([{ dni: "00000001", nombre: "Ana" }]);
-    listarResumen.mockResolvedValue({ filas: [], bloqueos: [], totales: { jornadasTrabajadas: 0, minutosTrabajados: 0, noAsistencias: { falta: 0, descanso: 0, feriado: 0, vacaciones: 0, permiso: 0, suspension: 0 }, cantidadTardanzas: 0, minutosPenalizados: 0, horasExtra: { pendiente: { minutosAl25: 0, minutosAl35: 0 }, aprobada: { minutosAl25: 0, minutosAl35: 0 }, rechazada: { minutosAl25: 0, minutosAl35: 0 } } } });
+    listarResumen.mockResolvedValue({ filas: [], bloqueos: [], totales: { jornadasTrabajadas: 0, minutosTrabajados: 0, noAsistencias: { falta: 0, descanso: 0, feriado: 0, vacaciones: 0, permiso: 0, suspension: 0 }, cantidadTardanzas: 0, minutosPenalizados: 0, horasExtra: { pendiente: { minutosAl25: 0, minutosAl35: 0 }, aprobada: { minutosAl25: 0, minutosAl35: 0 }, descartada: { minutosAl25: 0, minutosAl35: 0 } } } });
   });
 
   it("usa el encabezado de página compartido con el h1 'Períodos de planilla'", async () => {
@@ -134,7 +134,7 @@ describe("página de Períodos de planilla (/periodos)", () => {
         horasExtra: {
           pendiente: { minutosAl25: 30, minutosAl35: 0 },
           aprobada: { minutosAl25: 60, minutosAl35: 30 },
-          rechazada: { minutosAl25: 0, minutosAl35: 60 },
+          descartada: { minutosAl25: 0, minutosAl35: 60 },
         },
         jornadas: [],
       }],
@@ -146,7 +146,7 @@ describe("página de Períodos de planilla (/periodos)", () => {
         horasExtra: {
           pendiente: { minutosAl25: 30, minutosAl35: 0 },
           aprobada: { minutosAl25: 60, minutosAl35: 30 },
-          rechazada: { minutosAl25: 0, minutosAl35: 60 },
+          descartada: { minutosAl25: 0, minutosAl35: 60 },
         },
       },
     });
@@ -159,13 +159,13 @@ describe("página de Períodos de planilla (/periodos)", () => {
     expect(html).toContain("Suspensiones");
     expect(html).toContain("Pendientes 25%");
     expect(html).toContain("Aprobadas 35%");
-    expect(html).toContain("Rechazadas 35%");
+    expect(html).toContain("Descartadas 35%");
     expect(html).toContain("16 h");
   });
 
   it("muestra bloqueos navegables y el detalle diario con sede y resultado real", async () => {
     listar.mockResolvedValue([{ id: "p1", inicio: "2026-01-01", fin: "2026-01-31", estado: "abierto" }]);
-    const totales = { jornadasTrabajadas: 1, minutosTrabajados: 480, noAsistencias: { falta: 0, descanso: 0, feriado: 0, vacaciones: 0, permiso: 0, suspension: 0 }, cantidadTardanzas: 0, minutosPenalizados: 0, horasExtra: { pendiente: { minutosAl25: 30, minutosAl35: 0 }, aprobada: { minutosAl25: 0, minutosAl35: 0 }, rechazada: { minutosAl25: 0, minutosAl35: 0 } } };
+    const totales = { jornadasTrabajadas: 1, minutosTrabajados: 480, noAsistencias: { falta: 0, descanso: 0, feriado: 0, vacaciones: 0, permiso: 0, suspension: 0 }, cantidadTardanzas: 0, minutosPenalizados: 0, horasExtra: { pendiente: { minutosAl25: 30, minutosAl35: 0 }, aprobada: { minutosAl25: 0, minutosAl35: 0 }, descartada: { minutosAl25: 0, minutosAl35: 0 } } };
     listarResumen.mockResolvedValue({
       filas: [{ dni: "00000001", nombre: "Ana", grupo: "Tiendas", ...totales, jornadas: [
         { fecha: "2026-01-02", sede: "Centro", resultado: "trabajada", entradaReal: "2026-01-02T09:00:00.000Z", salidaReal: "2026-01-02T17:00:00.000Z", minutosTrabajados: 480, tardanzaEnMinutos: 0, minutosPenalizados: 0, politicaDeTardanzaVersion: null, horaExtra: { id: "extra-1", estado: "pendiente", minutosAl25: 30, minutosAl35: 0 } },
@@ -189,8 +189,32 @@ describe("página de Períodos de planilla (/periodos)", () => {
     expect(html).toContain("Trabajada");
     expect(html).toContain("Pendiente de revisión");
     expect(html).toContain("Aprobar horas extra");
-    expect(html).toContain("Rechazar horas extra");
+    expect(html).toContain("Descartar horas extra");
     expect(html).toContain('name="horaExtraId"');
+  });
+
+  it("descarta con evidencia y motivo obligatorios y distingue la hora descartada de una hora no autorizada", async () => {
+    listar.mockResolvedValue([{ id: "p1", inicio: "2026-01-01", fin: "2026-01-31", estado: "abierto" }]);
+    const totales = { jornadasTrabajadas: 1, minutosTrabajados: 480, noAsistencias: { falta: 0, descanso: 0, feriado: 0, vacaciones: 0, permiso: 0, suspension: 0 }, cantidadTardanzas: 0, minutosPenalizados: 0, horasExtra: { pendiente: { minutosAl25: 30, minutosAl35: 0 }, aprobada: { minutosAl25: 0, minutosAl35: 0 }, descartada: { minutosAl25: 15, minutosAl35: 0 } } };
+    listarResumen.mockResolvedValue({
+      filas: [{ dni: "00000001", nombre: "Ana", grupo: "Tiendas", ...totales, jornadas: [
+        { fecha: "2026-01-02", sede: "Centro", resultado: "trabajada", entradaReal: "2026-01-02T09:00:00.000Z", salidaReal: "2026-01-02T17:00:00.000Z", minutosTrabajados: 480, tardanzaEnMinutos: 0, minutosPenalizados: 0, politicaDeTardanzaVersion: null, horaExtra: { id: "extra-1", estado: "pendiente", minutosAl25: 30, minutosAl35: 0 } },
+        { fecha: "2026-01-05", sede: "Centro", resultado: "trabajada", entradaReal: "2026-01-05T09:00:00.000Z", salidaReal: "2026-01-05T17:00:00.000Z", minutosTrabajados: 480, tardanzaEnMinutos: 0, minutosPenalizados: 0, politicaDeTardanzaVersion: null, horaExtra: { id: "extra-2", estado: "descartada", minutosAl25: 15, minutosAl35: 0 } },
+      ] }],
+      totales,
+      bloqueos: [],
+    });
+
+    const html = await render();
+
+    expect(html).toContain('value="descartada"');
+    expect(html).toMatch(/<select[^>]*name="causa"[^>]*required/);
+    expect(html).toContain("Marca errónea");
+    expect(html).toContain("Permanencia sin trabajo");
+    expect(html).toMatch(/<input[^>]*required[^>]*name="motivo"|<input[^>]*name="motivo"[^>]*required/);
+    expect(html).toContain("No se descarta por falta de autorización previa");
+    expect(html).toContain("Descartada: 25% 15 min");
+    expect(html).not.toMatch(/rechaza|no autorizada/i);
   });
 
   it("no muestra decisiones de horas extra cuando el período no tiene filas", async () => {
@@ -200,7 +224,7 @@ describe("página de Períodos de planilla (/periodos)", () => {
     const html = await render();
 
     expect(html).not.toContain("Aprobar horas extra");
-    expect(html).not.toContain("Rechazar horas extra");
+    expect(html).not.toContain("Descartar horas extra");
   });
 
   it("mantiene los totales globales al aplicar filtros de presentación", async () => {
@@ -230,7 +254,7 @@ describe("página de Períodos de planilla (/periodos)", () => {
   });
 
   describe("tablas comparables", () => {
-    const totales = { jornadasTrabajadas: 2, minutosTrabajados: 960, noAsistencias: { falta: 1, descanso: 0, feriado: 0, vacaciones: 0, permiso: 0, suspension: 0 }, cantidadTardanzas: 1, minutosPenalizados: 60, horasExtra: { pendiente: { minutosAl25: 30, minutosAl35: 0 }, aprobada: { minutosAl25: 0, minutosAl35: 0 }, rechazada: { minutosAl25: 0, minutosAl35: 0 } } };
+    const totales = { jornadasTrabajadas: 2, minutosTrabajados: 960, noAsistencias: { falta: 1, descanso: 0, feriado: 0, vacaciones: 0, permiso: 0, suspension: 0 }, cantidadTardanzas: 1, minutosPenalizados: 60, horasExtra: { pendiente: { minutosAl25: 30, minutosAl35: 0 }, aprobada: { minutosAl25: 0, minutosAl35: 0 }, descartada: { minutosAl25: 0, minutosAl35: 0 } } };
 
     async function renderConDetalle() {
       listar.mockResolvedValue([{ id: "p1", inicio: "2026-01-01", fin: "2026-01-31", estado: "abierto" }]);

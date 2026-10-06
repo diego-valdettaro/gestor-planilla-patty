@@ -5,7 +5,7 @@ export interface HoraExtraCalculada {
   estado: EstadoDeHoraExtra;
 }
 
-export type EstadoDeHoraExtra = "pendiente" | "aprobada" | "rechazada";
+export type EstadoDeHoraExtra = "pendiente" | "aprobada" | "descartada";
 
 export interface JornadaParaHoraExtra {
   entradaProgramada: string;

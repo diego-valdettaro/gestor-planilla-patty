@@ -2,7 +2,7 @@ import type { Actor } from "@/autenticacion/permisos";
 import { exigir, puedeGestionarPeriodos, puedeOperarAsistenciaDelGrupo, puedeRevisarAsistencias } from "@/autenticacion/permisos";
 import { calcularTardanza, type PoliticaDePenalizacionPorTardanzas, type TardanzaCalculada } from "@/tardanzas/politica-de-penalizacion";
 
-import type { EstadoDeHoraExtra } from "./calcular-hora-extra";
+import { validarDescarteDeHoraExtra, type DecisionDeHoraExtra } from "./descarte-de-hora-extra";
 import { nombreDelMotivoPlanificado, type MotivoPlanificadoDeNoAsistencia, type TipoDeEstadoManualRegistrable } from "./estado-manual";
 
 export type { TipoDeEstadoManual } from "./estado-manual";
@@ -74,7 +74,7 @@ export interface RepositorioDeAsistencias {
   confirmar(asistencia: AsistenciaConfirmada): Promise<void>;
   buscarInstantaneaDeTurno(dni: string, fecha: string): Promise<InstantaneaDeTurno | undefined>;
   ajustar(solicitud: AjusteDeAsistencia, responsableId: string): Promise<void>;
-  decidirHoraExtra(dni: string, fecha: string, estado: EstadoDeHoraExtra, responsableId: string): Promise<void>;
+  decidirHoraExtra(dni: string, fecha: string, decision: DecisionDeHoraExtra, responsableId: string): Promise<void>;
   registrarEstadoManual(estadoManual: EstadoManual): Promise<void>;
   buscarPoliticaVigente(sede: string, fecha: string): Promise<PoliticaDePenalizacionPorTardanzas | undefined>;
   contarTardanzas(dni: string, inicio: string, fin: string): Promise<number>;
@@ -84,6 +84,12 @@ export interface SolicitudDeDecisionDeHoraExtra {
   dni: string;
   fecha: string;
 }
+
+export interface SolicitudDeDescarteDeHoraExtra extends SolicitudDeDecisionDeHoraExtra {
+  causa?: string;
+  motivo?: string;
+}
+
 
 export async function confirmarAsistencia(
   repositorio: RepositorioDeAsistencias,
@@ -142,16 +148,17 @@ export async function aprobarHoraExtra(
   solicitud: SolicitudDeDecisionDeHoraExtra,
 ): Promise<void> {
   autorizarFinanzas(actor);
-  await repositorio.decidirHoraExtra(solicitud.dni, solicitud.fecha, "aprobada", actor.id);
+  await repositorio.decidirHoraExtra(solicitud.dni, solicitud.fecha, { estado: "aprobada" }, actor.id);
 }
 
-export async function rechazarHoraExtra(
+export async function descartarHoraExtra(
   repositorio: RepositorioDeAsistencias,
   actor: Actor,
-  solicitud: SolicitudDeDecisionDeHoraExtra,
+  solicitud: SolicitudDeDescarteDeHoraExtra,
 ): Promise<void> {
   autorizarFinanzas(actor);
-  await repositorio.decidirHoraExtra(solicitud.dni, solicitud.fecha, "rechazada", actor.id);
+  const descarte = validarDescarteDeHoraExtra(solicitud);
+  await repositorio.decidirHoraExtra(solicitud.dni, solicitud.fecha, { estado: "descartada", ...descarte }, actor.id);
 }
 
 export async function registrarEstadoManual(

@@ -8,10 +8,16 @@ export async function cerrarPeriodoDesdeFormulario(formData: FormData): Promise<
 export async function reabrirPeriodoDesdeFormulario(formData: FormData): Promise<void> { const casos = crearCasosDeUsoDePeriodos(repositorioDePeriodos, { obtenerActorActual }); await casos.reabrir(obtenerTexto(formData, "periodoId"), obtenerTexto(formData, "motivo")); revalidatePath("/periodos"); }
 export async function decidirHorasExtraDesdeFormulario(formData: FormData): Promise<void> {
   const decision = obtenerTexto(formData, "decision");
-  if (decision !== "aprobada" && decision !== "rechazada") throw new Error("La decisión de horas extra no es válida.");
+  if (decision !== "aprobada" && decision !== "descartada") throw new Error("La decisión de horas extra no es válida.");
   const horasExtraIds = formData.getAll("horaExtraId").filter((valor): valor is string => typeof valor === "string" && Boolean(valor.trim()));
   const casos = crearCasosDeUsoDePeriodos(repositorioDePeriodos, { obtenerActorActual });
-  await casos.decidirHorasExtra({ periodoId: obtenerTexto(formData, "periodoId"), horasExtraIds, decision });
+  await casos.decidirHorasExtra({
+    periodoId: obtenerTexto(formData, "periodoId"),
+    horasExtraIds,
+    decision,
+    causa: formData.get("causa")?.toString(),
+    motivo: formData.get("motivo")?.toString(),
+  });
   revalidatePath("/periodos");
 }
 

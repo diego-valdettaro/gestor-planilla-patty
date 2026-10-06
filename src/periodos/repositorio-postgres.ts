@@ -85,7 +85,13 @@ export class RepositorioPostgresDePeriodos implements RepositorioDePeriodos {
         .for("update");
       if (!periodo || periodo.estado !== "abierto") throw new Error("El período no existe o no está abierto.");
       const actualizadas = await tx.update(horasExtra)
-        .set({ estado: decision, decididaPorId: responsableId, decididaEn: registradaEn })
+        .set({
+          estado: decision.estado,
+          causaDeDescarte: decision.estado === "descartada" ? decision.causa : null,
+          motivoDeDescarte: decision.estado === "descartada" ? decision.motivo : null,
+          decididaPorId: responsableId,
+          decididaEn: registradaEn,
+        })
         .from(asistenciasEsperadas)
         .where(and(
           eq(horasExtra.asistenciaId, asistenciasEsperadas.id),
@@ -268,7 +274,7 @@ function cumpleFiltros(fila: FilaDeResumen, filtros: FiltrosDeResumen): boolean 
 }
 
 const MOTIVOS_DE_NO_ASISTENCIA: MotivoDeNoAsistencia[] = ["falta", "descanso", "feriado", "vacaciones", "permiso", "suspension"];
-const ESTADOS_DE_HORA_EXTRA: EstadoDeHoraExtra[] = ["pendiente", "aprobada", "rechazada"];
+const ESTADOS_DE_HORA_EXTRA: EstadoDeHoraExtra[] = ["pendiente", "aprobada", "descartada"];
 
 function crearFilaVacia(dni: string, nombre: string, grupo: string): FilaDeResumen {
   return { dni, nombre, grupo, ...crearResumenVacio().totales, jornadas: [] };

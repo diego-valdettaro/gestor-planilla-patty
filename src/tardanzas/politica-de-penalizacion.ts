@@ -53,8 +53,8 @@ export async function calcularTardanza(
 ): Promise<TardanzaCalculada | undefined> {
   const politica = await repositorio.buscarPoliticaVigente(solicitud.sede, solicitud.fecha);
   if (!politica) throw new Error("No existe una política de tardanzas vigente para la sede.");
-  const minutosDeTardanza = calcularMinutosDeTardanza(solicitud.entradaProgramada, solicitud.entradaReal);
-  if (minutosDeTardanza <= politica.toleranciaEnMinutos) return undefined;
+  const minutosDeTardanza = minutosDeTardanzaFueraDeTolerancia(politica, solicitud.entradaProgramada, solicitud.entradaReal);
+  if (minutosDeTardanza === undefined) return undefined;
   const periodo = obtenerPeriodoDePlanilla(solicitud.fecha);
   const tardanzasAnteriores = await repositorio.contarTardanzas(solicitud.dni, periodo.inicio, periodo.fin);
   return {
@@ -62,6 +62,16 @@ export async function calcularTardanza(
     minutosPenalizados: calcularMinutosPenalizados(tardanzasAnteriores + 1, politica),
     politicaVersion: politica.version,
   };
+}
+
+/** Minutos reales de tardanza si la entrada supera la tolerancia de la política; `undefined` si no hay tardanza. */
+export function minutosDeTardanzaFueraDeTolerancia(
+  politica: Pick<PoliticaDePenalizacionPorTardanzas, "toleranciaEnMinutos">,
+  entradaProgramada: string,
+  entradaReal: string,
+): number | undefined {
+  const minutos = calcularMinutosDeTardanza(entradaProgramada, entradaReal);
+  return minutos > politica.toleranciaEnMinutos ? minutos : undefined;
 }
 
 export function calcularMinutosPenalizados(
