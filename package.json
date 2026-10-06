@@ -20,7 +20,7 @@
     "db:migrate": "tsx scripts/migrar-base.ts migrate",
     "db:check": "tsx scripts/migrar-base.ts check",
     "db:baseline": "tsx scripts/migrar-base.ts baseline",
-    "provisionar:administracion": "tsx scripts/provisionar-administracion.ts",
+    "provisionar:administrador": "tsx scripts/provisionar-administrador.ts",
     "provisionar:cuenta": "tsx scripts/provisionar-cuenta.ts"
   },
   "dependencies": {

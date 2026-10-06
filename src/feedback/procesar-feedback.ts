@@ -1,7 +1,9 @@
+import type { Rol } from "@/autenticacion/permisos";
+
 export interface FeedbackRecibido {
   comentario: string;
   ruta: string;
-  rol: "operaciones" | "administracion" | "finanzas";
+  rol: Rol;
 }
 
 export interface PropuestaDeIssue {

@@ -61,7 +61,7 @@ export function resumenDeRevision(datos: {
     `  Rama:    ${rama}`,
     `  Base:    ${nombreBase}`,
     `  URL:     http://localhost:${puerto}`,
-    "  Cuentas: operaciones/operaciones · admin/admin · finanzas/finanzas",
+    "  Cuentas: admin · finanzas · rrhh · gerente-tiendas · gerente-administracion · gerente-sin-grupos (clave = usuario)",
   );
   const pasos = issue ? pasosDeQaManual(issue.body) : [];
   if (pasos.length) {

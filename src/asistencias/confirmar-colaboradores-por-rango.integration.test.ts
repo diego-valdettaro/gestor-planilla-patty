@@ -39,7 +39,7 @@ describe.skipIf(!databaseUrl)("confirmación por rango en PostgreSQL", () => {
       { dni: carla, nombre: "Carla Rango", sede, grupo, activo: true },
       { dni: diego, nombre: "Diego Rango", sede, grupo, activo: true },
     ]);
-    await db.insert(schema.cuentasLocales).values({ id: cuentaId, nombreUsuario: `rango-${sufijo}`, hashContrasena: "prueba", rol: "administracion" });
+    await db.insert(schema.cuentasLocales).values({ id: cuentaId, nombreUsuario: `rango-${sufijo}`, hashContrasena: "prueba", rol: "administrador" });
     await db.insert(schema.periodosPlanilla).values([
       { inicio: "2036-02-01", fin: "2036-02-28", estado: "cerrado", cerradoPorId: cuentaId, cerradoEn: new Date() },
       { inicio: "2036-03-01", fin: "2036-03-24", estado: "abierto" },

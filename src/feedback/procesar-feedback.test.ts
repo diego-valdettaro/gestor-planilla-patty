@@ -14,7 +14,7 @@ describe("procesarFeedback", () => {
     await expect(procesarFeedback({
       comentario: "Necesito ver el total semanal por persona.",
       ruta: "/turnos",
-      rol: "operaciones",
+      rol: "gerente_de_area",
     }, { analizar, crearIssue })).resolves.toEqual({ url: "https://github.com/diego-valdettaro/gestor-planilla-patty/issues/15" });
 
     expect(analizar).toHaveBeenCalledWith(expect.objectContaining({ comentario: "Necesito ver el total semanal por persona." }));
@@ -25,7 +25,7 @@ describe("procesarFeedback", () => {
     const analizar = vi.fn();
     const crearIssue = vi.fn();
 
-    await expect(procesarFeedback({ comentario: "  ", ruta: "/turnos", rol: "operaciones" }, { analizar, crearIssue }))
+    await expect(procesarFeedback({ comentario: "  ", ruta: "/turnos", rol: "gerente_de_area" }, { analizar, crearIssue }))
       .rejects.toThrow("Escriba un comentario antes de enviarlo.");
 
     expect(analizar).not.toHaveBeenCalled();

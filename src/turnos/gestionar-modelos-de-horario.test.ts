@@ -21,14 +21,15 @@ function crearRepositorioEnMemoria(): { modelos: ModeloDeHorario[]; repositorio:
       buscarPorId: async (id) => modelos.find((modelo) => modelo.id === id),
       eliminar: async (id) => { modelos.splice(modelos.findIndex((modelo) => modelo.id === id), 1); },
       tieneUso: async () => false,
+      obtenerGrupoDeSede: async (sede) => sede === "Tienda Centro" ? "Tiendas" : sede === "Oficina" ? "Administración" : undefined,
     },
   };
 }
 
 describe("gestionar modelos de horario", () => {
-  it("permite a Operaciones crear, editar y reactivar un modelo de horario", async () => {
+  it("permite al Administrador crear, editar y reactivar un modelo de horario", async () => {
     const { modelos, repositorio } = crearRepositorioEnMemoria();
-    const actor = { id: "operaciones-1", rol: "operaciones" as const };
+    const actor = { id: "admin-1", rol: "administrador" as const };
 
     await crearModeloDeHorario(repositorio, actor, {
       id: "modelo-1", sede: "Tienda Centro", nombre: "Apertura", entrada: "09:00", salida: "18:00",
@@ -49,7 +50,7 @@ describe("gestionar modelos de horario", () => {
   ])("rechaza %s y %s por requerir %s", async (entrada, salida, mensaje) => {
     const { repositorio } = crearRepositorioEnMemoria();
 
-    await expect(crearModeloDeHorario(repositorio, { id: "admin-1", rol: "administracion" }, {
+    await expect(crearModeloDeHorario(repositorio, { id: "admin-1", rol: "administrador" }, {
       id: "modelo-1", sede: "Tienda Centro", nombre: "Inv\u00e1lido", entrada, salida,
     })).rejects.toThrow(mensaje);
   });
@@ -59,7 +60,7 @@ describe("gestionar modelos de horario", () => {
     modelos.push({ id: "modelo-1", sede: "Tienda Centro", nombre: "Apertura", entrada: "09:00", salida: "18:00", activo: true });
     repositorio.tieneUso = async () => true;
 
-    await eliminarModeloDeHorario(repositorio, { id: "admin-1", rol: "administracion" }, "modelo-1");
+    await eliminarModeloDeHorario(repositorio, { id: "admin-1", rol: "administrador" }, "modelo-1");
 
     expect(modelos).toEqual([{ id: "modelo-1", sede: "Tienda Centro", nombre: "Apertura", entrada: "09:00", salida: "18:00", activo: false }]);
   });
@@ -69,7 +70,7 @@ describe("gestionar modelos de horario", () => {
     modelos.push({ id: "modelo-1", sede: "Tienda Centro", nombre: "Apertura", entrada: "09:00", salida: "18:00", activo: false });
     repositorio.tieneUso = async () => true;
 
-    await expect(guardarModeloDeHorario(repositorio, { id: "admin-1", rol: "administracion" }, {
+    await expect(guardarModeloDeHorario(repositorio, { id: "admin-1", rol: "administrador" }, {
       id: "modelo-1", sede: "Tienda Centro", nombre: "Apertura", entrada: "09:00", salida: "18:00", activo: true,
     })).rejects.toThrow("Un modelo de horario usado solo se puede desactivar.");
   });
@@ -80,5 +81,21 @@ describe("gestionar modelos de horario", () => {
     await expect(crearModeloDeHorario(repositorio, { id: "finanzas-1", rol: "finanzas" }, {
       id: "modelo-1", sede: "Tienda Centro", nombre: "Apertura", entrada: "09:00", salida: "18:00",
     })).rejects.toThrow("No tiene permiso para administrar modelos de horario.");
+  });
+
+  it("limita al gerente a las sedes de sus grupos que gestionan asistencia", async () => {
+    const { modelos, repositorio } = crearRepositorioEnMemoria();
+    const modelo = { id: "modelo-1", nombre: "Apertura", entrada: "09:00", salida: "18:00" };
+    const gerenteDeTiendas = { id: "ger-1", rol: "gerente_de_area" as const, grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] };
+    const gerenteDeAdministracion = { id: "ger-2", rol: "gerente_de_area" as const, grupos: [{ nombre: "Administración", gestionaAsistencia: false }] };
+
+    await crearModeloDeHorario(repositorio, gerenteDeTiendas, { ...modelo, sede: "Tienda Centro" });
+    expect(modelos).toHaveLength(1);
+
+    await expect(crearModeloDeHorario(repositorio, gerenteDeTiendas, { ...modelo, id: "modelo-2", sede: "Oficina" })).rejects.toThrow("No tiene permiso para administrar modelos de horario.");
+    await expect(crearModeloDeHorario(repositorio, gerenteDeAdministracion, { ...modelo, id: "modelo-3", sede: "Oficina" })).rejects.toThrow("No tiene permiso para administrar modelos de horario.");
+    await expect(eliminarModeloDeHorario(repositorio, gerenteDeAdministracion, "modelo-1")).rejects.toThrow("No tiene permiso para administrar modelos de horario.");
+    await expect(guardarModeloDeHorario(repositorio, gerenteDeTiendas, { ...modelo, sede: "Oficina", activo: true })).rejects.toThrow("No tiene permiso para administrar modelos de horario.");
+    expect(modelos).toHaveLength(1);
   });
 });

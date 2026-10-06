@@ -32,13 +32,14 @@ La aplicación sigue siendo un monolito con PostgreSQL. Los contratos de este do
 
 | Responsable | Datos o decisión que controla |
 | --- | --- |
-| Gerente de área | Alta operativa de personas de su grupo, horarios, revisión de jornadas y aprobación de la situación de todos sus colaboradores por grupo y período. |
+| Gerente de área | Alta operativa de personas de su grupo, horarios, revisión de jornadas y aprobación de la situación de todos sus colaboradores por grupo y período. Los horarios, asistencias y aprobación aplican solo a grupos que gestionan asistencia. |
 | Recursos Humanos | Fechas de ingreso y cese de cada relación laboral. |
-| Finanzas | Cuentas y asignaciones de gerentes, importación alternativa de marcas, decisiones de horas extra, cierre y reapertura de períodos, datos y reglas monetarias, fuentes externas, finalización de Pagos y constancia del pago realizado. |
+| Administrador del sistema | Configuración global (grupos, sedes, atributo «Gestiona asistencia y horarios», política de tardanzas, cambio de grupo) y cuentas de cualquier rol. Superusuario temporal mientras se estabiliza la herramienta (ADR 0012). |
+| Finanzas | Cuentas de gerente de área y de Recursos Humanos y asignaciones de gerentes, importación alternativa de marcas, decisiones de horas extra, cierre y reapertura de períodos, datos y reglas monetarias, fuentes externas, finalización de Pagos y constancia del pago realizado. |
 | Asistencia | Hechos diarios revisados y revisiones cerradas aprobadas por los gerentes. |
 | Pagos | Población del mes, valoración monetaria, bloqueos, versiones finales y constancia de pago del mes completo. |
 
-El gerente de Administración tiene alcance sobre el grupo Administración, igual que los gerentes de Taller y Tiendas. La sede de una jornada puede variar dentro del grupo. El DNI es el identificador único de negocio y coincide con el valor usado por el huellero; el UUID existente puede enlazar registros internos. Una persona conserva su DNI si tiene relaciones laborales sucesivas.
+El gerente de Administración tiene alcance sobre el grupo Administración, igual que los gerentes de Taller y Tiendas, salvo que ese grupo no gestiona asistencia: sus personas entran en planilla y en Pagos por sus relaciones laborales, pero no tienen horarios, asistencias ni aprobación, y no bloquean el cierre de un período (ADR 0012). La sede de una jornada puede variar dentro del grupo. El DNI es el identificador único de negocio y coincide con el valor usado por el huellero; el UUID existente puede enlazar registros internos. Una persona conserva su DNI si tiene relaciones laborales sucesivas.
 
 Las autorizaciones se comprueban en el servidor. Un gerente solo opera sobre su grupo. No se publica un horario antes del ingreso confirmado ni después del cese confirmado. Finanzas no aprueba asistencias en nombre del gerente.
 
@@ -55,7 +56,7 @@ flowchart LR
     F --> G["Finanzas confirma pago realizado fuera de la app"]
 ```
 
-La aprobación cubre a todas las personas del grupo, incluso si no tienen marcas. Una persona con relación laboral vigente y sin horario, marcas ni situación resuelta bloquea la aprobación. Corregir asistencias de un grupo invalida su aprobación. Si el período está cerrado y el mes no está pagado, Finanzas debe reabrirlo; el gerente corrige y vuelve a aprobar; Finanzas vuelve a cerrarlo y crea otra revisión. Las revisiones anteriores no se modifican.
+La aprobación cubre a todas las personas de cada grupo que gestiona asistencia, incluso si no tienen marcas. Una persona con relación laboral vigente y sin horario, marcas ni situación resuelta bloquea la aprobación. Corregir asistencias de un grupo invalida su aprobación. Si el período está cerrado y el mes no está pagado, Finanzas debe reabrirlo; el gerente corrige y vuelve a aprobar; Finanzas vuelve a cerrarlo y crea otra revisión. Las revisiones anteriores no se modifican.
 
 El pago se confirma una vez para el mes completo. Después se bloquea reemplazar la preliquidación pagada y reabrir los períodos cuyas revisiones la sustentan. El flujo de subsanación posterior al pago queda fuera de este incremento. La aplicación registra el hecho del pago; no ejecuta transferencias.
 

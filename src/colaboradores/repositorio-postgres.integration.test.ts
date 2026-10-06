@@ -155,7 +155,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeColaboradores", () => {
         asistencia: await db.select().from(schema.asistenciasEsperadas).where(eq(schema.asistenciasEsperadas.dni, dni)),
       };
 
-      await cambiarGrupoDeColaborador(repositorio, { id: randomUUID(), rol: "administracion" }, dni, "Taller");
+      await cambiarGrupoDeColaborador(repositorio, { id: randomUUID(), rol: "administrador" }, dni, "Taller");
 
       await expect(repositorio.buscarPorDni(dni)).resolves.toMatchObject({ grupo: "Taller" });
       await expect(db.select().from(schema.turnosPublicados).where(eq(schema.turnosPublicados.dni, dni))).resolves.toEqual(antesDelCambio.turno);

@@ -281,3 +281,4 @@ th, td { border: 1px solid #e2e8f0; padding: 0.6rem; text-align: left; }
   .panel-tabla, .tabla-plan-semanal, .calendario { max-width: 100%; }
   .panel-tabla, .tabla-plan-semanal, .calendario, .dias { overflow-x: auto; }
 }
+.formulario-asignacion { align-items: flex-end; display: flex; flex-wrap: wrap; gap: .5rem; }

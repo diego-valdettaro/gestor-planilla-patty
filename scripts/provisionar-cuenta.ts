@@ -7,7 +7,7 @@ import { repositorioDeCuentas } from "@/autenticacion/servicio";
 const nombreUsuario = process.env.CUENTA_NOMBRE_USUARIO;
 const contrasena = process.env.CUENTA_CONTRASENA;
 const rol = process.env.CUENTA_ROL;
-const roles: Rol[] = ["operaciones", "administracion", "finanzas"];
+const roles: Rol[] = ["administrador", "gerente_de_area", "recursos_humanos", "finanzas"];
 
 async function main(): Promise<void> {
   if (!nombreUsuario || !contrasena || !rol || !roles.includes(rol as Rol)) {

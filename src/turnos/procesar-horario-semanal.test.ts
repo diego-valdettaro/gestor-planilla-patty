@@ -42,10 +42,10 @@ describe("procesar horario semanal", () => {
       .rejects.toThrow("Todas las asistencias laborales de la semana deben estar confirmadas o tener un estado manual.");
   });
 
-  it("rechaza a quien no pertenece a Finanzas", async () => {
+  it("rechaza a un gerente de área", async () => {
     const { repositorio } = crearRepositorio();
 
-    await expect(procesarHorarioSemanal(repositorio, { id: "administracion-1", rol: "administracion" }, "00001024", "2026-08-31"))
+    await expect(procesarHorarioSemanal(repositorio, { id: "gerente-1", rol: "gerente_de_area", grupos: [{ nombre: "tiendas", gestionaAsistencia: true }] }, "00001024", "2026-08-31"))
       .rejects.toThrow("No tiene permiso para procesar horarios semanales.");
   });
 });

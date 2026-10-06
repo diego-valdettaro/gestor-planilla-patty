@@ -1,5 +1,6 @@
 import { nombreDelMotivoPlanificado, type MotivoPlanificadoDeNoAsistencia, type TipoDeEstadoManual } from "@/asistencias/estado-manual";
-import type { Actor } from "@/colaboradores/registrar-colaborador";
+import type { Actor } from "@/autenticacion/permisos";
+import { exigir, puedeImportarMarcas } from "@/autenticacion/permisos";
 
 import type { ErrorDeImportacion, FilaDeAsistenciaImportada } from "./parsear-archivo-huellero";
 
@@ -124,7 +125,7 @@ export async function prevalidarImportacion(
   actor: Actor,
   solicitud: SolicitudDePrevalidacion,
 ): Promise<ErrorDeImportacion[]> {
-  if (actor.rol !== "administracion" && actor.rol !== "finanzas") throw new Error("No tiene permiso para importar asistencias.");
+  exigir(puedeImportarMarcas(actor), "No tiene permiso para importar asistencias.");
 
   const errores = [...solicitud.erroresDelArchivo];
   for (const fila of solicitud.filas) {

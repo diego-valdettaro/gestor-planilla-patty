@@ -40,4 +40,27 @@ describe("exportación del resumen del período", () => {
     expect(Object.keys(fila).some((columna) => columna.includes("pendientes") || columna.includes("rechazadas"))).toBe(false);
     expect(respuesta.headers.get("content-disposition")).toContain("resumen-2026-01-01.xlsx");
   });
+
+  it.each([
+    ["un gerente de área", { id: "g1", rol: "gerente_de_area", grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] }],
+    ["Recursos Humanos", { id: "r1", rol: "recursos_humanos" }],
+    ["un rol anterior a la migración", { id: "o1", rol: "operaciones" }],
+  ])("responde 403 sin leer el resumen a %s", async (_nombre, actor) => {
+    obtenerActorActual.mockResolvedValue(actor);
+    const { GET } = await import("./route");
+
+    const respuesta = await GET(new NextRequest("http://localhost/api/periodos/p1/exportar"), { params: Promise.resolve({ periodoId: "p1" }) });
+
+    expect(respuesta.status).toBe(403);
+    expect(listarResumen).not.toHaveBeenCalled();
+  });
+
+  it("responde 403 sin sesión y permite exportar al Administrador del sistema", async () => {
+    const { GET } = await import("./route");
+    obtenerActorActual.mockRejectedValue(new Error("La sesión no es válida."));
+    expect((await GET(new NextRequest("http://localhost/api/periodos/p1/exportar"), { params: Promise.resolve({ periodoId: "p1" }) })).status).toBe(403);
+
+    obtenerActorActual.mockResolvedValue({ id: "a1", rol: "administrador" });
+    expect((await GET(new NextRequest("http://localhost/api/periodos/p1/exportar"), { params: Promise.resolve({ periodoId: "p1" }) })).status).toBe(200);
+  });
 });

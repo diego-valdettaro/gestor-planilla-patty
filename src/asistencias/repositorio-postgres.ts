@@ -3,7 +3,7 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import type { EvidenciaDeCeldaAsistencia } from "@/app/asistencias/estado-de-celda";
 import * as schema from "@/db/schema";
-import { ajustesDeAsistencia, asistenciasEsperadas, estadosManuales, horasExtra, marcasCrudas, periodosPlanilla, tardanzas, turnosPublicados } from "@/db/schema";
+import { ajustesDeAsistencia, asistenciasEsperadas, colaboradores, estadosManuales, horasExtra, marcasCrudas, periodosPlanilla, tardanzas, turnosPublicados } from "@/db/schema";
 import { buscarPoliticaVigente, RepositorioPostgresDeTardanzas } from "@/tardanzas/repositorio-postgres";
 import { calcularMinutosDeTardanza, calcularMinutosPenalizados } from "@/tardanzas/politica-de-penalizacion";
 
@@ -144,6 +144,16 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
       if (codigoPostgres(causa) === "40001") throw new Error("La selección cambió mientras se confirmaba. Revise el rango e intente otra vez.");
       throw causa;
     }
+  }
+
+  async obtenerGrupoDelColaborador(dni: string): Promise<string | undefined> {
+    const [colaborador] = await this.db.select({ grupo: colaboradores.grupo }).from(colaboradores).where(eq(colaboradores.dni, dni));
+    return colaborador?.grupo;
+  }
+
+  async obtenerGruposDeColaboradores(dnis: string[]): Promise<Array<{ dni: string; grupo: string }>> {
+    if (!dnis.length) return [];
+    return this.db.select({ dni: colaboradores.dni, grupo: colaboradores.grupo }).from(colaboradores).where(inArray(colaboradores.dni, dnis));
   }
 
   async buscarTurnoPublicado(dni: string, fecha: string): Promise<TurnoParaConfirmar | undefined> {

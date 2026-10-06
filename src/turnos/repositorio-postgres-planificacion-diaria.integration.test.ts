@@ -41,7 +41,7 @@ describe.skipIf(!databaseUrl)("persistencia de planificación diaria por grupo",
     ]);
     await db.insert(schema.colaboradores).values({ dni, nombre: "Ana Grupo", sede: sedeNorte, grupo, activo: true });
     await db.insert(schema.modelosDeHorario).values({ id: modeloId, sede: sedeNorte, nombre: "Apertura", entrada: "09:00", salida: "18:00", activo: true });
-    await db.insert(schema.cuentasLocales).values({ id: cuentaId, nombreUsuario: `plan-${sufijo}`, hashContrasena: "prueba", rol: "operaciones" });
+    await db.insert(schema.cuentasLocales).values({ id: cuentaId, nombreUsuario: `plan-${sufijo}`, hashContrasena: "prueba", rol: "administrador" });
     await db.insert(schema.periodosPlanilla).values({ inicio: "2034-08-26", fin: "2034-09-25", estado: "abierto" });
   });
 
@@ -65,7 +65,7 @@ describe.skipIf(!databaseUrl)("persistencia de planificación diaria por grupo",
 
   it("publica una semana multisede y conserva grupo, sedes y motivos aunque cambie el colaborador", async () => {
     const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio, {
-      obtenerActorActual: async () => ({ id: cuentaId, rol: "operaciones" }),
+      obtenerActorActual: async () => ({ id: cuentaId, rol: "administrador" }),
     });
     const plan = await casosDeUso.obtenerOCrear(semana, grupo);
     await casosDeUso.guardarBorrador(plan.id, [
@@ -83,7 +83,7 @@ describe.skipIf(!databaseUrl)("persistencia de planificación diaria por grupo",
       })),
     ]);
 
-    await expect(publicarPlanSemanal(repositorio, { id: cuentaId, rol: "operaciones" }, plan.id, [dni]))
+    await expect(publicarPlanSemanal(repositorio, { id: cuentaId, rol: "administrador" }, plan.id, [dni]))
       .resolves.toEqual({ publicados: 1, errores: [] });
     await db.update(schema.colaboradores).set({ grupo: otroGrupo, sede: sedeNueva }).where(eq(schema.colaboradores.dni, dni));
 

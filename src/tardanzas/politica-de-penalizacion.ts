@@ -1,4 +1,5 @@
-import type { Actor } from "@/colaboradores/registrar-colaborador";
+import type { Actor } from "@/autenticacion/permisos";
+import { exigir, puedeConfigurarGlobalmente } from "@/autenticacion/permisos";
 
 export interface SolicitudDePoliticaDePenalizacionPorTardanzas {
   sede: string;
@@ -105,7 +106,5 @@ function formatoDeFecha(fecha: Date): string {
 }
 
 function autorizarConfiguracion(actor: Actor): void {
-  if (actor.rol !== "administracion" && actor.rol !== "finanzas") {
-    throw new Error("No tiene permiso para configurar políticas de tardanzas.");
-  }
+  exigir(puedeConfigurarGlobalmente(actor), "No tiene permiso para configurar políticas de tardanzas.");
 }

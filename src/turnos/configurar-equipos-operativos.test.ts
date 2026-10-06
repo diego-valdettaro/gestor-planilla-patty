@@ -8,7 +8,7 @@ describe("configurar equipos operativos", () => {
 
     await asignarGrupoASede(
       { asignar: async (sede, equipo) => { asignaciones.push({ sede, equipo }); } },
-      { id: "admin-1", rol: "administracion" },
+      { id: "admin-1", rol: "administrador" },
       "Tienda Centro",
       "tiendas",
     );
@@ -22,7 +22,7 @@ describe("configurar equipos operativos", () => {
 
     await expect(asignarGrupoASede(
       { asignar },
-      { id: "operaciones-1", rol: "operaciones" },
+      { id: "operaciones-1", rol: "gerente_de_area" },
       "Tienda Centro",
       "tiendas",
     )).rejects.toThrow("No tiene permiso para cambiar la configuración.");

@@ -42,7 +42,7 @@ test("una contraseña incorrecta muestra un error recuperable", async ({ page })
   expect(errores).toEqual([]);
 });
 
-test("Administración abre los recorridos críticos sin errores de navegador", async ({ page }) => {
+test("el Administrador del sistema abre los recorridos críticos sin errores de navegador", async ({ page }) => {
   const errores = observarErroresDelNavegador(page);
 
   await page.goto("/iniciar-sesion");
@@ -53,6 +53,7 @@ test("Administración abre los recorridos críticos sin errores de navegador", a
 
   const recorridos = [
     { ruta: "/configuracion", titulo: "Configuración" },
+    { ruta: "/cuentas", titulo: "Cuentas" },
     { ruta: "/turnos", titulo: "Planificación de horarios" },
     { ruta: "/asistencias", titulo: "Asistencias" },
     { ruta: "/periodos", titulo: "Períodos de planilla" },
@@ -69,8 +70,8 @@ test("Administración abre los recorridos críticos sin errores de navegador", a
 test("un horario personalizado conserva sede y horas al reabrirlo", async ({ page }) => {
   test.setTimeout(60_000);
   await page.goto("/iniciar-sesion");
-  await page.getByLabel("Usuario").fill("operaciones");
-  await page.getByLabel("Contraseña").fill("operaciones");
+  await page.getByLabel("Usuario").fill("gerente-tiendas");
+  await page.getByLabel("Contraseña").fill("gerente-tiendas");
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page).toHaveURL(/\/turnos$/);
 
@@ -113,8 +114,8 @@ test("completar semana reemplaza los siete días con el modelo por defecto y los
   const errores = observarErroresDelNavegador(page);
 
   await page.goto("/iniciar-sesion");
-  await page.getByLabel("Usuario").fill("operaciones");
-  await page.getByLabel("Contraseña").fill("operaciones");
+  await page.getByLabel("Usuario").fill("gerente-tiendas");
+  await page.getByLabel("Contraseña").fill("gerente-tiendas");
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page).toHaveURL(/\/turnos$/);
 
@@ -169,8 +170,8 @@ test("completar semana no exige un modelo por defecto cuando todos los días que
   const errores = observarErroresDelNavegador(page);
 
   await page.goto("/iniciar-sesion");
-  await page.getByLabel("Usuario").fill("operaciones");
-  await page.getByLabel("Contraseña").fill("operaciones");
+  await page.getByLabel("Usuario").fill("gerente-tiendas");
+  await page.getByLabel("Contraseña").fill("gerente-tiendas");
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page).toHaveURL(/\/turnos$/);
 
@@ -195,8 +196,8 @@ test("completar semana sobre una fila publicada deja cambios sin publicar en vez
   const errores = observarErroresDelNavegador(page);
 
   await page.goto("/iniciar-sesion");
-  await page.getByLabel("Usuario").fill("operaciones");
-  await page.getByLabel("Contraseña").fill("operaciones");
+  await page.getByLabel("Usuario").fill("gerente-tiendas");
+  await page.getByLabel("Contraseña").fill("gerente-tiendas");
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page).toHaveURL(/\/turnos$/);
 
@@ -225,8 +226,8 @@ test("publicar selección solo publica la fila marcada y respeta una deselecció
   const errores = observarErroresDelNavegador(page);
 
   await page.goto("/iniciar-sesion");
-  await page.getByLabel("Usuario").fill("operaciones");
-  await page.getByLabel("Contraseña").fill("operaciones");
+  await page.getByLabel("Usuario").fill("gerente-tiendas");
+  await page.getByLabel("Contraseña").fill("gerente-tiendas");
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page).toHaveURL(/\/turnos$/);
 
@@ -356,27 +357,90 @@ async function iniciarSesion(page: Page, usuario: string) {
   await page.waitForURL((url) => !url.pathname.startsWith("/iniciar-sesion"), { timeout: 30_000 });
 }
 
-test("Finanzas consulta Horarios sin controles de edición ni publicación", async ({ page }) => {
+test("Finanzas no ve Horarios y consulta Asistencias en solo lectura", async ({ page }) => {
   const errores = observarErroresDelNavegador(page);
 
   await iniciarSesion(page, "finanzas");
-  await page.goto("/turnos");
+  const menu = page.getByRole("navigation", { name: "Navegación principal" });
+  await expect(menu.getByRole("link", { name: /Horarios/ })).toHaveCount(0);
+  await expect(menu.getByRole("link", { name: /Configuración/ })).toHaveCount(0);
+  await expect(menu.getByRole("link", { name: /Cuentas/ })).toBeVisible();
 
-  await expect(page.getByRole("heading", { name: "Planificación de horarios", level: 1 })).toBeVisible();
-  await expect(page.getByLabel("Grupo", { exact: true })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Selector semanal" })).toBeVisible();
-  for (const nombre of ["Guardar borrador", "Publicar planificación", "Completar semana", "Republicar cambios"]) {
-    await expect(page.getByRole("button", { name: nombre })).toHaveCount(0);
-  }
-  await expect(page.getByRole("checkbox")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /^Horario de / })).toHaveCount(0);
-  expect(errores, "Horarios en solo lectura no debe registrar errores de navegador").toEqual([]);
+  await page.goto("/turnos");
+  await expect(page.getByRole("heading", { name: "Sin permiso", level: 1 })).toBeVisible();
+
+  await page.goto(`/asistencias?grupo=Tiendas&semana=${fechaDeLaSemanaDeDemo(0)}`);
+  await expect(page.getByRole("heading", { name: "Asistencias", level: 1 })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Importar archivo" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Confirmar por rango" })).toHaveCount(0);
+  expect(errores, "Asistencias en solo lectura no debe registrar errores de navegador").toEqual([]);
 });
 
-test("Operaciones conserva la acción principal de Horarios y ve por qué Guardar borrador está deshabilitado", async ({ page }) => {
+test("cada rol ve en el menú exactamente las rutas que puede abrir", async ({ page }) => {
+  const errores = observarErroresDelNavegador(page);
+  const casos: Array<[string, string[]]> = [
+    ["admin", ["Configuración", "Cuentas", "Horarios", "Asistencia", "Períodos de planilla"]],
+    ["finanzas", ["Cuentas", "Asistencia", "Períodos de planilla"]],
+    ["gerente-tiendas", ["Configuración", "Horarios", "Asistencia"]],
+    ["gerente-administracion", ["Configuración"]],
+    ["gerente-sin-grupos", []],
+    ["rrhh", []],
+  ];
+
+  for (const [usuario, enlaces] of casos) {
+    await page.context().clearCookies();
+    await iniciarSesion(page, usuario);
+    const menu = page.getByRole("navigation", { name: "Navegación principal" });
+    const etiquetas = (await menu.locator(".enlaces-navegacion a").allInnerTexts()).map((texto) => texto.replace(/\s+/g, " ").replace("(sección actual)", "").replace(/^\S+\s/, "").trim());
+    expect(etiquetas.map((etiqueta) => etiqueta.replace(/^[^\p{L}]+/u, "")), `menú de ${usuario}`).toEqual(enlaces);
+  }
+  expect(errores).toEqual([]);
+});
+
+test("un rol sin pantallas explica qué esperar y el gerente del grupo Administración no entra a Horarios", async ({ page }) => {
+  await iniciarSesion(page, "rrhh");
+  await expect(page.getByRole("heading", { name: "Sin acciones disponibles todavía", level: 1 })).toBeVisible();
+
+  await page.context().clearCookies();
+  await iniciarSesion(page, "gerente-sin-grupos");
+  await expect(page.getByText("Todavía no tiene grupos asignados.")).toBeVisible();
+
+  await page.context().clearCookies();
+  await iniciarSesion(page, "gerente-administracion");
+  await expect(page).toHaveURL(/\/configuracion$/);
+  await page.goto("/turnos");
+  await expect(page.getByRole("heading", { name: "Sin permiso", level: 1 })).toBeVisible();
+  await page.goto("/asistencias");
+  await expect(page.getByRole("heading", { name: "Sin permiso", level: 1 })).toBeVisible();
+});
+
+test("Finanzas crea una cuenta de gerente de área y la ve con su rol y sin grupos", async ({ page }) => {
+  test.setTimeout(60_000);
+  const errores = observarErroresDelNavegador(page);
+  const usuario = `gerente-e2e-${Date.now()}`;
+
+  await iniciarSesion(page, "finanzas");
+  await page.goto("/cuentas");
+  await expect(page.getByRole("heading", { name: "Cuentas", level: 1 })).toBeVisible();
+  const rol = page.getByLabel("Rol");
+  await expect(rol.locator("option")).toHaveText(["Rol…", "Gerente de área", "Recursos Humanos"]);
+
+  await page.getByLabel("Nombre de usuario").fill(usuario);
+  await page.getByLabel("Contraseña inicial").fill("clave-segura-1");
+  await rol.selectOption("gerente_de_area");
+  await page.getByRole("button", { name: "Crear cuenta" }).click();
+
+  await expect(page.getByRole("status").filter({ hasText: "La cuenta quedó creada." })).toBeVisible();
+  const fila = page.getByRole("row", { name: new RegExp(usuario) });
+  await expect(fila).toContainText("Gerente de área");
+  await expect(fila).toContainText("Sin grupos");
+  expect(errores).toEqual([]);
+});
+
+test("el gerente de área conserva la acción principal de Horarios y ve por qué Guardar borrador está deshabilitado", async ({ page }) => {
   const errores = observarErroresDelNavegador(page);
 
-  await iniciarSesion(page, "operaciones");
+  await iniciarSesion(page, "gerente-tiendas");
   await page.goto("/turnos");
 
   const guardar = page.getByRole("button", { name: "Guardar borrador" }).first();
@@ -390,8 +454,8 @@ test("Operaciones conserva la acción principal de Horarios y ve por qué Guarda
 test("el selector semanal y el panel de feedback se operan con teclado y devuelven el foco", async ({ page }) => {
   const errores = observarErroresDelNavegador(page);
   await page.goto("/iniciar-sesion");
-  await page.getByLabel("Usuario").fill("operaciones");
-  await page.getByLabel("Contraseña").fill("operaciones");
+  await page.getByLabel("Usuario").fill("gerente-tiendas");
+  await page.getByLabel("Contraseña").fill("gerente-tiendas");
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page).toHaveURL(/\/turnos$/);
   await page.goto(`/turnos?semana=${fechaDeLaSemanaDeDemo(0)}&equipo=Tiendas`);
@@ -533,7 +597,7 @@ async function elementosQueDesbordan(page: Page): Promise<string> {
   });
 }
 
-const rutasAutenticadas = ["/configuracion", "/turnos", "/asistencias", "/asistencias/importar", "/periodos"];
+const rutasAutenticadas = ["/configuracion", "/cuentas", "/turnos", "/asistencias", "/asistencias/importar", "/periodos"];
 
 for (const [nombre, ancho, alto] of [["375 px", 375, 812], ["escritorio", 1280, 800]] as const) {
   test(`las rutas autenticadas caben en ${nombre} sin errores de consola`, async ({ page }) => {

@@ -1,5 +1,5 @@
 import type { Actor, Colaborador, RepositorioDeColaboradores } from "./registrar-colaborador";
-import { verificarPermiso } from "./registrar-colaborador";
+import { verificarPermisoDeConfiguracionGlobal } from "./registrar-colaborador";
 
 export interface RepositorioParaCambiarGrupo extends RepositorioDeColaboradores {
   tieneBorradorAbiertoEnGrupo(dni: string, grupo: string): Promise<boolean>;
@@ -11,7 +11,7 @@ export async function cambiarGrupoDeColaborador(
   dni: string,
   grupoNuevo: string,
 ): Promise<void> {
-  verificarPermiso(actor);
+  verificarPermisoDeConfiguracionGlobal(actor);
 
   const normalizado = grupoNuevo.trim();
   if (!normalizado) throw new Error("El grupo operativo es obligatorio.");

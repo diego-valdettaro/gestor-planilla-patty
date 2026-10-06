@@ -31,7 +31,7 @@ describe.skipIf(!databaseUrl)("publicarPlanSemanal (selección, integración Pos
   const semana = inicioDeSemana("2032-03-01");
   const dias = diasDeLaSemana(semana);
   const cuentaId = randomUUID();
-  const actor = { id: cuentaId, rol: "operaciones" as const };
+  const actor = { id: cuentaId, rol: "administrador" as const };
 
   afterAll(async () => {
     const planes = await db.select({ id: schema.planesSemanalesEnBorrador.id }).from(schema.planesSemanalesEnBorrador)
@@ -61,7 +61,7 @@ describe.skipIf(!databaseUrl)("publicarPlanSemanal (selección, integración Pos
       { dni: huIdConflicto, nombre: "Colaborador en conflicto", sede, grupo, activo: true },
     ]);
     await db.insert(schema.periodosPlanilla).values({ inicio: dias[0], fin: dias[6], estado: "abierto" });
-    await db.insert(schema.cuentasLocales).values({ id: cuentaId, nombreUsuario: `publicacion-${cuentaId}`, hashContrasena: "prueba", rol: "operaciones" });
+    await db.insert(schema.cuentasLocales).values({ id: cuentaId, nombreUsuario: `publicacion-${cuentaId}`, hashContrasena: "prueba", rol: "administrador" });
 
     const plan = await repositorio.obtenerOCrear(semana, grupo);
     const jornada = (dni: string, fecha: string) => ({

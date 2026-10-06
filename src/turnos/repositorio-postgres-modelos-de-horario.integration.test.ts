@@ -23,7 +23,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeModelosDeHorario", () => {
 
   beforeAll(async () => {
     await db.insert(schema.sedes).values({ nombre: "Lima" }).onConflictDoNothing();
-    await db.insert(schema.cuentasLocales).values({ id: responsableId, nombreUsuario: `modelos-${responsableId}`, hashContrasena: "hash", rol: "administracion" });
+    await db.insert(schema.cuentasLocales).values({ id: responsableId, nombreUsuario: `modelos-${responsableId}`, hashContrasena: "hash", rol: "administrador" });
   });
 
   afterAll(async () => {

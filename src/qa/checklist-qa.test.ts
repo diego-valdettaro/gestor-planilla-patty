@@ -89,7 +89,7 @@ describe("resumen del entorno de revisión", () => {
 
     expect(lineas).toContain("  Issue:   Mostrar checklist de QA (https://github.com/diego-valdettaro/gestor-planilla-patty/issues/140)");
     expect(lineas).toContain("  URL:     http://localhost:3140");
-    expect(lineas).toContain("  Cuentas: operaciones/operaciones · admin/admin · finanzas/finanzas");
+    expect(lineas).toContain("  Cuentas: admin · finanzas · rrhh · gerente-tiendas · gerente-administracion · gerente-sin-grupos (clave = usuario)");
     expect(lineas).toContain("    1. Abrir la URL local.");
   });
 

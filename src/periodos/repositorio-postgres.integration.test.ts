@@ -31,7 +31,7 @@ describe.skipIf(!databaseUrl)("períodos de planilla persistidos", () => {
 
   beforeAll(async () => {
     await db.insert(schema.grupos).values([{ nombre: grupoActual }, { nombre: grupoHistorico }, { nombre: segundoGrupo }]);
-    await db.insert(schema.cuentasLocales).values({ id: cuentaId, nombreUsuario: `liquidacion-${sufijo}`, hashContrasena: "prueba", rol: "administracion" });
+    await db.insert(schema.cuentasLocales).values({ id: cuentaId, nombreUsuario: `liquidacion-${sufijo}`, hashContrasena: "prueba", rol: "administrador" });
     await db.insert(schema.colaboradores).values([
       { dni: ana, nombre: "Ana Historica", sede: "Sede fija actual", grupo: grupoActual },
       { dni: beto, nombre: "Beto Segundo", sede: "Otra sede fija", grupo: segundoGrupo },

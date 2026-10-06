@@ -46,7 +46,7 @@ describe("publicar plan semanal", () => {
     const plan = { id: "plan-1", semana: "2026-08-31", equipo: "tiendas" as const, celdas: [...celdasDeHu1, ...celdasDeSemana("00000012")] };
     const { publicados, repositorio } = crearRepositorio(plan);
 
-    const resultado = await publicarPlanSemanal(repositorio, { id: "operaciones-1", rol: "operaciones" }, plan.id, ["00000011", "00000012"]);
+    const resultado = await publicarPlanSemanal(repositorio, { id: "operaciones-1", rol: "administrador" }, plan.id, ["00000011", "00000012"]);
 
     expect(resultado).toEqual({ publicados: 2, errores: [] });
     expect(publicados).toHaveLength(14);
@@ -60,7 +60,7 @@ describe("publicar plan semanal", () => {
     const { publicados, repositorio } = crearRepositorio(plan);
     repositorio.perteneceAPeriodoAbierto = async (fecha) => fecha <= "2026-09-05";
 
-    const resultado = await publicarPlanSemanal(repositorio, { id: "administracion-1", rol: "administracion" }, plan.id, ["00000011"]);
+    const resultado = await publicarPlanSemanal(repositorio, { id: "administracion-1", rol: "administrador" }, plan.id, ["00000011"]);
 
     expect(resultado.publicados).toBe(0);
     expect(resultado.errores).toContainEqual({ dni: "00000011", fecha: "2026-09-06", mensaje: "La fecha no pertenece a un período de planilla abierto." });
@@ -73,7 +73,7 @@ describe("publicar plan semanal", () => {
 
     const resultado = await publicarPlanSemanal(
       repositorio,
-      { id: "administracion-1", rol: "administracion" },
+      { id: "administracion-1", rol: "administrador" },
       plan.id,
       ["00000011", "00000012"],
     );
@@ -83,13 +83,18 @@ describe("publicar plan semanal", () => {
     expect(publicados).toEqual([]);
   });
 
-  it("permite a Finanzas publicar con las mismas reglas que Operaciones", async () => {
+  it("permite al gerente de área del grupo publicar y rechaza a otros roles y grupos", async () => {
     const plan = { id: "plan-1", semana: "2026-08-31", equipo: "tiendas" as const, celdas: celdasDeSemana("00000011") };
     const { publicados, repositorio } = crearRepositorio(plan);
+    const gerente = { id: "gerente-1", rol: "gerente_de_area" as const, grupos: [{ nombre: "tiendas", gestionaAsistencia: true }] };
 
-    const resultado = await publicarPlanSemanal(repositorio, { id: "finanzas-1", rol: "finanzas" }, plan.id, ["00000011"]);
+    const resultado = await publicarPlanSemanal(repositorio, gerente, plan.id, ["00000011"]);
 
     expect(resultado).toEqual({ publicados: 1, errores: [] });
+    expect(publicados).toHaveLength(7);
+    await expect(publicarPlanSemanal(repositorio, { id: "finanzas-1", rol: "finanzas" }, plan.id, ["00000011"])).rejects.toThrow("No tiene permiso para publicar planes semanales.");
+    await expect(publicarPlanSemanal(repositorio, { id: "rrhh-1", rol: "recursos_humanos" }, plan.id, ["00000011"])).rejects.toThrow("No tiene permiso para publicar planes semanales.");
+    await expect(publicarPlanSemanal(repositorio, { ...gerente, grupos: [{ nombre: "taller", gestionaAsistencia: true }] }, plan.id, ["00000011"])).rejects.toThrow("No tiene permiso para publicar planes semanales de este grupo.");
     expect(publicados).toHaveLength(7);
   });
 });

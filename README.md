@@ -24,11 +24,11 @@ pnpm dev
 Configure `DATABASE_URL` en `.env` con una base local. La aplicación comprueba
 las migraciones antes de arrancar.
 
-Para crear la primera cuenta de administración, defina `ADMIN_NOMBRE_USUARIO`
+Para crear la primera cuenta, de Administrador del sistema, defina `ADMIN_NOMBRE_USUARIO`
 y `ADMIN_CONTRASENA` y ejecute:
 
 ```powershell
-pnpm provisionar:administracion
+pnpm provisionar:administrador
 ```
 
 Las instrucciones para una instalación existente, variables de feedback y

@@ -21,10 +21,10 @@ function crearRepositorioEnMemoria(tardanzasAcumuladas = 0): {
 }
 
 describe("casos de uso de tardanzas en el servidor", () => {
-  it("permite a Administración versionar una política de penalización por sede", async () => {
+  it("permite al Administrador versionar una política de penalización por sede", async () => {
     const { politicas, repositorio } = crearRepositorioEnMemoria();
     const casosDeUso = crearCasosDeUsoDeTardanzas(repositorio, {
-      obtenerActorActual: async () => ({ id: "administracion-1", rol: "administracion" }),
+      obtenerActorActual: async () => ({ id: "admin-1", rol: "administrador" }),
     });
 
     await casosDeUso.configurarPolitica({
@@ -35,14 +35,14 @@ describe("casos de uso de tardanzas en el servidor", () => {
     expect(politicas).toEqual([{
       sede: "Lima", toleranciaEnMinutos: 10, tardanzasAcumuladas: 3,
       horasPenalizadas: 1, version: 1, vigenteDesde: "2026-09-01",
-      configuradaPorId: "administracion-1", configuradaEn: expect.any(Date),
+      configuradaPorId: "admin-1", configuradaEn: expect.any(Date),
     }]);
   });
 
   it("calcula una tardanza solo cuando la entrada supera la tolerancia vigente", async () => {
     const { repositorio } = crearRepositorioEnMemoria();
     const casosDeUso = crearCasosDeUsoDeTardanzas(repositorio, {
-      obtenerActorActual: async () => ({ id: "finanzas-1", rol: "finanzas" }),
+      obtenerActorActual: async () => ({ id: "admin-1", rol: "administrador" }),
     });
     await casosDeUso.configurarPolitica({
       sede: "Lima", toleranciaEnMinutos: 10, tardanzasAcumuladas: 3,
@@ -63,7 +63,7 @@ describe("casos de uso de tardanzas en el servidor", () => {
   it("rechaza configurar una política de tardanzas desde Operaciones", async () => {
     const { repositorio } = crearRepositorioEnMemoria();
     const casosDeUso = crearCasosDeUsoDeTardanzas(repositorio, {
-      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "operaciones" }),
+      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "gerente_de_area" }),
     });
 
     await expect(casosDeUso.configurarPolitica({
@@ -75,7 +75,7 @@ describe("casos de uso de tardanzas en el servidor", () => {
   it("penaliza cada acumulación configurada dentro del período de planilla", async () => {
     const { repositorio } = crearRepositorioEnMemoria(2);
     const casosDeUso = crearCasosDeUsoDeTardanzas(repositorio, {
-      obtenerActorActual: async () => ({ id: "finanzas-1", rol: "finanzas" }),
+      obtenerActorActual: async () => ({ id: "admin-1", rol: "administrador" }),
     });
     await casosDeUso.configurarPolitica({
       sede: "Lima", toleranciaEnMinutos: 10, tardanzasAcumuladas: 3,

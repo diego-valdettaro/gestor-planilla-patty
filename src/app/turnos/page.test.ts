@@ -19,7 +19,7 @@ vi.mock("@/turnos/casos-de-uso-planes-semanales", () => ({
   crearCasosDeUsoDePlanesSemanales: () => ({ obtenerOCrear }),
 }));
 vi.mock("@/turnos/servicio", () => ({
-  repositorioDeGrupos: { listar: listarGrupos },
+  repositorioDeGrupos: { listarOperablesPor: listarGrupos },
   repositorioDeModelosDeHorario: { listarPorSede: listarModelosPorSede },
   repositorioDeTurnos: {
     listarColaboradoresActivosPorEquipo,
@@ -45,7 +45,7 @@ describe("página de Horarios (/turnos)", () => {
   beforeEach(() => {
     vi.stubGlobal("React", React);
     vi.clearAllMocks();
-    obtenerActorActual.mockResolvedValue({ rol: "administracion" });
+    obtenerActorActual.mockResolvedValue({ rol: "administrador" });
     listarGrupos.mockResolvedValue(["Tiendas"]);
     listarEquiposConProcesamientosDeSemana.mockResolvedValue([]);
     listarColaboradoresActivosPorEquipo.mockResolvedValue([]);
@@ -79,56 +79,45 @@ describe("página de Horarios (/turnos)", () => {
     expect(listarModelosPorSede.mock.calls.map(([sede]) => sede)).toEqual(["Norte", "Sur"]);
   });
 
-  it("permite a Finanzas consultar el horario semanal en solo lectura", async () => {
-    obtenerActorActual.mockResolvedValue({ rol: "finanzas" });
+  it.each([["Finanzas", { rol: "finanzas" }], ["Recursos Humanos", { rol: "recursos_humanos" }], ["un gerente sin grupos", { rol: "gerente_de_area", grupos: [] }], ["un gerente de un grupo que no gestiona asistencia", { rol: "gerente_de_area", grupos: [{ nombre: "Administración", gestionaAsistencia: false }] }]])("niega Horarios a %s", async (_nombre, actor) => {
+    obtenerActorActual.mockResolvedValue(actor);
 
     const html = await render();
 
-    expect(html).toContain("Planificador semanal de solo lectura");
-    expect(html).toContain("Su rol no permite editarlo ni publicarlo.");
-    expect(html).not.toContain("Sin permiso");
+    expect(html).toContain("Sin permiso");
+    expect(html).not.toContain("Planificador semanal");
+    expect(obtenerOCrear).not.toHaveBeenCalled();
   });
 
-  it.each(["operaciones", "administracion"])("entrega el planificador editable a %s", async (rol) => {
-    obtenerActorActual.mockResolvedValue({ rol });
+  it.each([["administrador", { rol: "administrador" }], ["un gerente del grupo", { rol: "gerente_de_area", grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] }]])("entrega el planificador editable a %s", async (_nombre, actor) => {
+    obtenerActorActual.mockResolvedValue(actor);
 
     const html = await render();
 
     expect(html).toContain("Planificador semanal editable");
+    expect(listarGrupos).toHaveBeenCalledWith(actor);
   });
 
-  it("explica con el estado vacío compartido que no hay grupo y no manda a Operaciones a Configuración", async () => {
-    obtenerActorActual.mockResolvedValue({ rol: "operaciones" });
+  it("no manda al gerente a Configuración cuando no hay grupo operativo disponible", async () => {
+    obtenerActorActual.mockResolvedValue({ rol: "gerente_de_area", grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] });
     listarGrupos.mockResolvedValue([]);
 
     const html = await render();
 
     expect(html).toContain('class="estado-vacio"');
     expect(html).toContain("No hay grupos operativos");
-    expect(html).toContain("Pida a Administración");
+    expect(html).toContain("Pida al Administrador del sistema");
     expect(html).not.toContain("/configuracion");
     expect(html).not.toContain("Planificador semanal");
   });
 
-  it("ofrece Configuración a Administración cuando no hay grupo", async () => {
+  it("ofrece Configuración al Administrador cuando no hay grupo", async () => {
     listarGrupos.mockResolvedValue([]);
 
     const html = await render();
 
     expect(html).toContain("No hay grupos operativos");
     expect(html).toContain('href="/configuracion"');
-  });
-
-  it("no ofrece Configuración a Finanzas cuando no hay grupo", async () => {
-    obtenerActorActual.mockResolvedValue({ rol: "finanzas" });
-    listarGrupos.mockResolvedValue([]);
-
-    const html = await render();
-
-    expect(html).toContain('class="estado-vacio"');
-    expect(html).toContain("No hay grupos operativos");
-    expect(html).not.toContain("/configuracion");
-    expect(html).toContain("Pida a Administración");
   });
 
   it("usa el estado vacío compartido para un rol sin permiso de Horarios", async () => {

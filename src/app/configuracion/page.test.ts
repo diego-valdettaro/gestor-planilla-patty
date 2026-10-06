@@ -7,6 +7,7 @@ const listarGrupos = vi.fn();
 const listarColaboradores = vi.fn();
 const listarModelosPorSede = vi.fn();
 const filasDeSedes = vi.fn();
+const GERENTE_DE_TIENDAS = { rol: "gerente_de_area", grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] };
 
 function consulta(filas: () => unknown) {
   const cadena: Record<string, unknown> = {};
@@ -21,11 +22,11 @@ vi.mock("@/autenticacion/sesion-del-servidor", () => ({ obtenerActorActual }));
 vi.mock("@/db/client", () => ({ db: { select: () => consulta(() => filasDeSedes()) } }));
 vi.mock("@/colaboradores/servicio", () => ({ repositorioDeColaboradores: { listar: listarColaboradores } }));
 vi.mock("@/turnos/servicio", () => ({
-  repositorioDeGrupos: { listar: listarGrupos },
+  repositorioDeGrupos: { listarConAtributos: async () => ((await listarGrupos()) as string[]).map((nombre) => ({ nombre, gestionaAsistencia: true })) },
   repositorioDeModelosDeHorario: { listarPorSede: listarModelosPorSede },
 }));
 vi.mock("@/app/boton-de-accion-confirmada", () => ({ BotonDeAccionConfirmada: () => createElement("button") }));
-vi.mock("./actions", () => ({ asignarEquipoOperativoASede: vi.fn(), cambiarGrupoDeColaboradorDeConfiguracion: vi.fn(), crearModeloHorario: vi.fn(), desactivarColaborador: vi.fn(), desactivarModeloHorario: vi.fn(), eliminarModeloHorario: vi.fn(), eliminarSede: vi.fn(), guardarColaborador: vi.fn(), guardarModeloHorario: vi.fn(), guardarPoliticaDeTardanzas: vi.fn(), guardarSede: vi.fn(), reactivarColaborador: vi.fn(), reactivarModeloHorario: vi.fn() }));
+vi.mock("./actions", () => ({ asignarEquipoOperativoASede: vi.fn(), cambiarGrupoDeColaboradorDeConfiguracion: vi.fn(), crearModeloHorario: vi.fn(), desactivarColaborador: vi.fn(), desactivarModeloHorario: vi.fn(), eliminarModeloHorario: vi.fn(), eliminarSede: vi.fn(), guardarColaborador: vi.fn(), guardarModeloHorario: vi.fn(), guardarPoliticaDeTardanzas: vi.fn(), guardarGestionDeAsistenciaDelGrupo: vi.fn(), guardarSede: vi.fn(), reactivarColaborador: vi.fn(), reactivarModeloHorario: vi.fn() }));
 vi.mock("./filtros-de-colaboradores", () => ({ FiltrosDeColaboradores: () => createElement("div") }));
 vi.mock("./editor-de-grupo", () => ({ EditorDeGrupo: () => createElement("div") }));
 vi.mock("./creador-de-grupo", () => ({ CreadorDeGrupo: () => createElement("div") }));
@@ -39,7 +40,7 @@ describe("página de Configuración (/configuracion)", () => {
   beforeEach(() => {
     vi.stubGlobal("React", React);
     vi.clearAllMocks();
-    obtenerActorActual.mockResolvedValue({ rol: "administracion" });
+    obtenerActorActual.mockResolvedValue({ rol: "administrador" });
     filasDeSedes.mockReturnValue([]);
     listarGrupos.mockResolvedValue([]);
     listarColaboradores.mockResolvedValue([]);
@@ -65,17 +66,18 @@ describe("página de Configuración (/configuracion)", () => {
     expect(html).toContain("Guardar política está deshabilitado porque no hay sedes activas.");
   });
 
-  it("no ofrece a Operaciones acciones de Administración", async () => {
-    obtenerActorActual.mockResolvedValue({ rol: "operaciones" });
+  it("al gerente de área le ofrece modelos y colaboradores de sus grupos, sin acciones globales", async () => {
+    obtenerActorActual.mockResolvedValue(GERENTE_DE_TIENDAS);
     filasDeSedes.mockReturnValue([{ nombre: "Norte", grupo: "Tiendas" }]);
     listarGrupos.mockResolvedValue(["Tiendas"]);
 
     const html = await render();
 
     expect(html).toContain("Crear modelo");
-    expect(html).not.toContain("Crear colaborador");
+    expect(html).toContain("Crear colaborador");
     expect(html).not.toContain("Crear sede");
     expect(html).not.toContain("Guardar política");
+    expect(html).not.toContain("Grupos operativos");
   });
 
   it("explica con el estado vacío compartido que Finanzas no puede cambiar la configuración", async () => {
@@ -110,16 +112,15 @@ describe("página de Configuración (/configuracion)", () => {
     expect(html).not.toContain("No hay sedes activas");
   });
 
-  it("sin sedes, no pide a Operaciones crear una sede que no puede administrar", async () => {
-    obtenerActorActual.mockResolvedValue({ rol: "operaciones" });
+  it("sin sedes, no pide al gerente crear una sede que no puede administrar", async () => {
+    obtenerActorActual.mockResolvedValue(GERENTE_DE_TIENDAS);
 
     const html = await render();
 
     expect(html).toContain("No hay modelos de horario");
-    expect(html).toContain("Pida a Administración");
+    expect(html).toContain("Pida al Administrador del sistema");
     expect(html).not.toContain("Cree una sede");
     expect(html).not.toContain("No hay sedes activas");
-    expect(html).not.toContain("No hay colaboradores");
   });
 
   it("distingue un filtro sin coincidencias de la ausencia total de colaboradores", async () => {
@@ -134,5 +135,58 @@ describe("página de Configuración (/configuracion)", () => {
     expect(html).toContain("Ningún colaborador coincide con el filtro");
     expect(html).not.toContain("No hay colaboradores.");
     expect(html).not.toContain("<table");
+  });
+});
+
+describe("página de Configuración (/configuracion) por rol", () => {
+  beforeEach(() => {
+    vi.stubGlobal("React", React);
+    vi.clearAllMocks();
+    filasDeSedes.mockReturnValue([{ nombre: "Norte", grupo: "Tiendas" }, { nombre: "Taller", grupo: "Taller" }, { nombre: "Oficina", grupo: "Administración" }]);
+    listarGrupos.mockResolvedValue(["Tiendas", "Taller", "Administración"]);
+    listarModelosPorSede.mockResolvedValue([]);
+    listarColaboradores.mockResolvedValue([
+      { dni: "00000001", nombre: "Ana Tienda", sede: "Norte", grupo: "Tiendas", activo: true },
+      { dni: "00000002", nombre: "Beto Taller", sede: "Taller", grupo: "Taller", activo: true },
+    ]);
+  });
+
+  it("el Administrador ve los grupos con su atributo y todos los colaboradores", async () => {
+    obtenerActorActual.mockResolvedValue({ rol: "administrador" });
+
+    const html = await render();
+
+    expect(html).toContain("Gestiona asistencia y horarios");
+    expect(html).toContain("Ana Tienda");
+    expect(html).toContain("Beto Taller");
+  });
+
+  it("el gerente solo ve los colaboradores de sus grupos y no las acciones de grupo", async () => {
+    obtenerActorActual.mockResolvedValue(GERENTE_DE_TIENDAS);
+
+    const html = await render();
+
+    expect(html).toContain("Ana Tienda");
+    expect(html).not.toContain("Beto Taller");
+    expect(html).not.toContain("Cambiar grupo");
+  });
+
+  it("el gerente de un grupo que no gestiona asistencia ve colaboradores pero no modelos de horario", async () => {
+    obtenerActorActual.mockResolvedValue({ rol: "gerente_de_area", grupos: [{ nombre: "Administración", gestionaAsistencia: false }] });
+    listarColaboradores.mockResolvedValue([{ dni: "00000003", nombre: "Hugo Oficina", sede: "Oficina", grupo: "Administración", activo: true }]);
+
+    const html = await render();
+
+    expect(html).toContain("Hugo Oficina");
+    expect(html).not.toContain("Modelos de horario");
+  });
+
+  it.each([["gerente sin grupos", { rol: "gerente_de_area", grupos: [] }], ["Finanzas", { rol: "finanzas" }], ["Recursos Humanos", { rol: "recursos_humanos" }]])("rechaza con estado vacío a %s", async (_nombre, actor) => {
+    obtenerActorActual.mockResolvedValue(actor);
+
+    const html = await render();
+
+    expect(html).toContain("Sin permiso");
+    expect(html).not.toContain("Crear modelo");
   });
 });

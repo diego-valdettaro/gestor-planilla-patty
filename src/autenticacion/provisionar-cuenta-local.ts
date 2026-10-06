@@ -1,4 +1,4 @@
-import type { Rol } from "@/colaboradores/registrar-colaborador";
+import type { Rol } from "./permisos";
 
 import type { CuentaLocal, RepositorioDeCuentas } from "./iniciar-sesion";
 

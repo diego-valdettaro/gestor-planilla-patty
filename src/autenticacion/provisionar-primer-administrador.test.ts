@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  provisionarPrimeraAdministracion,
+  provisionarPrimerAdministrador,
   type RepositorioDeProvisionamiento,
-} from "./provisionar-primera-administracion";
+} from "./provisionar-primer-administrador";
 
-describe("provisionarPrimeraAdministracion", () => {
-  it("crea la primera cuenta con el rol de Administración y no guarda la contraseña", async () => {
+describe("provisionarPrimerAdministrador", () => {
+  it("crea la primera cuenta con el rol de Administrador del sistema y no guarda la contraseña", async () => {
     const cuentas: Array<{ nombreUsuario: string; hashContrasena: string; rol: string }> = [];
     const repositorio: RepositorioDeProvisionamiento = {
       existeAlgunaCuenta: async () => false,
@@ -15,14 +15,14 @@ describe("provisionarPrimeraAdministracion", () => {
       },
     };
 
-    await provisionarPrimeraAdministracion(
+    await provisionarPrimerAdministrador(
       repositorio,
       { nombreUsuario: "admin", contrasena: "secreto" },
       async () => "hash-argon2id",
     );
 
     expect(cuentas).toEqual([
-      { nombreUsuario: "admin", hashContrasena: "hash-argon2id", rol: "administracion" },
+      { nombreUsuario: "admin", hashContrasena: "hash-argon2id", rol: "administrador" },
     ]);
   });
 
@@ -33,7 +33,7 @@ describe("provisionarPrimeraAdministracion", () => {
     };
 
     await expect(
-      provisionarPrimeraAdministracion(
+      provisionarPrimerAdministrador(
         repositorio,
         { nombreUsuario: "admin", contrasena: "secreto" },
         async () => "hash-argon2id",

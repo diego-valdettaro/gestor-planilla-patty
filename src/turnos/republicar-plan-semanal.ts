@@ -1,4 +1,5 @@
-import type { Actor } from "@/colaboradores/registrar-colaborador";
+import type { Actor } from "@/autenticacion/permisos";
+import { exigir, puedeConsultarHorarios, puedeOperarAsistenciaDelGrupo } from "@/autenticacion/permisos";
 
 import type { PlanSemanalEnBorrador, RepositorioDePlanesSemanales } from "./plan-semanal-en-borrador";
 import type { RepositorioDeTurnos, TurnoPublicado } from "./publicar-turno-semanal";
@@ -14,10 +15,11 @@ export async function republicarPlanSemanal(
   dni: string,
   motivo: string,
 ): Promise<void> {
-  if (actor.rol !== "operaciones" && actor.rol !== "administracion" && actor.rol !== "finanzas") throw new Error("No tiene permiso para republicar horarios semanales.");
+  exigir(puedeConsultarHorarios(actor), "No tiene permiso para republicar horarios semanales.");
   if (!motivo.trim() || motivo.trim().length > 250) throw new Error("El motivo de republicación es obligatorio y no puede superar 250 caracteres.");
   const plan = await repositorio.buscarPorId(planId);
   if (!plan) throw new Error("El plan semanal en borrador no existe.");
+  exigir(puedeOperarAsistenciaDelGrupo(actor, plan.equipo), "No tiene permiso para republicar horarios semanales de este grupo.");
   if (!(await repositorio.colaboradorPerteneceAEquipo(dni, plan.equipo))) throw new Error("El colaborador no pertenece al equipo operativo del plan.");
   if (await repositorio.horarioSemanalEstaProcesado?.(dni, plan.semana)) throw new Error("No se puede corregir un horario semanal que ya fue procesado.");
 

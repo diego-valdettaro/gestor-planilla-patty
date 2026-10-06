@@ -101,31 +101,27 @@ describe("página de Períodos de planilla (/periodos)", () => {
     expect(html).toContain('data-testid="creador-de-periodo"');
   });
 
-  it("oculta los controles de cierre y reapertura para Administración", async () => {
-    obtenerActorActual.mockResolvedValue({ rol: "administracion" });
+  it.each([
+    ["gerente de área", { rol: "gerente_de_area", grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] }],
+    ["Recursos Humanos", { rol: "recursos_humanos" }],
+  ])("niega el acceso a %s sin mostrar controles de cierre ni reapertura", async (_nombre, actor) => {
+    obtenerActorActual.mockResolvedValue(actor);
     listar.mockResolvedValue([{ id: "p1", inicio: "2026-01-01", fin: "2026-01-31", estado: "abierto" }]);
 
     const html = await render();
 
+    expect(html).toContain("Sin permiso");
     expect(html).not.toContain("Cerrar período");
+    expect(html).not.toContain("Reabrir período");
   });
 
-  it("oculta el formulario de reapertura para Administración cuando el período está cerrado", async () => {
-    obtenerActorActual.mockResolvedValue({ rol: "administracion" });
+  it("ofrece el cierre y la reapertura al Administrador del sistema, superusuario temporal", async () => {
+    obtenerActorActual.mockResolvedValue({ rol: "administrador" });
     listar.mockResolvedValue([{ id: "p1", inicio: "2026-01-01", fin: "2026-01-31", estado: "cerrado" }]);
 
     const html = await render();
 
-    expect(html).not.toContain("Motivo de reapertura");
-    expect(html).not.toContain("Reabrir período");
-  });
-
-  it("niega el acceso a Operaciones", async () => {
-    obtenerActorActual.mockResolvedValue({ rol: "operaciones" });
-
-    const html = await render();
-
-    expect(html).toContain("Sin permiso");
+    expect(html).toContain("Reabrir período");
   });
 
   it("agrupa por grupo y muestra totales, motivos y horas extra por estado", async () => {
@@ -197,8 +193,8 @@ describe("página de Períodos de planilla (/periodos)", () => {
     expect(html).toContain('name="horaExtraId"');
   });
 
-  it("no ofrece decisiones de horas extra a Administración", async () => {
-    obtenerActorActual.mockResolvedValue({ rol: "administracion" });
+  it("no muestra decisiones de horas extra cuando el período no tiene filas", async () => {
+    obtenerActorActual.mockResolvedValue({ rol: "administrador" });
     listar.mockResolvedValue([{ id: "p1", inicio: "2026-01-01", fin: "2026-01-31", estado: "abierto" }]);
 
     const html = await render();

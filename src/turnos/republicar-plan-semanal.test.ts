@@ -45,7 +45,7 @@ describe("republicar plan semanal", () => {
   it("reemplaza los siete días corregidos con un motivo auditado", async () => {
     const { reemplazos, repositorio } = crearRepositorio();
 
-    await republicarPlanSemanal(repositorio, { id: "operaciones-1", rol: "operaciones" }, "plan-1", "00000011", "  Corrige entrada pactada  ");
+    await republicarPlanSemanal(repositorio, { id: "operaciones-1", rol: "administrador" }, "plan-1", "00000011", "  Corrige entrada pactada  ");
 
     expect(reemplazos).toEqual([expect.objectContaining({
       motivo: "Corrige entrada pactada",
@@ -57,7 +57,7 @@ describe("republicar plan semanal", () => {
   it("no permite corregir una semana cuya asistencia ya fue procesada", async () => {
     const { reemplazos, repositorio } = crearRepositorio(true);
 
-    await expect(republicarPlanSemanal(repositorio, { id: "administracion-1", rol: "administracion" }, "plan-1", "00000011", "Corrige entrada pactada"))
+    await expect(republicarPlanSemanal(repositorio, { id: "administracion-1", rol: "administrador" }, "plan-1", "00000011", "Corrige entrada pactada"))
       .rejects.toThrow("No se puede corregir un horario semanal que ya fue procesado.");
     expect(reemplazos).toEqual([]);
   });
@@ -65,17 +65,22 @@ describe("republicar plan semanal", () => {
   it("republica cuando el único cambio es el motivo planificado", async () => {
     const { reemplazos, repositorio } = crearRepositorio(false, true);
 
-    await republicarPlanSemanal(repositorio, { id: "operaciones-1", rol: "operaciones" }, "plan-1", "00000011", "Cambia descanso por feriado");
+    await republicarPlanSemanal(repositorio, { id: "operaciones-1", rol: "administrador" }, "plan-1", "00000011", "Cambia descanso por feriado");
 
     expect(reemplazos[0].turnos[0]).toMatchObject({ motivoNoAsistencia: "feriado" });
   });
 
-  it("permite a Finanzas republicar con las mismas reglas que Operaciones", async () => {
+  it("permite al gerente de área del grupo republicar y rechaza a otros roles y grupos", async () => {
     const { reemplazos, repositorio } = crearRepositorio();
+    const gerente = { id: "gerente-1", rol: "gerente_de_area" as const, grupos: [{ nombre: "tiendas", gestionaAsistencia: true }] };
 
-    await republicarPlanSemanal(repositorio, { id: "finanzas-1", rol: "finanzas" }, "plan-1", "00000011", "Corrige entrada pactada");
+    await republicarPlanSemanal(repositorio, gerente, "plan-1", "00000011", "Corrige entrada pactada");
 
     expect(reemplazos).toEqual([expect.objectContaining({ motivo: "Corrige entrada pactada" })]);
     expect(reemplazos[0].turnos).toHaveLength(7);
+    await expect(republicarPlanSemanal(repositorio, { id: "finanzas-1", rol: "finanzas" }, "plan-1", "00000011", "x")).rejects.toThrow("No tiene permiso para republicar horarios semanales.");
+    await expect(republicarPlanSemanal(repositorio, { ...gerente, grupos: [{ nombre: "taller", gestionaAsistencia: true }] }, "plan-1", "00000011", "x")).rejects.toThrow("No tiene permiso para republicar horarios semanales de este grupo.");
+    await expect(republicarPlanSemanal(repositorio, { ...gerente, grupos: [{ nombre: "tiendas", gestionaAsistencia: false }] }, "plan-1", "00000011", "x")).rejects.toThrow("No tiene permiso para republicar horarios semanales.");
+    expect(reemplazos).toHaveLength(1);
   });
 });

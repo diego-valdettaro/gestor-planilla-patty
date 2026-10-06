@@ -35,6 +35,7 @@ export const sedes = pgTable("sedes", {
 
 export const grupos = pgTable("grupos", {
   nombre: text("nombre").primaryKey(),
+  gestionaAsistencia: boolean("gestiona_asistencia").notNull().default(true),
   creadoEn: timestamp("creado_en", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -42,9 +43,16 @@ export const cuentasLocales = pgTable("cuentas_locales", {
   id: uuid("id").primaryKey().defaultRandom(),
   nombreUsuario: text("nombre_usuario").notNull().unique(),
   hashContrasena: text("hash_contrasena").notNull(),
-  rol: text("rol", { enum: ["operaciones", "administracion", "finanzas"] }).notNull(),
+  rol: text("rol", { enum: ["administrador", "gerente_de_area", "recursos_humanos", "finanzas"] }).notNull(),
   creadaEn: timestamp("creada_en", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// Un grupo tiene a lo sumo un gerente de área (PK en grupo); un gerente puede tener varios grupos.
+export const gerentesDeGrupo = pgTable("gerentes_de_grupo", {
+  grupo: text("grupo").primaryKey().references(() => grupos.nombre),
+  cuentaId: uuid("cuenta_id").notNull().references(() => cuentasLocales.id),
+  asignadoEn: timestamp("asignado_en", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [index("gerentes_de_grupo_cuenta_id").on(table.cuentaId)]);
 
 export const sesiones = pgTable(
   "sesiones",

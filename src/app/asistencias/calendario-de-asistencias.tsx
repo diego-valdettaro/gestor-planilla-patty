@@ -32,12 +32,14 @@ export function CalendarioDeAsistencias({
   desfase,
   dni,
   nombreColaborador,
+  soloLectura = false,
 }: {
   asistencias: Asistencia[];
   dias: string[];
   desfase: number;
   dni: string;
   nombreColaborador: string;
+  soloLectura?: boolean;
 }) {
   const porFecha = new Map(asistencias.map((asistencia) => [asistencia.fecha, asistencia]));
   const [fechaSeleccionada, setFechaSeleccionada] = useState<string>();
@@ -49,7 +51,7 @@ export function CalendarioDeAsistencias({
   const [estado, accion, pendiente] = useActionState(registrarAsistenciaManual, estadoInicial);
   const asistencia = fechaSeleccionada ? porFecha.get(fechaSeleccionada) : undefined;
   const estadoSeleccionado: EstadoDeCeldaAsistencia = estadoDeCeldaAsistencia(asistencia);
-  const editable = celdaDeAsistenciaEsEditable(asistencia);
+  const editable = !soloLectura && celdaDeAsistenciaEsEditable(asistencia);
 
   useEffect(() => {
     if (estado.listo) dialogo.current?.close();
@@ -118,17 +120,20 @@ export function CalendarioDeAsistencias({
             : <button className="boton-principal" disabled={pendiente} type="submit">{pendiente ? "Guardando…" : "Guardar asistencia"}</button>}
         </div>
         {estado.error && <p className="mensaje-operacion error" role="alert">{estado.error}</p>}
-      </form> : <FormularioSoloLectura estado={estadoSeleccionado} estadoManual={asistencia?.estadoManual ?? null} fecha={fechaSeleccionada} />}
+      </form> : <FormularioSoloLectura estado={estadoSeleccionado} estadoManual={asistencia?.estadoManual ?? null} fecha={fechaSeleccionada} soloConsulta={soloLectura} />}
     </dialog>
   </>;
 }
 
-function FormularioSoloLectura({ estado, estadoManual, fecha }: {
+function FormularioSoloLectura({ estado, estadoManual, fecha, soloConsulta = false }: {
   estado: EstadoDeCeldaAsistencia;
   estadoManual: EvidenciaDeCeldaAsistencia["estadoManual"];
   fecha: string | undefined;
+  soloConsulta?: boolean;
 }) {
-  const { titulo, descripcion } = textoSoloLectura(estado, estadoManual);
+  const { titulo, descripcion } = soloConsulta
+    ? { titulo: "Solo consulta", descripcion: `Estado del día: ${etiquetaDeCeldaAsistencia(estado, estadoManual)}. Su rol no registra ni confirma asistencias: lo hace el gerente de área del grupo.` }
+    : textoSoloLectura(estado, estadoManual);
   return <form method="dialog">
     <h2 id="titulo-asistencia">{titulo}</h2>
     <p>{fecha}. {descripcion}</p>

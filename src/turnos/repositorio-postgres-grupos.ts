@@ -1,7 +1,9 @@
-import { asc } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import * as schema from "@/db/schema";
+import type { Actor } from "@/autenticacion/permisos";
+import { puedeConsultarAsistenciaDelGrupo } from "@/autenticacion/permisos";
 import { grupos } from "@/db/schema";
 
 import { GrupoDuplicadoError, type RepositorioDeGrupos } from "./gestionar-grupos";
@@ -16,6 +18,21 @@ export class RepositorioPostgresDeGrupos implements RepositorioDeGrupos {
       if (esViolacionDeUnicidad(causa)) throw new GrupoDuplicadoError();
       throw causa;
     }
+  }
+
+  async actualizarGestionDeAsistencia(nombre: string, gestionaAsistencia: boolean): Promise<void> {
+    const actualizados = await this.db.update(grupos).set({ gestionaAsistencia }).where(eq(grupos.nombre, nombre)).returning({ nombre: grupos.nombre });
+    if (!actualizados.length) throw new Error("El grupo no existe.");
+  }
+
+  async listarConAtributos(): Promise<Array<{ nombre: string; gestionaAsistencia: boolean }>> {
+    return this.db.select({ nombre: grupos.nombre, gestionaAsistencia: grupos.gestionaAsistencia }).from(grupos).orderBy(asc(grupos.nombre));
+  }
+
+  /** Grupos que gestionan asistencia y que el actor puede operar (o, Finanzas, consultar). */
+  async listarOperablesPor(actor: Actor): Promise<string[]> {
+    const todos = await this.listarConAtributos();
+    return todos.filter(({ nombre, gestionaAsistencia }) => gestionaAsistencia && puedeConsultarAsistenciaDelGrupo(actor, nombre)).map(({ nombre }) => nombre);
   }
 
   async listar(): Promise<string[]> {

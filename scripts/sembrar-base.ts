@@ -8,7 +8,8 @@ import { Pool } from "pg";
 import { hashDeContrasena } from "@/autenticacion/contrasenas";
 import { provisionarCuentaLocal } from "@/autenticacion/provisionar-cuenta-local";
 import { RepositorioPostgresDeCuentas } from "@/autenticacion/repositorio-postgres";
-import type { Actor } from "@/colaboradores/registrar-colaborador";
+import { asignarGerenteAGrupo } from "@/autenticacion/gestionar-cuentas";
+import type { Actor } from "@/autenticacion/permisos";
 import { registrarColaborador } from "@/colaboradores/registrar-colaborador";
 import { RepositorioPostgresDeColaboradores } from "@/colaboradores/repositorio-postgres";
 import * as schema from "@/db/schema";
@@ -42,10 +43,22 @@ const GRUPOS = {
 };
 const NOMBRES_DE_GRUPO = Object.values(GRUPOS);
 
+// Una cuenta por rol, con la clave igual al nombre de usuario. Los gerentes de área ejemplifican
+// el modelo del ADR 0012: uno con varios grupos, uno cuyo único grupo (Administración) no gestiona
+// asistencia y uno sin grupos asignados (como queda una cuenta «operaciones» migrada).
 const CUENTAS = [
-  { nombreUsuario: "operaciones", contrasena: "operaciones", rol: "operaciones" },
-  { nombreUsuario: "admin", contrasena: "admin", rol: "administracion" },
+  { nombreUsuario: "admin", contrasena: "admin", rol: "administrador" },
   { nombreUsuario: "finanzas", contrasena: "finanzas", rol: "finanzas" },
+  { nombreUsuario: "rrhh", contrasena: "rrhh", rol: "recursos_humanos" },
+  { nombreUsuario: "gerente-tiendas", contrasena: "gerente-tiendas", rol: "gerente_de_area" },
+  { nombreUsuario: "gerente-administracion", contrasena: "gerente-administracion", rol: "gerente_de_area" },
+  { nombreUsuario: "gerente-sin-grupos", contrasena: "gerente-sin-grupos", rol: "gerente_de_area" },
+] as const;
+
+const GERENTES_POR_GRUPO = [
+  { gerente: "gerente-tiendas", grupo: GRUPOS.tiendas },
+  { gerente: "gerente-tiendas", grupo: GRUPOS.taller },
+  { gerente: "gerente-administracion", grupo: GRUPOS.administracion },
 ] as const;
 
 // Los DNI de demo comparten este patrón (99900001…99900011) para poder limpiarlos al resembrar.
@@ -147,6 +160,7 @@ async function limpiar(pool: Pool): Promise<void> {
     DELETE FROM periodos_planilla WHERE inicio IN ('${PERIODO_ACTUAL.inicio}', '${PERIODO_ANTERIOR.inicio}');
     DELETE FROM colaboradores WHERE dni LIKE '${PATRON_DNI_DEMO}';
     DELETE FROM sedes WHERE nombre IN (${sedes});
+    DELETE FROM gerentes_de_grupo WHERE cuenta_id IN (SELECT id FROM cuentas_locales WHERE nombre_usuario IN (${usuarios}));
     DELETE FROM grupos WHERE nombre IN (${NOMBRES_DE_GRUPO.map((nombre) => `'${nombre.replace(/'/g, "''")}'`).join(", ")});
     DELETE FROM sesiones WHERE cuenta_id IN (SELECT id FROM cuentas_locales WHERE nombre_usuario IN (${usuarios}));
     DELETE FROM cuentas_locales WHERE nombre_usuario IN (${usuarios});
@@ -298,12 +312,15 @@ async function main(): Promise<void> {
     }
     const admin = await cuentas.buscarPorNombreUsuario("admin");
     const finanzas = await cuentas.buscarPorNombreUsuario("finanzas");
-    if (!admin || !finanzas) throw new Error("No se pudieron leer las cuentas recién creadas.");
-    const actorAdmin: Actor = { id: admin.id, rol: "administracion" };
-    const actorOperaciones: Actor = { id: admin.id, rol: "operaciones" };
+    const gerenteTiendas = await cuentas.buscarPorNombreUsuario("gerente-tiendas");
+    if (!admin || !finanzas || !gerenteTiendas) throw new Error("No se pudieron leer las cuentas recién creadas.");
+    const actorAdmin: Actor = { id: admin.id, rol: "administrador" };
+    const actorFinanzas: Actor = { id: finanzas.id, rol: "finanzas" };
+    const actorGerenteDeTiendas: Actor = { id: gerenteTiendas.id, rol: "gerente_de_area", grupos: GERENTES_POR_GRUPO.filter(({ gerente }) => gerente === "gerente-tiendas").map(({ grupo }) => ({ nombre: grupo, gestionaAsistencia: true })) };
 
     // --- Sedes (mismo camino que `configuracion/actions.ts`: insert directo) ---
-    await db.insert(schema.grupos).values(NOMBRES_DE_GRUPO.map((nombre) => ({ nombre })));
+    // Administración entra en planilla pero no marca: queda fuera de horarios y asistencias (ADR 0012).
+    await db.insert(schema.grupos).values(NOMBRES_DE_GRUPO.map((nombre) => ({ nombre, gestionaAsistencia: nombre !== GRUPOS.administracion })));
     await db.insert(schema.sedes).values([
       { nombre: SEDES.benavides, activa: true, grupo: GRUPOS.tiendas },
       { nombre: SEDES.sanIsidro, activa: true, grupo: GRUPOS.tiendas },
@@ -311,6 +328,13 @@ async function main(): Promise<void> {
       { nombre: SEDES.administracion, activa: true, grupo: GRUPOS.administracion },
       { nombre: SEDES.depositoInactivo, activa: false, grupo: null }, // sede inactiva, sin colaboradores: no necesita grupo
     ]);
+
+    // --- Gerentes por grupo (caso de uso: Finanzas asigna) ---
+    for (const { gerente, grupo } of GERENTES_POR_GRUPO) {
+      const cuenta = await cuentas.buscarPorNombreUsuario(gerente);
+      if (!cuenta) throw new Error(`No se pudo leer la cuenta ${gerente}.`);
+      await asignarGerenteAGrupo(cuentas, actorFinanzas, grupo, cuenta.id);
+    }
 
     // --- Modelos de horario (caso de uso: valida las horas) ---
     for (const modelo of MODELOS) {
@@ -337,10 +361,10 @@ async function main(): Promise<void> {
 
     // --- Actividad: semana del mes actual, grupo tiendas ---
     // Beto -> Publicado ; Carla -> Publicado con una celda editada ; Darío -> Liquidado
-    await turnos.publicarEnLote(turnosDeSemana("99900002", SEDES.benavides, SEMANA_ACTUAL), actorOperaciones);
-    await turnos.publicarEnLote(turnosDeSemana("99900003", SEDES.benavides, SEMANA_ACTUAL), actorOperaciones);
-    await turnos.publicarEnLote(turnosDeSemana("99900004", SEDES.sanIsidro, SEMANA_ACTUAL), actorOperaciones);
-    await turnos.publicarEnLote(turnosDeSemana("99900006", SEDES.benavides, SEMANA_ACTUAL), actorOperaciones);
+    await turnos.publicarEnLote(turnosDeSemana("99900002", SEDES.benavides, SEMANA_ACTUAL), actorGerenteDeTiendas);
+    await turnos.publicarEnLote(turnosDeSemana("99900003", SEDES.benavides, SEMANA_ACTUAL), actorGerenteDeTiendas);
+    await turnos.publicarEnLote(turnosDeSemana("99900004", SEDES.sanIsidro, SEMANA_ACTUAL), actorGerenteDeTiendas);
+    await turnos.publicarEnLote(turnosDeSemana("99900006", SEDES.benavides, SEMANA_ACTUAL), actorGerenteDeTiendas);
     for (const fecha of diasDeLaSemana(SEMANA_ACTUAL).slice(0, 6)) {
       await db.update(schema.asistenciasEsperadas).set({
         entradaPropuesta: `${fecha}T08:02:00`,
@@ -371,7 +395,7 @@ async function main(): Promise<void> {
     await turnos.guardarCeldas([...celdasAna, ...celdasCarla]);
 
     // --- Mes anterior con período cerrado (Elena publicada + procesada, luego se cierra) ---
-    await turnos.publicarEnLote(turnosDeSemana("99900005", SEDES.sanIsidro, SEMANA_ANTERIOR), actorOperaciones);
+    await turnos.publicarEnLote(turnosDeSemana("99900005", SEDES.sanIsidro, SEMANA_ANTERIOR), actorGerenteDeTiendas);
     await confirmarSemanaLaboral(db, "99900005", modeloApertura(SEDES.sanIsidro), SEMANA_ANTERIOR);
     await turnos.registrarProcesamiento({ dni: "99900005", semana: SEMANA_ANTERIOR, equipo: "Tiendas", responsableId: finanzas.id });
     await db.update(schema.periodosPlanilla)
