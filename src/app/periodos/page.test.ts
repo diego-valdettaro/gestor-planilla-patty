@@ -141,7 +141,7 @@ describe("página de Períodos de planilla (/periodos)", () => {
       expect(html).toContain("Aprobada por gerente-taller el 2026-01-20 15:30 UTC");
       expect(html).toContain("Pendiente de aprobación");
       expect(html).toContain("Personas que bloquean la aprobación de Tiendas");
-      expect(html).toContain("Ana (00000001): Sin horario publicado, 3 días (del 2026-01-29 al 2026-01-31)");
+      expect(html).toContain("Ana (00000001): Sin horario publicado, 3 días (entre el 2026-01-29 y el 2026-01-31)");
       expect(html).toContain("Beto (00000002): Asistencia pendiente de revisión, el 2026-01-05");
       expect(html).toContain('href="/asistencias?vista=mensual&amp;grupo=Tiendas&amp;fecha=2026-01-29&amp;colaborador=00000001"');
       expect(html).not.toContain("data-aprobar");

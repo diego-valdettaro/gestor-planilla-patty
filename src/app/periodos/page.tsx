@@ -130,7 +130,7 @@ function detalleDeAprobacion(aprobacion: AprobacionDeGrupo): string {
 }
 
 function textoDeFechas(fechas: string[]): string {
-  return fechas.length === 1 ? `el ${fechas[0]}` : `${fechas.length} días (del ${fechas[0]} al ${fechas[fechas.length - 1]})`;
+  return fechas.length === 1 ? `el ${fechas[0]}` : `${fechas.length} días (entre el ${fechas[0]} y el ${fechas[fechas.length - 1]})`;
 }
 
 function enlaceDeBloqueoDeAprobacion(grupo: string, dni: string, fecha: string): string {
