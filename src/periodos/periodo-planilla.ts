@@ -1,6 +1,6 @@
 import type { Actor } from "@/autenticacion/permisos";
 import { exigir, puedeGestionarPeriodos } from "@/autenticacion/permisos";
-import { validarDescarteDeHoraExtra, type DescarteDeHoraExtra } from "@/asistencias/descarte-de-hora-extra";
+import { validarDescarteDeHoraExtra, type DecisionDeHoraExtra } from "@/asistencias/descarte-de-hora-extra";
 
 export type EstadoDePeriodo = "abierto" | "cerrado";
 export type AccionDePeriodo = "cierre" | "reapertura";
@@ -67,7 +67,7 @@ export interface RevisionDePeriodo {
   cerradaEn: Date;
 }
 
-export type DecisionDeHoraExtra = { estado: "aprobada" } | ({ estado: "descartada" } & DescarteDeHoraExtra);
+export type { DecisionDeHoraExtra };
 export interface SolicitudDeDecisionDeHorasExtra {
   periodoId: string;
   horasExtraIds: string[];

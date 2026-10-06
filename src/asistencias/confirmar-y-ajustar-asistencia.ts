@@ -2,7 +2,7 @@ import type { Actor } from "@/autenticacion/permisos";
 import { exigir, puedeGestionarPeriodos, puedeOperarAsistenciaDelGrupo, puedeRevisarAsistencias } from "@/autenticacion/permisos";
 import { calcularTardanza, type PoliticaDePenalizacionPorTardanzas, type TardanzaCalculada } from "@/tardanzas/politica-de-penalizacion";
 
-import { validarDescarteDeHoraExtra, type DescarteDeHoraExtra } from "./descarte-de-hora-extra";
+import { validarDescarteDeHoraExtra, type DecisionDeHoraExtra } from "./descarte-de-hora-extra";
 import { nombreDelMotivoPlanificado, type MotivoPlanificadoDeNoAsistencia, type TipoDeEstadoManualRegistrable } from "./estado-manual";
 
 export type { TipoDeEstadoManual } from "./estado-manual";
@@ -74,7 +74,7 @@ export interface RepositorioDeAsistencias {
   confirmar(asistencia: AsistenciaConfirmada): Promise<void>;
   buscarInstantaneaDeTurno(dni: string, fecha: string): Promise<InstantaneaDeTurno | undefined>;
   ajustar(solicitud: AjusteDeAsistencia, responsableId: string): Promise<void>;
-  decidirHoraExtra(dni: string, fecha: string, decision: DecisionDeHoraExtraPorJornada, responsableId: string): Promise<void>;
+  decidirHoraExtra(dni: string, fecha: string, decision: DecisionDeHoraExtra, responsableId: string): Promise<void>;
   registrarEstadoManual(estadoManual: EstadoManual): Promise<void>;
   buscarPoliticaVigente(sede: string, fecha: string): Promise<PoliticaDePenalizacionPorTardanzas | undefined>;
   contarTardanzas(dni: string, inicio: string, fin: string): Promise<number>;
@@ -90,7 +90,6 @@ export interface SolicitudDeDescarteDeHoraExtra extends SolicitudDeDecisionDeHor
   motivo?: string;
 }
 
-export type DecisionDeHoraExtraPorJornada = { estado: "aprobada" } | ({ estado: "descartada" } & DescarteDeHoraExtra);
 
 export async function confirmarAsistencia(
   repositorio: RepositorioDeAsistencias,

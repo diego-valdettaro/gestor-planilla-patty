@@ -11,12 +11,12 @@ import type {
   AsistenciaConfirmada,
   RepositorioDeAsistencias,
   AjusteDeAsistencia,
-  DecisionDeHoraExtraPorJornada,
   EstadoManual,
   InstantaneaDeTurno,
   TurnoParaConfirmar,
 } from "./confirmar-y-ajustar-asistencia";
 import { calcularMinutosTrabajados } from "./confirmar-y-ajustar-asistencia";
+import type { DecisionDeHoraExtra } from "./descarte-de-hora-extra";
 import type { MotivoPlanificadoDeNoAsistencia } from "./estado-manual";
 import { lunesDeLaSemana } from "./calcular-hora-extra";
 import { recalcularHorasExtraDeSemana } from "./recalcular-horas-extra-de-semana";
@@ -211,7 +211,7 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
     });
   }
 
-  async decidirHoraExtra(dni: string, fecha: string, decision: DecisionDeHoraExtraPorJornada, responsableId: string): Promise<void> {
+  async decidirHoraExtra(dni: string, fecha: string, decision: DecisionDeHoraExtra, responsableId: string): Promise<void> {
     const resultado = await this.db.update(horasExtra).set({
       estado: decision.estado,
       causaDeDescarte: decision.estado === "descartada" ? decision.causa : null,

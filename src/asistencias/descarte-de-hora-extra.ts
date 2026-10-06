@@ -12,6 +12,9 @@ export interface DescarteDeHoraExtra {
   motivo: string;
 }
 
+/** Decisión de Finanzas sobre una hora extra pendiente: aprobarla, o descartarla con su evidencia y motivo. */
+export type DecisionDeHoraExtra = { estado: "aprobada" } | ({ estado: "descartada" } & DescarteDeHoraExtra);
+
 /**
  * Una hora extra solo se descarta con la evidencia de una marca errónea o de permanencia sin
  * trabajo efectivo, y con el motivo que la describe. La falta de autorización previa no es causa.
