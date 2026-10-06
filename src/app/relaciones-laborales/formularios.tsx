@@ -1,8 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useId, useRef } from "react";
 
-import { corregirIngresoDesdeFormulario, registrarCeseDesdeFormulario, registrarIngresoDesdeFormulario, type EstadoDeFormularioDeRelacionLaboral } from "./actions";
+import { confirmarCeseDesdeFormulario, confirmarIngresoDesdeFormulario, corregirIngresoDesdeFormulario, registrarCeseDesdeFormulario, registrarIngresoDesdeFormulario, type EstadoDeFormularioDeRelacionLaboral } from "./actions";
 
 const estadoInicial: EstadoDeFormularioDeRelacionLaboral = {};
 
@@ -29,13 +29,40 @@ export function FormularioDeFecha({ relacionId, campo, valorInicial, minimo, eti
   nombreDeLaPersona: string;
 }) {
   const [estado, accion, pendiente] = useActionState(campo === "ingreso" ? corregirIngresoDesdeFormulario : registrarCeseDesdeFormulario, estadoInicial);
-  const nombreDelCampo = campo === "ingreso" ? "ingreso" : "cese";
   return <details className="edicion-configuracion"><summary>{etiquetaDelBoton}</summary>
     <form action={accion} className="formulario-edicion" key={estado.listo ?? 0}>
       <input name="relacionId" type="hidden" value={relacionId} />
-      <label>Fecha de {nombreDelCampo} de {nombreDeLaPersona}<input defaultValue={valorInicial} min={minimo} name="fecha" required type="date" /></label>
-      <button className="boton-principal" disabled={pendiente} type="submit">Guardar fecha</button>
+      <label>Fecha de {campo} de {nombreDeLaPersona}<input defaultValue={valorInicial} min={minimo} name="fecha" required type="date" /></label>
+      <button className="boton-secundario" disabled={pendiente} type="submit">Guardar fecha</button>
       {estado.error && <p className="mensaje-operacion error" role="alert">{estado.error}</p>}
     </form>
   </details>;
+}
+
+/** Confirma una fecha tras un diálogo; si el servidor la rechaza, el error queda dentro del diálogo, junto a la acción. */
+export function ConfirmacionDeFecha({ relacionId, campo, etiqueta, titulo, descripcion }: {
+  relacionId: string;
+  campo: Campo;
+  etiqueta: string;
+  titulo: string;
+  descripcion: string;
+}) {
+  const [estado, accion, pendiente] = useActionState(campo === "ingreso" ? confirmarIngresoDesdeFormulario : confirmarCeseDesdeFormulario, estadoInicial);
+  const dialogo = useRef<HTMLDialogElement>(null);
+  const tituloId = useId();
+  return <form action={accion}>
+    <input name="relacionId" type="hidden" value={relacionId} />
+    <button className="boton-secundario" onClick={() => dialogo.current?.showModal()} type="button">{etiqueta}</button>
+    <dialog aria-labelledby={tituloId} className="dialogo-confirmacion" ref={dialogo}>
+      <section>
+        <h2 id={tituloId}>{titulo}</h2>
+        <p>{descripcion}</p>
+        {estado.error && <p className="mensaje-operacion error" role="alert">{estado.error}</p>}
+        <div className="acciones-dialogo">
+          <button className="boton-secundario" onClick={() => dialogo.current?.close()} type="button">Cancelar</button>
+          <button className="boton-principal" disabled={pendiente} type="submit">{etiqueta}</button>
+        </div>
+      </section>
+    </dialog>
+  </form>;
 }

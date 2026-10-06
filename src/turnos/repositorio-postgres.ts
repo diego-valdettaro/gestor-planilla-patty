@@ -102,9 +102,11 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
     await this.db.transaction(async (tx) => {
       const jornadas: Array<TurnoPublicado & { grupo: Grupo; descanso: boolean }> = [];
       for (const turno of turnos) {
+        // FOR SHARE espera a que termine quien confirma un ingreso o cese de la persona (que la bloquea FOR UPDATE)
+        // y así las vigencias leídas abajo son las confirmadas hasta ahora.
         const [colaborador] = await tx.select({ grupo: colaboradores.grupo }).from(colaboradores).where(and(
           eq(colaboradores.dni, turno.dni), eq(colaboradores.activo, true),
-        ));
+        )).for("share");
         if (!colaborador) throw new Error("El colaborador activo no existe.");
         const vigencias = await vigenciasConfirmadasDe(tx, turno.dni);
         // La semana de la jornada debe tocar una relación laboral confirmada; cada día se valida contra ella.
@@ -231,7 +233,12 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
           eq(turnosPublicados.dni, turno.dni), eq(turnosPublicados.fecha, turno.fecha),
         ));
         if (!existente) throw new Error("La corrección debe incluir horarios semanales publicados.");
-        await validarJornadaPlanificada(this, existente.grupo, turno);
+        await tx.select({ id: colaboradores.id }).from(colaboradores).where(eq(colaboradores.dni, turno.dni)).for("share");
+        await validarJornadaPlanificada({
+          listarVigenciasConfirmadas: (dni) => vigenciasConfirmadasDe(tx, dni),
+          sedeActivaPerteneceAlGrupo: (sede, grupo) => this.sedeActivaPerteneceAlGrupo(sede, grupo),
+          buscarModeloDeHorario: (id) => this.buscarModeloDeHorario(id),
+        }, existente.grupo, turno);
         const jornada = normalizarJornada(turno, existente.grupo);
         const [asistencia] = await tx.select({ id: asistenciasEsperadas.id, estado: asistenciasEsperadas.estado }).from(asistenciasEsperadas).where(and(
           eq(asistenciasEsperadas.dni, turno.dni), eq(asistenciasEsperadas.fecha, turno.fecha),

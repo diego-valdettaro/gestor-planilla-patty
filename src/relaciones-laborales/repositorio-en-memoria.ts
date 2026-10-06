@@ -5,13 +5,11 @@ import type { AlmacenDeRelaciones, RelacionConPersona, RepositorioDeRelacionesLa
 // Apoyo de pruebas: repositorio en memoria con las dos personas de demo y sin bloqueo real de transacción.
 export const ANA = "99900001";
 export const BETO = "99900002";
-export const DNI_DE_ANA = ANA;
-export const DNI_DE_BETO = BETO;
 
 export function crearRepositorioEnMemoria() {
   const personas = new Map([
-    [DNI_DE_ANA, { dni: DNI_DE_ANA, nombre: "Ana Pérez", grupo: "Tiendas" }],
-    [DNI_DE_BETO, { dni: DNI_DE_BETO, nombre: "Beto Ruiz", grupo: "Taller" }],
+    [ANA, { dni: ANA, nombre: "Ana Pérez", grupo: "Tiendas" }],
+    [BETO, { dni: BETO, nombre: "Beto Ruiz", grupo: "Taller" }],
   ]);
   const relaciones: RelacionConPersona[] = [];
   const almacen: AlmacenDeRelaciones = {

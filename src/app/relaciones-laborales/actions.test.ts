@@ -39,7 +39,7 @@ describe("acciones de Relaciones laborales (borde del servidor)", () => {
     simulacro.actor.mockResolvedValue(recursosHumanos);
 
     const estado = await registrarIngresoDesdeFormulario({}, formulario({ dni: ANA, ingreso: "2026-03-02" }));
-    await confirmarIngresoDesdeFormulario(formulario({ relacionId: contexto.relaciones[0].id }));
+    await confirmarIngresoDesdeFormulario({}, formulario({ relacionId: contexto.relaciones[0].id }));
 
     expect(estado).toEqual({ listo: 1 });
     expect(contexto.relaciones[0]).toMatchObject({ dni: ANA, ingreso: "2026-03-02", ingresoConfirmado: true });
@@ -51,11 +51,11 @@ describe("acciones de Relaciones laborales (borde del servidor)", () => {
     simulacro.actor.mockResolvedValue(recursosHumanos);
     await registrarIngresoDesdeFormulario({}, formulario({ dni: ANA, ingreso: "2026-03-02" }));
     const { id } = contexto.relaciones[0];
-    await confirmarIngresoDesdeFormulario(formulario({ relacionId: id }));
+    expect(await confirmarIngresoDesdeFormulario({}, formulario({ relacionId: id }))).toEqual({ listo: 1 });
 
     expect(await registrarCeseDesdeFormulario({}, formulario({ relacionId: id, fecha: "2026-02-30" }))).toEqual({ error: "La fecha de cese no es válida." });
     expect(await registrarCeseDesdeFormulario({}, formulario({ relacionId: id, fecha: "2026-06-30" }))).toEqual({ listo: 1 });
-    await confirmarCeseDesdeFormulario(formulario({ relacionId: id }));
+    expect(await confirmarCeseDesdeFormulario({}, formulario({ relacionId: id }))).toEqual({ listo: 1 });
 
     expect(contexto.relaciones[0]).toMatchObject({ cese: "2026-06-30", ceseConfirmado: true });
   });
@@ -81,8 +81,8 @@ describe("acciones de Relaciones laborales (borde del servidor)", () => {
     expect(await registrarIngresoDesdeFormulario({}, formulario({ dni: ANA, ingreso: "2026-05-04" }))).toEqual({ error: expect.stringContaining("No tiene permiso") });
     expect(await corregirIngresoDesdeFormulario({}, formulario({ relacionId: id, fecha: "2026-03-09" }))).toEqual({ error: expect.stringContaining("No tiene permiso") });
     expect(await registrarCeseDesdeFormulario({}, formulario({ relacionId: id, fecha: "2026-06-30" }))).toEqual({ error: expect.stringContaining("No tiene permiso") });
-    await expect(confirmarIngresoDesdeFormulario(formulario({ relacionId: id }))).rejects.toThrow("No tiene permiso");
-    await expect(confirmarCeseDesdeFormulario(formulario({ relacionId: id }))).rejects.toThrow("No tiene permiso");
+    expect(await confirmarIngresoDesdeFormulario({}, formulario({ relacionId: id }))).toEqual({ error: "No tiene permiso para registrar ni confirmar relaciones laborales." });
+    expect(await confirmarCeseDesdeFormulario({}, formulario({ relacionId: id }))).toEqual({ error: "No tiene permiso para registrar ni confirmar relaciones laborales." });
 
     expect(contexto.relaciones).toHaveLength(1);
     expect(contexto.relaciones[0]).toMatchObject({ ingreso: "2026-03-02", cese: null, ingresoConfirmado: false });

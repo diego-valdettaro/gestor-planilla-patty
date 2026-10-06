@@ -120,7 +120,7 @@ describe.skipIf(!databaseUrl)("relaciones laborales (integración PostgreSQL)", 
 
     expect((await hay("2033-02-20")).map(({ dni }) => dni)).toEqual([]);
     expect((await hay("2033-02-01")).map(({ dni }) => dni)).toEqual([ana]);
-    expect((await hay("2033-02-10", "2033-03-10")).map(({ ingreso }) => ingreso)).toEqual(["2033-01-03", "2033-03-02"]);
+    expect((await hay("2033-02-10", "2033-03-10")).flatMap(({ relaciones }) => relaciones.map(({ ingreso }) => ingreso))).toEqual(["2033-01-03", "2033-03-02"]);
     expect((await hay("2033-03-02")).map(({ dni }) => dni)).toEqual([ana]);
   });
 

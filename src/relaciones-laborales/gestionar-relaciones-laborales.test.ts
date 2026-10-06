@@ -159,7 +159,7 @@ describe("personas con relación laboral vigente", () => {
     expect((await consultarPersonasConRelacionVigente(repositorio, finanzas, "2026-05-15")).map(({ dni }) => dni)).toEqual([ANA]);
     expect(await consultarPersonasConRelacionVigente(repositorio, finanzas, "2026-07-15")).toEqual([]);
     expect(await consultarPersonasConRelacionVigente(repositorio, finanzas, "2026-10-01")).toEqual([
-      { dni: ANA, nombre: "Ana Pérez", grupo: "Tiendas", relacionId: expect.any(String), ingreso: "2026-09-09", cese: null },
+      { dni: ANA, nombre: "Ana Pérez", grupo: "Tiendas", relaciones: [{ relacionId: expect.any(String), ingreso: "2026-09-09", cese: null }] },
     ]);
   });
 
@@ -168,7 +168,9 @@ describe("personas con relación laboral vigente", () => {
 
     const resultado = await consultarPersonasConRelacionVigente(repositorio, finanzas, "2026-06-25", "2026-09-15");
 
-    expect(resultado.map(({ ingreso, cese }) => ({ ingreso, cese }))).toEqual([{ ingreso: "2026-03-02", cese: "2026-06-30" }, { ingreso: "2026-09-09", cese: null }]);
+    // Una sola fila para Ana aunque el rango abarque su reingreso.
+    expect(resultado).toHaveLength(1);
+    expect(resultado[0].relaciones.map(({ ingreso, cese }) => ({ ingreso, cese }))).toEqual([{ ingreso: "2026-03-02", cese: "2026-06-30" }, { ingreso: "2026-09-09", cese: null }]);
     expect(await consultarPersonasConRelacionVigente(repositorio, finanzas, "2026-07-01", "2026-09-08")).toEqual([]);
   });
 

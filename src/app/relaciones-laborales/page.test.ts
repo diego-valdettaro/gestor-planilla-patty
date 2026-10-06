@@ -10,10 +10,9 @@ vi.mock("@/colaboradores/servicio", () => ({ repositorioDeColaboradores: { lista
 vi.mock("@/relaciones-laborales/servicio", () => ({
   get repositorioDeRelacionesLaborales() { return simulacro.repositorio; },
 }));
-vi.mock("@/app/boton-de-accion-confirmada", () => ({ BotonDeAccionConfirmada: ({ etiqueta }: { etiqueta: string }) => createElement("button", undefined, etiqueta) }));
-vi.mock("./actions", () => ({ confirmarIngresoDesdeFormulario: vi.fn(), confirmarCeseDesdeFormulario: vi.fn() }));
 vi.mock("./formularios", () => ({
   FormularioDeIngreso: ({ colaboradores }: { colaboradores: Array<{ dni: string }> }) => createElement("output", undefined, `ingreso:${colaboradores.map(({ dni }) => dni).join(",")}`),
+  ConfirmacionDeFecha: ({ etiqueta }: { etiqueta: string }) => createElement("button", undefined, etiqueta),
   FormularioDeFecha: ({ etiquetaDelBoton }: { etiquetaDelBoton: string }) => createElement("output", undefined, etiquetaDelBoton),
 }));
 
@@ -79,10 +78,10 @@ describe("página de Relaciones laborales (/relaciones-laborales)", () => {
     simulacro.actor.mockResolvedValue(recursosHumanos);
 
     const enLaFecha = await render({ desde: "2026-05-01" });
-    expect(enLaFecha).toContain("1 relación vigente");
+    expect(enLaFecha).toContain("1 persona vigente");
     expect(enLaFecha).toContain("Sin cese");
     // Un cese sin confirmar no corta la vigencia: Ana sigue vigente después del 30/06.
-    expect(await render({ desde: "2026-09-10" })).toContain("1 relación vigente");
+    expect(await render({ desde: "2026-09-10" })).toContain("1 persona vigente");
     const sinNadie = await render({ desde: "2026-02-01" });
     expect(sinNadie).toContain("Nadie tiene una relación laboral vigente");
     expect(await render({ desde: "2026-05-02", hasta: "2026-05-01" })).toContain('role="alert"');

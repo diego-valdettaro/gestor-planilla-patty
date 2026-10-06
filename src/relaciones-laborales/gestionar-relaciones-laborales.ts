@@ -31,14 +31,17 @@ export interface RepositorioDeRelacionesLaborales extends AlmacenDeRelaciones {
   ejecutarSobreColaborador<T>(dni: string, operacion: (almacen: AlmacenDeRelaciones) => Promise<T>): Promise<T>;
 }
 
+/** Una persona con relación laboral vigente; `relaciones` son las vigentes en la consulta (más de una si el rango abarca un reingreso). */
 export interface PersonaConRelacionVigente {
   dni: string;
   nombre: string;
   grupo: string;
-  relacionId: string;
-  ingreso: string;
-  /** Cese confirmado; null mientras no haya uno. */
-  cese: string | null;
+  relaciones: Array<{
+    relacionId: string;
+    ingreso: string;
+    /** Cese confirmado; null mientras no haya uno. */
+    cese: string | null;
+  }>;
 }
 
 const FIN_DE_LOS_TIEMPOS = "9999-12-31";
@@ -74,8 +77,8 @@ function verificarQueNoSeSolape(propuesta: { ingreso: string; cese: string | nul
   }
 }
 
-async function buscarOFallar(repositorio: RepositorioDeRelacionesLaborales, id: string): Promise<RelacionLaboral> {
-  const relacion = await repositorio.buscar(id);
+async function buscarOFallar(fuente: Pick<AlmacenDeRelaciones, "buscar">, id: string): Promise<RelacionLaboral> {
+  const relacion = await fuente.buscar(id);
   if (!relacion) throw new Error("No existe esa relación laboral.");
   return relacion;
 }
@@ -87,13 +90,11 @@ async function sobreRelacion<T>(
   operacion: (almacen: AlmacenDeRelaciones, relacion: RelacionLaboral) => Promise<T>,
 ): Promise<T> {
   const { dni } = await buscarOFallar(repositorio, id);
-  return repositorio.ejecutarSobreColaborador(dni, async (almacen) => operacion(almacen, await buscarEnAlmacen(almacen, id)));
+  return repositorio.ejecutarSobreColaborador(dni, async (almacen) => operacion(almacen, await buscarOFallar(almacen, id)));
 }
 
-async function buscarEnAlmacen(almacen: AlmacenDeRelaciones, id: string): Promise<RelacionLaboral> {
-  const relacion = await almacen.buscar(id);
-  if (!relacion) throw new Error("No existe esa relación laboral.");
-  return relacion;
+async function otrasRelacionesDe(almacen: AlmacenDeRelaciones, relacion: RelacionLaboral): Promise<RelacionLaboral[]> {
+  return (await almacen.listarDelColaborador(relacion.dni)).filter(({ id }) => id !== relacion.id);
 }
 
 /** Registra el ingreso de una persona ya dada de alta por el gerente de su grupo; es su primera relación o un reingreso con el mismo DNI. */
@@ -126,8 +127,7 @@ export async function corregirIngreso(
   await sobreRelacion(repositorio, relacionId, async (almacen, relacion) => {
     if (relacion.ingresoConfirmado) throw new Error("El ingreso ya está confirmado y no puede modificarse.");
     if (relacion.cese !== null && ingreso > relacion.cese) throw new Error("El ingreso no puede ser posterior al cese registrado.");
-    const otras = (await almacen.listarDelColaborador(relacion.dni)).filter(({ id }) => id !== relacion.id);
-    verificarQueNoSeSolape({ ingreso, cese: relacion.cese }, otras);
+    verificarQueNoSeSolape({ ingreso, cese: relacion.cese }, await otrasRelacionesDe(almacen, relacion));
     await almacen.actualizarIngreso(relacion.id, ingreso);
   });
 }
@@ -157,8 +157,7 @@ export async function registrarCese(
     if (!relacion.ingresoConfirmado) throw new Error("Confirme el ingreso antes de registrar el cese.");
     if (relacion.ceseConfirmado) throw new Error("El cese ya está confirmado y no puede modificarse.");
     if (cese < relacion.ingreso) throw new Error("El cese no puede ser anterior al ingreso.");
-    const otras = (await almacen.listarDelColaborador(relacion.dni)).filter(({ id }) => id !== relacion.id);
-    verificarQueNoSeSolape({ ingreso: relacion.ingreso, cese }, otras);
+    verificarQueNoSeSolape({ ingreso: relacion.ingreso, cese }, await otrasRelacionesDe(almacen, relacion));
     await almacen.actualizarCese(relacion.id, cese);
   });
 }
@@ -186,8 +185,8 @@ export async function listarRelacionesLaborales(
 }
 
 /**
- * Personas con relación laboral vigente en una fecha (`hasta` omitido) o con al menos un día vigente en el
- * rango `desde`–`hasta`. Parte de las relaciones confirmadas, no de las filas de asistencia.
+ * Personas (una fila por DNI) con relación laboral vigente en una fecha (`hasta` omitido) o con al menos un día
+ * vigente en el rango `desde`–`hasta`. Parte de las relaciones confirmadas, no de las filas de asistencia.
  */
 export async function consultarPersonasConRelacionVigente(
   repositorio: RepositorioDeRelacionesLaborales,
@@ -200,11 +199,15 @@ export async function consultarPersonasConRelacionVigente(
   validarFechaDeRelacion(hasta, "fin de la consulta");
   if (hasta < desde) throw new Error("El fin de la consulta no puede ser anterior a su inicio.");
 
-  const vigentes: PersonaConRelacionVigente[] = [];
+  const porDni = new Map<string, PersonaConRelacionVigente>();
   for (const relacion of await repositorio.listarConPersona()) {
     const [vigencia] = vigenciasConfirmadas([relacion]);
     if (!vigencia || !seSuperponeConElRango(vigencia, desde, hasta)) continue;
-    vigentes.push({ dni: relacion.dni, nombre: relacion.nombre, grupo: relacion.grupo, relacionId: relacion.id, ingreso: vigencia.ingreso, cese: vigencia.cese });
+    const persona = porDni.get(relacion.dni) ?? { dni: relacion.dni, nombre: relacion.nombre, grupo: relacion.grupo, relaciones: [] };
+    persona.relaciones.push({ relacionId: relacion.id, ingreso: vigencia.ingreso, cese: vigencia.cese });
+    porDni.set(relacion.dni, persona);
   }
-  return vigentes.sort((a, b) => a.nombre.localeCompare(b.nombre) || a.ingreso.localeCompare(b.ingreso));
+  return [...porDni.values()]
+    .map((persona) => ({ ...persona, relaciones: persona.relaciones.sort((a, b) => a.ingreso.localeCompare(b.ingreso)) }))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre));
 }

@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 
-import { BotonDeAccionConfirmada } from "@/app/boton-de-accion-confirmada";
 import { NOMBRE_DE_ROL, puedeConsultarRelacionesLaborales, puedeGestionarRelacionesLaborales } from "@/autenticacion/permisos";
 import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
 import { repositorioDeColaboradores } from "@/colaboradores/servicio";
@@ -9,8 +8,7 @@ import type { PersonaConRelacionVigente, RelacionConPersona } from "@/relaciones
 import { repositorioDeRelacionesLaborales } from "@/relaciones-laborales/servicio";
 import { estaVigenteEn, formatearFechaDeRelacion, vigenciasConfirmadas } from "@/relaciones-laborales/vigencia";
 
-import { confirmarCeseDesdeFormulario, confirmarIngresoDesdeFormulario } from "./actions";
-import { FormularioDeFecha, FormularioDeIngreso } from "./formularios";
+import { ConfirmacionDeFecha, FormularioDeFecha, FormularioDeIngreso } from "./formularios";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +17,7 @@ type Parametros = { desde?: string; hasta?: string };
 export default async function PaginaDeRelacionesLaborales({ searchParams }: { searchParams: Promise<Parametros> }) {
   const actor = await obtenerActorActual().catch(() => undefined);
   if (!actor) redirect("/iniciar-sesion");
-  if (!puedeConsultarRelacionesLaborales(actor)) return <main className="centrado"><section className="estado-vacio"><h1>Sin permiso</h1><p>Su rol no permite consultar relaciones laborales. Solo Recursos Humanos, Finanzas y el Administrador del sistema pueden hacerlo.</p></section></main>;
+  if (!puedeConsultarRelacionesLaborales(actor)) return <main className="centrado"><section className="estado-vacio"><h1>Sin permiso</h1><p>Su rol no permite consultar relaciones laborales. Pida al Administrador del sistema que revise su rol.</p></section></main>;
 
   const puedeGestionar = puedeGestionarRelacionesLaborales(actor);
   const casosDeUso = crearCasosDeUsoDeRelacionesLaborales(repositorioDeRelacionesLaborales, { obtenerActorActual });
@@ -63,7 +61,7 @@ export default async function PaginaDeRelacionesLaborales({ searchParams }: { se
     </section>
 
     <section className="tarjeta panel">
-      <header className="panel-cabecera"><div><h2>Personas con relación laboral vigente</h2><p>Consulta por fecha o rango, a partir de las relaciones confirmadas y sin depender de las asistencias registradas.</p></div><span className="insignia neutro">{vigentes.length} {vigentes.length === 1 ? "relación vigente" : "relaciones vigentes"}</span></header>
+      <header className="panel-cabecera"><div><h2>Personas con relación laboral vigente</h2><p>Consulta por fecha o rango, a partir de las relaciones confirmadas y sin depender de las asistencias registradas.</p></div><span className="insignia neutro">{vigentes.length} {vigentes.length === 1 ? "persona vigente" : "personas vigentes"}</span></header>
       <form className="filtros panel-filtros" method="get">
         <label>Desde<input defaultValue={desde} name="desde" required type="date" /></label>
         <label>Hasta (opcional)<input defaultValue={hasta} name="hasta" type="date" /></label>
@@ -71,7 +69,7 @@ export default async function PaginaDeRelacionesLaborales({ searchParams }: { se
       </form>
       {errorDeConsulta && <p className="mensaje-operacion error" role="alert">{errorDeConsulta}</p>}
       {!errorDeConsulta && (vigentes.length
-        ? <div className="panel-tabla"><table><thead><tr><th>Colaborador</th><th>DNI</th><th>Grupo</th><th>Ingreso</th><th>Cese confirmado</th></tr></thead><tbody>{vigentes.map((persona) => <tr key={persona.relacionId}><td>{persona.nombre}</td><td>{persona.dni}</td><td>{persona.grupo}</td><td>{formatearFechaDeRelacion(persona.ingreso)}</td><td>{persona.cese ? formatearFechaDeRelacion(persona.cese) : "Sin cese"}</td></tr>)}</tbody></table></div>
+        ? <div className="panel-tabla"><table><thead><tr><th>Colaborador</th><th>DNI</th><th>Grupo</th><th>Ingreso</th><th>Cese confirmado</th></tr></thead><tbody>{vigentes.map((persona) => <tr key={persona.dni}><td>{persona.nombre}</td><td>{persona.dni}</td><td>{persona.grupo}</td><td>{persona.relaciones.map((relacion) => <span className="linea-de-relacion" key={relacion.relacionId}>{formatearFechaDeRelacion(relacion.ingreso)}</span>)}</td><td>{persona.relaciones.map((relacion) => <span className="linea-de-relacion" key={relacion.relacionId}>{relacion.cese ? formatearFechaDeRelacion(relacion.cese) : "Sin cese"}</span>)}</td></tr>)}</tbody></table></div>
         : <section className="estado-vacio"><h3>Nadie tiene una relación laboral vigente {hasta ? "en ese rango" : "en esa fecha"}</h3><p>Una relación cuenta cuando su ingreso está confirmado. Confirme los ingresos pendientes o cambie la fecha de consulta.</p></section>)}
     </section>
   </main>;
@@ -88,12 +86,12 @@ function estadoDe(relacion: RelacionConPersona, hoy: string): string {
 function acciones(relacion: RelacionConPersona) {
   if (!relacion.ingresoConfirmado) return <>
     <FormularioDeFecha campo="ingreso" etiquetaDelBoton="Corregir ingreso" nombreDeLaPersona={relacion.nombre} relacionId={relacion.id} valorInicial={relacion.ingreso} />
-    <BotonDeAccionConfirmada accion={confirmarIngresoDesdeFormulario} confirmar="Confirmar ingreso" descripcion={`Se confirma que ${relacion.nombre} ingresó el ${formatearFechaDeRelacion(relacion.ingreso)}. Desde esa fecha el gerente puede publicar sus horarios y la persona entra en Pagos. Después no podrá corregirse.`} etiqueta="Confirmar ingreso" titulo={`¿Confirmar el ingreso de ${relacion.nombre}?`}><input name="relacionId" type="hidden" value={relacion.id} /></BotonDeAccionConfirmada>
+    <ConfirmacionDeFecha campo="ingreso" descripcion={`Se confirma que ${relacion.nombre} ingresó el ${formatearFechaDeRelacion(relacion.ingreso)}. Desde esa fecha el gerente puede publicar sus horarios y la persona entra en Pagos. Después no podrá corregirse.`} etiqueta="Confirmar ingreso" relacionId={relacion.id} titulo={`¿Confirmar el ingreso de ${relacion.nombre}?`} />
   </>;
   if (relacion.cese === null) return <FormularioDeFecha campo="cese" etiquetaDelBoton="Registrar cese" minimo={relacion.ingreso} nombreDeLaPersona={relacion.nombre} relacionId={relacion.id} />;
   if (!relacion.ceseConfirmado) return <>
     <FormularioDeFecha campo="cese" etiquetaDelBoton="Corregir cese" minimo={relacion.ingreso} nombreDeLaPersona={relacion.nombre} relacionId={relacion.id} valorInicial={relacion.cese} />
-    <BotonDeAccionConfirmada accion={confirmarCeseDesdeFormulario} confirmar="Confirmar cese" descripcion={`Se confirma que la relación laboral de ${relacion.nombre} termina el ${formatearFechaDeRelacion(relacion.cese)}. El gerente no podrá publicar horarios después de esa fecha. Después no podrá corregirse.`} etiqueta="Confirmar cese" titulo={`¿Confirmar el cese de ${relacion.nombre}?`}><input name="relacionId" type="hidden" value={relacion.id} /></BotonDeAccionConfirmada>
+    <ConfirmacionDeFecha campo="cese" descripcion={`Se confirma que la relación laboral de ${relacion.nombre} termina el ${formatearFechaDeRelacion(relacion.cese)}. El gerente no podrá publicar horarios después de esa fecha. Después no podrá corregirse.`} etiqueta="Confirmar cese" relacionId={relacion.id} titulo={`¿Confirmar el cese de ${relacion.nombre}?`} />
   </>;
   return <span className="pista-configuracion">Sin acciones pendientes</span>;
 }

@@ -43,14 +43,12 @@ export async function registrarCeseDesdeFormulario(estadoAnterior: EstadoDeFormu
   return ejecutar(estadoAnterior, () => casosDeUso().registrarCese(texto(formData, "relacionId"), texto(formData, "fecha")), "No se pudo registrar el cese.");
 }
 
-export async function confirmarIngresoDesdeFormulario(formData: FormData): Promise<void> {
-  await casosDeUso().confirmarIngreso(texto(formData, "relacionId"));
-  refrescar();
+export async function confirmarIngresoDesdeFormulario(estadoAnterior: EstadoDeFormularioDeRelacionLaboral, formData: FormData): Promise<EstadoDeFormularioDeRelacionLaboral> {
+  return ejecutar(estadoAnterior, () => casosDeUso().confirmarIngreso(texto(formData, "relacionId")), "No se pudo confirmar el ingreso.");
 }
 
-export async function confirmarCeseDesdeFormulario(formData: FormData): Promise<void> {
-  await casosDeUso().confirmarCese(texto(formData, "relacionId"));
-  refrescar();
+export async function confirmarCeseDesdeFormulario(estadoAnterior: EstadoDeFormularioDeRelacionLaboral, formData: FormData): Promise<EstadoDeFormularioDeRelacionLaboral> {
+  return ejecutar(estadoAnterior, () => casosDeUso().confirmarCese(texto(formData, "relacionId")), "No se pudo confirmar el cese.");
 }
 
 function texto(formData: FormData, campo: string): string {
