@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 
@@ -15,6 +15,7 @@ import { confirmarCese, confirmarIngreso, registrarCese, registrarIngreso } from
 import { RepositorioPostgresDeRelacionesLaborales } from "@/relaciones-laborales/repositorio-postgres";
 import { RepositorioPostgresDeColaboradores } from "@/colaboradores/repositorio-postgres";
 import * as schema from "@/db/schema";
+import { RepositorioPostgresDePeriodos } from "@/periodos/repositorio-postgres";
 import { configurarPoliticaDePenalizacionPorTardanzas } from "@/tardanzas/politica-de-penalizacion";
 import { RepositorioPostgresDeTardanzas } from "@/tardanzas/repositorio-postgres";
 import { crearModeloDeHorario } from "@/turnos/gestionar-modelos-de-horario";
@@ -88,6 +89,7 @@ const COLABORADORES = [
 // salvo las de los tres casos de arriba (ver `registrarRelacionesLaborales`).
 const INGRESO_DE_DEMO = "2020-01-06";
 const DNI_CON_RELACION_ESPECIAL = ["99900012", "99900013", "99900014"];
+const DNI_DE_TALLER = ["99900007", "99900008"];
 
 const MODELOS = [
   { id: randomUUID(), sede: SEDES.benavides, nombre: "Apertura", entrada: "08:00", salida: "16:00" },
@@ -167,6 +169,7 @@ async function limpiar(pool: Pool): Promise<void> {
     DELETE FROM auditoria_modelos_de_horario WHERE modelo_id IN (SELECT id FROM modelos_de_horario WHERE sede IN (${sedes}));
     DELETE FROM modelos_de_horario WHERE sede IN (${sedes});
     DELETE FROM politicas_de_penalizacion_por_tardanzas WHERE sede IN (${sedes});
+    DELETE FROM aprobaciones_de_asistencia WHERE periodo_id IN (SELECT id FROM periodos_planilla WHERE inicio IN ('${PERIODO_ACTUAL.inicio}', '${PERIODO_ANTERIOR.inicio}'));
     DELETE FROM auditoria_periodos_planilla WHERE periodo_id IN (SELECT id FROM periodos_planilla WHERE inicio IN ('${PERIODO_ACTUAL.inicio}', '${PERIODO_ANTERIOR.inicio}'));
     DELETE FROM periodos_planilla WHERE inicio IN ('${PERIODO_ACTUAL.inicio}', '${PERIODO_ANTERIOR.inicio}');
     DELETE FROM relaciones_laborales WHERE dni LIKE '${PATRON_DNI_DEMO}';
@@ -178,6 +181,37 @@ async function limpiar(pool: Pool): Promise<void> {
     DELETE FROM cuentas_locales WHERE nombre_usuario IN (${usuarios});
     COMMIT;
   `);
+}
+
+function fechasDelRango(inicio: string, fin: string): string[] {
+  const fechas: string[] = [];
+  for (let instante = Date.parse(inicio); instante <= Date.parse(fin); instante += 86_400_000) fechas.push(iso(new Date(instante)));
+  return fechas;
+}
+
+/**
+ * Taller queda con la situación resuelta todo el período abierto (lunes a viernes confirmados, fines de semana de descanso):
+ * el gerente puede aprobar su asistencia. Tiendas, en cambio, queda bloqueada por personas sin horario o pendientes.
+ */
+async function resolverAsistenciaDeTaller(db: Db, turnos: RepositorioPostgresDeTurnos, actor: Actor): Promise<void> {
+  const fechas = fechasDelRango(PERIODO_ACTUAL.inicio, PERIODO_ACTUAL.fin);
+  for (const dni of DNI_DE_TALLER) {
+    await turnos.publicarEnLote(fechas.map((fecha) => {
+      const finDeSemana = [0, 6].includes(new Date(`${fecha}T00:00:00Z`).getUTCDay());
+      return finDeSemana
+        ? { dni, fecha, sede: null, entradaProgramada: null, salidaProgramada: null, motivoNoAsistencia: "descanso" as const }
+        : { dni, fecha, sede: SEDES.taller, entradaProgramada: "07:00", salidaProgramada: "16:00", descanso: false };
+    }), actor);
+    await db.update(schema.asistenciasEsperadas).set({
+      estado: "confirmada",
+      entradaReal: sql`${schema.asistenciasEsperadas.fecha}::text || 'T07:00:00'`,
+      salidaReal: sql`${schema.asistenciasEsperadas.fecha}::text || 'T16:00:00'`,
+      minutosTrabajados: 540,
+      instantaneaDeTurno: { sede: SEDES.taller, entradaProgramada: "07:00", salidaProgramada: "16:00", descanso: false },
+      confirmadoPorId: actor.id,
+      confirmadoEn: new Date(),
+    }).where(and(eq(schema.asistenciasEsperadas.dni, dni), eq(schema.asistenciasEsperadas.estado, "pendiente")));
+  }
 }
 
 async function registrarRelacionesLaborales(db: Db, actor: Actor): Promise<void> {
@@ -318,6 +352,20 @@ async function verificarInvariantes(pool: Pool): Promise<void> {
   if (fallos.length) throw new Error(`Invariantes del seed no se cumplen:\n- ${fallos.join("\n- ")}`);
 }
 
+async function verificarAprobaciones(db: Db): Promise<void> {
+  const periodos = new RepositorioPostgresDePeriodos(db);
+  const fallos: string[] = [];
+  const [abierto] = await db.select({ id: schema.periodosPlanilla.id }).from(schema.periodosPlanilla).where(eq(schema.periodosPlanilla.inicio, PERIODO_ACTUAL.inicio));
+  const [cerrado] = await db.select({ id: schema.periodosPlanilla.id }).from(schema.periodosPlanilla).where(eq(schema.periodosPlanilla.inicio, PERIODO_ANTERIOR.inicio));
+  const delAbierto = new Map((await periodos.listarAprobaciones(abierto.id)).map((aprobacion) => [aprobacion.grupo, aprobacion]));
+  if (delAbierto.has(GRUPOS.administracion)) fallos.push("Administración no gestiona asistencia y no debería pedir aprobación");
+  if (delAbierto.get(GRUPOS.taller)?.bloqueos.length !== 0) fallos.push("Taller debería poder aprobarse en el período abierto");
+  if (!delAbierto.get(GRUPOS.tiendas)?.bloqueos.length) fallos.push("Tiendas debería tener personas que bloquean la aprobación");
+  const delCerrado = await periodos.listarAprobaciones(cerrado.id);
+  if (delCerrado.some(({ estado }) => estado !== "aprobada")) fallos.push("el período cerrado debería tener todos sus grupos aprobados");
+  if (fallos.length) throw new Error(`Invariantes de aprobación no se cumplen:\n- ${fallos.join("\n- ")}`);
+}
+
 function resumen(): string {
   return [
     "Seed de demo aplicado.",
@@ -333,6 +381,11 @@ function resumen(): string {
     "  Eva Confirmable  -> Lista para confirmar por rango",
     `Período ${PERIODO_ANTERIOR.inicio}..${PERIODO_ANTERIOR.fin}: cerrado (Elena publicada + procesada)`,
     `Período ${PERIODO_ACTUAL.inicio}..${PERIODO_ACTUAL.fin}: abierto`,
+    "",
+    "Aprobación de asistencia (#114; entre con gerente-tiendas / gerente-tiendas, finanzas / finanzas o admin / admin):",
+    `  Período abierto: Taller lista para aprobar; Tiendas bloqueada (personas sin horario o con asistencia pendiente); Administración no gestiona asistencia`,
+    `  Período cerrado ${PERIODO_ANTERIOR.inicio}..${PERIODO_ANTERIOR.fin}: Tiendas y Taller aprobadas`,
+    "  Finanzas ve el cierre explicado: no puede cerrar el período abierto hasta que ambos grupos estén aprobados",
     "",
     "Relaciones laborales (rrhh / rrhh):",
     "  Julia Ingreso    -> ingresa el miércoles de la semana de actividad (lun/mar = «Sin relación laboral»)",
@@ -461,6 +514,15 @@ async function main(): Promise<void> {
       .set({ estado: "cerrado", cerradoPorId: finanzas.id, cerradoEn: new Date() })
       .where(eq(schema.periodosPlanilla.inicio, PERIODO_ANTERIOR.inicio));
 
+    // --- Aprobación de asistencia por grupo (#114) ---
+    // Período abierto: Taller con todo resuelto (el gerente puede aprobar) y Tiendas bloqueada por personas sin horario o pendientes.
+    await resolverAsistenciaDeTaller(db, turnos, actorAdmin);
+    // Período cerrado: sus aprobaciones quedaron vigentes cuando lo cerró Finanzas (escritura directa: el cierre de arriba también lo es).
+    const [periodoAnterior] = await db.select({ id: schema.periodosPlanilla.id }).from(schema.periodosPlanilla).where(eq(schema.periodosPlanilla.inicio, PERIODO_ANTERIOR.inicio));
+    await db.insert(schema.aprobacionesDeAsistencia).values([GRUPOS.tiendas, GRUPOS.taller].map((grupo) => ({
+      periodoId: periodoAnterior.id, grupo, aprobadaPorId: gerenteTiendas.id, aprobadaEn: new Date(),
+    })));
+
     // --- Asistencias en sus estados actuales (pendiente / confirmada / manual) + tardanza + hora extra.
     // Sin caso de uso limpio para fabricar estos estados; escritura directa.
     const [lun, mar, mie] = diasActual;
@@ -473,6 +535,7 @@ async function main(): Promise<void> {
     // Darío ya quedó todo confirmado (semana liquidada).
 
     await verificarInvariantes(pool);
+    await verificarAprobaciones(db);
     console.log(resumen());
   } finally {
     await pool.end();

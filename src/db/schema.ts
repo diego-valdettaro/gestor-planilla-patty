@@ -119,6 +119,26 @@ export const revisionesDePeriodosPlanilla = pgTable(
   (table) => [uniqueIndex("revisiones_periodo_numero").on(table.periodoId, table.numero)],
 );
 
+// Aprobación de la asistencia de un grupo para un período (ADR 0012). Solo se agregan filas: una corrección
+// invalida la vigente (invalidadaEn + motivo) y la renovación inserta otra, así el historial se conserva.
+export const aprobacionesDeAsistencia = pgTable(
+  "aprobaciones_de_asistencia",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    periodoId: uuid("periodo_id").notNull().references(() => periodosPlanilla.id),
+    grupo: text("grupo").notNull().references(() => grupos.nombre),
+    aprobadaPorId: uuid("aprobada_por_id").notNull().references(() => cuentasLocales.id),
+    aprobadaEn: timestamp("aprobada_en", { withTimezone: true }).notNull(),
+    invalidadaEn: timestamp("invalidada_en", { withTimezone: true }),
+    motivoDeInvalidacion: text("motivo_de_invalidacion"),
+  },
+  (table) => [
+    index("aprobaciones_de_asistencia_periodo_grupo").on(table.periodoId, table.grupo),
+    uniqueIndex("aprobaciones_de_asistencia_una_vigente").on(table.periodoId, table.grupo).where(sql`${table.invalidadaEn} IS NULL`),
+    check("aprobaciones_de_asistencia_invalidacion_completa", sql`(${table.invalidadaEn} IS NULL) = (${table.motivoDeInvalidacion} IS NULL)`),
+  ],
+);
+
 export const modelosDeHorario = pgTable(
   "modelos_de_horario",
   {

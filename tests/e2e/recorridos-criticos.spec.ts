@@ -381,7 +381,7 @@ test("cada rol ve en el menú exactamente las rutas que puede abrir", async ({ p
   const casos: Array<[string, string[]]> = [
     ["admin", ["Configuración", "Cuentas", "Horarios", "Asistencia", "Períodos de planilla", "Relaciones laborales"]],
     ["finanzas", ["Cuentas", "Asistencia", "Períodos de planilla", "Relaciones laborales"]],
-    ["gerente-tiendas", ["Configuración", "Horarios", "Asistencia"]],
+    ["gerente-tiendas", ["Configuración", "Horarios", "Asistencia", "Períodos de planilla"]],
     ["gerente-administracion", ["Configuración"]],
     ["gerente-sin-grupos", []],
     ["rrhh", ["Relaciones laborales"]],
@@ -394,6 +394,39 @@ test("cada rol ve en el menú exactamente las rutas que puede abrir", async ({ p
     const etiquetas = (await menu.locator(".enlaces-navegacion a").allInnerTexts()).map((texto) => texto.replace(/\s+/g, " ").replace("(sección actual)", "").replace(/^\S+\s/, "").trim());
     expect(etiquetas.map((etiqueta) => etiqueta.replace(/^[^\p{L}]+/u, "")), `menú de ${usuario}`).toEqual(enlaces);
   }
+  expect(errores).toEqual([]);
+});
+
+test("el gerente aprueba la asistencia de su grupo y Finanzas ve por qué no puede cerrar el período", async ({ page }) => {
+  test.setTimeout(90_000);
+  const errores = observarErroresDelNavegador(page);
+
+  await iniciarSesion(page, "gerente-tiendas");
+  await page.goto("/periodos");
+  await expect(page.getByRole("heading", { name: "Períodos de planilla", level: 1 })).toBeVisible();
+  // El gerente solo ve y aprueba sus grupos: sin exportación, cierre ni reapertura, y Administración no gestiona asistencia.
+  await expect(page.getByRole("link", { name: "Exportar XLSX completo" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Cerrar período" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Reabrir período" })).toHaveCount(0);
+  const tabla = page.getByRole("region", { name: "Aprobación de asistencia por grupo" });
+  const filaDe = (grupo: string) => tabla.locator("tbody tr").filter({ hasText: new RegExp(`^${grupo}`) });
+  await expect(filaDe("Administración")).toHaveCount(0);
+  await expect(filaDe("Tiendas")).toContainText("Pendiente de aprobación");
+  await expect(filaDe("Tiendas").getByRole("button", { name: /Aprobar/ })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Personas que bloquean la aprobación de Tiendas" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Ana Borrador \(99900001\): Sin horario publicado/ })).toBeVisible();
+
+  await filaDe("Taller").getByRole("button", { name: /Aprobar asistencia/ }).click();
+  await expect(filaDe("Taller")).toContainText("Aprobada por gerente-tiendas");
+  await expect(filaDe("Taller").getByRole("button", { name: /Aprobar/ })).toHaveCount(0);
+
+  await page.context().clearCookies();
+  await iniciarSesion(page, "finanzas");
+  await page.goto("/periodos");
+  await expect(page.getByRole("button", { name: /Aprobar asistencia/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Cerrar período" })).toBeDisabled();
+  await expect(page.getByText("falta la aprobación de asistencia del grupo Tiendas")).toBeVisible();
+  await expect(page.getByText("Finanzas no aprueba en su nombre")).toBeVisible();
   expect(errores).toEqual([]);
 });
 

@@ -3,6 +3,7 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import * as schema from "@/db/schema";
 import type { MotivoPlanificadoDeNoAsistencia, TipoDeEstadoManual } from "@/asistencias/estado-manual";
+import { invalidarAprobacionesDeAsistencia, rangoDeFechas } from "@/periodos/aprobaciones";
 import {
   asistenciasEsperadas,
   colaboradores,
@@ -110,6 +111,14 @@ export class RepositorioPostgresDeImportaciones implements RepositorioDeImportac
 
   async guardar(importacion: ImportacionDeAsistencias): Promise<void> {
     await this.db.transaction(async (tx) => {
+      // Una importación que agrega propuestas o reemplaza asistencias ya registradas es una corrección (ADR 0012).
+      const afectadas = [...importacion.propuestas, ...importacion.reemplazos];
+      if (afectadas.length) {
+        const rango = rangoDeFechas(afectadas.map(({ fecha }) => fecha));
+        await invalidarAprobacionesDeAsistencia(tx, {
+          dnis: afectadas.map(({ dni }) => dni), ...rango, motivo: `Se importaron marcas del ${rango.desde} al ${rango.hasta}.`,
+        });
+      }
       const [guardada] = await tx.insert(importacionesSemanales).values({
         archivoNombre: importacion.archivo.nombre, archivoUbicacion: importacion.archivo.ubicacion, archivoHashSha256: importacion.archivo.hashSha256,
         usuarioId: importacion.usuarioId, importadaEn: importacion.importadaEn,

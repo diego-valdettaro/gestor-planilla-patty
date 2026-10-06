@@ -3,11 +3,12 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import * as schema from "@/db/schema";
 import { colaboradores, relacionesLaborales } from "@/db/schema";
+import { bloquearPeriodos, invalidarAprobacionesDeAsistencia, SIN_FIN } from "@/periodos/aprobaciones";
 
 import type { AlmacenDeRelaciones, RelacionConPersona, RepositorioDeRelacionesLaborales } from "./gestionar-relaciones-laborales";
 import { vigenciasConfirmadas, type RelacionLaboral, type Vigencia } from "./vigencia";
 
-type Db = Pick<NodePgDatabase<typeof schema>, "select" | "insert" | "update">;
+type Db = Pick<NodePgDatabase<typeof schema>, "select" | "selectDistinct" | "insert" | "update">;
 
 const columnas = {
   id: relacionesLaborales.id,
@@ -47,7 +48,9 @@ class AlmacenPostgresDeRelaciones implements AlmacenDeRelaciones {
   }
 
   async confirmarIngreso(id: string, responsableId: string, confirmadoEn: Date): Promise<void> {
-    await this.db.update(relacionesLaborales).set({ ingresoConfirmadoPorId: responsableId, ingresoConfirmadoEn: confirmadoEn }).where(eq(relacionesLaborales.id, id));
+    const [relacion] = await this.db.update(relacionesLaborales).set({ ingresoConfirmadoPorId: responsableId, ingresoConfirmadoEn: confirmadoEn })
+      .where(eq(relacionesLaborales.id, id)).returning({ dni: relacionesLaborales.dni, ingreso: relacionesLaborales.ingreso, cese: relacionesLaborales.cese });
+    await this.invalidarAprobaciones(relacion, "Se confirmó un ingreso");
   }
 
   async actualizarCese(id: string, cese: string): Promise<void> {
@@ -55,7 +58,15 @@ class AlmacenPostgresDeRelaciones implements AlmacenDeRelaciones {
   }
 
   async confirmarCese(id: string, responsableId: string, confirmadoEn: Date): Promise<void> {
-    await this.db.update(relacionesLaborales).set({ ceseConfirmadoPorId: responsableId, ceseConfirmadoEn: confirmadoEn }).where(eq(relacionesLaborales.id, id));
+    const [relacion] = await this.db.update(relacionesLaborales).set({ ceseConfirmadoPorId: responsableId, ceseConfirmadoEn: confirmadoEn })
+      .where(eq(relacionesLaborales.id, id)).returning({ dni: relacionesLaborales.dni, ingreso: relacionesLaborales.ingreso, cese: relacionesLaborales.cese });
+    await this.invalidarAprobaciones(relacion, "Se confirmó un cese");
+  }
+
+  /** Confirmar un ingreso o un cese cambia quién entra en la población del grupo: invalida su aprobación (ADR 0012). */
+  private async invalidarAprobaciones(relacion: { dni: string; ingreso: string; cese: string | null } | undefined, motivo: string): Promise<void> {
+    if (!relacion) return;
+    await invalidarAprobacionesDeAsistencia(this.db, { dnis: [relacion.dni], desde: relacion.ingreso, hasta: relacion.cese ?? SIN_FIN, motivo: `${motivo} de la relación laboral de ${relacion.dni}.` });
   }
 }
 
@@ -85,6 +96,7 @@ export class RepositorioPostgresDeRelacionesLaborales extends AlmacenPostgresDeR
 
   async ejecutarSobreColaborador<T>(dni: string, operacion: (almacen: AlmacenDeRelaciones) => Promise<T>): Promise<T> {
     return this.raiz.transaction(async (tx) => {
+      await bloquearPeriodos(tx);
       await tx.select({ id: colaboradores.id }).from(colaboradores).where(and(eq(colaboradores.dni, dni))).for("update");
       return operacion(new AlmacenPostgresDeRelaciones(tx));
     });

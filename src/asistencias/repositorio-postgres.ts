@@ -1,9 +1,10 @@
-import { and, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import type { EvidenciaDeCeldaAsistencia } from "@/app/asistencias/estado-de-celda";
 import * as schema from "@/db/schema";
 import { ajustesDeAsistencia, asistenciasEsperadas, colaboradores, estadosManuales, horasExtra, marcasCrudas, periodosPlanilla, tardanzas, turnosPublicados } from "@/db/schema";
+import { invalidarAprobacionesDeAsistencia } from "@/periodos/aprobaciones";
 import { buscarPoliticaVigente, RepositorioPostgresDeTardanzas } from "@/tardanzas/repositorio-postgres";
 import { minutosDeTardanzaFueraDeTolerancia } from "@/tardanzas/politica-de-penalizacion";
 
@@ -59,10 +60,15 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
   async confirmarColaboradoresPorRango(solicitud: SolicitudDeConfirmacionPorRango, responsableId: string): Promise<void> {
     try {
       await this.db.transaction(async (tx) => {
+        // Ordenados por id, como en `invalidarAprobacionesDeAsistencia`: todos toman los bloqueos de períodos en el mismo orden.
         const periodos = await tx.select().from(periodosPlanilla).where(and(
           lte(periodosPlanilla.inicio, solicitud.fin),
           gte(periodosPlanilla.fin, solicitud.inicio),
-        )).for("update");
+        )).orderBy(asc(periodosPlanilla.id)).for("update");
+        await invalidarAprobacionesDeAsistencia(tx, {
+          dnis: solicitud.dnis, desde: solicitud.inicio, hasta: solicitud.fin,
+          motivo: `Se confirmaron asistencias del ${solicitud.inicio} al ${solicitud.fin}.`,
+        });
         const filas = await consultaJornadasDelRango(tx, solicitud.dnis, solicitud.inicio, solicitud.fin)
           .for("update", { of: asistenciasEsperadas });
         const evaluacion = evaluarJornadasDelRango({
@@ -173,6 +179,9 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
 
   async confirmar(asistencia: AsistenciaConfirmada): Promise<void> {
     await this.db.transaction(async (tx) => {
+      await invalidarAprobacionesDeAsistencia(tx, {
+        dnis: [asistencia.dni], desde: asistencia.fecha, hasta: asistencia.fecha, motivo: `Se confirmó la asistencia del ${asistencia.fecha}.`,
+      });
       const resultado = await tx.update(asistenciasEsperadas).set({
         estado: "confirmada", entradaReal: asistencia.entradaReal, salidaReal: asistencia.salidaReal,
         minutosTrabajados: asistencia.minutosTrabajados,
@@ -194,6 +203,9 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
 
   async ajustar(solicitud: AjusteDeAsistencia, responsableId: string): Promise<void> {
     await this.db.transaction(async (tx) => {
+      await invalidarAprobacionesDeAsistencia(tx, {
+        dnis: [solicitud.dni], desde: solicitud.fecha, hasta: solicitud.fecha, motivo: `Se ajustó la asistencia del ${solicitud.fecha}.`,
+      });
       const [asistencia] = await tx.update(asistenciasEsperadas).set({
         entradaReal: solicitud.entradaReal, salidaReal: solicitud.salidaReal, minutosTrabajados: solicitud.minutosTrabajados,
       }).where(and(eq(asistenciasEsperadas.dni, solicitud.dni), eq(asistenciasEsperadas.fecha, solicitud.fecha), eq(asistenciasEsperadas.estado, "confirmada")))
@@ -227,6 +239,9 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
 
   async registrarEstadoManual(estadoManual: EstadoManual): Promise<void> {
     await this.db.transaction(async (tx) => {
+      await invalidarAprobacionesDeAsistencia(tx, {
+        dnis: [estadoManual.dni], desde: estadoManual.fecha, hasta: estadoManual.fecha, motivo: `Se registró un estado manual el ${estadoManual.fecha}.`,
+      });
       const [asistencia] = await tx.update(asistenciasEsperadas).set({ estado: "manual" })
         .where(and(eq(asistenciasEsperadas.dni, estadoManual.dni), eq(asistenciasEsperadas.fecha, estadoManual.fecha), eq(asistenciasEsperadas.estado, "pendiente")))
         .returning({ id: asistenciasEsperadas.id });

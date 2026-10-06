@@ -53,7 +53,7 @@ Registro diario revisado que conserva las propuestas basadas en marcas crudas y 
 _Evitar_: asistencia editada, marca final
 
 **Aprobación de asistencias**:
-Conformidad del gerente de área sobre la situación de todos los colaboradores de su grupo en un período de planilla, incluidos quienes no tengan marcas del huellero. Una corrección posterior exige renovarla antes del cierre.
+Conformidad del gerente de área sobre la situación de todos los colaboradores de su grupo en un período de planilla, incluidos quienes no tengan marcas del huellero. Solo la dan los grupos que gestionan asistencia y bloquea quien tenga días de su relación laboral sin horario o con asistencia pendiente. Una corrección posterior invalida la aprobación del grupo afectado (queda en el historial) y exige renovarla antes del cierre.
 _Evitar_: confirmación diaria, cierre del período, aprobación de pago
 
 **Asistencia pendiente de revisión**:

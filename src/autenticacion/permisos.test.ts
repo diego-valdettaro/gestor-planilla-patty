@@ -9,7 +9,9 @@ import {
   puedeConfigurarGlobalmente,
   puedeConsultarAsistencias,
   puedeConsultarConfiguracion,
+  puedeAprobarAsistenciaDelGrupo,
   puedeConsultarHorarios,
+  puedeConsultarPeriodos,
   puedeConsultarRelacionesLaborales,
   puedeGestionarCalendarioLaboral,
   puedeGestionarPeriodos,
@@ -57,12 +59,28 @@ describe("matriz de permisos por rol", () => {
     ["consultar asistencias", puedeConsultarAsistencias, [administrador, finanzas, gerenteDeTiendas], [recursosHumanos, gerenteSinGrupos, gerenteDeAdministracion]],
     ["revisar y confirmar asistencias", puedeRevisarAsistencias, [administrador, gerenteDeTiendas], [finanzas, recursosHumanos, gerenteSinGrupos, gerenteDeAdministracion]],
     ["consultar horarios", puedeConsultarHorarios, [administrador, gerenteDeTiendas], [finanzas, recursosHumanos, gerenteSinGrupos, gerenteDeAdministracion]],
+    ["consultar períodos (un gerente solo para aprobar sus grupos)", puedeConsultarPeriodos, [administrador, finanzas, gerenteDeTiendas, gerenteDeVariosGrupos], [recursosHumanos, gerenteSinGrupos, gerenteDeAdministracion]],
     ["consultar configuración", puedeConsultarConfiguracion, [administrador, gerenteDeTiendas, gerenteDeAdministracion], [finanzas, recursosHumanos, gerenteSinGrupos]],
   ];
 
   it.each(casos)("%s", (_nombre, puede, permitidos, rechazados) => {
     for (const quien of permitidos) expect(puede(quien), `${quien.rol} debería poder`).toBe(true);
     for (const quien of rechazados) expect(puede(quien), `${quien.rol} no debería poder`).toBe(false);
+  });
+});
+
+describe("aprobar la asistencia de un grupo", () => {
+  it("la aprueba el gerente del grupo y el Administrador; Finanzas y Recursos Humanos no", () => {
+    expect(puedeAprobarAsistenciaDelGrupo(gerenteDeTiendas, "Tiendas")).toBe(true);
+    expect(puedeAprobarAsistenciaDelGrupo(administrador, "Taller")).toBe(true);
+    expect(puedeAprobarAsistenciaDelGrupo(finanzas, "Tiendas")).toBe(false);
+    expect(puedeAprobarAsistenciaDelGrupo(recursosHumanos, "Tiendas")).toBe(false);
+  });
+
+  it("un gerente no aprueba grupos ajenos ni un grupo que no gestiona asistencia", () => {
+    expect(puedeAprobarAsistenciaDelGrupo(gerenteDeTiendas, "Taller")).toBe(false);
+    expect(puedeAprobarAsistenciaDelGrupo(gerenteDeAdministracion, "Administración")).toBe(false);
+    expect(puedeAprobarAsistenciaDelGrupo(gerenteSinGrupos, "Tiendas")).toBe(false);
   });
 });
 

@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import * as schema from "@/db/schema";
 
+import { aprobarGruposQueGestionanAsistenciaDePrueba, eliminarAprobacionesDePrueba } from "./aprobaciones-de-prueba";
 import { decidirHorasExtra } from "./periodo-planilla";
 import { RepositorioPostgresDePeriodos } from "./repositorio-postgres";
 
@@ -76,6 +77,7 @@ describe.skipIf(!databaseUrl)("decisiones y revisiones de períodos en PostgreSQ
   afterAll(async () => {
     const asistencias = await db.select({ id: schema.asistenciasEsperadas.id }).from(schema.asistenciasEsperadas).where(eq(schema.asistenciasEsperadas.dni, dni));
     const ids = asistencias.map(({ id }) => id);
+    await eliminarAprobacionesDePrueba(db, [periodoDecisionesId, periodoCierreId]);
     await db.delete(schema.revisionesDePeriodosPlanilla).where(inArray(schema.revisionesDePeriodosPlanilla.periodoId, [periodoDecisionesId, periodoCierreId]));
     await db.delete(schema.auditoriaPeriodosPlanilla).where(inArray(schema.auditoriaPeriodosPlanilla.periodoId, [periodoDecisionesId, periodoCierreId]));
     if (ids.length) {
@@ -135,6 +137,8 @@ describe.skipIf(!databaseUrl)("decisiones y revisiones de períodos en PostgreSQ
   });
 
   it("bloquea pendientes, congela una revisión completa y conserva cierres anteriores al reabrir", async () => {
+    // El cierre exige la aprobación de cada grupo que gestiona asistencia (ADR 0012); aquí no es lo que se prueba.
+    await aprobarGruposQueGestionanAsistenciaDePrueba(db, periodoCierreId, finanzasId);
     await expect(repositorio.cerrar(periodoCierreId, finanzasId, instantePrimerCierre)).rejects.toThrow("asistencias pendientes");
     await db.update(schema.asistenciasEsperadas).set({ estado: "confirmada", entradaReal: "2071-02-03T09:00:00Z", salidaReal: "2071-02-03T18:00:00Z", minutosTrabajados: 540, instantaneaDeTurno: { sede: "Centro", entradaProgramada: "09:00", salidaProgramada: "17:00", descanso: false } }).where(eq(schema.asistenciasEsperadas.id, asistenciaPendienteId));
     const [extraPendiente] = await db.insert(schema.horasExtra).values({ asistenciaId: asistenciaPendienteId, minutosAl25: 60, minutosAl35: 0 }).returning({ id: schema.horasExtra.id });

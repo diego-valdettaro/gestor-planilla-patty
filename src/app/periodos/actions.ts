@@ -21,6 +21,22 @@ export async function decidirHorasExtraDesdeFormulario(formData: FormData): Prom
   revalidatePath("/periodos");
 }
 
+export interface EstadoDeAprobacionDeAsistencia { error?: string; listo?: boolean; }
+
+/** El gerente (o el Administrador) aprueba la asistencia de un grupo; el error se muestra junto al botón en lugar de romper la página. */
+export async function aprobarAsistenciaDesdeFormulario(_estadoAnterior: EstadoDeAprobacionDeAsistencia, formData: FormData): Promise<EstadoDeAprobacionDeAsistencia> {
+  try {
+    const casos = crearCasosDeUsoDePeriodos(repositorioDePeriodos, { obtenerActorActual });
+    await casos.aprobarAsistencia({ periodoId: obtenerTexto(formData, "periodoId"), grupo: obtenerTexto(formData, "grupo") });
+    revalidatePath("/periodos");
+    return { listo: true };
+  } catch (causa) {
+    // Refresca la lista de quienes bloquean: pudo cambiar desde que se cargó la página.
+    revalidatePath("/periodos");
+    return { error: causa instanceof Error ? causa.message : "No se pudo aprobar la asistencia." };
+  }
+}
+
 export interface EstadoDeCreacionDePeriodo { error?: string; advertencia?: string; valores?: { inicio: string; fin: string }; listo?: boolean; }
 
 export async function crearPeriodoDesdeFormulario(_estadoAnterior: EstadoDeCreacionDePeriodo, formData: FormData): Promise<EstadoDeCreacionDePeriodo> {

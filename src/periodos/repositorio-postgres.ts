@@ -1,22 +1,32 @@
-import { and, asc, desc, eq, gte, inArray, lte } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import * as schema from "@/db/schema";
 import {
+  aprobacionesDeAsistencia,
   asistenciasEsperadas,
   auditoriaPeriodosPlanilla,
   colaboradores,
+  cuentasLocales,
   estadosManuales,
+  gerentesDeGrupo,
+  grupos,
   horasExtra,
   periodosPlanilla,
+  relacionesLaborales,
   revisionesDePeriodosPlanilla,
   tardanzas,
   turnosPublicados,
 } from "@/db/schema";
 
+import { vigenciasConfirmadas, type RelacionLaboral } from "@/relaciones-laborales/vigencia";
+
+import { calcularBloqueosDeAprobacion, type BloqueoDeAprobacion, type JornadaParaAprobar } from "./aprobacion-de-asistencia";
 import {
+  AprobacionBloqueadaError,
   crearResumenVacio,
   PeriodosSolapadosError,
+  type AprobacionDeGrupo,
   type BloqueoDePeriodo,
   type DecisionDeHoraExtra,
   type DetalleDeJornada,
@@ -59,6 +69,62 @@ export class RepositorioPostgresDePeriodos implements RepositorioDePeriodos {
     return this.db.select().from(revisionesDePeriodosPlanilla)
       .where(eq(revisionesDePeriodosPlanilla.periodoId, periodoId))
       .orderBy(asc(revisionesDePeriodosPlanilla.numero));
+  }
+
+  async listarAprobaciones(periodoId: string): Promise<AprobacionDeGrupo[]> {
+    const periodo = await this.buscar(periodoId);
+    if (!periodo) throw new Error("No existe el período de planilla.");
+    const gruposQueGestionan = await this.db.select({ nombre: grupos.nombre }).from(grupos)
+      .where(eq(grupos.gestionaAsistencia, true)).orderBy(asc(grupos.nombre));
+    const gerentes = new Map((await this.db.select({ grupo: gerentesDeGrupo.grupo, nombreUsuario: cuentasLocales.nombreUsuario })
+      .from(gerentesDeGrupo).innerJoin(cuentasLocales, eq(cuentasLocales.id, gerentesDeGrupo.cuentaId)))
+      .map(({ grupo, nombreUsuario }) => [grupo, nombreUsuario]));
+    const registradas = await this.db.select({
+      grupo: aprobacionesDeAsistencia.grupo,
+      aprobadaPor: cuentasLocales.nombreUsuario,
+      aprobadaEn: aprobacionesDeAsistencia.aprobadaEn,
+      invalidadaEn: aprobacionesDeAsistencia.invalidadaEn,
+      motivoDeInvalidacion: aprobacionesDeAsistencia.motivoDeInvalidacion,
+    }).from(aprobacionesDeAsistencia)
+      .innerJoin(cuentasLocales, eq(cuentasLocales.id, aprobacionesDeAsistencia.aprobadaPorId))
+      .where(eq(aprobacionesDeAsistencia.periodoId, periodoId))
+      .orderBy(desc(aprobacionesDeAsistencia.aprobadaEn));
+    const resultado: AprobacionDeGrupo[] = [];
+    for (const { nombre } of gruposQueGestionan) {
+      const delGrupo = registradas.filter(({ grupo }) => grupo === nombre);
+      const vigente = delGrupo.find(({ invalidadaEn }) => invalidadaEn === null);
+      const ultima = vigente ?? delGrupo[0];
+      const estado = vigente ? "aprobada" : ultima ? "invalidada" : "pendiente";
+      resultado.push({
+        grupo: nombre,
+        gerente: gerentes.get(nombre) ?? null,
+        estado,
+        aprobadaPor: vigente?.aprobadaPor ?? null,
+        aprobadaEn: vigente?.aprobadaEn ?? null,
+        invalidadaEn: estado === "invalidada" ? ultima.invalidadaEn : null,
+        motivoDeInvalidacion: estado === "invalidada" ? ultima.motivoDeInvalidacion : null,
+        bloqueos: vigente ? [] : await bloqueosDeAprobacion(this.db, periodo, nombre),
+      });
+    }
+    return resultado;
+  }
+
+  async aprobarAsistencia(periodoId: string, grupo: string, responsableId: string, aprobadaEn: Date): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      // Mismo bloqueo del período que toma toda corrección de asistencia: aprobar y corregir se serializan.
+      const [periodo] = await tx.select().from(periodosPlanilla).where(eq(periodosPlanilla.id, periodoId)).for("update");
+      if (!periodo || periodo.estado !== "abierto") throw new Error("El período no existe o no está abierto.");
+      const [grupoDelPeriodo] = await tx.select({ gestionaAsistencia: grupos.gestionaAsistencia }).from(grupos).where(eq(grupos.nombre, grupo));
+      if (!grupoDelPeriodo) throw new Error("No existe el grupo.");
+      if (!grupoDelPeriodo.gestionaAsistencia) throw new Error("El grupo no gestiona asistencia: no requiere aprobación.");
+      const [vigente] = await tx.select({ id: aprobacionesDeAsistencia.id }).from(aprobacionesDeAsistencia).where(and(
+        eq(aprobacionesDeAsistencia.periodoId, periodoId), eq(aprobacionesDeAsistencia.grupo, grupo), isNull(aprobacionesDeAsistencia.invalidadaEn),
+      ));
+      if (vigente) throw new Error("La asistencia del grupo ya está aprobada para este período.");
+      const bloqueos = await bloqueosDeAprobacion(tx, periodo, grupo);
+      if (bloqueos.length) throw new AprobacionBloqueadaError(bloqueos);
+      await tx.insert(aprobacionesDeAsistencia).values({ periodoId, grupo, aprobadaPorId: responsableId, aprobadaEn });
+    });
   }
 
   async crear(inicio: string, fin: string): Promise<void> {
@@ -113,6 +179,12 @@ export class RepositorioPostgresDePeriodos implements RepositorioDePeriodos {
         .where(eq(periodosPlanilla.id, id))
         .for("update");
       if (!periodo || periodo.estado !== "abierto") throw new Error("El período no existe o ya está cerrado.");
+
+      // El cierre exige la aprobación vigente de todos los grupos que gestionan asistencia (ADR 0012); Finanzas no aprueba por ellos.
+      const sinAprobar = await gruposSinAprobacionVigente(tx, id);
+      if (sinAprobar.length) {
+        throw new Error(`No se puede cerrar el período: falta la aprobación ${sinAprobar.length === 1 ? "del grupo" : "de los grupos"} ${sinAprobar.join(", ")}. Pida al gerente de área ${sinAprobar.length === 1 ? "del grupo" : "de cada grupo"} que apruebe; Finanzas no aprueba en su nombre.`);
+      }
 
       const pendientes = await tx.select({ id: asistenciasEsperadas.id }).from(asistenciasEsperadas)
         .where(and(
@@ -175,6 +247,60 @@ export class RepositorioPostgresDePeriodos implements RepositorioDePeriodos {
 }
 
 type ConexionDeConsulta = Pick<NodePgDatabase<typeof schema>, "select">;
+
+async function gruposSinAprobacionVigente(conexion: ConexionDeConsulta, periodoId: string): Promise<string[]> {
+  const requeridos = await conexion.select({ nombre: grupos.nombre }).from(grupos).where(eq(grupos.gestionaAsistencia, true)).orderBy(asc(grupos.nombre));
+  const aprobados = new Set((await conexion.select({ grupo: aprobacionesDeAsistencia.grupo }).from(aprobacionesDeAsistencia)
+    .where(and(eq(aprobacionesDeAsistencia.periodoId, periodoId), isNull(aprobacionesDeAsistencia.invalidadaEn)))).map(({ grupo }) => grupo));
+  return requeridos.map(({ nombre }) => nombre).filter((nombre) => !aprobados.has(nombre));
+}
+
+/** Personas del grupo con relación laboral confirmada en el período que no tienen horario o tienen asistencia pendiente. */
+async function bloqueosDeAprobacion(
+  conexion: ConexionDeConsulta,
+  periodo: PeriodoPlanilla,
+  grupo: string,
+): Promise<BloqueoDeAprobacion[]> {
+  const integrantes = await conexion.select({ dni: colaboradores.dni, nombre: colaboradores.nombre }).from(colaboradores).where(eq(colaboradores.grupo, grupo));
+  if (!integrantes.length) return [];
+  const dnis = integrantes.map(({ dni }) => dni);
+  const relaciones = await conexion.select({
+    id: relacionesLaborales.id,
+    dni: relacionesLaborales.dni,
+    ingreso: relacionesLaborales.ingreso,
+    cese: relacionesLaborales.cese,
+    ingresoConfirmadoEn: relacionesLaborales.ingresoConfirmadoEn,
+    ceseConfirmadoEn: relacionesLaborales.ceseConfirmadoEn,
+  }).from(relacionesLaborales).where(inArray(relacionesLaborales.dni, dnis));
+  const personas = integrantes.map(({ dni, nombre }) => ({
+    dni,
+    nombre,
+    vigencias: vigenciasConfirmadas(relaciones.filter((relacion) => relacion.dni === dni).map((relacion): RelacionLaboral => ({
+      id: relacion.id,
+      dni: relacion.dni,
+      ingreso: relacion.ingreso,
+      cese: relacion.cese,
+      ingresoConfirmado: relacion.ingresoConfirmadoEn !== null,
+      ceseConfirmado: relacion.ceseConfirmadoEn !== null,
+    }))),
+  }));
+  const publicadas = await conexion.select({
+    dni: turnosPublicados.dni,
+    fecha: turnosPublicados.fecha,
+    descanso: turnosPublicados.descanso,
+    motivoNoAsistencia: turnosPublicados.motivoNoAsistencia,
+    estado: asistenciasEsperadas.estado,
+  }).from(turnosPublicados).leftJoin(asistenciasEsperadas, and(
+    eq(asistenciasEsperadas.dni, turnosPublicados.dni), eq(asistenciasEsperadas.fecha, turnosPublicados.fecha),
+  )).where(and(inArray(turnosPublicados.dni, dnis), gte(turnosPublicados.fecha, periodo.inicio), lte(turnosPublicados.fecha, periodo.fin)));
+  const jornadas: JornadaParaAprobar[] = publicadas.map((jornada) => ({
+    dni: jornada.dni,
+    fecha: jornada.fecha,
+    // Una jornada laboral sin fila de asistencia tampoco está resuelta; los días de descanso o de motivo no la necesitan.
+    situacion: jornada.estado === "pendiente" || (jornada.estado === null && !jornada.descanso && !jornada.motivoNoAsistencia) ? "pendiente" : "resuelta",
+  }));
+  return calcularBloqueosDeAprobacion(periodo, personas, jornadas);
+}
 
 async function construirResumen(
   conexion: ConexionDeConsulta,
