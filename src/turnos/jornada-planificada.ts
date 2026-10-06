@@ -1,3 +1,5 @@
+import { verificarJornadaContraLaVigencia, type Vigencia } from "@/relaciones-laborales/vigencia";
+
 import type { ModeloDeHorario } from "./gestionar-modelos-de-horario";
 
 export const MOTIVOS_PLANIFICADOS_DE_NO_ASISTENCIA = [
@@ -6,7 +8,13 @@ export const MOTIVOS_PLANIFICADOS_DE_NO_ASISTENCIA = [
   "vacaciones",
   "permiso",
   "suspension",
+  "sin_relacion_laboral",
 ] as const;
+
+/** Motivos que el gerente puede elegir a mano; «sin_relacion_laboral» lo fija el sistema según la relación laboral confirmada. */
+export const MOTIVOS_ELEGIBLES_DE_NO_ASISTENCIA = MOTIVOS_PLANIFICADOS_DE_NO_ASISTENCIA.filter(
+  (motivo) => motivo !== "sin_relacion_laboral",
+);
 
 export type MotivoPlanificadoDeNoAsistencia = typeof MOTIVOS_PLANIFICADOS_DE_NO_ASISTENCIA[number];
 
@@ -21,6 +29,8 @@ export interface DatosDeJornadaPlanificada {
 }
 
 export interface RepositorioParaValidarJornadaPlanificada {
+  /** Intervalos de las relaciones laborales confirmadas por Recursos Humanos para la persona (ADR 0012). */
+  listarVigenciasConfirmadas(dni: string): Promise<Vigencia[]>;
   sedeActivaPerteneceAlGrupo(sede: string, grupo: string): Promise<boolean>;
   buscarModeloDeHorario(id: string): Promise<ModeloDeHorario | undefined>;
 }
@@ -28,12 +38,14 @@ export interface RepositorioParaValidarJornadaPlanificada {
 export async function validarJornadaPlanificada(
   repositorio: RepositorioParaValidarJornadaPlanificada,
   grupo: string,
-  jornada: DatosDeJornadaPlanificada,
+  jornada: DatosDeJornadaPlanificada & { dni: string; fecha: string },
 ): Promise<void> {
   if (jornada.motivoNoAsistencia && !esMotivoPlanificadoDeNoAsistencia(jornada.motivoNoAsistencia)) {
     throw new Error("El motivo planificado de no asistencia no es válido.");
   }
   const motivo = motivoPlanificadoDe(jornada);
+  // Un día fuera de la relación laboral confirmada solo admite «Sin relación laboral»; dentro, nunca (ADR 0012).
+  verificarJornadaContraLaVigencia(await repositorio.listarVigenciasConfirmadas(jornada.dni), jornada.fecha, motivo);
   if (motivo) {
     if (jornada.sede !== null || jornada.modeloHorarioId != null || jornada.entradaProgramada !== null || jornada.salidaProgramada !== null) {
       throw new Error("Una no asistencia planificada no tiene sede, modelo ni horas.");

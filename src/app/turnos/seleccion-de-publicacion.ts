@@ -1,13 +1,15 @@
 // Elegibilidad y selección para la publicación parcial de una planificación semanal.
 // Una fila es elegible para el checkbox de publicación solo cuando está completa,
 // no publicada y no liquidada (ver `resumenSemanalDe` en el componente para el estado
-// por colaborador y `resumirPlanSemanal` para la completitud de la fila).
+// por colaborador y `resumirPlanSemanal` para la completitud de la fila). Una semana sin ningún día dentro
+// de una relación laboral confirmada nunca es elegible (ADR 0012).
 export function esElegibleParaPublicar(opciones: {
   filaCompleta: boolean;
   semanaPublicada: boolean;
   semanaLiquidada: boolean;
+  semanaSinRelacionLaboral?: boolean;
 }): boolean {
-  return opciones.filaCompleta && !opciones.semanaPublicada && !opciones.semanaLiquidada;
+  return opciones.filaCompleta && !opciones.semanaPublicada && !opciones.semanaLiquidada && !opciones.semanaSinRelacionLaboral;
 }
 
 // Selección efectiva a partir de las filas elegibles y las decisiones manuales del

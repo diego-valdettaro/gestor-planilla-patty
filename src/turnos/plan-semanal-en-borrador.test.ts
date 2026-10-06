@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { crearCasosDeUsoDePlanesSemanales } from "./casos-de-uso-planes-semanales";
 import type { PlanSemanalEnBorrador, RepositorioDePlanesSemanales } from "./plan-semanal-en-borrador";
 
-function crearRepositorioEnMemoria(): {
+function crearRepositorioEnMemoria(vigencias = [{ ingreso: "2026-01-01", cese: null as string | null }]): {
   asistenciasEsperadas: unknown[];
   turnosPublicados: unknown[];
   repositorio: RepositorioDePlanesSemanales;
@@ -35,6 +35,7 @@ function crearRepositorioEnMemoria(): {
       borrarCelda: async (planId, dni, fecha) => { celdas.delete(`${planId}:${dni}:${fecha}`); },
       buscarPublicado: async () => undefined,
       colaboradorPerteneceAEquipo: async (dni, equipo) => (dni === "00001024" || dni === "00002048") && equipo === "tiendas",
+      listarVigenciasConfirmadas: async () => vigencias,
       sedeActivaPerteneceAlGrupo: async (sede, equipo) => sede === "Lima" && equipo === "tiendas",
       buscarModeloDeHorario: async (id) => id === "modelo-apertura"
         ? { id, sede: "Lima", nombre: "Apertura", entrada: "09:00", salida: "18:00", activo: true }
@@ -141,6 +142,31 @@ describe("casos de uso de planes semanales en borrador", () => {
     ]);
     expect(turnosPublicados).toEqual([]);
     expect(asistenciasEsperadas).toEqual([]);
+  });
+
+  it("no copia a la semana nueva un día fuera de la relación laboral confirmada; el sistema lo marca al publicar", async () => {
+    const { repositorio } = crearRepositorioEnMemoria([{ ingreso: "2026-01-01", cese: "2026-09-07" }]);
+    const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio, {
+      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "administrador" }),
+    });
+    const plan = await casosDeUso.obtenerOCrear("2026-09-07", "tiendas");
+
+    await casosDeUso.copiarSemanaAnterior(plan.id);
+
+    expect((await casosDeUso.obtenerOCrear("2026-09-07", "tiendas")).celdas).toEqual([]);
+  });
+
+  it("no copia los días que quedan fuera de la relación laboral confirmada: el sistema los marca «Sin relación laboral»", async () => {
+    const { repositorio } = crearRepositorioEnMemoria();
+    repositorio.listarVigenciasConfirmadas = async () => [{ ingreso: "2026-01-01", cese: "2026-09-07" }];
+    const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio, {
+      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "administrador" }),
+    });
+    const plan = await casosDeUso.obtenerOCrear("2026-09-07", "tiendas");
+
+    await casosDeUso.copiarSemanaAnterior(plan.id);
+
+    expect((await casosDeUso.obtenerOCrear("2026-09-07", "tiendas")).celdas).toEqual([]);
   });
 
   it("no copia la jornada de una persona que ya no pertenece al grupo del plan", async () => {

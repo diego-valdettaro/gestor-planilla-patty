@@ -7,6 +7,7 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import * as schema from "@/db/schema";
+import { eliminarRelacionesDePrueba, registrarRelacionConfirmadaDePrueba } from "@/relaciones-laborales/relacion-de-prueba";
 
 import { crearCasosDeUsoDePlanesSemanales } from "./casos-de-uso-planes-semanales";
 import { publicarPlanSemanal } from "./publicar-plan-semanal";
@@ -40,6 +41,7 @@ describe.skipIf(!databaseUrl)("persistencia de planificación diaria por grupo",
       { nombre: sedeNueva, grupo: otroGrupo, activa: true },
     ]);
     await db.insert(schema.colaboradores).values({ dni, nombre: "Ana Grupo", sede: sedeNorte, grupo, activo: true });
+    await registrarRelacionConfirmadaDePrueba(db, dni);
     await db.insert(schema.modelosDeHorario).values({ id: modeloId, sede: sedeNorte, nombre: "Apertura", entrada: "09:00", salida: "18:00", activo: true });
     await db.insert(schema.cuentasLocales).values({ id: cuentaId, nombreUsuario: `plan-${sufijo}`, hashContrasena: "prueba", rol: "administrador" });
     await db.insert(schema.periodosPlanilla).values({ inicio: "2034-08-26", fin: "2034-09-25", estado: "abierto" });
@@ -56,6 +58,7 @@ describe.skipIf(!databaseUrl)("persistencia de planificación diaria por grupo",
     await db.delete(schema.planesSemanalesEnBorrador).where(eq(schema.planesSemanalesEnBorrador.semana, semana));
     await db.delete(schema.modelosDeHorario).where(eq(schema.modelosDeHorario.id, modeloId));
     await db.delete(schema.periodosPlanilla).where(eq(schema.periodosPlanilla.inicio, "2034-08-26"));
+    await eliminarRelacionesDePrueba(db, [dni]);
     await db.delete(schema.colaboradores).where(eq(schema.colaboradores.dni, dni));
     await db.delete(schema.cuentasLocales).where(eq(schema.cuentasLocales.id, cuentaId));
     await db.delete(schema.sedes).where(inArray(schema.sedes.nombre, [sedeNorte, sedeSur, sedeNueva]));

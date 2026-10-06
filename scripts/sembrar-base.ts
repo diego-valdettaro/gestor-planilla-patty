@@ -11,6 +11,8 @@ import { RepositorioPostgresDeCuentas } from "@/autenticacion/repositorio-postgr
 import { asignarGerenteAGrupo } from "@/autenticacion/gestionar-cuentas";
 import type { Actor } from "@/autenticacion/permisos";
 import { registrarColaborador } from "@/colaboradores/registrar-colaborador";
+import { confirmarCese, confirmarIngreso, registrarCese, registrarIngreso } from "@/relaciones-laborales/gestionar-relaciones-laborales";
+import { RepositorioPostgresDeRelacionesLaborales } from "@/relaciones-laborales/repositorio-postgres";
 import { RepositorioPostgresDeColaboradores } from "@/colaboradores/repositorio-postgres";
 import * as schema from "@/db/schema";
 import { configurarPoliticaDePenalizacionPorTardanzas } from "@/tardanzas/politica-de-penalizacion";
@@ -76,7 +78,16 @@ const COLABORADORES = [
   { dni: "99900009", nombre: "Hugo Marín", sede: SEDES.administracion, grupo: GRUPOS.administracion, activo: true },
   { dni: "99900010", nombre: "Inés Quispe", sede: SEDES.administracion, grupo: GRUPOS.administracion, activo: true },
   { dni: "99900011", nombre: "Nico Inactivo", sede: SEDES.benavides, grupo: GRUPOS.tiendas, activo: false },
+  // Casos de relación laboral (#109): ingreso a mitad de semana, reingreso e ingreso sin confirmar.
+  { dni: "99900012", nombre: "Julia Ingreso", sede: SEDES.benavides, grupo: GRUPOS.tiendas, activo: true },
+  { dni: "99900013", nombre: "Karen Reingreso", sede: SEDES.benavides, grupo: GRUPOS.tiendas, activo: true },
+  { dni: "99900014", nombre: "Luis Pendiente", sede: SEDES.benavides, grupo: GRUPOS.tiendas, activo: true },
 ];
+
+// Relaciones laborales: todas las personas de demo tienen una relación confirmada desde esta fecha,
+// salvo las de los tres casos de arriba (ver `registrarRelacionesLaborales`).
+const INGRESO_DE_DEMO = "2020-01-06";
+const DNI_CON_RELACION_ESPECIAL = ["99900012", "99900013", "99900014"];
 
 const MODELOS = [
   { id: randomUUID(), sede: SEDES.benavides, nombre: "Apertura", entrada: "08:00", salida: "16:00" },
@@ -158,6 +169,7 @@ async function limpiar(pool: Pool): Promise<void> {
     DELETE FROM politicas_de_penalizacion_por_tardanzas WHERE sede IN (${sedes});
     DELETE FROM auditoria_periodos_planilla WHERE periodo_id IN (SELECT id FROM periodos_planilla WHERE inicio IN ('${PERIODO_ACTUAL.inicio}', '${PERIODO_ANTERIOR.inicio}'));
     DELETE FROM periodos_planilla WHERE inicio IN ('${PERIODO_ACTUAL.inicio}', '${PERIODO_ANTERIOR.inicio}');
+    DELETE FROM relaciones_laborales WHERE dni LIKE '${PATRON_DNI_DEMO}';
     DELETE FROM colaboradores WHERE dni LIKE '${PATRON_DNI_DEMO}';
     DELETE FROM sedes WHERE nombre IN (${sedes});
     DELETE FROM gerentes_de_grupo WHERE cuenta_id IN (SELECT id FROM cuentas_locales WHERE nombre_usuario IN (${usuarios}));
@@ -166,6 +178,28 @@ async function limpiar(pool: Pool): Promise<void> {
     DELETE FROM cuentas_locales WHERE nombre_usuario IN (${usuarios});
     COMMIT;
   `);
+}
+
+async function registrarRelacionesLaborales(db: Db, actor: Actor): Promise<void> {
+  const repositorio = new RepositorioPostgresDeRelacionesLaborales(db);
+  const lunes = diasDeLaSemana(SEMANA_ACTUAL);
+  const confirmada = async (dni: string, ingreso: string, cese?: string) => {
+    const relacion = await registrarIngreso(repositorio, actor, { dni, ingreso });
+    await confirmarIngreso(repositorio, actor, relacion.id);
+    if (cese) {
+      await registrarCese(repositorio, actor, relacion.id, cese);
+      await confirmarCese(repositorio, actor, relacion.id);
+    }
+    return relacion;
+  };
+  for (const { dni } of COLABORADORES.filter(({ dni }) => !DNI_CON_RELACION_ESPECIAL.includes(dni))) await confirmada(dni, INGRESO_DE_DEMO);
+  // Julia ingresa el miércoles de la semana de actividad: lunes y martes quedan «Sin relación laboral».
+  await confirmada("99900012", lunes[2]);
+  // Karen tuvo una relación que terminó y reingresó el martes de la semana de actividad (mismo DNI, otra relación).
+  await confirmada("99900013", "2024-02-05", "2025-12-31");
+  await confirmada("99900013", lunes[1]);
+  // Luis tiene el ingreso registrado pero Recursos Humanos aún no lo confirmó: no se le pueden publicar horarios.
+  await registrarIngreso(repositorio, actor, { dni: "99900014", ingreso: lunes[0] });
 }
 
 function turnosDeSemana(dni: string, sede: string, semana: string) {
@@ -267,6 +301,16 @@ async function verificarInvariantes(pool: Pool): Promise<void> {
   );
   if (Number(procesados.n) !== 2) fallos.push(`se esperaban 2 semanas procesadas, hay ${procesados.n}`);
 
+  const { rows: [relaciones] } = await pool.query<{ confirmadas: string; porConfirmar: string; karen: string }>(
+    `SELECT count(*) FILTER (WHERE ingreso_confirmado_en IS NOT NULL)::text AS confirmadas,
+            count(*) FILTER (WHERE ingreso_confirmado_en IS NULL)::text AS "porConfirmar",
+            count(*) FILTER (WHERE dni = '99900013')::text AS karen
+       FROM relaciones_laborales WHERE dni LIKE '${PATRON_DNI_DEMO}'`,
+  );
+  if (Number(relaciones.porConfirmar) !== 1) fallos.push(`se esperaba 1 ingreso por confirmar, hay ${relaciones.porConfirmar}`);
+  if (Number(relaciones.karen) !== 2) fallos.push(`Karen debería tener 2 relaciones laborales, tiene ${relaciones.karen}`);
+  if (Number(relaciones.confirmadas) !== COLABORADORES.length) fallos.push(`se esperaban ${COLABORADORES.length} relaciones con ingreso confirmado (una por persona más el reingreso, menos Luis), hay ${relaciones.confirmadas}`);
+
   if (fallos.length) throw new Error(`Invariantes del seed no se cumplen:\n- ${fallos.join("\n- ")}`);
 }
 
@@ -285,6 +329,11 @@ function resumen(): string {
     "  Eva Confirmable  -> Lista para confirmar por rango",
     `Período ${PERIODO_ANTERIOR.inicio}..${PERIODO_ANTERIOR.fin}: cerrado (Elena publicada + procesada)`,
     `Período ${PERIODO_ACTUAL.inicio}..${PERIODO_ACTUAL.fin}: abierto`,
+    "",
+    "Relaciones laborales (rrhh / rrhh):",
+    "  Julia Ingreso    -> ingresa el miércoles de la semana de actividad (lun/mar = «Sin relación laboral»)",
+    "  Karen Reingreso  -> dos relaciones con el mismo DNI; reingresó el martes de la semana de actividad",
+    "  Luis Pendiente   -> ingreso sin confirmar: no se le puede publicar el horario",
     "",
     "Calendario de asistencias de Beto Publicado (mes actual):",
     "  lun/mar -> Registrada ; mié -> Registrada (Feriado) ; jue -> Pendiente de revisión ; vie/sáb -> Esperada",
@@ -316,6 +365,9 @@ async function main(): Promise<void> {
     if (!admin || !finanzas || !gerenteTiendas) throw new Error("No se pudieron leer las cuentas recién creadas.");
     const actorAdmin: Actor = { id: admin.id, rol: "administrador" };
     const actorFinanzas: Actor = { id: finanzas.id, rol: "finanzas" };
+    const rrhh = await cuentas.buscarPorNombreUsuario("rrhh");
+    if (!rrhh) throw new Error("No se pudo leer la cuenta de Recursos Humanos.");
+    const actorRrhh: Actor = { id: rrhh.id, rol: "recursos_humanos" };
     const actorGerenteDeTiendas: Actor = { id: gerenteTiendas.id, rol: "gerente_de_area", grupos: GERENTES_POR_GRUPO.filter(({ gerente }) => gerente === "gerente-tiendas").map(({ grupo }) => ({ nombre: grupo, gestionaAsistencia: true })) };
 
     // --- Sedes (mismo camino que `configuracion/actions.ts`: insert directo) ---
@@ -352,6 +404,9 @@ async function main(): Promise<void> {
     for (const colaborador of COLABORADORES) {
       await registrarColaborador(colaboradores, actorAdmin, colaborador);
     }
+
+    // --- Relaciones laborales (casos de uso: las registra y confirma Recursos Humanos) ---
+    await registrarRelacionesLaborales(db, actorRrhh);
 
     // --- Períodos: ambos abiertos al principio para poder publicar dentro ---
     await db.insert(schema.periodosPlanilla).values([

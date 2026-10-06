@@ -3,8 +3,9 @@ import { describe, expect, it } from "vitest";
 import { publicarPlanSemanal } from "./publicar-plan-semanal";
 import type { CeldaDePlanSemanalEnBorrador, PlanSemanalEnBorrador, RepositorioDePlanesSemanales } from "./plan-semanal-en-borrador";
 import type { RepositorioDeTurnos, TurnoPublicado } from "./publicar-turno-semanal";
+import type { Vigencia } from "@/relaciones-laborales/vigencia";
 
-function crearRepositorio(plan: PlanSemanalEnBorrador) {
+function crearRepositorio(plan: PlanSemanalEnBorrador, vigencias: Record<string, Vigencia[]> | undefined = undefined) {
   const publicados: TurnoPublicado[] = [];
   const repositorio: RepositorioDePlanesSemanales & RepositorioDeTurnos = {
     buscarPorId: async () => plan,
@@ -15,6 +16,7 @@ function crearRepositorio(plan: PlanSemanalEnBorrador) {
     borrarCelda: async () => undefined,
     colaboradorPerteneceAEquipo: async (id) => id === "00000011" || id === "00000012",
     obtenerGrupoDelColaborador: async () => "tiendas",
+    listarVigenciasConfirmadas: async (dni) => vigencias?.[dni] ?? [{ ingreso: "2026-01-01", cese: null }],
     sedeActivaPerteneceAlGrupo: async (sede, grupo) => sede === "Lima" && grupo === "tiendas",
     buscarModeloDeHorario: async () => undefined,
     listarColaboradoresActivosPorEquipo: async () => [
@@ -96,5 +98,71 @@ describe("publicar plan semanal", () => {
     await expect(publicarPlanSemanal(repositorio, { id: "rrhh-1", rol: "recursos_humanos" }, plan.id, ["00000011"])).rejects.toThrow("No tiene permiso para publicar planes semanales.");
     await expect(publicarPlanSemanal(repositorio, { ...gerente, grupos: [{ nombre: "taller", gestionaAsistencia: true }] }, plan.id, ["00000011"])).rejects.toThrow("No tiene permiso para publicar planes semanales de este grupo.");
     expect(publicados).toHaveLength(7);
+  });
+
+  describe("relación laboral confirmada (ADR 0012)", () => {
+    const gerente = { id: "gerente-1", rol: "gerente_de_area" as const, grupos: [{ nombre: "tiendas", gestionaAsistencia: true }] };
+    // Semana del lunes 31/08 al domingo 06/09.
+
+    it("una persona que ingresa a mitad de semana se publica con «Sin relación laboral» antes del ingreso, aunque el borrador no tenga esas celdas", async () => {
+      const celdas = celdasDeSemana("00000011").slice(2);
+      const plan = { id: "plan-1", semana: "2026-08-31", equipo: "tiendas" as const, celdas };
+      const { publicados, repositorio } = crearRepositorio(plan, { "00000011": [{ ingreso: "2026-09-02", cese: null }] });
+
+      const resultado = await publicarPlanSemanal(repositorio, gerente, plan.id, ["00000011"]);
+
+      expect(resultado).toEqual({ publicados: 1, errores: [] });
+      expect(publicados).toHaveLength(7);
+      expect(publicados.filter((turno) => turno.motivoNoAsistencia === "sin_relacion_laboral").map((turno) => turno.fecha)).toEqual(["2026-08-31", "2026-09-01"]);
+      expect(publicados.find((turno) => turno.fecha === "2026-09-01")).toMatchObject({ descanso: true, sede: null, entradaProgramada: null });
+      expect(publicados.find((turno) => turno.fecha === "2026-09-02")).toMatchObject({ descanso: false, sede: "Lima" });
+    });
+
+    it("los días posteriores al cese confirmado quedan «Sin relación laboral»", async () => {
+      const plan = { id: "plan-1", semana: "2026-08-31", equipo: "tiendas" as const, celdas: celdasDeSemana("00000011").slice(0, 4) };
+      const { publicados, repositorio } = crearRepositorio(plan, { "00000011": [{ ingreso: "2026-01-01", cese: "2026-09-03" }] });
+
+      await publicarPlanSemanal(repositorio, gerente, plan.id, ["00000011"]);
+
+      expect(publicados.filter((turno) => turno.motivoNoAsistencia === "sin_relacion_laboral").map((turno) => turno.fecha)).toEqual(["2026-09-04", "2026-09-05", "2026-09-06"]);
+    });
+
+    it("no publica una semana sin ningún día dentro de una relación confirmada y explica el siguiente paso", async () => {
+      const plan = { id: "plan-1", semana: "2026-08-31", equipo: "tiendas" as const, celdas: celdasDeSemana("00000011") };
+      const { publicados, repositorio } = crearRepositorio(plan, { "00000011": [] });
+
+      const resultado = await publicarPlanSemanal(repositorio, gerente, plan.id, ["00000011"]);
+
+      expect(resultado.publicados).toBe(0);
+      expect(resultado.errores).toHaveLength(7);
+      expect(resultado.errores[0].mensaje).toMatch(/relación laboral confirmada por Recursos Humanos.*registre y confirme/);
+      expect(publicados).toEqual([]);
+    });
+
+    it("rechaza una jornada laboral en un día anterior al ingreso, sin publicar a nadie de la selección", async () => {
+      const plan = { id: "plan-1", semana: "2026-08-31", equipo: "tiendas" as const, celdas: [...celdasDeSemana("00000011"), ...celdasDeSemana("00000012")] };
+      const { publicados, repositorio } = crearRepositorio(plan, { "00000011": [{ ingreso: "2026-09-02", cese: null }] });
+
+      const resultado = await publicarPlanSemanal(repositorio, gerente, plan.id, ["00000011", "00000012"]);
+
+      expect(resultado.publicados).toBe(0);
+      expect(resultado.errores).toContainEqual({ dni: "00000011", fecha: "2026-08-31", mensaje: expect.stringContaining("fuera de la relación laboral confirmada") });
+      expect(publicados).toEqual([]);
+    });
+
+    it("descarta un «Sin relación laboral» guardado antes de que Recursos Humanos confirmara el ingreso y exige definir ese día", async () => {
+      const obsoletas = celdasDeSemana("00000011").slice(0, 2).map((celda) => ({ ...celda, sede: null, entradaProgramada: null, salidaProgramada: null, descanso: true, motivoNoAsistencia: "sin_relacion_laboral" as const }));
+      const plan = { id: "plan-1", semana: "2026-08-31", equipo: "tiendas" as const, celdas: [...obsoletas, ...celdasDeSemana("00000011").slice(2)] };
+      const { publicados, repositorio } = crearRepositorio(plan);
+
+      const resultado = await publicarPlanSemanal(repositorio, gerente, plan.id, ["00000011"]);
+
+      expect(resultado.publicados).toBe(0);
+      expect(resultado.errores).toEqual([
+        { dni: "00000011", fecha: "2026-08-31", mensaje: "La celda está sin definir." },
+        { dni: "00000011", fecha: "2026-09-01", mensaje: "La celda está sin definir." },
+      ]);
+      expect(publicados).toEqual([]);
+    });
   });
 });

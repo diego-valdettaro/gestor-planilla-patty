@@ -41,3 +41,13 @@ Cada grupo tiene el atributo **Gestiona asistencia y horarios** (por defecto sí
 
 La migración `0028_roles_de_cuenta_y_gerentes_por_grupo.sql` aplica la regla, restringe el rol a los cuatro valores y deja el grupo «Administración» con el atributo en «no». La primera cuenta de despliegue pasa a ser de Administrador (`pnpm provisionar:administrador`).
 
+## Enmienda (issue #109): relaciones laborales confirmadas y publicación de horarios
+
+Decidida por Diego al implementar las relaciones laborales; no cambia los permisos de los demás roles.
+
+- **Qué guarda Recursos Humanos.** Cada relación laboral tiene un ingreso y, al terminar, un cese. Cada fecha se registra y se confirma por separado. Solo cuenta lo confirmado: el ingreso sin confirmar no abre la relación y un cese sin confirmar no la cierra. Una fecha se corrige solo mientras no esté confirmada; revertir una confirmación queda fuera de este incremento. La persona la da de alta su gerente de grupo; Recursos Humanos crea la relación sobre una persona existente por DNI.
+- **Una sola relación abierta y sin solapes.** Una persona no tiene dos relaciones solapadas ni otra relación mientras la anterior no tenga cese; el reingreso exige un ingreso posterior al cese anterior. El servidor lo garantiza bloqueando la fila de la persona y con un índice único de relación sin cese.
+- **Publicar horarios.** Un horario solo se publica dentro de una relación laboral confirmada, en todas las vías (publicación individual, por plan, republicación y borrador). Una semana que no toca ninguna relación confirmada no se publica y la interfaz explica por qué. Cuando la semana toca la relación solo en parte (ingreso o cese a mitad de semana), los días fuera de ella llevan el estado **Sin relación laboral**, que fija el sistema; los siete días siguen exigiendo estado.
+- **Permisos.** Gestionan relaciones Recursos Humanos y el Administrador (superusuario temporal); Finanzas las consulta en solo lectura porque Pagos toma de ahí su población. Los gerentes de área no acceden a la pantalla.
+- **Consulta de vigencia.** Se puede consultar quién tiene una relación laboral vigente en una fecha o rango a partir de las relaciones confirmadas, sin depender de las filas de asistencia.
+- **Pendiente.** La desactivación manual de colaboradores del Administrador sigue como está («provisional»); su retiro es otro ticket. Confirmar un cese no revisa los horarios ya publicados posteriores a esa fecha.

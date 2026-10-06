@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const simulacro = vi.hoisted(() => ({
   actor: vi.fn(),
   buscarModelo: vi.fn(),
-  repositorioDeTurnos: { buscarPorId: vi.fn(), obtenerOCrear: vi.fn() },
+  repositorioDeTurnos: { buscarPorId: vi.fn(), obtenerOCrear: vi.fn(), colaboradorPerteneceAEquipo: vi.fn(), listarVigenciasConfirmadas: vi.fn() },
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -39,5 +39,15 @@ describe("acciones de Horarios (borde del servidor)", () => {
     await expect(republicarPlanSemanalDesdeGrilla(formulario({ planId: "p1", dni: "00000001", motivo: "Corrección" }))).rejects.toThrow("No tiene permiso para republicar horarios semanales.");
 
     expect(simulacro.buscarModelo).not.toHaveBeenCalled();
+  });
+
+  it("un gerente no publica a una persona sin relación laboral confirmada: el error explica la causa y el siguiente paso", async () => {
+    simulacro.actor.mockResolvedValue({ id: "g3", rol: "gerente_de_area", grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] });
+    simulacro.repositorioDeTurnos.buscarPorId.mockResolvedValue({ id: "p1", semana: "2026-09-07", equipo: "Tiendas", celdas: [] });
+    simulacro.repositorioDeTurnos.colaboradorPerteneceAEquipo.mockResolvedValue(true);
+    simulacro.repositorioDeTurnos.listarVigenciasConfirmadas.mockResolvedValue([]);
+
+    await expect(publicarPlanSemanalDesdeGrilla(formulario({ planId: "p1", dni: "00000001" })))
+      .rejects.toThrow(/relación laboral confirmada por Recursos Humanos.*registre y confirme/);
   });
 });

@@ -30,6 +30,10 @@ La migración `0028_roles_de_cuenta_y_gerentes_por_grupo.sql` convierte las cuen
 
 Hasta que se les asignen grupos, los gerentes migrados ven «Todavía no tiene grupos asignados». El grupo «Administración», si existe, queda como grupo que no gestiona asistencia ni horarios.
 
+### Relaciones laborales (ADR 0012, enmienda #109)
+
+La migración `0029_relaciones_laborales.sql` crea la tabla de relaciones laborales y no registra ninguna para los colaboradores existentes (los datos actuales son de desarrollo). Desde esa migración un gerente solo publica horarios dentro de una relación laboral confirmada: antes de usar **Horarios** una cuenta de Recursos Humanos (créela desde **Cuentas**) debe registrar y confirmar el ingreso de cada colaborador en **Relaciones laborales**.
+
 Los comandos no imprimen ni guardan la contraseña fuera del hash Argon2id.
 
 ## Feedback a issues

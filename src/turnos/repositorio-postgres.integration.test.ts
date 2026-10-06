@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { estadoDeCelda } from "@/app/turnos/estado-de-celda";
 import * as schema from "@/db/schema";
+import { eliminarRelacionesDePrueba, registrarRelacionConfirmadaDePrueba } from "@/relaciones-laborales/relacion-de-prueba";
 
 import { RepositorioPostgresDeTurnos } from "./repositorio-postgres";
 
@@ -38,6 +39,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeTurnos", () => {
       grupo: "Tiendas",
       activo: true,
     });
+    await registrarRelacionConfirmadaDePrueba(db, dni);
     await db.insert(schema.periodosPlanilla).values({
       inicio: "2030-08-26",
       fin: "2030-09-25",
@@ -78,6 +80,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeTurnos", () => {
       .where(and(eq(schema.planesSemanalesEnBorrador.semana, semanaDePlan), eq(schema.planesSemanalesEnBorrador.equipo, "tiendas")));
     if (planes.length) await db.delete(schema.celdasDePlanesSemanalesEnBorrador).where(inArray(schema.celdasDePlanesSemanalesEnBorrador.planId, planes.map(({ id }) => id)));
     await db.delete(schema.planesSemanalesEnBorrador).where(and(eq(schema.planesSemanalesEnBorrador.semana, semanaDePlan), eq(schema.planesSemanalesEnBorrador.equipo, "tiendas")));
+    await eliminarRelacionesDePrueba(db, [dni]);
     await db.delete(schema.colaboradores).where(eq(schema.colaboradores.dni, dni));
     await db.delete(schema.sedes).where(eq(schema.sedes.nombre, sede));
     await db.delete(schema.cuentasLocales).where(eq(schema.cuentasLocales.id, cuentaId));

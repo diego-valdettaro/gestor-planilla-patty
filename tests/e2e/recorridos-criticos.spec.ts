@@ -379,12 +379,12 @@ test("Finanzas no ve Horarios y consulta Asistencias en solo lectura", async ({ 
 test("cada rol ve en el menú exactamente las rutas que puede abrir", async ({ page }) => {
   const errores = observarErroresDelNavegador(page);
   const casos: Array<[string, string[]]> = [
-    ["admin", ["Configuración", "Cuentas", "Horarios", "Asistencia", "Períodos de planilla"]],
-    ["finanzas", ["Cuentas", "Asistencia", "Períodos de planilla"]],
+    ["admin", ["Configuración", "Cuentas", "Horarios", "Asistencia", "Períodos de planilla", "Relaciones laborales"]],
+    ["finanzas", ["Cuentas", "Asistencia", "Períodos de planilla", "Relaciones laborales"]],
     ["gerente-tiendas", ["Configuración", "Horarios", "Asistencia"]],
     ["gerente-administracion", ["Configuración"]],
     ["gerente-sin-grupos", []],
-    ["rrhh", []],
+    ["rrhh", ["Relaciones laborales"]],
   ];
 
   for (const [usuario, enlaces] of casos) {
@@ -398,10 +398,6 @@ test("cada rol ve en el menú exactamente las rutas que puede abrir", async ({ p
 });
 
 test("un rol sin pantallas explica qué esperar y el gerente del grupo Administración no entra a Horarios", async ({ page }) => {
-  await iniciarSesion(page, "rrhh");
-  await expect(page.getByRole("heading", { name: "Sin acciones disponibles todavía", level: 1 })).toBeVisible();
-
-  await page.context().clearCookies();
   await iniciarSesion(page, "gerente-sin-grupos");
   await expect(page.getByText("Todavía no tiene grupos asignados.")).toBeVisible();
 
@@ -412,6 +408,42 @@ test("un rol sin pantallas explica qué esperar y el gerente del grupo Administr
   await expect(page.getByRole("heading", { name: "Sin permiso", level: 1 })).toBeVisible();
   await page.goto("/asistencias");
   await expect(page.getByRole("heading", { name: "Sin permiso", level: 1 })).toBeVisible();
+});
+
+test("Recursos Humanos confirma un ingreso y el gerente ve su efecto en Horarios", async ({ page }) => {
+  test.setTimeout(90_000);
+  const errores = observarErroresDelNavegador(page);
+  const semana = fechaDeLaSemanaDeDemo(0);
+
+  await iniciarSesion(page, "gerente-tiendas");
+  await page.goto(`/turnos?semana=${semana}&equipo=Tiendas`);
+  const filaLuis = page.locator("tr", { hasText: "Luis Pendiente" });
+  await expect(filaLuis.getByText("No se puede publicar: no tiene una relación laboral confirmada en esta semana.")).toBeVisible();
+  await expect(filaLuis.getByRole("checkbox", { name: "Publicar" })).toHaveCount(0);
+  const filaJulia = page.locator("tr", { hasText: "Julia Ingreso" });
+  await expect(filaJulia.locator("td.celda-plan-semanal.fuera-de-relacion")).toHaveCount(2);
+  await expect(filaJulia.locator("td.celda-plan-semanal.fuera-de-relacion").first()).toContainText("Sin relación laboral");
+  await expect(page.getByRole("navigation", { name: "Navegación principal" }).getByRole("link", { name: /Relaciones laborales/ })).toHaveCount(0);
+  await page.goto("/relaciones-laborales");
+  await expect(page.getByRole("heading", { name: "Sin permiso", level: 1 })).toBeVisible();
+
+  await page.context().clearCookies();
+  await iniciarSesion(page, "rrhh");
+  await expect(page).toHaveURL(/\/relaciones-laborales$/);
+  await expect(page.getByRole("heading", { name: "Relaciones laborales", level: 1 })).toBeVisible();
+  // Tras confirmar, Luis también aparece en la consulta de vigencia: la fila de la tabla de relaciones es la primera.
+  const relacionDeLuis = page.locator("tr", { hasText: "Luis Pendiente" }).first();
+  await expect(relacionDeLuis).toContainText("Ingreso por confirmar");
+  await relacionDeLuis.getByRole("button", { name: "Confirmar ingreso" }).click();
+  const dialogo = page.getByRole("dialog", { name: /Confirmar el ingreso de Luis Pendiente/ });
+  await dialogo.getByRole("button", { name: "Confirmar ingreso" }).click();
+  await expect(relacionDeLuis).toContainText("Vigente");
+
+  await page.context().clearCookies();
+  await iniciarSesion(page, "gerente-tiendas");
+  await page.goto(`/turnos?semana=${semana}&equipo=Tiendas`);
+  await expect(page.locator("tr", { hasText: "Luis Pendiente" }).getByText("No se puede publicar")).toHaveCount(0);
+  expect(errores, "Relaciones laborales y Horarios no deben registrar errores de navegador").toEqual([]);
 });
 
 test("Finanzas crea una cuenta de gerente de área y la ve con su rol y sin grupos", async ({ page }) => {
@@ -597,7 +629,7 @@ async function elementosQueDesbordan(page: Page): Promise<string> {
   });
 }
 
-const rutasAutenticadas = ["/configuracion", "/cuentas", "/turnos", "/asistencias", "/asistencias/importar", "/periodos"];
+const rutasAutenticadas = ["/configuracion", "/cuentas", "/turnos", "/asistencias", "/asistencias/importar", "/periodos", "/relaciones-laborales"];
 
 for (const [nombre, ancho, alto] of [["375 px", 375, 812], ["escritorio", 1280, 800]] as const) {
   test(`las rutas autenticadas caben en ${nombre} sin errores de consola`, async ({ page }) => {

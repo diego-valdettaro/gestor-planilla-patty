@@ -183,6 +183,8 @@ th, td { border: 1px solid #e2e8f0; padding: 0.6rem; text-align: left; }
 .celda-plan-semanal .chip-turno:hover:not(:disabled), .celda-plan-semanal .chip-turno:focus-visible { outline: 2px solid #079557; outline-offset: -2px; }
 .celda-plan-semanal .chip-turno:disabled { cursor: default; opacity: .7; }
 .celda-plan-semanal.descanso .chip-turno, .celda-plan-semanal.vacia .chip-turno { align-items: center; justify-content: center; padding-right: .5rem; }
+.celda-plan-semanal.fuera-de-relacion .chip-turno { background: #f1f5f9; border-style: dashed; border-color: #b8c4d6; color: #475569; cursor: default; }
+.aviso-sin-relacion { color: #8a4b00 !important; display: block; font-size: .75rem; margin-top: .25rem; max-width: 22rem; white-space: normal; }
 .opciones-celda { display: grid; gap: .1rem; }
 .opciones-celda label { align-items: center; border-radius: .4rem; color: #1c3152; cursor: pointer; display: flex; font-size: .85rem; gap: .55rem; padding: .5rem .55rem; }
 .opciones-celda label:hover { background: #f1f5f9; }

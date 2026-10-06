@@ -5,7 +5,10 @@ import { exigir, puedeConsultarHorarios, puedeOperarAsistenciaDelGrupo } from "@
 import type { Grupo } from "./configurar-equipos-operativos";
 import { jornadasPlanificadasSonIguales, motivoPlanificadoDe, validarJornadaPlanificada } from "./jornada-planificada";
 import type { CeldaDePlanSemanalEnBorrador, PlanSemanalEnBorrador, RepositorioDePlanesSemanales } from "./plan-semanal-en-borrador";
+import { estaVigenteEn } from "@/relaciones-laborales/vigencia";
+
 import { desplazarFecha } from "./semana";
+import { esDiaSinRelacionLaboral } from "./semana-con-relacion-laboral";
 
 type SeleccionDeCelda = Pick<CeldaDePlanSemanalEnBorrador, "dni" | "fecha" | "sede">;
 type HorarioParaAplicar = Pick<CeldaDePlanSemanalEnBorrador, "modeloHorarioId" | "entradaProgramada" | "salidaProgramada" | "descanso" | "motivoNoAsistencia">;
@@ -92,6 +95,8 @@ export function crearCasosDeUsoDePlanesSemanales(
       for (const horario of horarios) {
         if (!(await repositorio.colaboradorPerteneceAEquipo(horario.dni, plan.equipo))) continue;
         const celda = { ...horario, planId, fecha: desplazarFecha(horario.fecha, 7) };
+        // Los días fuera de la relación laboral confirmada no se copian: el sistema los marca «Sin relación laboral».
+        if (esDiaSinRelacionLaboral(horario) || !estaVigenteEn(await repositorio.listarVigenciasConfirmadas(horario.dni), celda.fecha)) continue;
         await validarCelda(repositorio, plan, celda);
         celdasCopia.push(celda);
       }

@@ -24,11 +24,17 @@ import type { CeldaDePlanSemanalEnBorrador, PlanSemanalEnBorrador, RepositorioDe
 import type { RepositorioDeTurnos, TurnoPublicado } from "./publicar-turno-semanal";
 import type { ProcesamientoDeHorarioSemanal } from "./procesar-horario-semanal";
 import type { Actor } from "@/colaboradores/registrar-colaborador";
+import { vigenciasConfirmadasDe } from "@/relaciones-laborales/repositorio-postgres";
+import { verificarQueLaSemanaTengaRelacion, type Vigencia } from "@/relaciones-laborales/vigencia";
 import { motivoPlanificadoDe, validarJornadaPlanificada } from "./jornada-planificada";
 import { desplazarFecha, diasDeLaSemana, inicioDeSemana } from "./semana";
 
 export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, RepositorioDeGruposDeSedes, RepositorioDePlanesSemanales {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}
+
+  async listarVigenciasConfirmadas(dni: string): Promise<Vigencia[]> {
+    return vigenciasConfirmadasDe(this.db, dni);
+  }
 
   async listarSedesActivasPorGrupo(grupo: Grupo): Promise<string[]> {
     const resultados = await this.db.select({ sede: sedes.nombre }).from(sedes)
@@ -100,7 +106,11 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
           eq(colaboradores.dni, turno.dni), eq(colaboradores.activo, true),
         ));
         if (!colaborador) throw new Error("El colaborador activo no existe.");
+        const vigencias = await vigenciasConfirmadasDe(tx, turno.dni);
+        // La semana de la jornada debe tocar una relación laboral confirmada; cada día se valida contra ella.
+        verificarQueLaSemanaTengaRelacion(vigencias, diasDeLaSemana(inicioDeSemana(turno.fecha)));
         await validarJornadaPlanificada({
+          listarVigenciasConfirmadas: async () => vigencias,
           sedeActivaPerteneceAlGrupo: async (sede, grupo) => Boolean((await tx.select({ sede: sedes.nombre }).from(sedes)
             .where(and(eq(sedes.nombre, sede), eq(sedes.grupo, grupo), eq(sedes.activa, true))))[0]),
           buscarModeloDeHorario: async (id) => (await tx.select({

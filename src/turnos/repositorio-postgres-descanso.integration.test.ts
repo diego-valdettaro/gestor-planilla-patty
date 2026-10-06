@@ -7,6 +7,7 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import * as schema from "@/db/schema";
+import { eliminarRelacionesDePrueba, registrarRelacionConfirmadaDePrueba } from "@/relaciones-laborales/relacion-de-prueba";
 
 import { RepositorioPostgresDeTurnos } from "./repositorio-postgres";
 
@@ -21,6 +22,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeTurnos al publicar un descan
 
   beforeAll(async () => {
     await db.insert(schema.colaboradores).values({ dni, nombre: "Ana Rojas", sede: "Lima", grupo: "Tiendas", activo: true });
+    await registrarRelacionConfirmadaDePrueba(db, dni);
     await db.insert(schema.periodosPlanilla).values({ inicio: "2031-08-26", fin: "2031-09-25", estado: "abierto" });
   });
 
@@ -31,6 +33,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeTurnos al publicar un descan
     if (turno) await db.delete(schema.historialDeTurnosPublicados).where(eq(schema.historialDeTurnosPublicados.turnoPublicadoId, turno.id));
     await db.delete(schema.turnosPublicados).where(and(eq(schema.turnosPublicados.dni, dni), eq(schema.turnosPublicados.fecha, fecha)));
     await db.delete(schema.periodosPlanilla).where(and(eq(schema.periodosPlanilla.inicio, "2031-08-26"), eq(schema.periodosPlanilla.fin, "2031-09-25")));
+    await eliminarRelacionesDePrueba(db, [dni]);
     await db.delete(schema.colaboradores).where(eq(schema.colaboradores.dni, dni));
     await pool.end();
   });
