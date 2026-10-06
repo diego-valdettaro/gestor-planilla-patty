@@ -586,3 +586,56 @@ test("en ancho estrecho el menú se opera con teclado e identifica la sección p
   await expect(navegacion.getByRole("button", { name: "Menú" })).toHaveAttribute("aria-expanded", "false");
   expect(errores).toEqual([]);
 });
+
+test("las tablas de /periodos se desplazan dentro de su región a 375 px sin truncar datos ni errores de consola", async ({ page }) => {
+  const errores = observarErroresDelNavegador(page);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await iniciarSesionComoAdministracion(page);
+  await page.goto("/periodos");
+  await page.locator("details > summary").evaluateAll((resumenes) => resumenes.forEach((resumen) => resumen.parentElement?.setAttribute("open", "")));
+
+  const regiones = page.locator(".panel-tabla");
+  const cantidad = await regiones.count();
+  expect(cantidad).toBeGreaterThanOrEqual(5);
+  await expect(page.getByRole("region", { name: "Totales del período completo" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Horas extra del período completo" })).toBeVisible();
+  await expect(page.getByRole("region", { name: /^Detalle diario de / }).first()).toBeVisible();
+  expect(await desbordeHorizontalDeLaPagina(page)).toBeLessThanOrEqual(0);
+
+  for (let indice = 0; indice < cantidad; indice++) {
+    const region = regiones.nth(indice);
+    const nombre = await region.getAttribute("aria-label");
+    const medidas = await region.evaluate((el) => {
+      const caja = el.getBoundingClientRect();
+      const antes = el.scrollLeft;
+      el.scrollLeft = el.scrollWidth;
+      const celdas = [...el.querySelectorAll<HTMLElement>("th, td")];
+      const ultima = el.querySelector("thead th:last-child")!.getBoundingClientRect();
+      return {
+        izquierda: caja.left,
+        derecha: caja.right,
+        desplazable: el.scrollWidth > el.clientWidth,
+        desplazadoA: el.scrollLeft - antes,
+        ultimaColumnaVisible: ultima.right <= caja.right + 1 && ultima.left >= caja.left - 1,
+        celdasTruncadas: celdas.filter((celda) => celda.scrollWidth > celda.clientWidth + 1 || getComputedStyle(celda).textOverflow === "ellipsis").length,
+        alineacionesNumericas: [...el.querySelectorAll<HTMLElement>(".numerico")].map((celda) => getComputedStyle(celda).textAlign),
+        alineacionesDeEtiquetas: [...el.querySelectorAll<HTMLElement>("tbody th[scope=row]")].map((celda) => getComputedStyle(celda).textAlign),
+      };
+    });
+
+    expect(medidas.izquierda, nombre ?? "").toBeGreaterThanOrEqual(0);
+    expect(medidas.derecha, nombre ?? "").toBeLessThanOrEqual(375);
+    expect(medidas.desplazable, `${nombre} se desplaza horizontalmente`).toBe(true);
+    expect(medidas.desplazadoA, `${nombre} llega a su última columna`).toBeGreaterThan(0);
+    expect(medidas.ultimaColumnaVisible, `${nombre} muestra su última columna al final`).toBe(true);
+    expect(medidas.celdasTruncadas, `${nombre} sin celdas truncadas`).toBe(0);
+    expect(medidas.alineacionesNumericas.length, `${nombre} tiene cifras`).toBeGreaterThan(0);
+    expect(medidas.alineacionesNumericas.every((alineacion) => alineacion === "right"), `${nombre} alinea cifras a la derecha`).toBe(true);
+    expect(medidas.alineacionesDeEtiquetas.every((alineacion) => alineacion === "left" || alineacion === "start")).toBe(true);
+  }
+
+  await regiones.first().focus();
+  await expect(regiones.first()).toBeFocused();
+  expect(await desbordeHorizontalDeLaPagina(page)).toBeLessThanOrEqual(0);
+  expect(errores).toEqual([]);
+});

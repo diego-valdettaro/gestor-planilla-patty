@@ -241,6 +241,9 @@ th, td { border: 1px solid #e2e8f0; padding: 0.6rem; text-align: left; }
 .panel-tabla th { background: #f8fafc; color: #526174; font-size: .75rem; letter-spacing: .02em; }
 .panel-tabla th, .panel-tabla td { border: 0; border-bottom: 1px solid #e3e8ef; padding: .7rem .65rem; vertical-align: middle; }
 .panel-tabla tr:last-child td { border-bottom: 0; }
+.panel-tabla:focus-visible { outline: 2px solid #079557; outline-offset: 2px; }
+.panel-tabla .numerico { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.panel-tabla tbody th { background: transparent; color: inherit; font-size: inherit; font-weight: 600; white-space: nowrap; }
 @media (max-width: 900px) { .pagina { padding: 1.5rem; } .grilla-configuracion { grid-template-columns: 1fr; } .panel-filtros { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 700px) { .pagina { padding: 1rem; } .encabezado-pagina h1 { font-size: 2rem; } .panel-cabecera, .pie-politica { align-items: stretch; flex-direction: column; } .panel-filtros, .campos-politica { grid-template-columns: 1fr; } .lista-con-estado li, .lista-sedes li { grid-template-columns: 1fr; } .acciones-configuracion { justify-content: flex-start; } .formulario-edicion { left: 0; right: auto; width: min(27rem, calc(100vw - 3rem)); } }
 
