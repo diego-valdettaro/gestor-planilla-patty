@@ -217,9 +217,13 @@ async function marcarConfirmada(
   extras: { tardanzaMin?: number; horaExtra?: "pendiente" | "aprobada" },
 ): Promise<void> {
   const entradaReal = extras.tardanzaMin ? sumarMinutos(modelo.entrada, extras.tardanzaMin) : modelo.entrada;
+  // Como al confirmar de verdad, la asistencia conserva la instantánea del horario publicado: sin ella no se podría ajustar.
+  const [turno] = await db.select().from(schema.turnosPublicados)
+    .where(and(eq(schema.turnosPublicados.dni, dni), eq(schema.turnosPublicados.fecha, fecha)));
   const [fila] = await db.update(schema.asistenciasEsperadas)
     .set({
       estado: "confirmada",
+      ...(turno?.sede ? { instantaneaDeTurno: { sede: turno.sede, entradaProgramada: turno.entradaProgramada, salidaProgramada: turno.salidaProgramada, descanso: false } } : {}),
       entradaReal: `${fecha}T${entradaReal}:00`,
       salidaReal: `${fecha}T${modelo.salida}:00`,
       minutosTrabajados: minutosEntre(entradaReal, modelo.salida),
