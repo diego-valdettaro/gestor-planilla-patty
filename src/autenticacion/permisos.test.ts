@@ -14,6 +14,7 @@ import {
   puedeGestionarPeriodos,
   puedeGestionarRelacionesLaborales,
   puedeImportarMarcas,
+  puedeImportarMarcasDelGrupo,
   puedeOperarAsistenciaDelGrupo,
   puedeRevisarAsistencias,
   rolesQueSePuedenCrear,
@@ -103,6 +104,14 @@ describe("límite por grupo", () => {
   it("el Administrador opera todos los grupos, incluso los que no gestionan asistencia", () => {
     expect(puedeOperarAsistenciaDelGrupo(administrador, "Administración")).toBe(true);
     expect(puedeAdministrarPersonalDelGrupo(administrador, "Cualquiera")).toBe(true);
+  });
+
+  it("Finanzas y el Administrador importan marcas de cualquier grupo; el gerente, solo de los que opera", () => {
+    for (const quien of [finanzas, administrador]) expect(puedeImportarMarcasDelGrupo(quien, "Taller")).toBe(true);
+    expect(puedeImportarMarcasDelGrupo(gerenteDeTiendas, "Tiendas")).toBe(true);
+    expect(puedeImportarMarcasDelGrupo(gerenteDeTiendas, "Taller")).toBe(false);
+    expect(puedeImportarMarcasDelGrupo(gerenteDeVariosGrupos, "Taller")).toBe(true);
+    for (const quien of [recursosHumanos, gerenteSinGrupos, gerenteDeAdministracion]) expect(puedeImportarMarcasDelGrupo(quien, "Administración")).toBe(false);
   });
 
   it("un actor sin grupos cargados se trata como sin grupos", () => {

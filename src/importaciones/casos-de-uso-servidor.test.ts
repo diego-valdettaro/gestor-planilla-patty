@@ -1,6 +1,7 @@
 import * as XLSX from "xlsx";
 import { describe, expect, it } from "vitest";
 
+import type { Actor } from "@/autenticacion/permisos";
 import { crearCasosDeUsoDeImportaciones } from "./casos-de-uso-servidor";
 import type { AsistenciaExistente, ImportacionDeAsistencias, RepositorioDeImportaciones } from "./importar-semana-por-sede";
 import { parsearArchivoHuellero, type FilaDeAsistenciaImportada } from "./parsear-archivo-huellero";
@@ -259,7 +260,7 @@ describe("importación de marcas por rol y grupo", () => {
   const gerente = (...grupos: Array<[string, boolean]>) => ({
     id: "gerente-1", rol: "gerente_de_area" as const, grupos: grupos.map(([nombre, gestionaAsistencia]) => ({ nombre, gestionaAsistencia })),
   });
-  const con = (repositorio: RepositorioDeImportaciones, actor: Parameters<typeof crearCasosDeUsoDeImportaciones>[1] extends { obtenerActorActual(): Promise<infer A> } ? A : never) =>
+  const con = (repositorio: RepositorioDeImportaciones, actor: Actor) =>
     crearCasosDeUsoDeImportaciones(repositorio, { obtenerActorActual: async () => actor });
 
   it("un gerente importa las marcas de las personas de su grupo", async () => {

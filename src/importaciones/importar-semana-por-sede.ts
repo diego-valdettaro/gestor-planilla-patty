@@ -1,6 +1,6 @@
 import { nombreDelMotivoPlanificado, type MotivoPlanificadoDeNoAsistencia, type TipoDeEstadoManual } from "@/asistencias/estado-manual";
 import type { Actor } from "@/autenticacion/permisos";
-import { exigir, puedeImportarMarcas, puedeOperarAsistenciaDelGrupo } from "@/autenticacion/permisos";
+import { exigir, puedeImportarMarcas, puedeImportarMarcasDelGrupo } from "@/autenticacion/permisos";
 
 import type { ErrorDeImportacion, FilaDeAsistenciaImportada } from "./parsear-archivo-huellero";
 
@@ -159,11 +159,6 @@ export async function prevalidarImportacion(
     }
   }
   return errores;
-}
-
-/** Finanzas y el Administrador importan marcas de cualquier grupo; un gerente, solo las de las personas de sus grupos. */
-function puedeImportarMarcasDelGrupo(actor: Actor, grupo: string): boolean {
-  return actor.rol !== "gerente_de_area" || puedeOperarAsistenciaDelGrupo(actor, grupo);
 }
 
 export async function previsualizarImportacion(

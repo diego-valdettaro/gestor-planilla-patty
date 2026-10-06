@@ -6,6 +6,10 @@ const simulacro = vi.hoisted(() => ({
   actor: vi.fn(),
   guardar: vi.fn(),
   registrarProcesamiento: vi.fn(),
+  registrarEstadoManual: vi.fn(),
+  ajustar: vi.fn(),
+  evaluarPorRango: vi.fn(),
+  confirmarPorRango: vi.fn(),
   conservarArchivoFuente: vi.fn(),
   descartarArchivoFuente: vi.fn(),
 }));
@@ -15,7 +19,17 @@ const GRUPO_DE = new Map([["00001024", "Tiendas"], ["00002048", "Taller"]]);
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/autenticacion/sesion-del-servidor", () => ({ obtenerActorActual: simulacro.actor }));
-vi.mock("@/asistencias/servicio", () => ({ repositorioDeAsistencias: {} }));
+vi.mock("@/asistencias/servicio", () => ({
+  repositorioDeAsistencias: {
+    obtenerGrupoDelColaborador: async (dni: string) => GRUPO_DE.get(dni),
+    obtenerGruposDeColaboradores: async (dnis: string[]) => dnis.flatMap((dni) => GRUPO_DE.has(dni) ? [{ dni, grupo: GRUPO_DE.get(dni)! }] : []),
+    registrarEstadoManual: simulacro.registrarEstadoManual,
+    buscarTurnoPublicado: async () => undefined,
+    ajustar: simulacro.ajustar,
+    evaluarColaboradoresPorRango: simulacro.evaluarPorRango,
+    confirmarColaboradoresPorRango: simulacro.confirmarPorRango,
+  },
+}));
 vi.mock("@/importaciones/almacenamiento-local", () => ({
   conservarArchivoFuente: simulacro.conservarArchivoFuente,
   descartarArchivoFuente: simulacro.descartarArchivoFuente,
@@ -48,7 +62,7 @@ vi.mock("@/turnos/servicio", () => ({
   },
 }));
 
-import { importarAsistencia, procesarHorarioSemanal } from "./actions";
+import { ajustarAsistencia, confirmarAsistencia, confirmarSeleccionPorRango, evaluarConfirmacionPorRango, importarAsistencia, procesarHorarioSemanal, registrarEstadoManual } from "./actions";
 
 const gerente = (...grupos: Array<[string, boolean]>) => ({
   id: "g1", rol: "gerente_de_area", grupos: grupos.map(([nombre, gestionaAsistencia]) => ({ nombre, gestionaAsistencia })),
@@ -132,5 +146,46 @@ describe("procesar la semana de una persona desde Asistencias, por rol", () => {
 
     await expect(procesarHorarioSemanal(formularioDeProcesamiento("00001024"))).rejects.toThrow("No tiene permiso para procesar horarios semanales.");
     expect(simulacro.registrarProcesamiento).not.toHaveBeenCalled();
+  });
+});
+
+describe("revisar las asistencias de una persona de otro grupo, por acción de servidor", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const formulario = (campos: Record<string, string>) => {
+    const datos = new FormData();
+    for (const [campo, valor] of Object.entries(campos)) datos.set(campo, valor);
+    return datos;
+  };
+  const SIN_PERMISO = "No tiene permiso para revisar asistencias de este grupo.";
+
+  it("un gerente de Tiendas no confirma, ajusta ni resuelve la jornada de una persona de Taller", async () => {
+    simulacro.actor.mockResolvedValue(gerente(["Tiendas", true]));
+    const ajena = { dni: "00002048", fecha: "2026-09-01" };
+
+    await expect(confirmarAsistencia(formulario({ ...ajena, sede: "Lima", entradaReal: "2026-09-01T09:00", salidaReal: "2026-09-01T18:00" }))).rejects.toThrow(SIN_PERMISO);
+    await expect(ajustarAsistencia(formulario({ ...ajena, entradaReal: "2026-09-01T09:00", salidaReal: "2026-09-01T18:00", motivo: "Corrección" }))).rejects.toThrow(SIN_PERMISO);
+    await expect(registrarEstadoManual(formulario({ ...ajena, tipo: "falta", comentario: "No vino" }))).rejects.toThrow(SIN_PERMISO);
+    expect(simulacro.ajustar).not.toHaveBeenCalled();
+    expect(simulacro.registrarEstadoManual).not.toHaveBeenCalled();
+  });
+
+  it("un gerente de Tiendas no evalúa ni confirma por rango a una persona de Taller", async () => {
+    simulacro.actor.mockResolvedValue(gerente(["Tiendas", true]));
+    const rango = { inicio: "2026-09-01", fin: "2026-09-06" };
+
+    await expect(evaluarConfirmacionPorRango({ ...rango, colaboradores: [{ dni: "00002048", nombre: "Ajena" }] })).resolves.toEqual({ error: SIN_PERMISO });
+    await expect(confirmarSeleccionPorRango({ ...rango, dnis: ["00001024", "00002048"] })).resolves.toEqual({ error: SIN_PERMISO });
+    expect(simulacro.evaluarPorRango).not.toHaveBeenCalled();
+    expect(simulacro.confirmarPorRango).not.toHaveBeenCalled();
+  });
+
+  it("Finanzas, que ve Asistencias en solo lectura, tampoco las revisa", async () => {
+    simulacro.actor.mockResolvedValue({ id: "f1", rol: "finanzas" });
+
+    await expect(registrarEstadoManual(formulario({ dni: "00001024", fecha: "2026-09-01", tipo: "falta", comentario: "No vino" }))).rejects.toThrow("No tiene permiso para revisar asistencias.");
+    await expect(confirmarSeleccionPorRango({ inicio: "2026-09-01", fin: "2026-09-06", dnis: ["00001024"] })).resolves.toEqual({ error: "No tiene permiso para revisar asistencias." });
+    expect(simulacro.registrarEstadoManual).not.toHaveBeenCalled();
+    expect(simulacro.confirmarPorRango).not.toHaveBeenCalled();
   });
 });

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import type { Actor } from "@/autenticacion/permisos";
 import { crearCasosDeUsoDeTurnos } from "./casos-de-uso-servidor";
 import type {
   AsistenciaEsperada,
@@ -177,7 +178,7 @@ describe("casos de uso de turnos en el servidor", () => {
       id: "gerente-1", rol: "gerente_de_area" as const, grupos: grupos.map(([nombre, gestionaAsistencia]) => ({ nombre, gestionaAsistencia })),
     });
 
-    function procesarComo(actor: { id: string; rol: "administrador" | "gerente_de_area" | "recursos_humanos" | "finanzas"; grupos?: Array<{ nombre: string; gestionaAsistencia: boolean }> }) {
+    function procesarComo(actor: Actor) {
       const { repositorio } = crearRepositorioEnMemoria();
       const registrados: unknown[] = [];
       repositorio.registrarProcesamiento = async (procesamiento) => { registrados.push(procesamiento); };

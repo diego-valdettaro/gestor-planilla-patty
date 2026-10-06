@@ -14,7 +14,7 @@ export default async function PaginaDeImportacionDeAsistencias() {
   if (!puedeImportarMarcas(actor)) return <main className="centrado"><section className="estado-vacio"><h1>Sin permiso</h1><p>Su rol no permite importar asistencias. Solo los gerentes de área, Finanzas y el Administrador del sistema pueden hacerlo. Pida al Administrador del sistema que revise su rol.</p></section></main>;
 
   return <main className="contenido">
-    <header className="encabezado"><div><p className="eyebrow">{NOMBRE_DE_ROL[actor.rol]}</p><h1>Importar asistencias</h1><p>El XLSX define las sedes y fechas que se importarán.</p></div></header>
+    <header className="encabezado"><div><p className="eyebrow">{NOMBRE_DE_ROL[actor.rol]}</p><h1>Importar asistencias</h1><p>El XLSX define las sedes y fechas que se importarán.{actor.rol === "gerente_de_area" ? " Solo puede importar marcas de las personas de sus grupos." : ""}</p></div></header>
     <FormularioDeImportacion />
   </main>;
 }
