@@ -82,7 +82,7 @@ function DecisionesDeHorasExtra({ periodoId, filas }: { periodoId: string; filas
 
 function TotalesGenerales({ resumen }: { resumen: ResumenDePeriodo }) {
   const totales = resumen.totales;
-  return <section><h3>Totales del período completo</h3><TablaDeTotales totales={totales} /><TablaDeHorasExtra horasExtra={totales.horasExtra} /></section>;
+  return <section><h3>Totales del período completo</h3><TablaDeTotales totales={totales} titulo="Totales del período completo" /><TablaDeHorasExtra horasExtra={totales.horasExtra} titulo="Horas extra del período completo" /></section>;
 }
 
 function Bloqueos({ bloqueos }: { bloqueos: BloqueoDePeriodo[] }) {
@@ -93,19 +93,41 @@ function Bloqueos({ bloqueos }: { bloqueos: BloqueoDePeriodo[] }) {
 function ResumenPorGrupos({ filas }: { filas: FilaDeResumen[] }) {
   const grupos = new Map<string, FilaDeResumen[]>();
   for (const fila of filas) grupos.set(fila.grupo, [...(grupos.get(fila.grupo) ?? []), fila]);
-  return <>{[...grupos].map(([grupo, colaboradores]) => <section key={grupo}><h3>{grupo}</h3>{colaboradores.map((fila) => <article className="tarjeta" key={`${grupo}-${fila.dni}`}><h4>{fila.nombre} ({fila.dni})</h4><TablaDeTotales totales={fila} /><TablaDeHorasExtra horasExtra={fila.horasExtra} /><DetalleDiario fila={fila} /></article>)}</section>)}</>;
+  return <>{[...grupos].map(([grupo, colaboradores]) => <section key={grupo}><h3>{grupo}</h3>{colaboradores.map((fila) => <article className="tarjeta" key={`${grupo}-${fila.dni}`}><h4>{fila.nombre} ({fila.dni})</h4><TablaDeTotales totales={fila} titulo={`Totales de ${fila.nombre} (${fila.dni})`} /><TablaDeHorasExtra horasExtra={fila.horasExtra} titulo={`Horas extra de ${fila.nombre} (${fila.dni})`} /><DetalleDiario fila={fila} /></article>)}</section>)}</>;
 }
 
-function TablaDeTotales({ totales }: { totales: ResumenDePeriodo["totales"] }) {
-  return <div className="panel-tabla"><table><thead><tr><th>Jornadas trabajadas</th><th>Horas trabajadas</th><th>Faltas</th><th>Descansos</th><th>Feriados</th><th>Vacaciones</th><th>Permisos</th><th>Suspensiones</th><th>Tardanzas</th><th>Horas penalizadas</th></tr></thead><tbody><tr><td>{totales.jornadasTrabajadas}</td><td>{formatearDuracion(totales.minutosTrabajados)}</td><td>{totales.noAsistencias.falta}</td><td>{totales.noAsistencias.descanso}</td><td>{totales.noAsistencias.feriado}</td><td>{totales.noAsistencias.vacaciones}</td><td>{totales.noAsistencias.permiso}</td><td>{totales.noAsistencias.suspension}</td><td>{totales.cantidadTardanzas}</td><td>{formatearDuracion(totales.minutosPenalizados)}</td></tr></tbody></table></div>;
+function TablaComparable({ titulo, children }: { titulo: string; children: React.ReactNode }) {
+  return <div className="panel-tabla" role="region" aria-label={titulo} tabIndex={0}><table><caption className="sr-only">{titulo}</caption>{children}</table></div>;
 }
 
-function TablaDeHorasExtra({ horasExtra }: { horasExtra: FilaDeResumen["horasExtra"] }) {
-  return <div className="panel-tabla"><table><thead><tr><th>Pendientes 25%</th><th>Pendientes 35%</th><th>Aprobadas 25%</th><th>Aprobadas 35%</th><th>Rechazadas 25%</th><th>Rechazadas 35%</th></tr></thead><tbody><tr><td>{formatearDuracion(horasExtra.pendiente.minutosAl25)}</td><td>{formatearDuracion(horasExtra.pendiente.minutosAl35)}</td><td>{formatearDuracion(horasExtra.aprobada.minutosAl25)}</td><td>{formatearDuracion(horasExtra.aprobada.minutosAl35)}</td><td>{formatearDuracion(horasExtra.rechazada.minutosAl25)}</td><td>{formatearDuracion(horasExtra.rechazada.minutosAl35)}</td></tr></tbody></table></div>;
+function Cabecera({ columnas }: { columnas: Array<{ nombre: string; numerica?: boolean }> }) {
+  return <thead><tr>{columnas.map(({ nombre, numerica }) => <th key={nombre} scope="col" className={numerica ? "numerico" : undefined}>{nombre}</th>)}</tr></thead>;
+}
+
+function TablaDeTotales({ totales, titulo }: { totales: ResumenDePeriodo["totales"]; titulo: string }) {
+  const cifras = [
+    ["Jornadas trabajadas", totales.jornadasTrabajadas], ["Horas trabajadas", formatearDuracion(totales.minutosTrabajados)], ["Faltas", totales.noAsistencias.falta],
+    ["Descansos", totales.noAsistencias.descanso], ["Feriados", totales.noAsistencias.feriado], ["Vacaciones", totales.noAsistencias.vacaciones],
+    ["Permisos", totales.noAsistencias.permiso], ["Suspensiones", totales.noAsistencias.suspension], ["Tardanzas", totales.cantidadTardanzas],
+    ["Horas penalizadas", formatearDuracion(totales.minutosPenalizados)],
+  ] as const;
+  return <TablaComparable titulo={titulo}><Cabecera columnas={cifras.map(([nombre]) => ({ nombre, numerica: true }))} /><tbody><tr>{cifras.map(([nombre, valor]) => <td key={nombre} className="numerico">{valor}</td>)}</tr></tbody></TablaComparable>;
+}
+
+function TablaDeHorasExtra({ horasExtra, titulo }: { horasExtra: FilaDeResumen["horasExtra"]; titulo: string }) {
+  const cifras = [
+    ["Pendientes 25%", horasExtra.pendiente.minutosAl25], ["Pendientes 35%", horasExtra.pendiente.minutosAl35],
+    ["Aprobadas 25%", horasExtra.aprobada.minutosAl25], ["Aprobadas 35%", horasExtra.aprobada.minutosAl35],
+    ["Rechazadas 25%", horasExtra.rechazada.minutosAl25], ["Rechazadas 35%", horasExtra.rechazada.minutosAl35],
+  ] as const;
+  return <TablaComparable titulo={titulo}><Cabecera columnas={cifras.map(([nombre]) => ({ nombre, numerica: true }))} /><tbody><tr>{cifras.map(([nombre, minutos]) => <td key={nombre} className="numerico">{formatearDuracion(minutos)}</td>)}</tr></tbody></TablaComparable>;
 }
 
 function DetalleDiario({ fila }: { fila: FilaDeResumen }) {
-  return <details><summary>Ver detalle diario</summary><div className="panel-tabla"><table><thead><tr><th>Fecha</th><th>Sede de la jornada</th><th>Resultado real</th><th>Horario real</th><th>Tiempo trabajado</th><th>Tardanza</th><th>Penalización</th><th>Hora extra</th></tr></thead><tbody>{fila.jornadas.map((jornada) => <tr id={`jornada-${fila.dni}-${jornada.fecha}`} key={jornada.fecha}><td>{jornada.fecha}</td><td>{jornada.sede ?? "Sin sede"}</td><td>{nombreDelResultado(jornada.resultado)}</td><td>{horarioReal(jornada)}</td><td>{formatearDuracion(jornada.minutosTrabajados)}</td><td>{formatearDuracion(jornada.tardanzaEnMinutos)}</td><td>{formatearDuracion(jornada.minutosPenalizados)}</td><td>{jornada.horaExtra ? `${nombreDelEstadoExtra(jornada.horaExtra.estado)}: 25% ${formatearDuracion(jornada.horaExtra.minutosAl25)}, 35% ${formatearDuracion(jornada.horaExtra.minutosAl35)}` : "Sin hora extra"}</td></tr>)}</tbody></table></div></details>;
+  return <details><summary>Ver detalle diario</summary><TablaComparable titulo={`Detalle diario de ${fila.nombre} (${fila.dni})`}>
+    <Cabecera columnas={[{ nombre: "Fecha" }, { nombre: "Sede de la jornada" }, { nombre: "Resultado real" }, { nombre: "Horario real" }, { nombre: "Tiempo trabajado", numerica: true }, { nombre: "Tardanza", numerica: true }, { nombre: "Penalización", numerica: true }, { nombre: "Hora extra" }]} />
+    <tbody>{fila.jornadas.map((jornada) => <tr id={`jornada-${fila.dni}-${jornada.fecha}`} key={jornada.fecha}><th scope="row">{jornada.fecha}</th><td>{jornada.sede ?? "Sin sede"}</td><td>{nombreDelResultado(jornada.resultado)}</td><td>{horarioReal(jornada)}</td><td className="numerico">{formatearDuracion(jornada.minutosTrabajados)}</td><td className="numerico">{formatearDuracion(jornada.tardanzaEnMinutos)}</td><td className="numerico">{formatearDuracion(jornada.minutosPenalizados)}</td><td>{jornada.horaExtra ? `${nombreDelEstadoExtra(jornada.horaExtra.estado)}: 25% ${formatearDuracion(jornada.horaExtra.minutosAl25)}, 35% ${formatearDuracion(jornada.horaExtra.minutosAl35)}` : "Sin hora extra"}</td></tr>)}</tbody>
+  </TablaComparable></details>;
 }
 
 function enlaceDelBloqueo(bloqueo: BloqueoDePeriodo): string {

@@ -228,4 +228,77 @@ describe("página de Períodos de planilla (/periodos)", () => {
     expect(html).toContain("El período no tiene asistencias ni horas extra pendientes.");
     expect(html).not.toContain("mensaje-operacion exito");
   });
+
+  describe("tablas comparables", () => {
+    const totales = { jornadasTrabajadas: 2, minutosTrabajados: 960, noAsistencias: { falta: 1, descanso: 0, feriado: 0, vacaciones: 0, permiso: 0, suspension: 0 }, cantidadTardanzas: 1, minutosPenalizados: 60, horasExtra: { pendiente: { minutosAl25: 30, minutosAl35: 0 }, aprobada: { minutosAl25: 0, minutosAl35: 0 }, rechazada: { minutosAl25: 0, minutosAl35: 0 } } };
+
+    async function renderConDetalle() {
+      listar.mockResolvedValue([{ id: "p1", inicio: "2026-01-01", fin: "2026-01-31", estado: "abierto" }]);
+      listarResumen.mockResolvedValue({
+        filas: [{ dni: "00000001", nombre: "Ana", grupo: "Tiendas", ...totales, jornadas: [
+          { fecha: "2026-01-02", sede: "Centro", resultado: "trabajada", entradaReal: "2026-01-02T09:00:00.000Z", salidaReal: "2026-01-02T17:00:00.000Z", minutosTrabajados: 480, tardanzaEnMinutos: 15, minutosPenalizados: 60, politicaDeTardanzaVersion: null, horaExtra: { id: "extra-1", estado: "pendiente", minutosAl25: 30, minutosAl35: 0 } },
+        ] }],
+        totales,
+        bloqueos: [],
+      });
+      return render();
+    }
+
+    function tablas(html: string) {
+      return [...html.matchAll(/<div class="panel-tabla"[^>]*>[\s\S]*?<\/table><\/div>/g)].map(([tabla]) => tabla);
+    }
+
+    function celdas(tabla: string, etiqueta: "th" | "td") {
+      return [...tabla.matchAll(new RegExp(`<${etiqueta}((?:\\s[^>]*)?)>([\\s\\S]*?)</${etiqueta}>`, "g"))].map(([, atributos, contenido]) => ({ atributos, contenido }));
+    }
+
+    it("nombra cada tabla como región desplazable por teclado con un título que identifica su objeto", async () => {
+      const html = await renderConDetalle();
+
+      const [totalesGlobales, extraGlobal, totalesDeAna, extraDeAna, detalle] = tablas(html);
+      expect(tablas(html)).toHaveLength(5);
+      expect(totalesGlobales).toContain('role="region" aria-label="Totales del período completo" tabindex="0"');
+      expect(totalesGlobales).toContain("<caption class=\"sr-only\">Totales del período completo</caption>");
+      expect(extraGlobal).toContain('aria-label="Horas extra del período completo"');
+      expect(totalesDeAna).toContain('aria-label="Totales de Ana (00000001)"');
+      expect(extraDeAna).toContain('aria-label="Horas extra de Ana (00000001)"');
+      expect(detalle).toContain('aria-label="Detalle diario de Ana (00000001)"');
+    });
+
+    it("declara las cabeceras de columna y la fecha como cabecera de fila del detalle diario", async () => {
+      const html = await renderConDetalle();
+
+      for (const tabla of tablas(html)) {
+        for (const cabecera of celdas(tabla, "th").filter(({ atributos }) => !atributos.includes('scope="row"'))) expect(cabecera.atributos).toContain('scope="col"');
+      }
+      const detalle = tablas(html)[4];
+      expect(celdas(detalle, "th").filter(({ atributos }) => atributos.includes('scope="col"')).map(({ contenido }) => contenido)).toEqual(["Fecha", "Sede de la jornada", "Resultado real", "Horario real", "Tiempo trabajado", "Tardanza", "Penalización", "Hora extra"]);
+      expect(detalle).toMatch(/<th[^>]*scope="row"[^>]*>2026-01-02<\/th>/);
+      expect(detalle).toContain('id="jornada-00000001-2026-01-02"');
+    });
+
+    it("alinea a la derecha las cifras de totales y horas extra conservando sus valores", async () => {
+      const html = await renderConDetalle();
+
+      const [totalesGlobales, extraGlobal] = tablas(html);
+      expect(celdas(totalesGlobales, "th").map(({ atributos }) => atributos)).toSatisfy((lista: string[]) => lista.every((atributos) => atributos.includes('class="numerico"')));
+      expect(celdas(totalesGlobales, "td").map(({ atributos }) => atributos)).toSatisfy((lista: string[]) => lista.every((atributos) => atributos.includes('class="numerico"')));
+      expect(celdas(totalesGlobales, "td").map(({ contenido }) => contenido)).toEqual(["2", "16 h", "1", "0", "0", "0", "0", "0", "1", "1 h"]);
+      expect(celdas(extraGlobal, "td").every(({ atributos }) => atributos.includes('class="numerico"'))).toBe(true);
+      expect(celdas(extraGlobal, "td").map(({ contenido }) => contenido)).toEqual(["30 min", "0 min", "0 min", "0 min", "0 min", "0 min"]);
+    });
+
+    it("alinea a la derecha solo las cifras del detalle diario y deja fecha, sede, resultado, horario y descripción a la izquierda", async () => {
+      const html = await renderConDetalle();
+
+      const detalle = tablas(html)[4];
+      const porNombre = new Map(celdas(detalle, "th").filter(({ atributos }) => atributos.includes('scope="col"')).map(({ atributos, contenido }) => [contenido, atributos]));
+      for (const numerica of ["Tiempo trabajado", "Tardanza", "Penalización"]) expect(porNombre.get(numerica)).toContain('class="numerico"');
+      for (const textual of ["Fecha", "Sede de la jornada", "Resultado real", "Horario real", "Hora extra"]) expect(porNombre.get(textual)).not.toContain("numerico");
+
+      const fila = celdas(detalle, "td");
+      expect(fila.map(({ contenido }) => contenido)).toEqual(["Centro", "Trabajada", "09:00 a 17:00", "8 h", "15 min", "1 h", "Pendiente: 25% 30 min, 35% 0 min"]);
+      expect(fila.map(({ atributos }) => atributos.includes("numerico"))).toEqual([false, false, false, true, true, true, false]);
+    });
+  });
 });
