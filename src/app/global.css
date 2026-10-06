@@ -278,4 +278,4 @@ th, td { border: 1px solid #e2e8f0; padding: 0.6rem; text-align: left; }
   .panel-tabla, .tabla-plan-semanal, .calendario { max-width: 100%; }
   .panel-tabla, .tabla-plan-semanal, .calendario, .dias { overflow-x: auto; }
 }
-.formulario-asignacion { align-items: flex-end; display: flex; flex-wrap: wrap; gap: .5rem; }.formulario-asignacion label { color: #526174; display: grid; font-size: .74rem; font-weight: 700; gap: .35rem; }.formulario-asignacion select { background: #fff; border: 1px solid #cfd8e4; border-radius: .35rem; color: #1d2733; min-height: 2.3rem; padding: .45rem .55rem; }
+.formulario-asignacion { align-items: flex-end; display: flex; flex-wrap: wrap; gap: .5rem; }

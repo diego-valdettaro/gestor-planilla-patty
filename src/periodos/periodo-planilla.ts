@@ -122,7 +122,7 @@ export function autorizarGestionDePeriodos(actor: Actor): void {
 }
 
 export function autorizarCierreDePeriodos(actor: Actor): void {
-  exigir(puedeGestionarPeriodos(actor), "Solo Finanzas puede cerrar o reabrir períodos de planilla.");
+  exigir(puedeGestionarPeriodos(actor), "Solo Finanzas y el Administrador del sistema pueden cerrar o reabrir períodos de planilla.");
 }
 
 export async function decidirHorasExtra(

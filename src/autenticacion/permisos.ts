@@ -88,6 +88,11 @@ export function puedeOperarAsistenciaDelGrupo(actor: Actor, grupo: string): bool
   return gruposDe(actor).some((asignado) => asignado.nombre === grupo && asignado.gestionaAsistencia);
 }
 
+/** Consulta de asistencias de un grupo: quien las opera y Finanzas, que las ve en solo lectura. */
+export function puedeConsultarAsistenciaDelGrupo(actor: Actor, grupo: string): boolean {
+  return actor.rol === "finanzas" || puedeOperarAsistenciaDelGrupo(actor, grupo);
+}
+
 /** Alta y edición de las personas de un grupo, aunque el grupo no gestione asistencia. */
 export function puedeAdministrarPersonalDelGrupo(actor: Actor, grupo: string): boolean {
   if (actor.rol === "administrador") return true;

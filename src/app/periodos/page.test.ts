@@ -193,7 +193,7 @@ describe("página de Períodos de planilla (/periodos)", () => {
     expect(html).toContain('name="horaExtraId"');
   });
 
-  it("no ofrece decisiones de horas extra a Administración", async () => {
+  it("no muestra decisiones de horas extra cuando el período no tiene filas", async () => {
     obtenerActorActual.mockResolvedValue({ rol: "administrador" });
     listar.mockResolvedValue([{ id: "p1", inicio: "2026-01-01", fin: "2026-01-31", estado: "abierto" }]);
 

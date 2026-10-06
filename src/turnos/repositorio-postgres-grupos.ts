@@ -3,7 +3,7 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import * as schema from "@/db/schema";
 import type { Actor } from "@/autenticacion/permisos";
-import { puedeOperarAsistenciaDelGrupo, puedeConsultarAsistencias } from "@/autenticacion/permisos";
+import { puedeConsultarAsistenciaDelGrupo } from "@/autenticacion/permisos";
 import { grupos } from "@/db/schema";
 
 import { GrupoDuplicadoError, type RepositorioDeGrupos } from "./gestionar-grupos";
@@ -29,10 +29,10 @@ export class RepositorioPostgresDeGrupos implements RepositorioDeGrupos {
     return this.db.select({ nombre: grupos.nombre, gestionaAsistencia: grupos.gestionaAsistencia }).from(grupos).orderBy(asc(grupos.nombre));
   }
 
-  /** Grupos con horarios y asistencias que el actor puede operar. */
+  /** Grupos que gestionan asistencia y que el actor puede operar (o, Finanzas, consultar). */
   async listarOperablesPor(actor: Actor): Promise<string[]> {
     const todos = await this.listarConAtributos();
-    return todos.filter(({ nombre, gestionaAsistencia }) => gestionaAsistencia && puedeVerGrupo(actor, nombre)).map(({ nombre }) => nombre);
+    return todos.filter(({ nombre, gestionaAsistencia }) => gestionaAsistencia && puedeConsultarAsistenciaDelGrupo(actor, nombre)).map(({ nombre }) => nombre);
   }
 
   async listar(): Promise<string[]> {
@@ -45,9 +45,4 @@ function esViolacionDeUnicidad(causa: unknown): boolean {
   if (typeof causa !== "object" || causa === null) return false;
   if ("code" in causa && causa.code === "23505") return true;
   return "cause" in causa && esViolacionDeUnicidad(causa.cause);
-}
-
-// Finanzas consulta asistencias de todos los grupos que las gestionan; el resto, solo los que opera.
-function puedeVerGrupo(actor: Actor, grupo: string): boolean {
-  return puedeOperarAsistenciaDelGrupo(actor, grupo) || (actor.rol === "finanzas" && puedeConsultarAsistencias(actor));
 }

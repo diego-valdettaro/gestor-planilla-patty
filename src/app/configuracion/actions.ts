@@ -3,7 +3,7 @@
 import { desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
-import { exigir, puedeConfigurarGlobalmente } from "@/autenticacion/permisos";
+import { exigir, puedeConfigurarGlobalmente, puedeConsultarHorarios } from "@/autenticacion/permisos";
 import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
 import { crearCasosDeUsoDeColaboradores } from "@/colaboradores/casos-de-uso-servidor";
 import { repositorioDeColaboradores } from "@/colaboradores/servicio";
@@ -142,6 +142,7 @@ export async function reactivarColaborador(formData: FormData): Promise<void> {
 }
 
 export async function guardarPoliticaDeTardanzas(formData: FormData): Promise<void> {
+  await exigirConfiguracionGlobal();
   const casos = crearCasosDeUsoDeTardanzas(repositorioDeTardanzas, { obtenerActorActual });
   const sede = texto(formData, "sede");
   const [ultimaPolitica] = await db.select({ version: politicasDePenalizacionPorTardanzas.version })
@@ -192,6 +193,7 @@ export async function eliminarModeloHorario(formData: FormData): Promise<void> {
 }
 
 export async function desactivarModeloHorario(formData: FormData): Promise<void> {
+  await exigirAccesoAModelos();
   const id = texto(formData, "id");
   const modelo = await repositorioDeModelosDeHorario.buscarPorId(id);
   if (!modelo) throw new Error("El modelo de horario no existe.");
@@ -201,12 +203,18 @@ export async function desactivarModeloHorario(formData: FormData): Promise<void>
 }
 
 export async function reactivarModeloHorario(formData: FormData): Promise<void> {
+  await exigirAccesoAModelos();
   const id = texto(formData, "id");
   const modelo = await repositorioDeModelosDeHorario.buscarPorId(id);
   if (!modelo) throw new Error("El modelo de horario no existe.");
   await guardarModeloDeHorario(repositorioDeModelosDeHorario, await obtenerActorActual(), { ...modelo, activo: true });
   revalidatePath("/configuracion");
   revalidatePath("/turnos");
+}
+
+// Rechaza antes de leer el modelo: la lectura previa no debe revelar a un rol sin acceso si el modelo existe.
+async function exigirAccesoAModelos(): Promise<void> {
+  exigir(puedeConsultarHorarios(await obtenerActorActual()), "No tiene permiso para administrar modelos de horario.");
 }
 
 async function exigirConfiguracionGlobal(): Promise<void> {

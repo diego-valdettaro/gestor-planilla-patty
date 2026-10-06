@@ -22,7 +22,7 @@ interface PropiedadesDePagina {
 export default async function PaginaDeAsistencias({ searchParams }: PropiedadesDePagina) {
   const actor = await obtenerActorActual().catch(() => undefined);
   if (!actor) redirect("/iniciar-sesion");
-  if (!puedeConsultarAsistencias(actor)) return <main className="centrado"><section className="estado-vacio"><h1>Sin permiso</h1><p>Su rol no permite consultar asistencias. Pueden hacerlo los gerentes de área de grupos que gestionan asistencia, Finanzas y el Administrador del sistema.</p></section></main>;
+  if (!puedeConsultarAsistencias(actor)) return <main className="centrado"><section className="estado-vacio"><h1>Sin permiso</h1><p>Su rol no permite consultar asistencias. Pueden hacerlo los gerentes de área de grupos que gestionan asistencia, Finanzas y el Administrador del sistema. Pida al Administrador del sistema que revise su rol o sus grupos.</p></section></main>;
 
   const soloLectura = !puedeRevisarAsistencias(actor);
   const parametros = await searchParams;
