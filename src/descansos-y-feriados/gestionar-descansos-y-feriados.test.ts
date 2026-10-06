@@ -151,6 +151,16 @@ describe("descanso sustitutorio", () => {
     await expect(registrarDescansoSustitutorio(repositorio, finanzas, { dni: ANA, origenFecha: MIERCOLES, fechaPrevista: LUNES })).rejects.toThrow("ya tiene un descanso sustitutorio");
   });
 
+  it("un mismo día previsto no sustituye dos orígenes, salvo que el primero no se haya otorgado", async () => {
+    const { repositorio } = await conDescansoDeAnaElMiercoles();
+    await registrarFeriado(repositorio, finanzas, { fecha: "2033-03-08", nombre: "Feriado de prueba" });
+    const primero = await registrarDescansoSustitutorio(repositorio, finanzas, { dni: ANA, origenFecha: MIERCOLES, fechaPrevista: VIERNES });
+
+    await expect(registrarDescansoSustitutorio(repositorio, finanzas, { dni: ANA, origenFecha: "2033-03-08", fechaPrevista: VIERNES })).rejects.toThrow("ya sustituye otro descanso o feriado");
+    await verificarDescansoSustitutorio(repositorio, finanzas, primero.id, "no_otorgado", VIERNES);
+    await expect(registrarDescansoSustitutorio(repositorio, finanzas, { dni: ANA, origenFecha: "2033-03-08", fechaPrevista: VIERNES })).resolves.toMatchObject({ estado: "previsto" });
+  });
+
   it("se verifica una sola vez como otorgado o no otorgado, con responsable, y no antes de su fecha", async () => {
     const { repositorio, sustitutorios } = await conDescansoDeAnaElMiercoles();
     const previsto = await registrarDescansoSustitutorio(repositorio, finanzas, { dni: ANA, origenFecha: MIERCOLES, fechaPrevista: VIERNES });

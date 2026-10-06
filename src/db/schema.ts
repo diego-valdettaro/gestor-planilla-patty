@@ -451,6 +451,7 @@ export const descansosSustitutorios = pgTable(
   },
   (table) => [
     uniqueIndex("descansos_sustitutorios_dni_origen").on(table.dni, table.origenFecha),
+    uniqueIndex("descansos_sustitutorios_dni_fecha_prevista").on(table.dni, table.fechaPrevista).where(sql`${table.estado} <> 'no_otorgado'`),
     check("descansos_sustitutorios_otro_dia", sql`${table.fechaPrevista} <> ${table.origenFecha}`),
     check("descansos_sustitutorios_verificacion_completa", sql`(${table.estado} = 'previsto' AND ${table.verificadoPorId} IS NULL AND ${table.verificadoEn} IS NULL) OR (${table.estado} <> 'previsto' AND ${table.verificadoPorId} IS NOT NULL AND ${table.verificadoEn} IS NOT NULL)`),
   ],

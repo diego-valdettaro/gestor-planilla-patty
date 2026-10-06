@@ -55,3 +55,5 @@ CREATE TABLE "descansos_sustitutorios" (
   )
 );
 CREATE UNIQUE INDEX "descansos_sustitutorios_dni_origen" ON "descansos_sustitutorios" USING btree ("dni", "origen_fecha");
+-- Un mismo día previsto no puede sustituir dos orígenes de la persona; uno no otorgado libera su día.
+CREATE UNIQUE INDEX "descansos_sustitutorios_dni_fecha_prevista" ON "descansos_sustitutorios" USING btree ("dni", "fecha_prevista") WHERE "estado" <> 'no_otorgado';

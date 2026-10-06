@@ -178,6 +178,8 @@ describe.skipIf(!databaseUrl)("descansos semanales, feriados y descansos sustitu
     await expect(insertar({ origenTipo: "domingo" as "feriado" })).rejects.toThrow();
     await insertar({});
     await expect(insertar({ fechaPrevista: "2044-08-01" })).rejects.toThrow();
+    // Otro origen de la misma persona no puede usar el mismo día previsto mientras el primero no sea «no otorgado».
+    await expect(insertar({ origenFecha: "2044-08-02" })).rejects.toThrow();
   });
 
   it("dos registros o dos verificaciones simultáneos de un sustitutorio no se duplican", async () => {

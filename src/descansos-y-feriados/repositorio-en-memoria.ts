@@ -43,7 +43,8 @@ export function crearRepositorioEnMemoria() {
     buscarSustitutorio: async (id) => sustitutorios.find((sustitutorio) => sustitutorio.id === id),
     listarSustitutorios: async (dni, desde, hasta) => sustitutorios.filter((sustitutorio) => sustitutorio.dni === dni && sustitutorio.origenFecha >= desde && sustitutorio.origenFecha <= hasta),
     insertarSustitutorio: async ({ responsableId: _responsable, ...datos }) => {
-      if (sustitutorios.some((existente) => existente.dni === datos.dni && existente.origenFecha === datos.origenFecha)) return undefined;
+      const choca = (existente: DescansoSustitutorio) => existente.dni === datos.dni && (existente.origenFecha === datos.origenFecha || (existente.fechaPrevista === datos.fechaPrevista && existente.estado !== "no_otorgado"));
+      if (sustitutorios.some(choca)) return undefined;
       const sustitutorio: DescansoSustitutorio = { id: randomUUID(), ...datos, estado: "previsto", verificadoPorId: null, verificadoEn: null };
       sustitutorios.push(sustitutorio);
       return sustitutorio;

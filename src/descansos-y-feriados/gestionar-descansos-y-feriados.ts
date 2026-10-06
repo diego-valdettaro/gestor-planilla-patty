@@ -43,7 +43,7 @@ export interface RepositorioDeDescansosYFeriados {
   buscarSustitutorio(id: string): Promise<DescansoSustitutorio | undefined>;
   /** Sustitutorios de una persona cuyo día de origen cae en el rango. */
   listarSustitutorios(dni: string, desde: string, hasta: string): Promise<DescansoSustitutorio[]>;
-  /** undefined si el día de origen ya tiene un sustitutorio. */
+  /** undefined si el día de origen ya tiene un sustitutorio o el día previsto ya sustituye otro origen de la persona. */
   insertarSustitutorio(sustitutorio: Pick<DescansoSustitutorio, "dni" | "origenFecha" | "origenTipo" | "fechaPrevista"> & { responsableId: string }): Promise<DescansoSustitutorio | undefined>;
   /** false si el sustitutorio ya no estaba «previsto». */
   verificarSustitutorio(id: string, estado: "otorgado" | "no_otorgado", responsableId: string, verificadoEn: Date): Promise<boolean>;
@@ -150,11 +150,11 @@ export async function registrarDescansoSustitutorio(
     throw new Error(`El ${fecha(solicitud.fechaPrevista)} ya es feriado o descanso semanal de la persona: elija un día laborable para el sustitutorio.`);
   }
   const registrado = await repositorio.insertarSustitutorio({ ...solicitud, origenTipo, responsableId: actor.id });
-  if (!registrado) throw new Error(`El ${fecha(solicitud.origenFecha)} ya tiene un descanso sustitutorio registrado.`);
+  if (!registrado) throw new Error(`El ${fecha(solicitud.origenFecha)} ya tiene un descanso sustitutorio, o el ${fecha(solicitud.fechaPrevista)} ya sustituye otro descanso o feriado de la persona.`);
   return registrado;
 }
 
-/** Verificación posterior: marca una sola vez si el descanso previsto se otorgó o no, nunca antes de su fecha. `hoy` es AAAA-MM-DD. */
+/** Verificación posterior: marca una sola vez si el descanso previsto se otorgó o no, nunca antes de su fecha. `hoy` es AAAA-MM-DD y lo fija quien llama: debe ser la fecha civil de Lima, no la UTC. */
 export async function verificarDescansoSustitutorio(
   repositorio: RepositorioDeDescansosYFeriados,
   actor: Actor,
