@@ -20,7 +20,7 @@ describe("exportación del resumen del período", () => {
         horasExtra: {
           pendiente: { minutosAl25: 120, minutosAl35: 0 },
           aprobada: { minutosAl25: 60, minutosAl35: 30 },
-          rechazada: { minutosAl25: 0, minutosAl35: 90 },
+          descartada: { minutosAl25: 0, minutosAl35: 90 },
         },
         jornadas: [],
       }],
@@ -37,7 +37,7 @@ describe("exportación del resumen del período", () => {
 
     expect(listarResumen).toHaveBeenCalledWith({ periodoId: "p1" });
     expect(fila).toMatchObject({ Grupo: "Tiendas", Colaborador: "Ana", "Jornadas trabajadas": 2, "Horas trabajadas (decimal)": 15.5, "Extras 25% aprobadas (horas decimales)": 1, "Extras 35% aprobadas (horas decimales)": 0.5 });
-    expect(Object.keys(fila).some((columna) => columna.includes("pendientes") || columna.includes("rechazadas"))).toBe(false);
+    expect(Object.keys(fila).some((columna) => columna.includes("pendientes") || columna.includes("descartadas"))).toBe(false);
     expect(respuesta.headers.get("content-disposition")).toContain("resumen-2026-01-01.xlsx");
   });
 

@@ -66,7 +66,7 @@ export async function recalcularHorasExtraDeSemana(
       await tx.insert(horasExtra).values({ asistenciaId: jornada.id, ...calculada });
     } else if (jornada.fecha === fechaAjustada || cambio(existente, calculada)) {
       await tx.update(horasExtra)
-        .set({ ...calculada, decididaPorId: null, decididaEn: null })
+        .set({ ...calculada, causaDeDescarte: null, motivoDeDescarte: null, decididaPorId: null, decididaEn: null })
         .where(eq(horasExtra.asistenciaId, jornada.id));
     }
   }

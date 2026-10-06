@@ -26,9 +26,14 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeAsistencias · horas extra p
   // DNI de 8 dígitos, único por ejecución (la restricción de la base exige exactamente 8 dígitos).
   const primerDni = 70_000_000 + Math.floor(Math.random() * 20_000_000);
   const colaboradores: string[] = [];
+  // Sede propia de la corrida: ajustar una asistencia reevalúa su tardanza con la política vigente de la sede.
+  const sede = `Sede extra ${cuentaId.slice(0, 8)}`;
 
   beforeAll(async () => {
     await db.insert(schema.cuentasLocales).values({ id: cuentaId, nombreUsuario: `extra-${cuentaId}`, hashContrasena: "prueba", rol: "finanzas" });
+    await db.insert(schema.politicasDePenalizacionPorTardanzas).values({
+      sede, toleranciaEnMinutos: 10, tardanzasAcumuladas: 3, horasPenalizadas: 1, version: 1, vigenteDesde: "2000-01-01", configuradaPorId: cuentaId,
+    });
   });
 
   afterAll(async () => {
@@ -37,10 +42,12 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeAsistencias · horas extra p
     const ids = asistencias.map(({ id }) => id);
     if (ids.length) {
       await db.delete(schema.horasExtra).where(inArray(schema.horasExtra.asistenciaId, ids));
+      await db.delete(schema.tardanzas).where(inArray(schema.tardanzas.asistenciaId, ids));
       await db.delete(schema.ajustesDeAsistencia).where(inArray(schema.ajustesDeAsistencia.asistenciaId, ids));
     }
     await db.delete(schema.asistenciasEsperadas).where(inArray(schema.asistenciasEsperadas.dni, colaboradores));
     await db.delete(schema.colaboradores).where(inArray(schema.colaboradores.dni, colaboradores));
+    await db.delete(schema.politicasDePenalizacionPorTardanzas).where(eq(schema.politicasDePenalizacionPorTardanzas.sede, sede));
     await db.delete(schema.cuentasLocales).where(eq(schema.cuentasLocales.id, cuentaId));
     await pool.end();
   });
@@ -59,7 +66,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeAsistencias · horas extra p
     await repositorio.confirmar({
       dni, fecha, entradaReal, salidaReal,
       minutosTrabajados: calcularMinutosTrabajados(entradaReal, salidaReal),
-      instantaneaDeTurno: { sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false },
+      instantaneaDeTurno: { sede, entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false },
       confirmadoPorId: cuentaId, confirmadoEn: new Date(),
     });
   }
@@ -73,8 +80,10 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeAsistencias · horas extra p
     return filas;
   }
 
-  async function decidir(dni: string, fecha: string, estado: "aprobada" | "rechazada"): Promise<void> {
-    await repositorio.decidirHoraExtra(dni, fecha, estado, cuentaId);
+  async function decidir(dni: string, fecha: string, estado: "aprobada" | "descartada"): Promise<void> {
+    await repositorio.decidirHoraExtra(
+      dni, fecha, estado === "aprobada" ? { estado } : { estado, causa: "marca_erronea", motivo: "Marca duplicada del huellero." }, cuentaId,
+    );
   }
 
   it("conserva el sobretiempo fraccionario y el tiempo anterior a la entrada", async () => {
@@ -126,6 +135,29 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeAsistencias · horas extra p
       minutosTrabajados: 540,
     }, cuentaId);
     expect((await horasExtra(dni))[0]).toMatchObject({ fecha: sabado, estado: "pendiente" });
+  });
+
+  it("descarta con evidencia y motivo, los conserva y los limpia cuando un ajuste devuelve la hora extra a pendiente", async () => {
+    const dni = await crearColaborador("descarte");
+    await confirmar(dni, lunes, "09:00", "18:30");
+
+    await decidir(dni, lunes, "descartada");
+
+    const [descartada] = await db.select({
+      estado: schema.horasExtra.estado, causa: schema.horasExtra.causaDeDescarte, motivo: schema.horasExtra.motivoDeDescarte,
+    }).from(schema.horasExtra).innerJoin(schema.asistenciasEsperadas, eq(schema.horasExtra.asistenciaId, schema.asistenciasEsperadas.id))
+      .where(eq(schema.asistenciasEsperadas.dni, dni));
+    expect(descartada).toEqual({ estado: "descartada", causa: "marca_erronea", motivo: "Marca duplicada del huellero." });
+
+    await repositorio.ajustar({
+      dni, fecha: lunes, entradaReal: `${lunes}T09:00`, salidaReal: `${lunes}T19:00`, motivo: "Se verificó otra salida.", minutosTrabajados: 600,
+    }, cuentaId);
+
+    const [reabierta] = await db.select({
+      estado: schema.horasExtra.estado, causa: schema.horasExtra.causaDeDescarte, motivo: schema.horasExtra.motivoDeDescarte,
+    }).from(schema.horasExtra).innerJoin(schema.asistenciasEsperadas, eq(schema.horasExtra.asistenciaId, schema.asistenciasEsperadas.id))
+      .where(eq(schema.asistenciasEsperadas.dni, dni));
+    expect(reabierta).toEqual({ estado: "pendiente", causa: null, motivo: null });
   });
 
   it("no modifica la hora extra de una jornada de un período cerrado", async () => {

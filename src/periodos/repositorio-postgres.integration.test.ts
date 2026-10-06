@@ -60,7 +60,7 @@ describe.skipIf(!databaseUrl)("períodos de planilla persistidos", () => {
     await db.insert(schema.horasExtra).values([
       { asistenciaId: porFecha.get("2042-01-01")!, minutosAl25: 30, minutosAl35: 0, estado: "pendiente" },
       { asistenciaId: porFecha.get("2042-01-08")!, minutosAl25: 60, minutosAl35: 30, estado: "aprobada" },
-      { asistenciaId: porFecha.get("2042-01-09")!, minutosAl25: 0, minutosAl35: 60, estado: "rechazada" },
+      { asistenciaId: porFecha.get("2042-01-09")!, minutosAl25: 0, minutosAl35: 60, estado: "descartada", causaDeDescarte: "marca_erronea", motivoDeDescarte: "Marca duplicada" },
     ]);
     await db.insert(schema.asistenciasEsperadas).values({ dni: beto, fecha: "2042-01-10", estado: "confirmada", minutosTrabajados: 480, entradaReal: "2042-01-10T09:00:00Z", salidaReal: "2042-01-10T17:00:00Z", instantaneaDeTurno: { sede: "Sede B", entradaProgramada: "09:00", salidaProgramada: "17:00", descanso: false } });
   });
@@ -94,7 +94,7 @@ describe.skipIf(!databaseUrl)("períodos de planilla persistidos", () => {
     expect(fila.noAsistencias).toEqual({ falta: 1, descanso: 1, feriado: 1, vacaciones: 1, permiso: 1, suspension: 1 });
     expect(fila.cantidadTardanzas).toBe(1);
     expect(fila.minutosPenalizados).toBe(60);
-    expect(fila.horasExtra).toEqual({ pendiente: { minutosAl25: 30, minutosAl35: 0 }, aprobada: { minutosAl25: 60, minutosAl35: 30 }, rechazada: { minutosAl25: 0, minutosAl35: 60 } });
+    expect(fila.horasExtra).toEqual({ pendiente: { minutosAl25: 30, minutosAl35: 0 }, aprobada: { minutosAl25: 60, minutosAl35: 30 }, descartada: { minutosAl25: 0, minutosAl35: 60 } });
     expect(fila.jornadas.find(({ fecha }) => fecha === "2042-01-01")?.sede).toBe("Sede Norte");
     expect(fila.jornadas.map(({ fecha }) => fecha)).not.toContain("2041-12-31");
     expect(fila.jornadas.map(({ fecha }) => fecha)).not.toContain("2042-01-11");

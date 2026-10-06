@@ -72,14 +72,38 @@ describe("decisión en lote de horas extra", () => {
     expect(repo.decidirHorasExtra).toHaveBeenCalledWith(
       "periodo-1",
       ["extra-1", "extra-2"],
-      "aprobada",
+      { estado: "aprobada" },
       "cuenta-1",
       ahora,
     );
   });
 
+  it("entrega el descarte con su evidencia y motivo depurados", async () => {
+    const repo = repositorio();
+    const ahora = new Date("2042-01-11T10:00:00Z");
+
+    await decidirHorasExtra(repo, actor("finanzas"), {
+      periodoId: "periodo-1", horasExtraIds: ["extra-1"], decision: "descartada", causa: "marca_erronea", motivo: "  Marca duplicada del huellero  ",
+    }, ahora);
+
+    expect(repo.decidirHorasExtra).toHaveBeenCalledWith(
+      "periodo-1", ["extra-1"], { estado: "descartada", causa: "marca_erronea", motivo: "Marca duplicada del huellero" }, "cuenta-1", ahora,
+    );
+  });
+
+  it("rechaza descartar sin motivo, sin evidencia o por falta de autorización previa, y no toca el repositorio", async () => {
+    const repo = repositorio();
+    const base = { periodoId: "periodo-1", horasExtraIds: ["extra-1"], decision: "descartada" as const };
+
+    await expect(decidirHorasExtra(repo, actor("finanzas"), { ...base, causa: "marca_erronea" })).rejects.toThrow("requiere un motivo");
+    await expect(decidirHorasExtra(repo, actor("finanzas"), { ...base, motivo: "Marca duplicada" })).rejects.toThrow("requiere indicar la evidencia");
+    await expect(decidirHorasExtra(repo, actor("finanzas"), { ...base, causa: "no_autorizada", motivo: "Sin autorización" })).rejects.toThrow("no justifica");
+
+    expect(repo.decidirHorasExtra).not.toHaveBeenCalled();
+  });
+
   it("rechaza una selección vacía y cualquier rol distinto de Finanzas", async () => {
-    const solicitud = { periodoId: "periodo-1", horasExtraIds: ["extra-1"], decision: "rechazada" as const };
+    const solicitud = { periodoId: "periodo-1", horasExtraIds: ["extra-1"], decision: "descartada" as const, causa: "marca_erronea", motivo: "Marca duplicada" };
 
     await expect(decidirHorasExtra(repositorio(), actor("gerente_de_area"), solicitud)).rejects.toThrow("Solo Finanzas");
     await expect(decidirHorasExtra(repositorio(), actor("finanzas"), { ...solicitud, horasExtraIds: [] })).rejects.toThrow("seleccionar");
