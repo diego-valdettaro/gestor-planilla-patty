@@ -44,9 +44,8 @@ export default async function PaginaDeRelacionesLaborales({ searchParams }: { se
 
     {puedeGestionar && <section className="tarjeta panel">
       <header className="panel-cabecera"><div><h2>Registrar ingreso</h2><p>Para un reingreso elija a la misma persona: conserva su DNI y recibe otra relación laboral. La persona la da de alta el gerente de su grupo.</p></div></header>
-      {colaboradoresParaIngreso.length
-        ? <FormularioDeIngreso colaboradores={colaboradoresParaIngreso.map(({ dni, nombre, grupo }) => ({ dni, nombre, grupo }))} />
-        : <section className="estado-vacio"><h3>No hay colaboradores para registrar</h3><p>{colaboradores.length ? "Todos los colaboradores tienen una relación laboral sin cese. Registre el cese de una para poder registrar su reingreso." : "El gerente de cada grupo da de alta a sus colaboradores en Configuración; después podrá registrar su ingreso aquí."}</p></section>}
+      <FormularioDeIngreso colaboradores={colaboradoresParaIngreso.map(({ dni, nombre, grupo }) => ({ dni, nombre, grupo }))} />
+      {!colaboradoresParaIngreso.length && <section className="estado-vacio"><h3>No hay colaboradores para registrar</h3><p>{colaboradores.length ? "Todos los colaboradores tienen una relación laboral sin cese. Registre el cese de una para poder registrar su reingreso." : "El gerente de cada grupo da de alta a sus colaboradores en Configuración; después podrá registrar su ingreso aquí."}</p></section>}
     </section>}
 
     <section className="tarjeta panel">

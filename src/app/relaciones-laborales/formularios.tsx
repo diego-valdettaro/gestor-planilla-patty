@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useId, useRef } from "react";
+import { useActionState, useEffect, useId, useRef } from "react";
 
 import { confirmarCeseDesdeFormulario, confirmarIngresoDesdeFormulario, corregirIngresoDesdeFormulario, registrarCeseDesdeFormulario, registrarIngresoDesdeFormulario, type EstadoDeFormularioDeRelacionLaboral } from "./actions";
 
@@ -11,7 +11,7 @@ export function FormularioDeIngreso({ colaboradores }: { colaboradores: Array<{ 
   return <form action={accion} className="filtros panel-filtros" key={estado.listo ?? 0}>
     <label>Colaborador<select defaultValue="" name="dni" required><option disabled value="">Colaborador…</option>{colaboradores.map((colaborador) => <option key={colaborador.dni} value={colaborador.dni}>{colaborador.nombre} · {colaborador.dni} · {colaborador.grupo}</option>)}</select></label>
     <label>Fecha de ingreso<input name="ingreso" required type="date" /></label>
-    <button className="boton-principal" disabled={pendiente} type="submit">Registrar ingreso</button>
+    <button className="boton-principal" disabled={pendiente || !colaboradores.length} type="submit">Registrar ingreso</button>
     {estado.error && <p className="mensaje-operacion error" role="alert">{estado.error}</p>}
     {estado.listo ? <p className="mensaje-operacion listo" role="status">El ingreso quedó registrado. Falta confirmarlo.</p> : null}
   </form>;
@@ -29,7 +29,10 @@ export function FormularioDeFecha({ relacionId, campo, valorInicial, minimo, eti
   nombreDeLaPersona: string;
 }) {
   const [estado, accion, pendiente] = useActionState(campo === "ingreso" ? corregirIngresoDesdeFormulario : registrarCeseDesdeFormulario, estadoInicial);
-  return <details className="edicion-configuracion"><summary>{etiquetaDelBoton}</summary>
+  const detalles = useRef<HTMLDetailsElement>(null);
+  // Al guardar la fecha el panel se cierra: abierto taparía los botones vecinos de la fila.
+  useEffect(() => { if (estado.listo) detalles.current?.removeAttribute("open"); }, [estado.listo]);
+  return <details className="edicion-configuracion" ref={detalles}><summary>{etiquetaDelBoton}</summary>
     <form action={accion} className="formulario-edicion" key={estado.listo ?? 0}>
       <input name="relacionId" type="hidden" value={relacionId} />
       <label>Fecha de {campo} de {nombreDeLaPersona}<input defaultValue={valorInicial} min={minimo} name="fecha" required type="date" /></label>
