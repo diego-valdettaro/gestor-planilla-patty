@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import * as schema from "@/db/schema";
-import { auditoriaDeModelosDeHorario, celdasDePlanesSemanalesEnBorrador, modelosDeHorario, turnosPublicados } from "@/db/schema";
+import { auditoriaDeModelosDeHorario, celdasDePlanesSemanalesEnBorrador, modelosDeHorario, sedes, turnosPublicados } from "@/db/schema";
 
 import type { ModeloDeHorario, RepositorioDeModelosDeHorario } from "./gestionar-modelos-de-horario";
 
@@ -31,6 +31,11 @@ export class RepositorioPostgresDeModelosDeHorario implements RepositorioDeModel
         responsableId,
       });
     });
+  }
+
+  async obtenerGrupoDeSede(sede: string): Promise<string | undefined> {
+    const [fila] = await this.db.select({ grupo: sedes.grupo }).from(sedes).where(eq(sedes.nombre, sede));
+    return fila?.grupo ?? undefined;
   }
 
   async buscarPorId(id: string): Promise<ModeloDeHorario | undefined> {

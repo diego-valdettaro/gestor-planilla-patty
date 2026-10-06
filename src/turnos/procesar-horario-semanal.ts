@@ -1,4 +1,5 @@
-import type { Actor } from "@/colaboradores/registrar-colaborador";
+import type { Actor } from "@/autenticacion/permisos";
+import { exigir, puedeGestionarPeriodos } from "@/autenticacion/permisos";
 
 import { diasDeLaSemana, inicioDeSemana } from "./semana";
 import type { Grupo } from "./configurar-equipos-operativos";
@@ -23,7 +24,7 @@ export async function procesarHorarioSemanal(
   dni: string,
   semana: string,
 ): Promise<void> {
-  if (actor.rol !== "finanzas") throw new Error("No tiene permiso para procesar horarios semanales.");
+  exigir(puedeGestionarPeriodos(actor), "No tiene permiso para procesar horarios semanales.");
   if (inicioDeSemana(semana) !== semana) throw new Error("La semana a procesar debe comenzar un lunes.");
 
   const horarios = await repositorio.listarSemanaPublicada(dni, semana);

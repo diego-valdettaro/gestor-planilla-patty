@@ -3,6 +3,7 @@
 import { desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
+import { exigir, puedeConfigurarGlobalmente } from "@/autenticacion/permisos";
 import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
 import { crearCasosDeUsoDeColaboradores } from "@/colaboradores/casos-de-uso-servidor";
 import { repositorioDeColaboradores } from "@/colaboradores/servicio";
@@ -11,12 +12,12 @@ import { politicasDePenalizacionPorTardanzas, sedes } from "@/db/schema";
 import { crearCasosDeUsoDeTardanzas } from "@/tardanzas/casos-de-uso-servidor";
 import { repositorioDeTardanzas } from "@/tardanzas/servicio";
 import { asignarGrupoASede } from "@/turnos/configurar-equipos-operativos";
-import { crearGrupo } from "@/turnos/gestionar-grupos";
+import { configurarGestionDeAsistenciaDelGrupo, crearGrupo } from "@/turnos/gestionar-grupos";
 import { crearModeloDeHorario, eliminarModeloDeHorario, guardarModeloDeHorario } from "@/turnos/gestionar-modelos-de-horario";
 import { repositorioDeGrupos, repositorioDeModelosDeHorario, repositorioDeTurnos } from "@/turnos/servicio";
 
 export async function guardarSede(formData: FormData): Promise<void> {
-  await exigirAdministracion();
+  await exigirConfiguracionGlobal();
   const grupo = texto(formData, "grupo");
   await db.insert(sedes).values({ nombre: texto(formData, "nombre"), grupo }).onConflictDoNothing();
   revalidatePath("/configuracion");
@@ -35,10 +36,17 @@ export async function crearGrupoDeConfiguracion(_estadoAnterior: EstadoDeCreacio
   }
 }
 
+export async function guardarGestionDeAsistenciaDelGrupo(formData: FormData): Promise<void> {
+  await configurarGestionDeAsistenciaDelGrupo(repositorioDeGrupos, await obtenerActorActual(), texto(formData, "nombre"), texto(formData, "gestiona") === "true");
+  revalidatePath("/configuracion");
+  revalidatePath("/turnos");
+  revalidatePath("/asistencias");
+}
+
 export interface EstadoDeCreacionDeGrupo { error?: string; listo?: boolean; }
 
 export async function eliminarSede(formData: FormData): Promise<void> {
-  await exigirAdministracion();
+  await exigirConfiguracionGlobal();
   const nombre = texto(formData, "nombre");
   const colaboradoresEnSede = await repositorioDeColaboradores.listar().then((items) => items.filter((item) => item.sede === nombre));
   if (colaboradoresEnSede.length) throw new Error("No puede eliminar una sede que tiene colaboradores asignados.");
@@ -58,7 +66,7 @@ export async function asignarEquipoOperativoASede(
   formData: FormData,
 ): Promise<EstadoDeAsignacionDeGrupo> {
   try {
-    await exigirAdministracion();
+    await exigirConfiguracionGlobal();
     const grupo = texto(formData, "grupo");
     await asignarGrupoASede(
       repositorioDeTurnos,
@@ -110,7 +118,7 @@ export async function cambiarGrupoDeColaboradorDeConfiguracion(
 }
 
 export async function desactivarColaborador(formData: FormData): Promise<void> {
-  await exigirAdministracion();
+  await exigirConfiguracionGlobal();
   const casos = crearCasosDeUsoDeColaboradores(repositorioDeColaboradores, { obtenerActorActual });
   const dni = texto(formData, "dni");
   const colaborador = await casos.consultar(dni);
@@ -122,7 +130,7 @@ export async function desactivarColaborador(formData: FormData): Promise<void> {
 }
 
 export async function reactivarColaborador(formData: FormData): Promise<void> {
-  await exigirAdministracion();
+  await exigirConfiguracionGlobal();
   const casos = crearCasosDeUsoDeColaboradores(repositorioDeColaboradores, { obtenerActorActual });
   const dni = texto(formData, "dni");
   const colaborador = await casos.consultar(dni);
@@ -201,9 +209,9 @@ export async function reactivarModeloHorario(formData: FormData): Promise<void> 
   revalidatePath("/turnos");
 }
 
-async function exigirAdministracion(): Promise<void> {
+async function exigirConfiguracionGlobal(): Promise<void> {
   const actor = await obtenerActorActual();
-  if (actor.rol !== "administracion") throw new Error("No tiene permiso para cambiar la configuración.");
+  exigir(puedeConfigurarGlobalmente(actor), "No tiene permiso para cambiar la configuración.");
 }
 
 function texto(formData: FormData, campo: string): string {

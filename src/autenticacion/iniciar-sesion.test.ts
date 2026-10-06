@@ -29,14 +29,14 @@ describe("iniciarSesion", () => {
   it("crea una sesión de Operaciones sin guardar el token en texto plano", async () => {
     const { repositorio, sesiones } = crearRepositorioEnMemoria({
       id: "cuenta-1",
-      nombreUsuario: "operaciones",
+      nombreUsuario: "gerente_de_area",
       hashContrasena: "hash-correcto",
-      rol: "operaciones",
+      rol: "gerente_de_area",
     });
 
     const resultado = await iniciarSesion(
       repositorio,
-      { nombreUsuario: "operaciones", contrasena: "secreto" },
+      { nombreUsuario: "gerente_de_area", contrasena: "secreto" },
       {
         verificar: async (hash, contrasena) =>
           hash === "hash-correcto" && contrasena === "secreto",
@@ -46,7 +46,7 @@ describe("iniciarSesion", () => {
     );
 
     expect(resultado).toEqual({
-      actor: { id: "cuenta-1", rol: "operaciones" },
+      actor: { id: "cuenta-1", rol: "gerente_de_area" },
       token: "token-seguro",
     });
     expect(sesiones).toEqual([
@@ -61,15 +61,15 @@ describe("iniciarSesion", () => {
   it("rechaza credenciales inválidas sin crear una sesión", async () => {
     const { repositorio, sesiones } = crearRepositorioEnMemoria({
       id: "cuenta-1",
-      nombreUsuario: "operaciones",
+      nombreUsuario: "gerente_de_area",
       hashContrasena: "hash-correcto",
-      rol: "operaciones",
+      rol: "gerente_de_area",
     });
 
     await expect(
       iniciarSesion(
         repositorio,
-        { nombreUsuario: "operaciones", contrasena: "incorrecta" },
+        { nombreUsuario: "gerente_de_area", contrasena: "incorrecta" },
         { verificar: async () => false },
         () => "token-seguro",
         new Date("2026-09-01T10:00:00.000Z"),

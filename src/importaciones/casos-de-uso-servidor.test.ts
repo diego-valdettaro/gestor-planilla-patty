@@ -30,7 +30,7 @@ function crearRepositorioEnMemoria(existentes: AsistenciaExistente[] = []): {
 
 function casosDeUso(repositorio: RepositorioDeImportaciones) {
   return crearCasosDeUsoDeImportaciones(repositorio, {
-    obtenerActorActual: async () => ({ id: "administracion-1", rol: "administracion" }),
+    obtenerActorActual: async () => ({ id: "administracion-1", rol: "administrador" }),
   });
 }
 

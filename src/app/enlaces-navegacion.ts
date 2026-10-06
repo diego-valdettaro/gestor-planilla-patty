@@ -1,16 +1,33 @@
-import type { Actor } from "@/colaboradores/registrar-colaborador";
+import type { Actor } from "@/autenticacion/permisos";
+import {
+  puedeAdministrarCuentas,
+  puedeConsultarAsistencias,
+  puedeConsultarConfiguracion,
+  puedeConsultarHorarios,
+  puedeGestionarPeriodos,
+} from "@/autenticacion/permisos";
 
 export type EnlaceDeNavegacion = { href: string; etiqueta: string; icono: string };
 
-const enlacesDeLaAplicacion: (EnlaceDeNavegacion & { roles: Actor["rol"][] })[] = [
-  { href: "/configuracion", etiqueta: "Configuración", icono: "♧", roles: ["administracion"] },
-  { href: "/turnos", etiqueta: "Horarios", icono: "▣", roles: ["operaciones", "administracion"] },
-  { href: "/asistencias", etiqueta: "Asistencia", icono: "◷", roles: ["administracion", "finanzas"] },
-  { href: "/periodos", etiqueta: "Períodos de planilla", icono: "▤", roles: ["administracion", "finanzas"] },
+// Cada enlace usa el mismo permiso que comprueba la ruta: el menú muestra exactamente lo que el rol puede abrir.
+const enlacesDeLaAplicacion: (EnlaceDeNavegacion & { permitido: (actor: Actor) => boolean })[] = [
+  { href: "/configuracion", etiqueta: "Configuración", icono: "♧", permitido: puedeConsultarConfiguracion },
+  { href: "/cuentas", etiqueta: "Cuentas", icono: "◉", permitido: puedeAdministrarCuentas },
+  { href: "/turnos", etiqueta: "Horarios", icono: "▣", permitido: puedeConsultarHorarios },
+  { href: "/asistencias", etiqueta: "Asistencia", icono: "◷", permitido: puedeConsultarAsistencias },
+  { href: "/periodos", etiqueta: "Períodos de planilla", icono: "▤", permitido: puedeGestionarPeriodos },
 ];
 
-export function enlacesPermitidos(rol: Actor["rol"]): EnlaceDeNavegacion[] {
-  return enlacesDeLaAplicacion.filter((enlace) => enlace.roles.includes(rol));
+const RUTAS_DE_INICIO_EN_ORDEN = ["/turnos", "/asistencias", "/periodos", "/cuentas", "/configuracion"];
+
+export function enlacesPermitidos(actor: Actor): EnlaceDeNavegacion[] {
+  return enlacesDeLaAplicacion.filter((enlace) => enlace.permitido(actor)).map(({ href, etiqueta, icono }) => ({ href, etiqueta, icono }));
+}
+
+/** Primera ruta que el actor puede abrir, o undefined si su rol aún no tiene pantallas. */
+export function rutaDeInicio(actor: Actor): string | undefined {
+  const permitidas = new Set(enlacesPermitidos(actor).map((enlace) => enlace.href));
+  return RUTAS_DE_INICIO_EN_ORDEN.find((ruta) => permitidas.has(ruta));
 }
 
 export function esEnlaceActivo(ruta: string, href: string): boolean {

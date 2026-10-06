@@ -32,7 +32,7 @@ describe.skipIf(!databaseUrl)("republicarPlanSemanal (atomicidad, integración P
   const cuentaId = randomUUID();
   const semana = inicioDeSemana("2032-04-05");
   const dias = diasDeLaSemana(semana);
-  const actor = { id: cuentaId, rol: "finanzas" as const };
+  const actor = { id: cuentaId, rol: "administrador" as const };
 
   afterAll(async () => {
     const planes = await db.select({ id: schema.planesSemanalesEnBorrador.id }).from(schema.planesSemanalesEnBorrador)
@@ -59,7 +59,7 @@ describe.skipIf(!databaseUrl)("republicarPlanSemanal (atomicidad, integración P
     await db.insert(schema.sedes).values({ nombre: sede, grupo, activa: true });
     await db.insert(schema.colaboradores).values({ dni: huId, nombre: "Colaborador republicación", sede, grupo, activo: true });
     await db.insert(schema.periodosPlanilla).values({ inicio: dias[0], fin: dias[6], estado: "abierto" });
-    await db.insert(schema.cuentasLocales).values({ id: cuentaId, nombreUsuario: `republicacion-${cuentaId}`, hashContrasena: "prueba", rol: "finanzas" });
+    await db.insert(schema.cuentasLocales).values({ id: cuentaId, nombreUsuario: `republicacion-${cuentaId}`, hashContrasena: "prueba", rol: "administrador" });
 
     const originales = dias.map((fecha) => ({ dni: huId, fecha, sede, entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false }));
     await repositorio.publicarEnLote(originales, actor);

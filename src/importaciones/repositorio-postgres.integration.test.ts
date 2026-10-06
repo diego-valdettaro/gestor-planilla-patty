@@ -25,13 +25,13 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeImportaciones", () => {
   const dni = dniDePrueba();
   const cuentaId = randomUUID();
   const fecha = "2032-09-01";
-  const casosDeUso = crearCasosDeUsoDeImportaciones(repositorio, { obtenerActorActual: async () => ({ id: cuentaId, rol: "administracion" }) });
+  const casosDeUso = crearCasosDeUsoDeImportaciones(repositorio, { obtenerActorActual: async () => ({ id: cuentaId, rol: "administrador" }) });
 
   beforeAll(async () => {
     await db.insert(schema.grupos).values({ nombre: grupo });
     await db.insert(schema.sedes).values({ nombre: sede, grupo, activa: true });
     await db.insert(schema.colaboradores).values({ dni, nombre: "Colaborador de importación", sede, grupo, activo: true });
-    await db.insert(schema.cuentasLocales).values({ id: cuentaId, nombreUsuario: `import-${sufijo}`, hashContrasena: "prueba", rol: "administracion" });
+    await db.insert(schema.cuentasLocales).values({ id: cuentaId, nombreUsuario: `import-${sufijo}`, hashContrasena: "prueba", rol: "administrador" });
     await db.insert(schema.periodosPlanilla).values({ inicio: "2032-08-26", fin: "2032-09-25", estado: "abierto" });
   });
 

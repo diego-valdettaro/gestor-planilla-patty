@@ -11,7 +11,7 @@ const { listarGrupos, listarColaboradores, listarResumen, listarResumenMensual }
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 vi.mock("@/autenticacion/sesion-del-servidor", () => ({ obtenerActorActual: vi.fn() }));
 vi.mock("@/turnos/servicio", () => ({
-  repositorioDeGrupos: { listar: listarGrupos },
+  repositorioDeGrupos: { listarOperablesPor: listarGrupos },
   repositorioDeTurnos: { listarColaboradoresActivosPorEquipo: listarColaboradores },
 }));
 vi.mock("@/asistencias/servicio", () => ({ repositorioDeAsistencias: {
@@ -23,7 +23,7 @@ describe("página semanal de asistencias", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     const { obtenerActorActual } = await import("@/autenticacion/sesion-del-servidor");
-    vi.mocked(obtenerActorActual).mockResolvedValue({ id: "admin-1", rol: "administracion" });
+    vi.mocked(obtenerActorActual).mockResolvedValue({ id: "admin-1", rol: "administrador" });
     listarGrupos.mockResolvedValue(["Tiendas"]);
     listarColaboradores.mockResolvedValue([{ dni: "00000011", nombre: "Ana Torres", sede: "Centro" }]);
     listarResumen.mockResolvedValue([]);
@@ -71,13 +71,13 @@ describe("página semanal de asistencias", () => {
   });
   it("usa el estado vacío compartido para un rol sin permiso de Asistencias", async () => {
     const { obtenerActorActual } = await import("@/autenticacion/sesion-del-servidor");
-    vi.mocked(obtenerActorActual).mockResolvedValue({ id: "op-1", rol: "operaciones" });
+    vi.mocked(obtenerActorActual).mockResolvedValue({ id: "op-1", rol: "gerente_de_area" });
     const { default: PaginaDeAsistencias } = await import("./page");
     const html = renderToStaticMarkup(await PaginaDeAsistencias({ searchParams: Promise.resolve({}) }));
 
     expect(html).toContain('class="estado-vacio"');
     expect(html).toContain("Sin permiso");
-    expect(html).toContain("Administración y Finanzas");
+    expect(html).toContain("gerentes de área");
   });
 
   it("no manda a Finanzas a Configuración cuando no hay grupos operativos", async () => {
@@ -89,15 +89,48 @@ describe("página semanal de asistencias", () => {
 
     expect(html).toContain("No hay grupos operativos");
     expect(html).not.toContain('href="/configuracion"');
-    expect(html).toContain("Administración");
+    expect(html).toContain("Administrador del sistema");
   });
 
-  it("ofrece Configuración a Administración cuando no hay grupos operativos", async () => {
+  it("ofrece Configuración al Administrador cuando no hay grupos operativos", async () => {
     listarGrupos.mockResolvedValue([]);
     const { default: PaginaDeAsistencias } = await import("./page");
     const html = renderToStaticMarkup(await PaginaDeAsistencias({ searchParams: Promise.resolve({}) }));
 
     expect(html).toContain("No hay grupos operativos");
     expect(html).toContain('href="/configuracion"');
+  });
+
+  it("pide los grupos que el actor puede ver y entrega el actor al repositorio", async () => {
+    const { obtenerActorActual } = await import("@/autenticacion/sesion-del-servidor");
+    const gerente = { id: "ger-1", rol: "gerente_de_area" as const, grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] };
+    vi.mocked(obtenerActorActual).mockResolvedValue(gerente);
+    const { default: PaginaDeAsistencias } = await import("./page");
+    const html = renderToStaticMarkup(await PaginaDeAsistencias({ searchParams: Promise.resolve({ grupo: "Tiendas", semana: "2031-03-10" }) }));
+
+    expect(listarGrupos).toHaveBeenCalledWith(gerente);
+    expect(html).toContain("Confirmar por rango");
+  });
+
+  it("muestra Asistencias en solo lectura a Finanzas, sin confirmar por rango", async () => {
+    const { obtenerActorActual } = await import("@/autenticacion/sesion-del-servidor");
+    vi.mocked(obtenerActorActual).mockResolvedValue({ id: "fin-1", rol: "finanzas" });
+    const { default: PaginaDeAsistencias } = await import("./page");
+    const html = renderToStaticMarkup(await PaginaDeAsistencias({ searchParams: Promise.resolve({ grupo: "Tiendas", semana: "2031-03-10" }) }));
+
+    expect(html).toContain("Ana Torres");
+    expect(html).toContain("Importar archivo");
+    expect(html).toContain("Su rol no permite registrar ni confirmar asistencias");
+    expect(html).not.toContain("Confirmar por rango");
+  });
+
+  it.each([["Recursos Humanos", { id: "rrhh-1", rol: "recursos_humanos" as const }], ["un gerente que solo gestiona Administración", { id: "ger-2", rol: "gerente_de_area" as const, grupos: [{ nombre: "Administración", gestionaAsistencia: false }] }]])("rechaza a %s", async (_nombre, actor) => {
+    const { obtenerActorActual } = await import("@/autenticacion/sesion-del-servidor");
+    vi.mocked(obtenerActorActual).mockResolvedValue(actor);
+    const { default: PaginaDeAsistencias } = await import("./page");
+    const html = renderToStaticMarkup(await PaginaDeAsistencias({ searchParams: Promise.resolve({}) }));
+
+    expect(html).toContain("Sin permiso");
+    expect(listarColaboradores).not.toHaveBeenCalled();
   });
 });

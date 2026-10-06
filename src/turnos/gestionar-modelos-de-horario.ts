@@ -1,4 +1,5 @@
-import type { Actor } from "@/colaboradores/registrar-colaborador";
+import type { Actor } from "@/autenticacion/permisos";
+import { exigir, puedeOperarAsistenciaDelGrupo, puedeConsultarConfiguracion } from "@/autenticacion/permisos";
 
 export interface ModeloDeHorario {
   id: string;
@@ -14,6 +15,7 @@ export interface RepositorioDeModelosDeHorario {
   buscarPorId(id: string): Promise<ModeloDeHorario | undefined>;
   eliminar(id: string, responsableId: string): Promise<void>;
   tieneUso(id: string): Promise<boolean>;
+  obtenerGrupoDeSede(sede: string): Promise<string | undefined>;
 }
 
 type ModeloNuevo = Omit<ModeloDeHorario, "activo">;
@@ -23,7 +25,7 @@ export async function crearModeloDeHorario(
   actor: Actor,
   modelo: ModeloNuevo,
 ): Promise<void> {
-  exigirPermiso(actor);
+  await exigirPermisoSobreSede(repositorio, actor, modelo.sede);
   validarHorario(modelo.entrada, modelo.salida);
   await repositorio.guardar({ ...modelo, activo: true }, actor.id);
 }
@@ -33,10 +35,12 @@ export async function guardarModeloDeHorario(
   actor: Actor,
   modelo: ModeloDeHorario,
 ): Promise<void> {
-  exigirPermiso(actor);
+  exigir(puedeConsultarConfiguracion(actor), MENSAJE_SIN_PERMISO);
   validarHorario(modelo.entrada, modelo.salida);
   const existente = await repositorio.buscarPorId(modelo.id);
   if (!existente) throw new Error("El modelo de horario no existe.");
+  await exigirPermisoSobreSede(repositorio, actor, existente.sede);
+  if (modelo.sede !== existente.sede) await exigirPermisoSobreSede(repositorio, actor, modelo.sede);
   if (await repositorio.tieneUso(modelo.id)) {
     if (modelo.activo || modelo.sede !== existente.sede || modelo.nombre !== existente.nombre || modelo.entrada !== existente.entrada || modelo.salida !== existente.salida) {
       throw new Error("Un modelo de horario usado solo se puede desactivar.");
@@ -50,9 +54,10 @@ export async function eliminarModeloDeHorario(
   actor: Actor,
   id: string,
 ): Promise<void> {
-  exigirPermiso(actor);
+  exigir(puedeConsultarConfiguracion(actor), MENSAJE_SIN_PERMISO);
   const modelo = await repositorio.buscarPorId(id);
   if (!modelo) throw new Error("El modelo de horario no existe.");
+  await exigirPermisoSobreSede(repositorio, actor, modelo.sede);
   if (await repositorio.tieneUso(id)) {
     await repositorio.guardar({ ...modelo, activo: false }, actor.id);
     return;
@@ -60,10 +65,12 @@ export async function eliminarModeloDeHorario(
   await repositorio.eliminar(id, actor.id);
 }
 
-function exigirPermiso(actor: Actor): void {
-  if (actor.rol !== "operaciones" && actor.rol !== "administracion") {
-    throw new Error("No tiene permiso para administrar modelos de horario.");
-  }
+const MENSAJE_SIN_PERMISO = "No tiene permiso para administrar modelos de horario.";
+
+async function exigirPermisoSobreSede(repositorio: RepositorioDeModelosDeHorario, actor: Actor, sede: string): Promise<void> {
+  exigir(puedeConsultarConfiguracion(actor), MENSAJE_SIN_PERMISO);
+  const grupo = await repositorio.obtenerGrupoDeSede(sede);
+  exigir(grupo !== undefined && puedeOperarAsistenciaDelGrupo(actor, grupo), MENSAJE_SIN_PERMISO);
 }
 
 function validarHorario(entrada: string, salida: string): void {

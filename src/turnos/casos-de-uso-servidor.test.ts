@@ -57,7 +57,7 @@ describe("casos de uso de turnos en el servidor", () => {
   it("permite a Operaciones publicar un turno y crea la asistencia esperada", async () => {
     const { asistenciasEsperadas, historial, repositorio } = crearRepositorioEnMemoria();
     const casosDeUso = crearCasosDeUsoDeTurnos(repositorio, {
-      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "operaciones" }),
+      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "administrador" }),
     });
 
     await casosDeUso.publicar({
@@ -91,7 +91,7 @@ describe("casos de uso de turnos en el servidor", () => {
   it("impide publicar más de un turno para un colaborador en la misma fecha", async () => {
     const { asistenciasEsperadas, repositorio } = crearRepositorioEnMemoria();
     const casosDeUso = crearCasosDeUsoDeTurnos(repositorio, {
-      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "operaciones" }),
+      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "administrador" }),
     });
     const turno = {
       dni: "00001024",
@@ -113,7 +113,7 @@ describe("casos de uso de turnos en el servidor", () => {
   it("rechaza un turno cuya fecha no pertenece al período de planilla abierto", async () => {
     const { asistenciasEsperadas, historial, repositorio } = crearRepositorioEnMemoria();
     const casosDeUso = crearCasosDeUsoDeTurnos(repositorio, {
-      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "operaciones" }),
+      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "administrador" }),
     });
 
     await expect(
@@ -134,7 +134,7 @@ describe("casos de uso de turnos en el servidor", () => {
   it("permite a Administración publicar un turno", async () => {
     const { asistenciasEsperadas, historial, repositorio } = crearRepositorioEnMemoria();
     const casosDeUso = crearCasosDeUsoDeTurnos(repositorio, {
-      obtenerActorActual: async () => ({ id: "administracion-1", rol: "administracion" }),
+      obtenerActorActual: async () => ({ id: "administracion-1", rol: "administrador" }),
     });
 
     await casosDeUso.publicar({

@@ -14,9 +14,21 @@ No use `db:baseline` en una base vacía ni en una base que ya haya recibido `001
 
 Ejecute `corepack pnpm validate` antes de cada commit. El comando crea un contenedor PostgreSQL temporal, aplica todas las migraciones y ejecuta pruebas, typecheck y build. El contenedor se elimina al terminar, incluso si una validación falla. No usa datos de la base local `planilla`.
 
-Para crear la única cuenta inicial de Administración, defina `ADMIN_NOMBRE_USUARIO` y `ADMIN_CONTRASENA`, y ejecute `pnpm provisionar:administracion`.
+Para crear la única cuenta inicial de Administrador del sistema, defina `ADMIN_NOMBRE_USUARIO` y `ADMIN_CONTRASENA`, y ejecute `pnpm provisionar:administrador`.
 
-El comando solo funciona cuando no hay cuentas locales. Luego, para crear una cuenta de Operaciones, Administración o Finanzas, defina `CUENTA_NOMBRE_USUARIO`, `CUENTA_CONTRASENA` y `CUENTA_ROL`, y ejecute `pnpm provisionar:cuenta`.
+El comando solo funciona cuando no hay cuentas locales. Luego, para crear una cuenta de rol `administrador`, `gerente_de_area`, `recursos_humanos` o `finanzas`, defina `CUENTA_NOMBRE_USUARIO`, `CUENTA_CONTRASENA` y `CUENTA_ROL`, y ejecute `pnpm provisionar:cuenta`. Una vez dentro, Finanzas y el Administrador crean cuentas desde **Cuentas** y asignan a cada gerente de área los grupos que dirige.
+
+### Migración de roles (ADR 0012)
+
+La migración `0028_roles_de_cuenta_y_gerentes_por_grupo.sql` convierte las cuentas existentes con esta regla:
+
+| Rol anterior | Rol nuevo |
+| --- | --- |
+| `administracion` | `administrador` |
+| `operaciones` | `gerente_de_area`, sin grupos: Finanzas o el Administrador los asignan desde **Cuentas** |
+| `finanzas` | `finanzas` (sin cambio) |
+
+Hasta que se les asignen grupos, los gerentes migrados ven «Todavía no tiene grupos asignados». El grupo «Administración», si existe, queda como grupo que no gestiona asistencia ni horarios.
 
 Los comandos no imprimen ni guardan la contraseña fuera del hash Argon2id.
 

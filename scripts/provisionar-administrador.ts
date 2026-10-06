@@ -1,5 +1,5 @@
 import { hashDeContrasena } from "@/autenticacion/contrasenas";
-import { provisionarPrimeraAdministracion } from "@/autenticacion/provisionar-primera-administracion";
+import { provisionarPrimerAdministrador } from "@/autenticacion/provisionar-primer-administrador";
 import { repositorioDeCuentas } from "@/autenticacion/servicio";
 
 const nombreUsuario = process.env.ADMIN_NOMBRE_USUARIO;
@@ -10,13 +10,13 @@ async function main(): Promise<void> {
     throw new Error("Defina ADMIN_NOMBRE_USUARIO y ADMIN_CONTRASENA antes de aprovisionar la cuenta.");
   }
 
-  await provisionarPrimeraAdministracion(
+  await provisionarPrimerAdministrador(
     repositorioDeCuentas,
     { nombreUsuario, contrasena },
     hashDeContrasena,
   );
 
-  console.log("La primera cuenta de Administración fue aprovisionada.");
+  console.log("La primera cuenta de Administrador del sistema fue aprovisionada.");
 }
 
 void main();

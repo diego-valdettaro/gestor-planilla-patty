@@ -1,4 +1,5 @@
-import type { Actor } from "@/colaboradores/registrar-colaborador";
+import type { Actor } from "@/autenticacion/permisos";
+import { exigir, puedeConfigurarGlobalmente } from "@/autenticacion/permisos";
 
 export type Grupo = string;
 
@@ -12,6 +13,6 @@ export async function asignarGrupoASede(
   sede: string,
   grupo: Grupo,
 ): Promise<void> {
-  if (actor.rol !== "administracion") throw new Error("No tiene permiso para cambiar la configuración.");
+  exigir(puedeConfigurarGlobalmente(actor), "No tiene permiso para cambiar la configuración.");
   await repositorio.asignar(sede, grupo);
 }

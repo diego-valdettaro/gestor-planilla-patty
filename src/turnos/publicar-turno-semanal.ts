@@ -1,4 +1,5 @@
-import type { Actor } from "@/colaboradores/registrar-colaborador";
+import type { Actor } from "@/autenticacion/permisos";
+import { exigir, puedeConsultarHorarios, puedeOperarAsistenciaDelGrupo } from "@/autenticacion/permisos";
 import type { Grupo } from "./configurar-equipos-operativos";
 import type { DatosDeJornadaPlanificada, RepositorioParaValidarJornadaPlanificada } from "./jornada-planificada";
 import { validarJornadaPlanificada } from "./jornada-planificada";
@@ -33,9 +34,7 @@ export async function publicarTurnoSemanal(
   actor: Actor,
   turno: TurnoPublicado,
 ): Promise<void> {
-  if (actor.rol !== "operaciones" && actor.rol !== "administracion") {
-    throw new Error("No tiene permiso para publicar turnos.");
-  }
+  exigir(puedeConsultarHorarios(actor), "No tiene permiso para publicar turnos.");
 
   if (!(await repositorio.perteneceAPeriodoAbierto(turno.fecha))) {
     throw new Error("La fecha no pertenece a un período de planilla abierto.");
@@ -47,6 +46,7 @@ export async function publicarTurnoSemanal(
 
   const grupo = await repositorio.obtenerGrupoDelColaborador(turno.dni);
   if (!grupo) throw new Error("El colaborador activo no existe.");
+  exigir(puedeOperarAsistenciaDelGrupo(actor, grupo), "No tiene permiso para publicar turnos de este grupo.");
   await validarJornadaPlanificada(repositorio, grupo, turno);
 
   await repositorio.publicar(turno, actor);

@@ -37,7 +37,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeAsistencias · resumen mensu
 
   beforeAll(async () => {
     await db.insert(schema.colaboradores).values({ dni, nombre: "Nora Prueba", sede: "Lima", grupo: "Tiendas", activo: true });
-    await db.insert(schema.cuentasLocales).values({ id: cuentaId, nombreUsuario: `asis-${cuentaId}`, hashContrasena: "prueba", rol: "administracion" });
+    await db.insert(schema.cuentasLocales).values({ id: cuentaId, nombreUsuario: `asis-${cuentaId}`, hashContrasena: "prueba", rol: "administrador" });
     await db.insert(schema.periodosPlanilla).values([
       { inicio: periodoAbierto.inicio, fin: periodoAbierto.fin, estado: "abierto" },
       { inicio: periodoCerrado.inicio, fin: periodoCerrado.fin, estado: "cerrado", cerradoPorId: cuentaId, cerradoEn: new Date() },

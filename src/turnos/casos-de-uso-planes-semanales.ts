@@ -1,5 +1,7 @@
 import type { SesionDelServidor } from "@/colaboradores/casos-de-uso-servidor";
 
+import { exigir, puedeConsultarHorarios, puedeOperarAsistenciaDelGrupo } from "@/autenticacion/permisos";
+
 import type { Grupo } from "./configurar-equipos-operativos";
 import { jornadasPlanificadasSonIguales, motivoPlanificadoDe, validarJornadaPlanificada } from "./jornada-planificada";
 import type { CeldaDePlanSemanalEnBorrador, PlanSemanalEnBorrador, RepositorioDePlanesSemanales } from "./plan-semanal-en-borrador";
@@ -12,16 +14,15 @@ export function crearCasosDeUsoDePlanesSemanales(
   repositorio: RepositorioDePlanesSemanales,
   sesion: SesionDelServidor,
 ) {
-  async function autorizar(): Promise<void> {
+  async function autorizar(equipo?: Grupo): Promise<void> {
     const actor = await sesion.obtenerActorActual();
-    if (actor.rol !== "operaciones" && actor.rol !== "administracion" && actor.rol !== "finanzas") {
-      throw new Error("No tiene permiso para editar planes semanales en borrador.");
-    }
+    exigir(puedeConsultarHorarios(actor), "No tiene permiso para editar planes semanales en borrador.");
+    if (equipo !== undefined) exigir(puedeOperarAsistenciaDelGrupo(actor, equipo), "No tiene permiso para editar planes semanales de este grupo.");
   }
 
   return {
     async obtenerOCrear(semana: string, equipo: Grupo): Promise<PlanSemanalEnBorrador> {
-      await autorizar();
+      await autorizar(equipo);
       return repositorio.obtenerOCrear(semana, equipo);
     },
     async guardarCelda(
@@ -30,6 +31,7 @@ export function crearCasosDeUsoDePlanesSemanales(
     ): Promise<void> {
       await autorizar();
       const plan = await obtenerPlan(repositorio, planId);
+      await autorizar(plan.equipo);
       await verificarQueNoEsteProcesado(repositorio, celda.dni, plan.semana);
       await validarCelda(repositorio, plan, celda);
       if (!(await repositorio.colaboradorPerteneceAEquipo(celda.dni, plan.equipo))) {
@@ -44,6 +46,7 @@ export function crearCasosDeUsoDePlanesSemanales(
     ): Promise<void> {
       await autorizar();
       const plan = await obtenerPlan(repositorio, planId);
+      await autorizar(plan.equipo);
       const celdasProcesadas = new Map<string, CeldaDePlanSemanalEnBorrador>();
       for (const celda of plan.celdas) {
         if (await repositorio.horarioSemanalEstaProcesado?.(celda.dni, plan.semana)) {
@@ -70,6 +73,7 @@ export function crearCasosDeUsoDePlanesSemanales(
     async borrarCelda(planId: string, dni: string, fecha: string): Promise<void> {
       await autorizar();
       const plan = await obtenerPlan(repositorio, planId);
+      await autorizar(plan.equipo);
       if (!fechaPerteneceALaSemana(fecha, plan.semana)) throw new Error("La fecha no pertenece a la semana del plan.");
       if (!(await repositorio.colaboradorPerteneceAEquipo(dni, plan.equipo))) {
         throw new Error("El colaborador no pertenece al equipo operativo del plan.");
@@ -81,6 +85,7 @@ export function crearCasosDeUsoDePlanesSemanales(
     async copiarSemanaAnterior(planId: string): Promise<void> {
       await autorizar();
       const plan = await obtenerPlan(repositorio, planId);
+      await autorizar(plan.equipo);
       const semanaAnterior = desplazarFecha(plan.semana, -7);
       const horarios = await repositorio.listarHorariosPublicadosDelEquipoEnSemana(semanaAnterior, plan.equipo);
       const celdasCopia: CeldaDePlanSemanalEnBorrador[] = [];
@@ -106,6 +111,7 @@ export function crearCasosDeUsoDePlanesSemanales(
       await autorizar();
       if (!seleccion.length) throw new Error("Seleccione al menos una celda para aplicar el horario.");
       const plan = await obtenerPlan(repositorio, planId);
+      await autorizar(plan.equipo);
       const celdas = seleccion.map((celda) => ({
         planId,
         ...celda,

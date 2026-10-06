@@ -8,5 +8,5 @@ El aplicativo guarda horarios, marcas, estados e incidencias como datos, y calcu
 
 - Cada resultado se puede rastrear hasta una asistencia, horario o ajuste.
 - Las reglas de penalización por tardanza tienen versión y fecha de vigencia. Un período cerrado conserva la versión usada para calcularlo.
-- Las reglas monetarias se activan solo con aprobación de Administración y Finanzas.
+- Las reglas monetarias se activan solo con aprobación de Finanzas (ADR 0008 y 0012).
 - El Excel histórico se usa como contraste durante la transición.

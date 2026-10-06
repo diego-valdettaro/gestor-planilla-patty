@@ -1,4 +1,5 @@
-import type { Actor } from "@/colaboradores/registrar-colaborador";
+import type { Actor } from "@/autenticacion/permisos";
+import { exigir, puedeGestionarPeriodos, puedeOperarAsistenciaDelGrupo, puedeRevisarAsistencias } from "@/autenticacion/permisos";
 import { calcularTardanza, type PoliticaDePenalizacionPorTardanzas, type TardanzaCalculada } from "@/tardanzas/politica-de-penalizacion";
 
 import type { EstadoDeHoraExtra } from "./calcular-hora-extra";
@@ -68,6 +69,7 @@ export interface AjusteDeAsistencia extends SolicitudDeAjuste {
 }
 
 export interface RepositorioDeAsistencias {
+  obtenerGrupoDelColaborador(dni: string): Promise<string | undefined>;
   buscarTurnoPublicado(dni: string, fecha: string): Promise<TurnoParaConfirmar | undefined>;
   confirmar(asistencia: AsistenciaConfirmada): Promise<void>;
   buscarInstantaneaDeTurno(dni: string, fecha: string): Promise<InstantaneaDeTurno | undefined>;
@@ -88,7 +90,7 @@ export async function confirmarAsistencia(
   actor: Actor,
   solicitud: SolicitudDeConfirmacion,
 ): Promise<void> {
-  autorizarRevision(actor);
+  await autorizarRevision(repositorio, actor, solicitud.dni);
   const turno = await repositorio.buscarTurnoPublicado(solicitud.dni, solicitud.fecha);
   if (!turno) throw new Error("No existe un turno publicado para confirmar esta asistencia.");
   if (turno.motivoNoAsistencia || turno.descanso) {
@@ -122,7 +124,7 @@ export async function ajustarAsistencia(
   actor: Actor,
   solicitud: SolicitudDeAjuste,
 ): Promise<void> {
-  autorizarRevision(actor);
+  await autorizarRevision(repositorio, actor, solicitud.dni);
   if (!solicitud.motivo.trim()) throw new Error("El ajuste de asistencia requiere un motivo.");
   const instantaneaDeTurno = await repositorio.buscarInstantaneaDeTurno(solicitud.dni, solicitud.fecha);
   if (!instantaneaDeTurno) throw new Error("La asistencia debe estar confirmada para ajustarla.");
@@ -157,7 +159,7 @@ export async function registrarEstadoManual(
   actor: Actor,
   solicitud: SolicitudDeEstadoManual,
 ): Promise<void> {
-  autorizarRevision(actor);
+  await autorizarRevision(repositorio, actor, solicitud.dni);
   const comentario = solicitud.comentario.trim();
   if (!comentario) throw new Error("El estado manual requiere un comentario.");
   const turno = await repositorio.buscarTurnoPublicado(solicitud.dni, solicitud.fecha);
@@ -176,12 +178,12 @@ export function calcularMinutosTrabajados(entradaReal: string, salidaReal: strin
   return minutos;
 }
 
-function autorizarRevision(actor: Actor): void {
-  if (actor.rol !== "administracion" && actor.rol !== "finanzas") {
-    throw new Error("No tiene permiso para revisar asistencias.");
-  }
+async function autorizarRevision(repositorio: RepositorioDeAsistencias, actor: Actor, dni: string): Promise<void> {
+  exigir(puedeRevisarAsistencias(actor), "No tiene permiso para revisar asistencias.");
+  const grupo = await repositorio.obtenerGrupoDelColaborador(dni);
+  exigir(grupo !== undefined && puedeOperarAsistenciaDelGrupo(actor, grupo), "No tiene permiso para revisar asistencias de este grupo.");
 }
 
 function autorizarFinanzas(actor: Actor): void {
-  if (actor.rol !== "finanzas") throw new Error("No tiene permiso para decidir horas extra.");
+  exigir(puedeGestionarPeriodos(actor), "No tiene permiso para decidir horas extra.");
 }

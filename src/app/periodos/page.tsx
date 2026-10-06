@@ -1,6 +1,7 @@
 import React from "react";
 import { redirect } from "next/navigation";
 
+import { NOMBRE_DE_ROL, puedeGestionarPeriodos } from "@/autenticacion/permisos";
 import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
 import { BotonDeAccionConfirmada } from "@/app/boton-de-accion-confirmada";
 import { calcularSugerenciaDePeriodo, crearResumenVacio } from "@/periodos/periodo-planilla";
@@ -15,7 +16,7 @@ export const dynamic = "force-dynamic";
 export default async function PaginaDePeriodos({ searchParams }: { searchParams: Promise<{ periodoId?: string; sede?: string; dni?: string }> }) {
   const actor = await obtenerActorActual().catch(() => undefined);
   if (!actor) redirect("/iniciar-sesion");
-  if (actor.rol !== "administracion" && actor.rol !== "finanzas") return <main className="centrado"><section className="estado-vacio"><h1>Sin permiso</h1><p>Su rol no permite consultar períodos de planilla.</p></section></main>;
+  if (!puedeGestionarPeriodos(actor)) return <main className="centrado"><section className="estado-vacio"><h1>Sin permiso</h1><p>Su rol no permite consultar períodos de planilla.</p></section></main>;
 
   const query = await searchParams;
   const periodos = await repositorioDePeriodos.listar();
@@ -26,7 +27,7 @@ export default async function PaginaDePeriodos({ searchParams }: { searchParams:
   const sugerencia = calcularSugerenciaDePeriodo(periodos, new Date());
 
   return <main className="contenido pagina">
-    <header className="encabezado encabezado-pagina"><div><p className="eyebrow">Administración y Finanzas</p><h1>Períodos de planilla</h1><p>Filtre, revise y exporte los totales de asistencia antes de cerrar el período de planilla.</p></div></header>
+    <header className="encabezado encabezado-pagina"><div><p className="eyebrow">{NOMBRE_DE_ROL[actor.rol]}</p><h1>Períodos de planilla</h1><p>Filtre, revise y exporte los totales de asistencia antes de cerrar el período de planilla.</p></div></header>
     <section className="tarjeta panel">
       <header className="panel-cabecera"><div><h2>Nuevo período</h2><p>Se sugiere continuar del día 26 al 25, pero puede indicar otras fechas.</p></div></header>
       <CreadorDePeriodo sugerencia={sugerencia} />
@@ -40,9 +41,9 @@ export default async function PaginaDePeriodos({ searchParams }: { searchParams:
         <a className="boton-secundario" href={`/api/periodos/${periodo.id}/exportar`}>Exportar XLSX completo</a>
       </form>
       <section className="tarjeta panel">
-        <header className="panel-cabecera"><div><h2>Período {periodo.inicio} a {periodo.fin}</h2><p>Estado actual: {periodo.estado === "abierto" ? <span className="insignia ok">Abierto</span> : <span className="insignia neutro">Cerrado</span>}</p></div>{periodo.estado === "abierto" && actor.rol === "finanzas" ? <BotonDeAccionConfirmada accion={cerrarPeriodoDesdeFormulario} confirmar="Cerrar período" descripcion="Ya no se podrán importar ni modificar asistencias de este período hasta que lo reabra con un motivo." etiqueta="Cerrar período" titulo="¿Cerrar este período de planilla?"><input type="hidden" name="periodoId" value={periodo.id} /></BotonDeAccionConfirmada> : null}</header>
-        {periodo.estado === "cerrado" && actor.rol === "finanzas" ? <BotonDeAccionConfirmada accion={reabrirPeriodoDesdeFormulario} confirmar="Reabrir período" descripcion={`El período de planilla del ${periodo.inicio} al ${periodo.fin} volverá a estar abierto: se podrán importar y modificar asistencias de esas fechas hasta que se cierre de nuevo. La reapertura queda registrada con el motivo indicado.`} etiqueta="Reabrir período" titulo="¿Reabrir este período de planilla?"><input type="hidden" name="periodoId" value={periodo.id} /><label>Motivo de reapertura<input name="motivo" required /></label></BotonDeAccionConfirmada> : null}
-        {periodo.estado === "abierto" && actor.rol === "finanzas" ? <DecisionesDeHorasExtra periodoId={periodo.id} filas={resumen.filas} /> : null}
+        <header className="panel-cabecera"><div><h2>Período {periodo.inicio} a {periodo.fin}</h2><p>Estado actual: {periodo.estado === "abierto" ? <span className="insignia ok">Abierto</span> : <span className="insignia neutro">Cerrado</span>}</p></div>{periodo.estado === "abierto" && puedeGestionarPeriodos(actor) ? <BotonDeAccionConfirmada accion={cerrarPeriodoDesdeFormulario} confirmar="Cerrar período" descripcion="Ya no se podrán importar ni modificar asistencias de este período hasta que lo reabra con un motivo." etiqueta="Cerrar período" titulo="¿Cerrar este período de planilla?"><input type="hidden" name="periodoId" value={periodo.id} /></BotonDeAccionConfirmada> : null}</header>
+        {periodo.estado === "cerrado" && puedeGestionarPeriodos(actor) ? <BotonDeAccionConfirmada accion={reabrirPeriodoDesdeFormulario} confirmar="Reabrir período" descripcion={`El período de planilla del ${periodo.inicio} al ${periodo.fin} volverá a estar abierto: se podrán importar y modificar asistencias de esas fechas hasta que se cierre de nuevo. La reapertura queda registrada con el motivo indicado.`} etiqueta="Reabrir período" titulo="¿Reabrir este período de planilla?"><input type="hidden" name="periodoId" value={periodo.id} /><label>Motivo de reapertura<input name="motivo" required /></label></BotonDeAccionConfirmada> : null}
+        {periodo.estado === "abierto" && puedeGestionarPeriodos(actor) ? <DecisionesDeHorasExtra periodoId={periodo.id} filas={resumen.filas} /> : null}
         <TotalesGenerales resumen={resumen} />
         <Bloqueos bloqueos={resumen.bloqueos} />
         {resumen.filas.length ? <ResumenPorGrupos filas={resumen.filas} /> : <section className="estado-vacio"><h3>Sin resultados</h3><p>No hay colaboradores que coincidan con los filtros elegidos. Los totales y bloqueos siguen cubriendo el período completo.</p></section>}

@@ -1,4 +1,5 @@
-import type { Actor } from "@/colaboradores/registrar-colaborador";
+import type { Actor } from "@/autenticacion/permisos";
+import { exigir, puedeConsultarHorarios, puedeOperarAsistenciaDelGrupo } from "@/autenticacion/permisos";
 
 import type { PlanSemanalEnBorrador, RepositorioDePlanesSemanales } from "./plan-semanal-en-borrador";
 import type { RepositorioDeTurnos, TurnoPublicado } from "./publicar-turno-semanal";
@@ -45,9 +46,10 @@ export async function revisarPlanSemanal(
   planId: string,
   personasSeleccionadas: string[],
 ): Promise<{ idsSeleccionados: string[]; plan: PlanSemanalEnBorrador; errores: ErrorDePublicacionDePlan[] }> {
-  if (actor.rol !== "operaciones" && actor.rol !== "administracion" && actor.rol !== "finanzas") throw new Error("No tiene permiso para publicar planes semanales.");
+  exigir(puedeConsultarHorarios(actor), "No tiene permiso para publicar planes semanales.");
   const plan = await repositorio.buscarPorId(planId);
   if (!plan) throw new Error("El plan semanal en borrador no existe.");
+  exigir(puedeOperarAsistenciaDelGrupo(actor, plan.equipo), "No tiene permiso para publicar planes semanales de este grupo.");
   const idsSeleccionados = [...new Set(personasSeleccionadas)];
   const errores = (await Promise.all(idsSeleccionados.map((dni) => validarPersona(repositorio, plan, dni)))).flat();
   return { idsSeleccionados, plan, errores };

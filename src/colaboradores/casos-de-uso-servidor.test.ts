@@ -26,10 +26,10 @@ function crearRepositorioEnMemoria(): {
 }
 
 describe("casos de uso de colaboradores en el servidor", () => {
-  it("usa el actor de la sesión del servidor y rechaza a Operaciones", async () => {
+  it("usa el actor de la sesión del servidor y rechaza a un gerente sin grupos", async () => {
     const { repositorio } = crearRepositorioEnMemoria();
     const casosDeUso = crearCasosDeUsoDeColaboradores(repositorio, {
-      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "operaciones" }),
+      obtenerActorActual: async () => ({ id: "gerente-1", rol: "gerente_de_area" }),
     });
 
     await expect(
@@ -49,7 +49,7 @@ describe("casos de uso de colaboradores en el servidor", () => {
       dni: "00001024", nombre: "Ana Rojas", sede: "Lima", grupo: "Tiendas", activo: true,
     });
     const casosDeUso = crearCasosDeUsoDeColaboradores(repositorio, {
-      obtenerActorActual: async () => ({ id: "admin-1", rol: "administracion" }),
+      obtenerActorActual: async () => ({ id: "admin-1", rol: "administrador" }),
     });
 
     await casosDeUso.cambiarGrupo("00001024", "Taller");

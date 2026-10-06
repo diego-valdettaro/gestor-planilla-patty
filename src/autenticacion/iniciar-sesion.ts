@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import type { Actor, Rol } from "@/colaboradores/registrar-colaborador";
+import type { Actor, Rol } from "./permisos";
 
 const DURACION_DE_LA_SESION_EN_DIAS = 14;
 

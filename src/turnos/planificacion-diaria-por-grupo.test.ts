@@ -22,7 +22,7 @@ function crearContexto() {
     buscarPublicado: async () => undefined,
   } satisfies Partial<RepositorioDePlanesSemanales>;
   const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio as unknown as RepositorioDePlanesSemanales, {
-    obtenerActorActual: async () => ({ id: "operaciones-1", rol: "operaciones" }),
+    obtenerActorActual: async () => ({ id: "operaciones-1", rol: "administrador" }),
   });
   return { casosDeUso, guardadas };
 }

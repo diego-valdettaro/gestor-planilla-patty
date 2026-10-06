@@ -28,7 +28,7 @@ describe("asignar grupo de una sede desde Configuración", () => {
   });
 
   it("emite una confirmación distinta en cada guardado para que el editor se cierre también al reabrirlo", async () => {
-    const actor = { id: "admin-1", rol: "administracion" as const };
+    const actor = { id: "admin-1", rol: "administrador" as const };
     simulacro.actor.mockResolvedValue(actor);
     simulacro.asignar.mockResolvedValue(undefined);
 
@@ -44,7 +44,7 @@ describe("asignar grupo de una sede desde Configuración", () => {
   });
 
   it("devuelve el error sin descartar el estado del formulario", async () => {
-    simulacro.actor.mockResolvedValue({ id: "admin-1", rol: "administracion" });
+    simulacro.actor.mockResolvedValue({ id: "admin-1", rol: "administrador" });
     simulacro.asignar.mockRejectedValue(new Error("La sede activa no existe."));
 
     await expect(asignarEquipoOperativoASede({}, formulario({ nombre: "Tienda Centro", grupo: "Taller" })))
@@ -53,7 +53,7 @@ describe("asignar grupo de una sede desde Configuración", () => {
   });
 
   it("rechaza a otros roles antes de intentar la asignación", async () => {
-    simulacro.actor.mockResolvedValue({ id: "operaciones-1", rol: "operaciones" });
+    simulacro.actor.mockResolvedValue({ id: "gerente-1", rol: "gerente_de_area" });
 
     await expect(asignarEquipoOperativoASede({}, formulario({ nombre: "Tienda Centro", grupo: "Taller" })))
       .resolves.toEqual({ error: "No tiene permiso para cambiar la configuración." });
@@ -67,7 +67,7 @@ describe("cambiar el grupo de un colaborador desde Configuración", () => {
   });
 
   it("emite una confirmación distinta en cada guardado para que el editor se cierre también al reabrirlo", async () => {
-    const actor = { id: "admin-1", rol: "administracion" as const };
+    const actor = { id: "admin-1", rol: "administrador" as const };
     simulacro.actor.mockResolvedValue(actor);
     simulacro.cambiarGrupoDeColaborador.mockResolvedValue(undefined);
 
@@ -84,7 +84,7 @@ describe("cambiar el grupo de un colaborador desde Configuración", () => {
   });
 
   it("devuelve el error sin descartar el estado del formulario", async () => {
-    simulacro.actor.mockResolvedValue({ id: "admin-1", rol: "administracion" });
+    simulacro.actor.mockResolvedValue({ id: "admin-1", rol: "administrador" });
     simulacro.cambiarGrupoDeColaborador.mockRejectedValue(new Error("No se puede cambiar de grupo: el colaborador tiene un plan semanal en borrador en su grupo actual."));
 
     await expect(cambiarGrupoDeColaboradorDeConfiguracion({}, formulario({ dni: "00001024", grupo: "Taller" })))

@@ -1,12 +1,13 @@
 import { NextRequest } from "next/server";
 import * as XLSX from "xlsx";
 
+import { puedeGestionarPeriodos } from "@/autenticacion/permisos";
 import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
 import { repositorioDePeriodos } from "@/periodos/servicio";
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ periodoId: string }> }) {
   const actor = await obtenerActorActual().catch(() => undefined);
-  if (!actor || (actor.rol !== "administracion" && actor.rol !== "finanzas")) return new Response("No autorizado", { status: 403 });
+  if (!actor || !puedeGestionarPeriodos(actor)) return new Response("No autorizado", { status: 403 });
   const { periodoId } = await params;
   const resumen = await repositorioDePeriodos.listarResumen({ periodoId });
   const datos = resumen.filas.map((fila) => ({

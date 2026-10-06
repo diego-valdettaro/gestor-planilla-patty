@@ -43,7 +43,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeTurnos", () => {
       fin: "2030-09-25",
       estado: "abierto",
     });
-    await db.insert(schema.cuentasLocales).values({ id: cuentaId, nombreUsuario: `turnos-${cuentaId}`, hashContrasena: "prueba", rol: "operaciones" });
+    await db.insert(schema.cuentasLocales).values({ id: cuentaId, nombreUsuario: `turnos-${cuentaId}`, hashContrasena: "prueba", rol: "administrador" });
   });
 
   afterAll(async () => {
@@ -129,7 +129,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeTurnos", () => {
   });
 
   it("republica los siete días, conserva la auditoría y reinicia cálculos pendientes", async () => {
-    const actor = { id: cuentaId, rol: "operaciones" as const };
+    const actor = { id: cuentaId, rol: "administrador" as const };
     const originales = fechasDeCorreccion.map((fechaDeCorreccion) => ({ dni, fecha: fechaDeCorreccion, sede, entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false }));
     await repositorio.publicarEnLote(originales, actor);
     const [asistencia] = await db.select({ id: schema.asistenciasEsperadas.id }).from(schema.asistenciasEsperadas)
@@ -168,7 +168,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeTurnos", () => {
       .resolves.toEqual(expect.arrayContaining([expect.objectContaining({ dni })]));
     await expect(repositorio.reemplazarSemanaPublicada(
       fechasProcesadas.map((fechaDeProcesamiento) => ({ dni, fecha: fechaDeProcesamiento, sede, entradaProgramada: "10:00", salidaProgramada: "19:00", descanso: false })),
-      { id: cuentaId, rol: "operaciones" }, "Cambio posterior",
+      { id: cuentaId, rol: "administrador" }, "Cambio posterior",
     )).rejects.toThrow("No se puede corregir un horario semanal que ya fue procesado.");
   });
 

@@ -1,4 +1,5 @@
-import type { Actor } from "@/colaboradores/registrar-colaborador";
+import type { Actor } from "@/autenticacion/permisos";
+import { exigir, puedeOperarAsistenciaDelGrupo, puedeRevisarAsistencias } from "@/autenticacion/permisos";
 
 export interface ColaboradorParaConfirmar {
   dni: string;
@@ -32,6 +33,7 @@ export interface SolicitudDeConfirmacionPorRango {
 }
 
 export interface RepositorioDeConfirmacionPorRango {
+  obtenerGruposDeColaboradores(dnis: string[]): Promise<Array<{ dni: string; grupo: string }>>;
   evaluarColaboradoresPorRango(solicitud: SolicitudDeEvaluacionPorRango): Promise<EvaluacionDeColaborador[]>;
   confirmarColaboradoresPorRango(solicitud: SolicitudDeConfirmacionPorRango, responsableId: string): Promise<void>;
 }
@@ -41,10 +43,11 @@ export async function evaluarColaboradoresPorRango(
   actor: Actor,
   solicitud: SolicitudDeEvaluacionPorRango,
 ): Promise<EvaluacionDeColaborador[]> {
-  autorizarRevision(actor);
+  exigir(puedeRevisarAsistencias(actor), MENSAJE_SIN_PERMISO);
   validarRango(solicitud.inicio, solicitud.fin);
   const colaboradores = [...new Map(solicitud.colaboradores.filter(({ dni }) => dni).map((item) => [item.dni, item])).values()];
   if (!colaboradores.length) return [];
+  await autorizarGruposDe(repositorio, actor, colaboradores.map(({ dni }) => dni));
   return repositorio.evaluarColaboradoresPorRango({ ...solicitud, colaboradores });
 }
 
@@ -53,10 +56,11 @@ export async function confirmarColaboradoresPorRango(
   actor: Actor,
   solicitud: SolicitudDeConfirmacionPorRango,
 ): Promise<void> {
-  autorizarRevision(actor);
+  exigir(puedeRevisarAsistencias(actor), MENSAJE_SIN_PERMISO);
   validarRango(solicitud.inicio, solicitud.fin);
   const dnis = [...new Set(solicitud.dnis.filter(Boolean))];
   if (!dnis.length) throw new Error("Debe seleccionar al menos un colaborador.");
+  await autorizarGruposDe(repositorio, actor, dnis);
   await repositorio.confirmarColaboradoresPorRango({ ...solicitud, dnis }, actor.id);
 }
 
@@ -69,6 +73,13 @@ function esFecha(valor: string): boolean {
   return new Date(`${valor}T00:00:00Z`).toISOString().slice(0, 10) === valor;
 }
 
-function autorizarRevision(actor: Actor): void {
-  if (actor.rol !== "administracion" && actor.rol !== "finanzas") throw new Error("No tiene permiso para revisar asistencias.");
+const MENSAJE_SIN_PERMISO = "No tiene permiso para revisar asistencias.";
+
+async function autorizarGruposDe(repositorio: RepositorioDeConfirmacionPorRango, actor: Actor, dnis: string[]): Promise<void> {
+  const grupos = await repositorio.obtenerGruposDeColaboradores(dnis);
+  const gruposPorDni = new Map(grupos.map(({ dni, grupo }) => [dni, grupo]));
+  for (const dni of dnis) {
+    const grupo = gruposPorDni.get(dni);
+    exigir(grupo !== undefined && puedeOperarAsistenciaDelGrupo(actor, grupo), "No tiene permiso para revisar asistencias de este grupo.");
+  }
 }

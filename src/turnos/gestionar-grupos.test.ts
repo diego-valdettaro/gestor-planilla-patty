@@ -1,36 +1,54 @@
 import { describe, expect, it } from "vitest";
 
-import { crearGrupo } from "./gestionar-grupos";
+import { configurarGestionDeAsistenciaDelGrupo, crearGrupo, type RepositorioDeGrupos } from "./gestionar-grupos";
+
+function crearRepositorio(): { repositorio: RepositorioDeGrupos; creados: string[]; atributos: Array<[string, boolean]> } {
+  const creados: string[] = [];
+  const atributos: Array<[string, boolean]> = [];
+  return {
+    creados,
+    atributos,
+    repositorio: {
+      crear: async (nombre) => { creados.push(nombre); },
+      actualizarGestionDeAsistencia: async (nombre, gestiona) => { atributos.push([nombre, gestiona]); },
+    },
+  };
+}
 
 describe("gestionar grupos", () => {
-  it("permite a Administracion crear un grupo con nombre", async () => {
-    const grupos: string[] = [];
+  it("permite al Administrador crear un grupo con nombre", async () => {
+    const { repositorio, creados } = crearRepositorio();
 
-    await crearGrupo({ crear: async (nombre) => { grupos.push(nombre); } }, { id: "admin-1", rol: "administracion" }, "Logistica");
+    await crearGrupo(repositorio, { id: "admin-1", rol: "administrador" }, "Logistica");
 
-    expect(grupos).toEqual(["Logistica"]);
+    expect(creados).toEqual(["Logistica"]);
   });
 
   it("rechaza un nombre vacio y no escribe", async () => {
-    let llamadas = 0;
+    const { repositorio, creados } = crearRepositorio();
 
-    await expect(crearGrupo({ crear: async () => { llamadas += 1; } }, { id: "admin-1", rol: "administracion" }, "  "))
-      .rejects.toThrow("El nombre del grupo es obligatorio.");
-    expect(llamadas).toBe(0);
+    await expect(crearGrupo(repositorio, { id: "admin-1", rol: "administrador" }, "  ")).rejects.toThrow("El nombre del grupo es obligatorio.");
+    expect(creados).toEqual([]);
   });
 
-  it("rechaza a Finanzas antes de escribir", async () => {
-    let llamadas = 0;
+  it.each([
+    ["Finanzas", { id: "fin-1", rol: "finanzas" as const }],
+    ["un gerente de área", { id: "ger-1", rol: "gerente_de_area" as const, grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] }],
+    ["Recursos Humanos", { id: "rrhh-1", rol: "recursos_humanos" as const }],
+  ])("rechaza a %s antes de escribir", async (_nombre, actor) => {
+    const { repositorio, creados, atributos } = crearRepositorio();
 
-    await expect(crearGrupo({ crear: async () => { llamadas += 1; } }, { id: "fin-1", rol: "finanzas" }, "Logistica"))
-      .rejects.toThrow("No tiene permiso para cambiar la configuracion.");
-    expect(llamadas).toBe(0);
+    await expect(crearGrupo(repositorio, actor, "Logistica")).rejects.toThrow("No tiene permiso para cambiar la configuracion.");
+    await expect(configurarGestionDeAsistenciaDelGrupo(repositorio, actor, "Tiendas", false)).rejects.toThrow("No tiene permiso para cambiar la configuracion.");
+    expect(creados).toEqual([]);
+    expect(atributos).toEqual([]);
   });
 
-  it("rechaza a Operaciones antes de escribir", async () => {
-    let llamadas = 0;
-    await expect(crearGrupo({ crear: async () => { llamadas += 1; } }, { id: "ops-1", rol: "operaciones" }, "Logistica"))
-      .rejects.toThrow("No tiene permiso para cambiar la configuracion.");
-    expect(llamadas).toBe(0);
+  it("permite al Administrador cambiar si un grupo gestiona asistencia y horarios", async () => {
+    const { repositorio, atributos } = crearRepositorio();
+
+    await configurarGestionDeAsistenciaDelGrupo(repositorio, { id: "admin-1", rol: "administrador" }, "Administración", false);
+
+    expect(atributos).toEqual([["Administración", false]]);
   });
 });

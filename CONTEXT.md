@@ -9,7 +9,7 @@ Unidad operativa donde se planifica una jornada y que también identifica su imp
 _Evitar_: centro de costo, grupo operativo, sede fija del colaborador
 
 **Grupo operativo**:
-Conjunto estable de colaboradores bajo un gerente de área, como Taller, Tiendas o Administración. Una jornada puede realizarse en cualquiera de las sedes de ese grupo.
+Conjunto estable de colaboradores bajo un gerente de área, como Taller, Tiendas o Administración. Una jornada puede realizarse en cualquiera de las sedes de ese grupo. Tiene un atributo configurable, «Gestiona asistencia y horarios»: Administración lo tiene en «no», porque sus personas entran en planilla pero no marcan, y queda fuera de horarios, asistencias y aprobación.
 _Evitar_: sede de la jornada, sede de adscripción, grupo que cambia según la tienda del día
 
 **DNI del colaborador**:
@@ -25,8 +25,12 @@ Intervalo entre el ingreso y el cese de un colaborador que acredita sus días re
 _Evitar_: estado activo actual, presencia en el resumen de asistencia
 
 **Gerente de área**:
-Responsable de publicar horarios y gestionar y aprobar asistencias de los colaboradores de los grupos operativos que tiene asignados.
+Responsable de publicar horarios y gestionar y aprobar asistencias de los colaboradores de los grupos operativos que tiene asignados. Un grupo tiene un gerente; un gerente puede tener varios grupos. Su alcance se comprueba en el servidor.
 _Evitar_: Administración, Finanzas, gerente con acceso a todos los grupos
+
+**Administrador del sistema**:
+Rol de configuración global y de comportamiento de la herramienta: grupos, sedes, política de tardanzas, cambio de grupo y cuentas de cualquier rol. Es un superusuario temporal mientras se estabiliza el uso de la herramienta (ADR 0012).
+_Evitar_: grupo Administración, gerente de Administración, rol operativo permanente
 
 **Recursos Humanos**:
 Responsable de registrar y confirmar el inicio y el cese de cada relación laboral.
@@ -97,7 +101,7 @@ Archivo XLSX limpio con los totales calculados y la información de auditoría d
 _Evitar_: copia de fórmulas del Excel histórico, planilla oficial de pagos
 
 **Política de penalización por tardanzas**:
-Regla configurable por Administración y Finanzas para cada sede que convierte tardanzas acumuladas en horas penalizadas desde una fecha de vigencia. Su resultado es disciplinario y no determina un descuento monetario.
+Regla configurable por el Administrador del sistema para cada sede que convierte tardanzas acumuladas en horas penalizadas desde una fecha de vigencia. Su resultado es disciplinario y no determina un descuento monetario.
 _Evitar_: descuento fijo por tardanza, regla retroactiva
 
 **Archivo fuente de asistencias**:

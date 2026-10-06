@@ -128,3 +128,74 @@ describe.skipIf(!databaseUrl)("migración 0026_identificar_colaboradores_por_dni
     await expect(insertar("1234")).rejects.toThrow(/colaboradores_dni_ocho_digitos/);
   });
 });
+
+// ADR 0012: roles administrador / gerente_de_area / recursos_humanos / finanzas (issue #108).
+describe.skipIf(!databaseUrl)("migración 0028_roles_de_cuenta_y_gerentes_por_grupo", () => {
+  const nombreDeLaBase = `planilla_migracion_0028_${randomUUID().replace(/-/g, "_")}`;
+  const adminPool = new Pool({ connectionString: databaseUrl });
+  let pool: Pool;
+
+  beforeAll(async () => {
+    await adminPool.query(`CREATE DATABASE "${nombreDeLaBase}"`);
+    const url = new URL(databaseUrl!);
+    url.pathname = `/${nombreDeLaBase}`;
+    pool = new Pool({ connectionString: url.toString() });
+    const migraciones = await leerMigraciones();
+    for (const migracion of migraciones.filter(({ archivo }) => archivo < "0028_roles_de_cuenta_y_gerentes_por_grupo.sql")) {
+      await pool.query(migracion.contenido);
+    }
+    await pool.query("INSERT INTO cuentas_locales (nombre_usuario, hash_contrasena, rol) VALUES ('admin-viejo', 'h', 'administracion'), ('ops-viejo', 'h', 'operaciones'), ('fin-viejo', 'h', 'finanzas')");
+    await pool.query("INSERT INTO grupos (nombre) VALUES ('Administración')");
+    const sesion = await pool.query("SELECT id FROM cuentas_locales WHERE nombre_usuario = 'ops-viejo'");
+    await pool.query("INSERT INTO sesiones (cuenta_id, token_hash, vence_en) VALUES ($1, 'token-viejo', now() + interval '1 day')", [sesion.rows[0].id]);
+    const migracion = migraciones.find(({ archivo }) => archivo === "0028_roles_de_cuenta_y_gerentes_por_grupo.sql");
+    await pool.query(migracion!.contenido);
+  });
+
+  afterAll(async () => {
+    await pool.end();
+    await adminPool.query(`DROP DATABASE IF EXISTS "${nombreDeLaBase}"`);
+    await adminPool.end();
+  });
+
+  it("aplica la regla: administracion -> administrador, operaciones -> gerente_de_area, finanzas sin cambio", async () => {
+    const { rows } = await pool.query("SELECT nombre_usuario, rol FROM cuentas_locales ORDER BY nombre_usuario");
+
+    expect(rows).toEqual([
+      { nombre_usuario: "admin-viejo", rol: "administrador" },
+      { nombre_usuario: "fin-viejo", rol: "finanzas" },
+      { nombre_usuario: "ops-viejo", rol: "gerente_de_area" },
+    ]);
+  });
+
+  it("deja a los gerentes migrados sin grupos asignados y conserva sus sesiones", async () => {
+    const asignaciones = await pool.query("SELECT 1 FROM gerentes_de_grupo");
+    const sesiones = await pool.query("SELECT 1 FROM sesiones");
+
+    expect(asignaciones.rowCount).toBe(0);
+    expect(sesiones.rowCount).toBe(1);
+  });
+
+  it("marca el grupo Administración como no gestor de asistencia y deja los demás como gestores", async () => {
+    await pool.query("INSERT INTO grupos (nombre) VALUES ('Taller nuevo')");
+
+    const { rows } = await pool.query("SELECT nombre, gestiona_asistencia FROM grupos WHERE nombre IN ('Administración', 'Taller nuevo', 'Tiendas') ORDER BY nombre");
+
+    expect(rows).toEqual([
+      { nombre: "Administración", gestiona_asistencia: false },
+      { nombre: "Taller nuevo", gestiona_asistencia: true },
+      { nombre: "Tiendas", gestiona_asistencia: true },
+    ]);
+  });
+
+  it("rechaza roles fuera del modelo y un segundo gerente para el mismo grupo", async () => {
+    await expect(pool.query("INSERT INTO cuentas_locales (nombre_usuario, hash_contrasena, rol) VALUES ('x', 'h', 'operaciones')")).rejects.toThrow(/cuentas_locales_rol_valido/);
+    const cuentas = await pool.query("SELECT id FROM cuentas_locales WHERE rol = 'gerente_de_area'");
+    await pool.query("INSERT INTO cuentas_locales (nombre_usuario, hash_contrasena, rol) VALUES ('ger-2', 'h', 'gerente_de_area')");
+    const segunda = await pool.query("SELECT id FROM cuentas_locales WHERE nombre_usuario = 'ger-2'");
+    await pool.query("INSERT INTO gerentes_de_grupo (grupo, cuenta_id) VALUES ('Taller nuevo', $1)", [cuentas.rows[0].id]);
+
+    await expect(pool.query("INSERT INTO gerentes_de_grupo (grupo, cuenta_id) VALUES ('Taller nuevo', $1)", [segunda.rows[0].id])).rejects.toThrow(/duplicate key|unique|pkey/i);
+    await pool.query("INSERT INTO gerentes_de_grupo (grupo, cuenta_id) VALUES ('Administración', $1)", [cuentas.rows[0].id]);
+  });
+});

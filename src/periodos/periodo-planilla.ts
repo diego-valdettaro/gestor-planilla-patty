@@ -1,4 +1,5 @@
-import type { Actor } from "@/colaboradores/registrar-colaborador";
+import type { Actor } from "@/autenticacion/permisos";
+import { exigir, puedeGestionarPeriodos } from "@/autenticacion/permisos";
 
 export type EstadoDePeriodo = "abierto" | "cerrado";
 export type AccionDePeriodo = "cierre" | "reapertura";
@@ -117,11 +118,11 @@ export class HuecoEntrePeriodosError extends Error {
 }
 
 export function autorizarGestionDePeriodos(actor: Actor): void {
-  if (actor.rol !== "administracion" && actor.rol !== "finanzas") throw new Error("No tiene permiso para gestionar períodos de planilla.");
+  exigir(puedeGestionarPeriodos(actor), "No tiene permiso para gestionar períodos de planilla.");
 }
 
 export function autorizarCierreDePeriodos(actor: Actor): void {
-  if (actor.rol !== "finanzas") throw new Error("Solo Finanzas puede cerrar o reabrir períodos de planilla.");
+  exigir(puedeGestionarPeriodos(actor), "Solo Finanzas puede cerrar o reabrir períodos de planilla.");
 }
 
 export async function decidirHorasExtra(

@@ -4,7 +4,7 @@ import type { CuentaLocal, RepositorioDeCuentas } from "./iniciar-sesion";
 import { provisionarCuentaLocal } from "./provisionar-cuenta-local";
 
 describe("provisionarCuentaLocal", () => {
-  it("crea una cuenta de Operaciones sin exponer la contraseña", async () => {
+  it("crea una cuenta de Gerente de área sin exponer la contraseña", async () => {
     const cuentas: Array<Omit<CuentaLocal, "id">> = [];
     const repositorio: RepositorioDeCuentas & {
       guardarCuenta(cuenta: Omit<CuentaLocal, "id">): Promise<void>;
@@ -18,12 +18,12 @@ describe("provisionarCuentaLocal", () => {
 
     await provisionarCuentaLocal(
       repositorio,
-      { nombreUsuario: "operaciones", contrasena: "secreto", rol: "operaciones" },
+      { nombreUsuario: "gerente", contrasena: "secreto", rol: "gerente_de_area" },
       async () => "hash-argon2id",
     );
 
     expect(cuentas).toEqual([
-      { nombreUsuario: "operaciones", hashContrasena: "hash-argon2id", rol: "operaciones" },
+      { nombreUsuario: "gerente", hashContrasena: "hash-argon2id", rol: "gerente_de_area" },
     ]);
   });
 });

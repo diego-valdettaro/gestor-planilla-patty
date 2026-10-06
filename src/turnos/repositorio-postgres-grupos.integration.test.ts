@@ -59,7 +59,7 @@ describe.skipIf(!databaseUrl)("grupos persistidos", () => {
     ]);
     await expect(turnos.obtenerOCrear(semana, grupo)).resolves.toMatchObject({ semana, equipo: grupo, celdas: [] });
 
-    await db.insert(schema.cuentasLocales).values({ id: cuenta, nombreUsuario: `grupo-${cuenta}`, hashContrasena: "prueba", rol: "operaciones" });
+    await db.insert(schema.cuentasLocales).values({ id: cuenta, nombreUsuario: `grupo-${cuenta}`, hashContrasena: "prueba", rol: "administrador" });
     await db.insert(schema.periodosPlanilla).values({ inicio: "2031-01-01", fin: "2031-01-31", estado: "abierto" });
     await turnos.publicarEnLote(fechas.map((fecha) => ({ dni: colaborador, fecha, sede, entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false })));
     await db.update(schema.asistenciasEsperadas).set({ estado: "manual" }).where(and(eq(schema.asistenciasEsperadas.dni, colaborador), inArray(schema.asistenciasEsperadas.fecha, fechas)));

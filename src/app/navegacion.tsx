@@ -4,16 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import type { Actor } from "@/colaboradores/registrar-colaborador";
+import { NOMBRE_DE_ROL, type Actor } from "@/autenticacion/permisos";
 
 import { cerrarSesionDesdeFormulario } from "./cerrar-sesion/actions";
 import { enlacesPermitidos, esEnlaceActivo, seccionActiva } from "./enlaces-navegacion";
-
-const etiquetasDeRol = {
-  operaciones: "Operaciones",
-  administracion: "Administración",
-  finanzas: "Finanzas",
-};
 
 export function Navegacion({ actor }: { actor?: Actor }) {
   const ruta = usePathname();
@@ -29,7 +23,7 @@ export function Navegacion({ actor }: { actor?: Actor }) {
 
   if (!actor) return null;
 
-  const enlaces = enlacesPermitidos(actor.rol);
+  const enlaces = enlacesPermitidos(actor);
   const seccion = seccionActiva(ruta, enlaces);
 
   return (
@@ -46,7 +40,7 @@ export function Navegacion({ actor }: { actor?: Actor }) {
             return <Link aria-current={activo ? "page" : undefined} className={activo ? "activo" : ""} href={enlace.href} key={enlace.href}><span aria-hidden="true">{enlace.icono}</span>{enlace.etiqueta}{activo && <small className="texto-activo"> (sección actual)</small>}</Link>;
           })}
         </div>
-        <div className="cuenta-navegacion"><span className="avatar-navegacion">{iniciales(actor.nombreUsuario ?? etiquetasDeRol[actor.rol])}</span><span><strong>{actor.nombreUsuario ?? "Sesión activa"}</strong><small>{etiquetasDeRol[actor.rol]}</small></span><form action={cerrarSesionDesdeFormulario}><button aria-label="Cerrar sesión" title="Cerrar sesión" type="submit">⌄</button></form></div>
+        <div className="cuenta-navegacion"><span className="avatar-navegacion">{iniciales(actor.nombreUsuario ?? NOMBRE_DE_ROL[actor.rol])}</span><span><strong>{actor.nombreUsuario ?? "Sesión activa"}</strong><small>{NOMBRE_DE_ROL[actor.rol]}</small></span><form action={cerrarSesionDesdeFormulario}><button aria-label="Cerrar sesión" title="Cerrar sesión" type="submit">⌄</button></form></div>
       </div>
     </nav>
   );

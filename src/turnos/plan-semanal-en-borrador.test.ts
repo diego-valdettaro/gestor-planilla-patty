@@ -52,7 +52,7 @@ describe("casos de uso de planes semanales en borrador", () => {
   it("permite a Operaciones guardar y continuar una celda de borrador sin publicar horarios ni asistencias", async () => {
     const { asistenciasEsperadas, repositorio, turnosPublicados } = crearRepositorioEnMemoria();
     const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio, {
-      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "operaciones" }),
+      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "administrador" }),
     });
 
     const plan = await casosDeUso.obtenerOCrear("2026-08-31", "tiendas");
@@ -71,7 +71,7 @@ describe("casos de uso de planes semanales en borrador", () => {
   it("permite guardar un descanso y borrar una celda para volverla sin definir", async () => {
     const { repositorio } = crearRepositorioEnMemoria();
     const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio, {
-      obtenerActorActual: async () => ({ id: "administracion-1", rol: "administracion" }),
+      obtenerActorActual: async () => ({ id: "administracion-1", rol: "administrador" }),
     });
     const plan = await casosDeUso.obtenerOCrear("2026-08-31", "tiendas");
 
@@ -93,7 +93,7 @@ describe("casos de uso de planes semanales en borrador", () => {
       await reemplazarCeldasDelPlan(planId, celdas);
     };
     const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio, {
-      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "operaciones" }),
+      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "administrador" }),
     });
     const plan = await casosDeUso.obtenerOCrear("2026-08-31", "tiendas");
 
@@ -112,7 +112,7 @@ describe("casos de uso de planes semanales en borrador", () => {
   it("no persiste ninguna celda si el borrador completo contiene una celda inválida", async () => {
     const { repositorio } = crearRepositorioEnMemoria();
     const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio, {
-      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "operaciones" }),
+      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "administrador" }),
     });
     const plan = await casosDeUso.obtenerOCrear("2026-08-31", "tiendas");
 
@@ -130,7 +130,7 @@ describe("casos de uso de planes semanales en borrador", () => {
   it("copia los horarios semanales publicados de la semana anterior al borrador sin publicarlos otra vez", async () => {
     const { asistenciasEsperadas, repositorio, turnosPublicados } = crearRepositorioEnMemoria();
     const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio, {
-      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "operaciones" }),
+      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "administrador" }),
     });
     const plan = await casosDeUso.obtenerOCrear("2026-09-07", "tiendas");
 
@@ -147,7 +147,7 @@ describe("casos de uso de planes semanales en borrador", () => {
     const { repositorio } = crearRepositorioEnMemoria();
     repositorio.colaboradorPerteneceAEquipo = async () => false;
     const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio, {
-      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "operaciones" }),
+      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "administrador" }),
     });
     const plan = await casosDeUso.obtenerOCrear("2026-09-07", "tiendas");
 
@@ -160,7 +160,7 @@ describe("casos de uso de planes semanales en borrador", () => {
     const { repositorio } = crearRepositorioEnMemoria();
     repositorio.sedeActivaPerteneceAlGrupo = async () => false;
     const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio, {
-      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "operaciones" }),
+      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "administrador" }),
     });
     const plan = await casosDeUso.obtenerOCrear("2026-09-07", "tiendas");
 
@@ -173,7 +173,7 @@ describe("casos de uso de planes semanales en borrador", () => {
   it("reemplaza las celdas editables del borrador al copiar la semana anterior", async () => {
     const { repositorio } = crearRepositorioEnMemoria();
     const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio, {
-      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "operaciones" }),
+      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "administrador" }),
     });
     const plan = await casosDeUso.obtenerOCrear("2026-09-07", "tiendas");
     await repositorio.guardarCelda({
@@ -191,7 +191,7 @@ describe("casos de uso de planes semanales en borrador", () => {
   it("conserva las celdas de una persona procesada y no copia sus horarios", async () => {
     const { repositorio } = crearRepositorioEnMemoria();
     const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio, {
-      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "operaciones" }),
+      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "administrador" }),
     });
     const plan = await casosDeUso.obtenerOCrear("2026-09-07", "tiendas");
     const celdaProcesada = {
@@ -211,7 +211,7 @@ describe("casos de uso de planes semanales en borrador", () => {
   it("aplica un descanso solo a las celdas seleccionadas del borrador", async () => {
     const { repositorio } = crearRepositorioEnMemoria();
     const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio, {
-      obtenerActorActual: async () => ({ id: "administracion-1", rol: "administracion" }),
+      obtenerActorActual: async () => ({ id: "administracion-1", rol: "administrador" }),
     });
     const plan = await casosDeUso.obtenerOCrear("2026-08-31", "tiendas");
 
@@ -226,10 +226,21 @@ describe("casos de uso de planes semanales en borrador", () => {
     ]);
   });
 
-  it("permite a Finanzas crear, guardar y borrar celdas del borrador con las mismas reglas que Operaciones", async () => {
+  it("rechaza a Finanzas y a un gerente de otro grupo en el borrador", async () => {
+    const { repositorio } = crearRepositorioEnMemoria();
+    const finanzas = crearCasosDeUsoDePlanesSemanales(repositorio, { obtenerActorActual: async () => ({ id: "finanzas-1", rol: "finanzas" }) });
+    const otroGrupo = crearCasosDeUsoDePlanesSemanales(repositorio, {
+      obtenerActorActual: async () => ({ id: "gerente-1", rol: "gerente_de_area", grupos: [{ nombre: "taller", gestionaAsistencia: true }] }),
+    });
+
+    await expect(finanzas.obtenerOCrear("2026-08-31", "tiendas")).rejects.toThrow("No tiene permiso para editar planes semanales en borrador.");
+    await expect(otroGrupo.obtenerOCrear("2026-08-31", "tiendas")).rejects.toThrow("No tiene permiso para editar planes semanales de este grupo.");
+  });
+
+  it("permite al gerente de área del grupo crear, guardar y borrar celdas del borrador", async () => {
     const { repositorio } = crearRepositorioEnMemoria();
     const finanzas = crearCasosDeUsoDePlanesSemanales(repositorio, {
-      obtenerActorActual: async () => ({ id: "finanzas-1", rol: "finanzas" }),
+      obtenerActorActual: async () => ({ id: "gerente-1", rol: "gerente_de_area", grupos: [{ nombre: "tiendas", gestionaAsistencia: true }] }),
     });
 
     const plan = await finanzas.obtenerOCrear("2026-08-31", "tiendas");
@@ -245,7 +256,7 @@ describe("casos de uso de planes semanales en borrador", () => {
   it("rechaza una celda fuera de semana, de otro equipo o con una sede fuera del grupo", async () => {
     const { repositorio } = crearRepositorioEnMemoria();
     const administracion = crearCasosDeUsoDePlanesSemanales(repositorio, {
-      obtenerActorActual: async () => ({ id: "administracion-1", rol: "administracion" }),
+      obtenerActorActual: async () => ({ id: "administracion-1", rol: "administrador" }),
     });
     const plan = await administracion.obtenerOCrear("2026-08-31", "tiendas");
     const celda = { dni: "00001024", fecha: "2026-09-07", sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false };
@@ -262,7 +273,7 @@ describe("casos de uso de planes semanales en borrador", () => {
       : undefined;
     repositorio.asistenciaEstaProcesada = async () => true;
     const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio, {
-      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "operaciones" }),
+      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "administrador" }),
     });
     const plan = await casosDeUso.obtenerOCrear("2026-08-31", "tiendas");
     const celda = { dni: "00001024", fecha: "2026-09-01", sede: "Lima", entradaProgramada: "10:00", salidaProgramada: "19:00", descanso: false };
@@ -276,7 +287,7 @@ describe("casos de uso de planes semanales en borrador", () => {
     const { repositorio } = crearRepositorioEnMemoria();
     repositorio.horarioSemanalEstaProcesado = async () => true;
     const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio, {
-      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "operaciones" }),
+      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "administrador" }),
     });
     const plan = await casosDeUso.obtenerOCrear("2026-08-31", "tiendas");
 
@@ -288,7 +299,7 @@ describe("casos de uso de planes semanales en borrador", () => {
   it("preserva la fila procesada al guardar cambios de otra persona", async () => {
     const { repositorio } = crearRepositorioEnMemoria();
     const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio, {
-      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "operaciones" }),
+      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "administrador" }),
     });
     const plan = await casosDeUso.obtenerOCrear("2026-08-31", "tiendas");
     const celdaProcesada = { planId: plan.id, dni: "00001024", fecha: "2026-09-01", sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false };
@@ -309,7 +320,7 @@ describe("casos de uso de planes semanales en borrador", () => {
       ? { dni, fecha, sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false }
       : undefined;
     const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio, {
-      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "operaciones" }),
+      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "administrador" }),
     });
     const plan = await casosDeUso.obtenerOCrear("2026-09-07", "tiendas");
 

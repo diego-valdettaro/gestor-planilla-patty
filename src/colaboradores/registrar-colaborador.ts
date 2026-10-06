@@ -1,10 +1,7 @@
-export type Rol = "operaciones" | "administracion" | "finanzas";
+import type { Actor } from "@/autenticacion/permisos";
+import { exigir, puedeAdministrarPersonalDelGrupo, puedeConfigurarGlobalmente } from "@/autenticacion/permisos";
 
-export interface Actor {
-  id: string;
-  rol: Rol;
-  nombreUsuario?: string;
-}
+export type { Actor, Rol } from "@/autenticacion/permisos";
 
 export interface Colaborador {
   dni: string;
@@ -26,6 +23,7 @@ export async function registrarColaborador(
   colaborador: Colaborador,
 ): Promise<void> {
   verificarPermiso(actor);
+  verificarPermisoSobreGrupo(actor, colaborador.grupo);
   validarDni(colaborador.dni);
 
   if (await repositorio.buscarPorDni(colaborador.dni)) {
@@ -40,9 +38,11 @@ export async function consultarColaborador(
   actor: Actor,
   dni: string,
 ): Promise<Colaborador | undefined> {
-  verificarPermiso(actor);
+  const colaborador = await repositorio.buscarPorDni(dni);
+  if (colaborador) verificarPermisoSobreGrupo(actor, colaborador.grupo);
+  else verificarPermiso(actor);
 
-  return repositorio.buscarPorDni(dni);
+  return colaborador;
 }
 
 export async function actualizarColaborador(
@@ -51,9 +51,16 @@ export async function actualizarColaborador(
   colaborador: Colaborador,
 ): Promise<void> {
   verificarPermiso(actor);
-
-  if (!(await repositorio.buscarPorDni(colaborador.dni))) {
+  const existente = await repositorio.buscarPorDni(colaborador.dni);
+  if (!existente) {
     throw new Error("No existe un colaborador con ese DNI.");
+  }
+  verificarPermisoSobreGrupo(actor, existente.grupo);
+  if (colaborador.grupo !== existente.grupo) {
+    exigir(puedeConfigurarGlobalmente(actor), "Solo el Administrador del sistema puede cambiar el grupo de un colaborador.");
+  }
+  if (colaborador.activo !== existente.activo) {
+    exigir(puedeConfigurarGlobalmente(actor), "Solo el Administrador del sistema puede activar o desactivar colaboradores.");
   }
 
   await repositorio.actualizar(colaborador);
@@ -67,8 +74,18 @@ export function validarDni(dni: string): void {
   if (!FORMATO_DNI.test(dni)) throw new Error(`El DNI debe tener exactamente ${LONGITUD_DNI} dígitos.`);
 }
 
+/** Rol que puede administrar personal de algún grupo (Administrador o gerente de área con grupos). */
 export function verificarPermiso(actor: Actor): void {
-  if (actor.rol !== "administracion" && actor.rol !== "finanzas") {
-    throw new Error("No tiene permiso para administrar colaboradores.");
-  }
+  exigir(
+    actor.rol === "administrador" || (actor.rol === "gerente_de_area" && (actor.grupos?.length ?? 0) > 0),
+    "No tiene permiso para administrar colaboradores.",
+  );
+}
+
+export function verificarPermisoSobreGrupo(actor: Actor, grupo: string): void {
+  exigir(puedeAdministrarPersonalDelGrupo(actor, grupo), "No tiene permiso para administrar colaboradores de este grupo.");
+}
+
+export function verificarPermisoDeConfiguracionGlobal(actor: Actor): void {
+  exigir(puedeConfigurarGlobalmente(actor), "No tiene permiso para cambiar la configuración.");
 }

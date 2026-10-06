@@ -35,7 +35,7 @@ describe.skipIf(!databaseUrl)("decisiones y revisiones de períodos en PostgreSQ
     await db.insert(schema.grupos).values({ nombre: grupo });
     await db.insert(schema.cuentasLocales).values([
       { id: finanzasId, nombreUsuario: `finanzas-75-${sufijo}`, hashContrasena: "prueba", rol: "finanzas" },
-      { id: administracionId, nombreUsuario: `admin-75-${sufijo}`, hashContrasena: "prueba", rol: "administracion" },
+      { id: administracionId, nombreUsuario: `admin-75-${sufijo}`, hashContrasena: "prueba", rol: "administrador" },
     ]);
     await db.insert(schema.colaboradores).values({ dni, nombre: "Ana Revisión", sede: "Centro", grupo });
     const periodos = await db.insert(schema.periodosPlanilla).values([

@@ -7,6 +7,7 @@ import { crearCasosDeUsoDePlanesSemanales } from "@/turnos/casos-de-uso-planes-s
 import { publicarPlanSemanal } from "@/turnos/publicar-plan-semanal";
 import { republicarPlanSemanal } from "@/turnos/republicar-plan-semanal";
 import { repositorioDeModelosDeHorario, repositorioDeTurnos } from "@/turnos/servicio";
+import { exigir, puedeConsultarHorarios } from "@/autenticacion/permisos";
 import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
 import { esMotivoPlanificadoDeNoAsistencia, type MotivoPlanificadoDeNoAsistencia } from "@/turnos/jornada-planificada";
 
@@ -29,7 +30,13 @@ export async function publicarTurnoDesdeGrilla(formData: FormData): Promise<void
   revalidatePath("/turnos");
 }
 
+// Rechaza antes de consultar modelos de horario: la lectura previa no debe servir a un rol sin acceso a Horarios.
+async function exigirAccesoAHorarios(): Promise<void> {
+  exigir(puedeConsultarHorarios(await obtenerActorActual()), "No tiene permiso para editar planes semanales en borrador.");
+}
+
 export async function guardarCeldaDelBorrador(formData: FormData): Promise<void> {
+  await exigirAccesoAHorarios();
   const sede = obtenerTexto(formData, "sede");
   const datosDelHorario = await interpretarHorarioParaSede(obtenerTexto(formData, "horario"), sede);
   if (!datosDelHorario) throw new Error("El horario seleccionado no es válido.");
@@ -43,6 +50,7 @@ export async function guardarCeldaDelBorrador(formData: FormData): Promise<void>
 }
 
 export async function guardarBorradorDesdeGrilla(planId: string, celdasJson: string): Promise<void> {
+  await exigirAccesoAHorarios();
   let celdas: Array<{ dni: string; fecha: string; sede: string | null; modeloHorarioId?: string | null; entradaProgramada: string | null; salidaProgramada: string | null; descanso?: boolean; motivoNoAsistencia?: MotivoPlanificadoDeNoAsistencia | null }>;
   try {
     celdas = JSON.parse(celdasJson);
