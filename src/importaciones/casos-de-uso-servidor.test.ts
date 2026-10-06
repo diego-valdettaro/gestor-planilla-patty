@@ -1,6 +1,7 @@
 import * as XLSX from "xlsx";
 import { describe, expect, it } from "vitest";
 
+import type { Actor } from "@/autenticacion/permisos";
 import { crearCasosDeUsoDeImportaciones } from "./casos-de-uso-servidor";
 import type { AsistenciaExistente, ImportacionDeAsistencias, RepositorioDeImportaciones } from "./importar-semana-por-sede";
 import { parsearArchivoHuellero, type FilaDeAsistenciaImportada } from "./parsear-archivo-huellero";
@@ -15,7 +16,7 @@ function crearRepositorioEnMemoria(existentes: AsistenciaExistente[] = []): {
 } {
   const importaciones: ImportacionDeAsistencias[] = [];
   const repositorio: RepositorioDeImportaciones = {
-    buscarColaborador: async (dni) => dni === "00001024" || dni === "00002048" ? { dni } : undefined,
+    buscarColaborador: async (dni) => dni === "00001024" ? { dni, grupo: "Tiendas" } : dni === "00002048" ? { dni, grupo: "Taller" } : undefined,
     buscarSede: async (nombre) => nombre.trim().toLocaleLowerCase() === "centro" ? "Centro" : undefined,
     buscarTurnoPublicado: async (dni, fecha) => (dni === "00001024" || dni === "00002048")
       ? { dni, fecha, sede: "Centro", descanso: false, motivoNoAsistencia: null }
@@ -248,5 +249,69 @@ describe("casos de uso de importaciones", () => {
       valorAnterior: { tipo: "vacaciones", comentario: "Vacaciones anuales" },
       entradaPropuesta: "2026-09-01T09:00:00", salidaPropuesta: "2026-09-01T18:00:00",
     }]);
+  });
+});
+
+describe("importación de marcas por rol y grupo", () => {
+  const solicitud = (filas: FilaDeAsistenciaImportada[]) => ({ filas, erroresDelArchivo: [] });
+  const propia = filaValida;
+  const ajena: FilaDeAsistenciaImportada = { ...filaValida, fila: 3, dni: "00002048" };
+  const archivo = { nombre: "huellero.xlsx", ubicacion: "x", hashSha256: "h" };
+  const gerente = (...grupos: Array<[string, boolean]>) => ({
+    id: "gerente-1", rol: "gerente_de_area" as const, grupos: grupos.map(([nombre, gestionaAsistencia]) => ({ nombre, gestionaAsistencia })),
+  });
+  const con = (repositorio: RepositorioDeImportaciones, actor: Actor) =>
+    crearCasosDeUsoDeImportaciones(repositorio, { obtenerActorActual: async () => actor });
+
+  it("un gerente importa las marcas de las personas de su grupo", async () => {
+    const { importaciones, repositorio } = crearRepositorioEnMemoria();
+    const casos = con(repositorio, gerente(["Tiendas", true]));
+
+    await expect(casos.previsualizar(solicitud([propia]))).resolves.toMatchObject({ errores: [] });
+    await expect(casos.aplicar({ ...solicitud([propia]), archivo, confirmarReemplazoDeConfirmadas: false })).resolves.toEqual({ requiereConfirmacion: false, jornadas: 1 });
+    expect(importaciones).toHaveLength(1);
+  });
+
+  it("rechaza una fila de una persona de otro grupo aunque haya filas propias y no guarda nada", async () => {
+    const { importaciones, repositorio } = crearRepositorioEnMemoria();
+    const casos = con(repositorio, gerente(["Tiendas", true]));
+    const mensaje = "El colaborador no pertenece a un grupo que usted gestiona.";
+
+    const { errores } = await casos.previsualizar(solicitud([propia, ajena]));
+    expect(errores).toEqual([expect.objectContaining({ fila: 3, dni: "00002048", motivo: mensaje })]);
+    await expect(casos.aplicar({ ...solicitud([propia, ajena]), archivo, confirmarReemplazoDeConfirmadas: false })).rejects.toMatchObject({
+      errores: [expect.objectContaining({ fila: 3, motivo: mensaje })],
+    });
+    expect(importaciones).toEqual([]);
+  });
+
+  it("un gerente con varios grupos importa las personas de cualquiera de ellos", async () => {
+    const { repositorio } = crearRepositorioEnMemoria();
+    await expect(con(repositorio, gerente(["Tiendas", true], ["Taller", true])).previsualizar(solicitud([propia, ajena]))).resolves.toMatchObject({ errores: [] });
+  });
+
+  it.each([
+    ["Finanzas", { id: "f1", rol: "finanzas" as const }],
+    ["el Administrador", { id: "a1", rol: "administrador" as const }],
+  ])("%s importa filas de cualquier grupo", async (_nombre, actor) => {
+    const { importaciones, repositorio } = crearRepositorioEnMemoria();
+    const casos = con(repositorio, actor);
+
+    await expect(casos.previsualizar(solicitud([propia, ajena]))).resolves.toMatchObject({ errores: [] });
+    await casos.aplicar({ ...solicitud([propia, ajena]), archivo, confirmarReemplazoDeConfirmadas: false });
+    expect(importaciones).toHaveLength(1);
+  });
+
+  it.each([
+    ["Recursos Humanos", { id: "r1", rol: "recursos_humanos" as const }],
+    ["un gerente sin grupos", gerente()],
+    ["un gerente solo de un grupo que no gestiona asistencia", gerente(["Tiendas", false])],
+  ])("rechaza a %s al prevalidar, previsualizar y aplicar", async (_nombre, actor) => {
+    const { importaciones, repositorio } = crearRepositorioEnMemoria();
+    const casos = con(repositorio, actor);
+
+    await expect(casos.previsualizar(solicitud([propia]))).rejects.toThrow("No tiene permiso para importar asistencias.");
+    await expect(casos.aplicar({ ...solicitud([propia]), archivo, confirmarReemplazoDeConfirmadas: false })).rejects.toThrow("No tiene permiso para importar asistencias.");
+    expect(importaciones).toEqual([]);
   });
 });

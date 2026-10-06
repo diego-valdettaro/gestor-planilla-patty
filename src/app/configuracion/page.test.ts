@@ -171,6 +171,31 @@ describe("página de Configuración (/configuracion) por rol", () => {
     expect(html).not.toContain("Cambiar grupo");
   });
 
+  it("el alta de un colaborador ofrece al gerente solo sus grupos y preselecciona el único que tiene", async () => {
+    obtenerActorActual.mockResolvedValue(GERENTE_DE_TIENDAS);
+    filasDeSedes.mockReturnValue([{ nombre: "Norte", grupo: "Tiendas" }, { nombre: "Taller", grupo: "Taller" }]);
+    listarGrupos.mockResolvedValue(["Tiendas", "Taller"]);
+
+    const html = await render();
+    const selectorDeGrupo = html.match(/<label>Grupo<select[^>]*name="grupo"[^>]*>.*?<\/select>/s)?.[0] ?? "";
+
+    expect(selectorDeGrupo).toContain('value="Tiendas" selected');
+    expect(selectorDeGrupo).not.toContain("Taller");
+  });
+
+  it("el alta de un colaborador no preselecciona grupo cuando el gerente tiene varios", async () => {
+    obtenerActorActual.mockResolvedValue({ rol: "gerente_de_area", grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }, { nombre: "Taller", gestionaAsistencia: true }] });
+    filasDeSedes.mockReturnValue([{ nombre: "Norte", grupo: "Tiendas" }]);
+    listarGrupos.mockResolvedValue(["Tiendas", "Taller"]);
+
+    const html = await render();
+    const selectorDeGrupo = html.match(/<label>Grupo<select[^>]*name="grupo"[^>]*>.*?<\/select>/s)?.[0] ?? "";
+
+    expect(selectorDeGrupo).not.toMatch(/value="(Tiendas|Taller)"[^>]*selected|selected[^>]*value="(Tiendas|Taller)"/);
+    expect(selectorDeGrupo).toContain("Tiendas");
+    expect(selectorDeGrupo).toContain("Taller");
+  });
+
   it("el gerente de un grupo que no gestiona asistencia ve colaboradores pero no modelos de horario", async () => {
     obtenerActorActual.mockResolvedValue({ rol: "gerente_de_area", grupos: [{ nombre: "Administración", gestionaAsistencia: false }] });
     listarColaboradores.mockResolvedValue([{ dni: "00000003", nombre: "Hugo Oficina", sede: "Oficina", grupo: "Administración", activo: true }]);

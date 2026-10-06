@@ -50,4 +50,15 @@ describe("acciones de Horarios (borde del servidor)", () => {
     await expect(publicarPlanSemanalDesdeGrilla(formulario({ planId: "p1", dni: "00000001" })))
       .rejects.toThrow(/relación laboral confirmada por Recursos Humanos.*registre y confirme/);
   });
+
+  it("un gerente de Tiendas no edita, publica ni republica el plan semanal del grupo Taller", async () => {
+    simulacro.actor.mockResolvedValue({ id: "g4", rol: "gerente_de_area", grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] });
+    simulacro.repositorioDeTurnos.buscarPorId.mockResolvedValue({ id: "p9", semana: "2026-09-07", equipo: "Taller", celdas: [] });
+
+    await expect(guardarCeldaDelBorrador(formulario({ sede: "Lima", horario: "descanso", planId: "p9", dni: "00000001", fecha: "2026-09-07" }))).rejects.toThrow("No tiene permiso para editar planes semanales de este grupo.");
+    await expect(guardarBorradorDesdeGrilla("p9", "[]")).rejects.toThrow("No tiene permiso para editar planes semanales de este grupo.");
+    await expect(borrarCeldaDelBorrador(formulario({ planId: "p9", dni: "00000001", fecha: "2026-09-07" }))).rejects.toThrow("No tiene permiso para editar planes semanales de este grupo.");
+    await expect(publicarPlanSemanalDesdeGrilla(formulario({ planId: "p9", dni: "00000001" }))).rejects.toThrow("No tiene permiso para publicar planes semanales de este grupo.");
+    await expect(republicarPlanSemanalDesdeGrilla(formulario({ planId: "p9", dni: "00000001", motivo: "Corrección" }))).rejects.toThrow("No tiene permiso para republicar horarios semanales de este grupo.");
+  });
 });

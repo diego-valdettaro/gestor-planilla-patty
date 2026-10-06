@@ -65,6 +65,12 @@ export function puedeImportarMarcas(actor: Actor): boolean {
   return actor.rol === "administrador" || actor.rol === "finanzas" || gerenteConGrupoQueGestionaAsistencia(actor);
 }
 
+/** Marcas de una persona de un grupo: Finanzas y el Administrador las importan de cualquier grupo; un gerente, solo de los grupos que opera. */
+export function puedeImportarMarcasDelGrupo(actor: Actor, grupo: string): boolean {
+  if (actor.rol === "administrador" || actor.rol === "finanzas") return true;
+  return puedeOperarAsistenciaDelGrupo(actor, grupo);
+}
+
 export function puedeConsultarAsistencias(actor: Actor): boolean {
   return actor.rol === "administrador" || actor.rol === "finanzas" || gerenteConGrupoQueGestionaAsistencia(actor);
 }
