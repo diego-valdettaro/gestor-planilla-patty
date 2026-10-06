@@ -6,7 +6,7 @@ import type { PlanSemanalEnBorrador, RepositorioDePlanesSemanales } from "./plan
 const semana = "2026-09-07";
 const plan: PlanSemanalEnBorrador = { id: "plan-1", semana, equipo: "Tiendas", celdas: [] };
 
-function crearContexto() {
+function crearContexto(vigencias = [{ ingreso: "2026-01-01", cese: null as string | null }]) {
   const guardadas: PlanSemanalEnBorrador["celdas"] = [];
   const modelos = new Map([
     ["modelo-sur", { id: "modelo-sur", sede: "Sur", nombre: "Apertura", entrada: "09:00", salida: "18:00", activo: true }],
@@ -17,6 +17,7 @@ function crearContexto() {
     buscarPorId: async () => ({ ...plan, celdas: guardadas }),
     guardarCelda: async (celda) => { guardadas.push(celda); },
     colaboradorPerteneceAEquipo: async (dni, grupo) => dni === "00000011" && grupo === "Tiendas",
+    listarVigenciasConfirmadas: async () => vigencias,
     sedeActivaPerteneceAlGrupo: async (sede, grupo) => grupo === "Tiendas" && (sede === "Norte" || sede === "Sur"),
     buscarModeloDeHorario: async (id) => modelos.get(id),
     buscarPublicado: async () => undefined,
@@ -107,5 +108,47 @@ describe("planificacion diaria por grupo", () => {
       descanso: true,
       motivoNoAsistencia: "descanso",
     } as never)).rejects.toThrow("Una no asistencia planificada no tiene sede, modelo ni horas.");
+  });
+
+  it("rechaza en el borrador una jornada anterior al ingreso confirmado y solo admite «Sin relación laboral» ese día", async () => {
+    const { casosDeUso, guardadas } = crearContexto([{ ingreso: "2026-09-09", cese: null }]);
+    const sinRelacion = { dni: "00000011", fecha: semana, sede: null, modeloHorarioId: null, entradaProgramada: null, salidaProgramada: null, descanso: true, motivoNoAsistencia: "sin_relacion_laboral" } as const;
+
+    await expect(casosDeUso.guardarCelda(plan.id, { ...sinRelacion, descanso: false, motivoNoAsistencia: null, sede: "Sur", entradaProgramada: "09:00", salidaProgramada: "18:00" }))
+      .rejects.toThrow("fuera de la relación laboral confirmada");
+    await expect(casosDeUso.guardarCelda(plan.id, { ...sinRelacion, descanso: true, motivoNoAsistencia: "descanso" }))
+      .rejects.toThrow("solo puede registrarse «Sin relación laboral»");
+    await casosDeUso.guardarCelda(plan.id, sinRelacion);
+    expect(guardadas).toEqual([expect.objectContaining({ motivoNoAsistencia: "sin_relacion_laboral" })]);
+  });
+
+  it("rechaza «Sin relación laboral» en un día dentro de la relación, incluso en un día de descanso", async () => {
+    const { casosDeUso, guardadas } = crearContexto([{ ingreso: "2026-01-01", cese: null }]);
+
+    await expect(casosDeUso.guardarCelda(plan.id, { dni: "00000011", fecha: semana, sede: null, modeloHorarioId: null, entradaProgramada: null, salidaProgramada: null, descanso: true, motivoNoAsistencia: "sin_relacion_laboral" }))
+      .rejects.toThrow("dentro de una relación laboral confirmada");
+    expect(guardadas).toEqual([]);
+  });
+
+  it("rechaza trabajar después del cese confirmado", async () => {
+    const { casosDeUso } = crearContexto([{ ingreso: "2026-01-01", cese: "2026-09-08" }]);
+
+    await expect(casosDeUso.guardarCelda(plan.id, { dni: "00000011", fecha: "2026-09-09", sede: "Sur", modeloHorarioId: null, entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false, motivoNoAsistencia: null }))
+      .rejects.toThrow("09/09/2026 está fuera de la relación laboral confirmada");
+  });
+
+  it("en el borrador rechaza una jornada fuera de la relación laboral confirmada y solo admite «Sin relación laboral» allí", async () => {
+    const { casosDeUso, guardadas } = crearContexto([{ ingreso: "2026-09-09", cese: null }]);
+    const vacia = { dni: "00000011", sede: null, modeloHorarioId: null, entradaProgramada: null, salidaProgramada: null };
+
+    await expect(casosDeUso.guardarCelda(plan.id, { ...vacia, fecha: "2026-09-08", sede: "Sur", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false, motivoNoAsistencia: null }))
+      .rejects.toThrow("fuera de la relación laboral confirmada");
+    await expect(casosDeUso.guardarCelda(plan.id, { ...vacia, fecha: "2026-09-08", descanso: true, motivoNoAsistencia: "vacaciones" }))
+      .rejects.toThrow("solo puede registrarse «Sin relación laboral»");
+    await casosDeUso.guardarCelda(plan.id, { ...vacia, fecha: "2026-09-08", descanso: true, motivoNoAsistencia: "sin_relacion_laboral" });
+    await expect(casosDeUso.guardarCelda(plan.id, { ...vacia, fecha: "2026-09-10", descanso: true, motivoNoAsistencia: "sin_relacion_laboral" }))
+      .rejects.toThrow("dentro de una relación laboral confirmada");
+
+    expect(guardadas.map(({ fecha, motivoNoAsistencia }) => ({ fecha, motivoNoAsistencia }))).toEqual([{ fecha: "2026-09-08", motivoNoAsistencia: "sin_relacion_laboral" }]);
   });
 });

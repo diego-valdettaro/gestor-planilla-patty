@@ -10,7 +10,9 @@ import {
   puedeConsultarAsistencias,
   puedeConsultarConfiguracion,
   puedeConsultarHorarios,
+  puedeConsultarRelacionesLaborales,
   puedeGestionarPeriodos,
+  puedeGestionarRelacionesLaborales,
   puedeImportarMarcas,
   puedeOperarAsistenciaDelGrupo,
   puedeRevisarAsistencias,
@@ -105,6 +107,36 @@ describe("límite por grupo", () => {
 
   it("un actor sin grupos cargados se trata como sin grupos", () => {
     expect(puedeOperarAsistenciaDelGrupo({ id: "x", rol: "gerente_de_area" }, "Tiendas")).toBe(false);
+  });
+});
+
+describe("relaciones laborales", () => {
+  it("solo Recursos Humanos y el Administrador registran y confirman ingreso y cese", () => {
+    expect(puedeGestionarRelacionesLaborales(recursosHumanos)).toBe(true);
+    expect(puedeGestionarRelacionesLaborales(administrador)).toBe(true);
+    for (const quien of [finanzas, gerenteDeTiendas, gerenteDeVariosGrupos, gerenteDeAdministracion, gerenteSinGrupos]) {
+      expect(puedeGestionarRelacionesLaborales(quien)).toBe(false);
+    }
+  });
+
+  it("Finanzas las consulta en solo lectura; los gerentes de área no", () => {
+    expect(puedeConsultarRelacionesLaborales(finanzas)).toBe(true);
+    expect(puedeConsultarRelacionesLaborales(recursosHumanos)).toBe(true);
+    expect(puedeConsultarRelacionesLaborales(administrador)).toBe(true);
+    for (const quien of [gerenteDeTiendas, gerenteDeAdministracion, gerenteSinGrupos]) {
+      expect(puedeConsultarRelacionesLaborales(quien)).toBe(false);
+    }
+  });
+
+  it("Recursos Humanos no recibe ningún otro permiso", () => {
+    expect(puedeAdministrarCuentas(recursosHumanos)).toBe(false);
+    expect(puedeConfigurarGlobalmente(recursosHumanos)).toBe(false);
+    expect(puedeConsultarConfiguracion(recursosHumanos)).toBe(false);
+    expect(puedeConsultarHorarios(recursosHumanos)).toBe(false);
+    expect(puedeConsultarAsistencias(recursosHumanos)).toBe(false);
+    expect(puedeGestionarPeriodos(recursosHumanos)).toBe(false);
+    expect(puedeImportarMarcas(recursosHumanos)).toBe(false);
+    expect(puedeRevisarAsistencias(recursosHumanos)).toBe(false);
   });
 });
 

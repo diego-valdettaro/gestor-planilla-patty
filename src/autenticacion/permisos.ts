@@ -98,3 +98,13 @@ export function puedeAdministrarPersonalDelGrupo(actor: Actor, grupo: string): b
   if (actor.rol === "administrador") return true;
   return gruposDe(actor).some((asignado) => asignado.nombre === grupo);
 }
+
+/** Registrar y confirmar el ingreso y el cese de las relaciones laborales: Recursos Humanos y, como superusuario temporal, el Administrador. */
+export function puedeGestionarRelacionesLaborales(actor: Actor): boolean {
+  return actor.rol === "administrador" || actor.rol === "recursos_humanos";
+}
+
+/** Consultar las relaciones laborales y quién está vigente en una fecha: además, Finanzas en solo lectura (Pagos toma de ahí su población). */
+export function puedeConsultarRelacionesLaborales(actor: Actor): boolean {
+  return puedeGestionarRelacionesLaborales(actor) || actor.rol === "finanzas";
+}

@@ -7,6 +7,7 @@ import { Pool } from "pg";
 import { afterAll, describe, expect, it } from "vitest";
 
 import * as schema from "@/db/schema";
+import { eliminarRelacionesDePrueba, registrarRelacionConfirmadaDePrueba } from "@/relaciones-laborales/relacion-de-prueba";
 
 import { RepositorioPostgresDeGrupos } from "./repositorio-postgres-grupos";
 import { RepositorioPostgresDeTurnos } from "./repositorio-postgres";
@@ -37,6 +38,7 @@ describe.skipIf(!databaseUrl)("grupos persistidos", () => {
     await db.delete(schema.turnosPublicados).where(and(eq(schema.turnosPublicados.dni, colaborador), inArray(schema.turnosPublicados.fecha, fechas)));
     await db.delete(schema.periodosPlanilla).where(eq(schema.periodosPlanilla.inicio, "2031-01-01"));
     await db.delete(schema.cuentasLocales).where(eq(schema.cuentasLocales.id, cuenta));
+    await eliminarRelacionesDePrueba(db, [colaborador]);
     await db.delete(schema.colaboradores).where(eq(schema.colaboradores.dni, colaborador));
     await db.delete(schema.sedes).where(eq(schema.sedes.nombre, sede));
     await db.delete(schema.grupos).where(eq(schema.grupos.nombre, grupo));
@@ -53,6 +55,7 @@ describe.skipIf(!databaseUrl)("grupos persistidos", () => {
   it("asigna una sede a un grupo dinámico y permite planificar a su colaborador", async () => {
     await db.insert(schema.sedes).values({ nombre: sede, grupo });
     await db.insert(schema.colaboradores).values({ dni: colaborador, nombre: "Prueba grupo", sede, grupo, activo: true });
+    await registrarRelacionConfirmadaDePrueba(db, colaborador);
 
     await expect(turnos.listarColaboradoresActivosPorEquipo(grupo)).resolves.toEqual([
       expect.objectContaining({ dni: colaborador, sede }),

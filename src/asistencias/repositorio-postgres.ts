@@ -16,6 +16,7 @@ import type {
   TurnoParaConfirmar,
 } from "./confirmar-y-ajustar-asistencia";
 import { calcularMinutosTrabajados } from "./confirmar-y-ajustar-asistencia";
+import type { MotivoPlanificadoDeNoAsistencia } from "./estado-manual";
 import type { EstadoDeHoraExtra } from "./calcular-hora-extra";
 import { lunesDeLaSemana } from "./calcular-hora-extra";
 import { recalcularHorasExtraDeSemana } from "./recalcular-horas-extra-de-semana";
@@ -78,6 +79,10 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
 
         const jornadasPendientes = filas.filter(({ estado }) => estado === "pendiente").sort((a, b) => a.fecha.localeCompare(b.fecha));
         for (const fila of jornadasPendientes) {
+          if (fila.motivoNoAsistencia === "sin_relacion_laboral") {
+            // Un día fuera de la relación laboral no tiene asistencia por registrar; nunca debería haber una pendiente.
+            throw new Error(`${fila.dni}, ${fila.fecha}: la jornada «Sin relación laboral» no requiere asistencia.`);
+          }
           if (fila.motivoNoAsistencia || fila.descanso) {
             const [actualizada] = await tx.update(asistenciasEsperadas).set({ estado: "manual" }).where(and(
               eq(asistenciasEsperadas.dni, fila.dni),
@@ -305,7 +310,7 @@ interface FilaParaConfirmarPorRango {
   entradaProgramada: string | null;
   salidaProgramada: string | null;
   descanso: boolean;
-  motivoNoAsistencia: "descanso" | "feriado" | "vacaciones" | "permiso" | "suspension" | null;
+  motivoNoAsistencia: MotivoPlanificadoDeNoAsistencia | null;
   enPeriodoCerrado: boolean;
   enPeriodoAbierto: boolean;
 }

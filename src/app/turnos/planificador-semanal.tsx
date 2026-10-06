@@ -6,9 +6,11 @@ import { useRouter } from "next/navigation";
 import { IconoCandado } from "@/app/icono-candado";
 import type { Grupo } from "@/turnos/configurar-equipos-operativos";
 import type { ModeloDeHorario } from "@/turnos/gestionar-modelos-de-horario";
-import { MOTIVOS_PLANIFICADOS_DE_NO_ASISTENCIA, esMotivoPlanificadoDeNoAsistencia, type MotivoPlanificadoDeNoAsistencia } from "@/turnos/jornada-planificada";
+import { estaVigenteEn, type Vigencia } from "@/relaciones-laborales/vigencia";
+import { MOTIVOS_ELEGIBLES_DE_NO_ASISTENCIA, esMotivoPlanificadoDeNoAsistencia, type MotivoPlanificadoDeNoAsistencia } from "@/turnos/jornada-planificada";
 import type { CeldaDePlanSemanalEnBorrador, HorarioSemanalParaCopiar } from "@/turnos/plan-semanal-en-borrador";
 import { inicioDeSemana } from "@/turnos/semana";
+import { ajustarSemanaALaRelacionLaboral } from "@/turnos/semana-con-relacion-laboral";
 
 import { guardarBorradorDesdeGrilla, publicarPlanSemanalDesdeGrilla, republicarPlanSemanalDesdeGrilla } from "./actions";
 import { ESTADOS_DE_HORARIO, type EstadoDeHorario, NOMBRE_DEL_ESTADO_DE_HORARIO, difiereDelPublicado, estadoDeCelda, estadoDeSemana } from "./estado-de-celda";
@@ -22,8 +24,8 @@ type Publicado = HorarioSemanalParaCopiar;
 type Confirmacion = { tipo: "cambiar-semana"; destino: string } | { tipo: "publicar" } | { tipo: "republicar"; dni: string; nombre: string };
 type ResultadoDeDia = "laboral" | MotivoPlanificadoDeNoAsistencia;
 
-export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, equipo, colaboradores, dias, celdasIniciales, publicados, procesados, modelos, sedes, soloLectura = false }: {
-  actualizadoEn?: string; equipos: Grupo[]; planId: string; semana: string; equipo: Grupo; colaboradores: Colaborador[]; dias: string[]; celdasIniciales: Celda[]; publicados: Publicado[]; procesados: string[]; modelos: Modelo[]; sedes: string[]; soloLectura?: boolean;
+export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, equipo, colaboradores, dias, celdasIniciales, publicados, procesados, modelos, sedes, vigencias = {}, soloLectura = false }: {
+  actualizadoEn?: string; equipos: Grupo[]; planId: string; semana: string; equipo: Grupo; colaboradores: Colaborador[]; dias: string[]; celdasIniciales: Celda[]; publicados: Publicado[]; procesados: string[]; modelos: Modelo[]; sedes: string[]; vigencias?: Record<string, Vigencia[]>; soloLectura?: boolean;
 }) {
   const router = useRouter();
   const dialogoPersonalizado = useRef<HTMLDialogElement>(null);
@@ -32,7 +34,9 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
   const dialogoCompletarSemana = useRef<HTMLDialogElement>(null);
   const numeroDeAperturaPersonalizada = useRef(0);
   const numeroDeAperturaCompletarSemana = useRef(0);
-  const [celdas, setCeldas] = useState(celdasIniciales);
+  const [celdasEditadas, setCeldas] = useState(celdasIniciales);
+  // Los días fuera de la relación laboral confirmada son «Sin relación laboral» y no se editan (ADR 0012).
+  const celdas = useMemo(() => celdasAjustadasALaRelacion(celdasEditadas, colaboradores, dias, vigencias), [celdasEditadas, colaboradores, dias, vigencias]);
   const [cambios, setCambios] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [publicando, setPublicando] = useState(false);
@@ -56,15 +60,16 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
   const publicadosCompletos = useMemo(() => colaboradores.filter(({ dni }) => estaPublicadaLaSemana(dni, dias, publicadosPorClave)).length, [colaboradores, dias, publicadosPorClave]);
   const planificacionPublicada = publicadosCompletos === colaboradores.length && colaboradores.length > 0;
   const resumenesPorColaborador = useMemo(
-    () => new Map(colaboradores.map((colaborador) => [colaborador.dni, resumenSemanalDe(colaborador.dni, dias, porClave, publicadosPorClave, procesadosPorId)])),
-    [colaboradores, dias, porClave, publicadosPorClave, procesadosPorId],
+    () => new Map(colaboradores.map((colaborador) => [colaborador.dni, resumenSemanalDe(colaborador.dni, dias, porClave, publicadosPorClave, procesadosPorId, vigencias[colaborador.dni] ?? [])])),
+    [colaboradores, dias, porClave, publicadosPorClave, procesadosPorId, vigencias],
   );
+  const sinRelacionEnLaSemana = useMemo(() => colaboradores.filter(({ dni }) => { const semana = resumenesPorColaborador.get(dni)!; return semana.semanaSinRelacionLaboral && !semana.semanaPublicada; }), [colaboradores, resumenesPorColaborador]);
   const idsElegiblesParaPublicar = useMemo(() => colaboradores
     .filter(({ dni }) => esElegibleParaPublicar(resumenesPorColaborador.get(dni)!))
     .map(({ dni }) => dni), [colaboradores, resumenesPorColaborador]);
   const elegiblesParaPublicar = useMemo(() => new Set(idsElegiblesParaPublicar), [idsElegiblesParaPublicar]);
   const seleccionados = useMemo(() => seleccionEfectiva(idsElegiblesParaPublicar, overridesDeSeleccion), [idsElegiblesParaPublicar, overridesDeSeleccion]);
-  const motivosDeAccionesDeshabilitadas = [!cambios && !guardando ? "Guardar borrador está deshabilitado porque no hay cambios sin guardar." : "", !seleccionados.size && !publicando ? "Publicar planificación está deshabilitado porque no hay colaboradores marcados para publicar." : ""].filter(Boolean).join(" ");
+  const motivosDeAccionesDeshabilitadas = [!cambios && !guardando ? "Guardar borrador está deshabilitado porque no hay cambios sin guardar." : "", !seleccionados.size && !publicando ? `Publicar planificación está deshabilitado porque no hay colaboradores marcados para publicar.${sinRelacionEnLaSemana.length ? " Recursos Humanos debe confirmar la relación laboral de quienes no la tienen en esta semana." : ""}` : ""].filter(Boolean).join(" ");
   const estadoDeLaPlanificacion = useMemo<EstadoDeHorario>(() => {
     if (!colaboradores.length) return "borrador-editable";
     const estados = new Set([...resumenesPorColaborador.values()].map((item) => item.estado));
@@ -76,7 +81,7 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
 
   function opcionesDeCelda() {
     return [
-      ...MOTIVOS_PLANIFICADOS_DE_NO_ASISTENCIA.map((motivo) => ({ value: `motivo:${motivo}`, label: ETIQUETA_DE_MOTIVO[motivo] })),
+      ...MOTIVOS_ELEGIBLES_DE_NO_ASISTENCIA.map((motivo) => ({ value: `motivo:${motivo}`, label: ETIQUETA_DE_MOTIVO[motivo] })),
       ...modelos.filter((modelo) => modelo.activo).map((modelo) => ({ value: `modelo:${modelo.id}`, label: `${modelo.sede} · ${modelo.nombre} · ${modelo.entrada} a ${modelo.salida}` })),
       { value: "personalizado", label: "Horario personalizado…" },
       { value: "", label: "Quitar asignación" },
@@ -182,7 +187,9 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
     }
     let nuevas: Celda[];
     try {
-      nuevas = celdasDeSemanaCompleta(completarSemana.colaborador.dni, dias, resultados, modelo);
+      const vigenciasDeLaPersona = vigencias[completarSemana.colaborador.dni] ?? [];
+      const diasDentro = dias.filter((fecha) => estaVigenteEn(vigenciasDeLaPersona, fecha));
+      nuevas = celdasDeSemanaCompleta(completarSemana.colaborador.dni, diasDentro, resultados, modelo);
     } catch (causa) {
       setError(causa instanceof Error ? causa.message : "No se pudo completar la semana.");
       return;
@@ -233,6 +240,10 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
     if (mostrado?.motivoNoAsistencia || mostrado?.descanso) clases.push("descanso");
     if (!mostrado) clases.push("vacia");
     const descripcion = `Horario de ${colaborador.nombre} para ${fecha}: ${descripcionDeCelda(mostrado)}. ${NOMBRE_DEL_ESTADO_DE_HORARIO[estado]}`;
+    // Fuera de la relación laboral confirmada la celda es fija: la fija el sistema, no el gerente.
+    if (!estaVigenteEn(vigencias[colaborador.dni] ?? [], fecha)) return <td className={`${clases.join(" ")} fuera-de-relacion`} key={fecha}>
+      <span className={`chip-turno estado-color-${estado}`}><span className="sr-only">{`${descripcion}. Fuera de la relación laboral confirmada por Recursos Humanos; no se puede editar.`}</span><b>Sin relación laboral</b></span>
+    </td>;
     if (soloLectura) return <td className={clases.join(" ")} key={fecha}>
       <span className={`chip-turno estado-color-${estado}`}><span className="sr-only">{descripcion}</span>{contenidoDeChip(mostrado)}</span>
     </td>;
@@ -269,7 +280,7 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
       {error && <p className="mensaje-operacion error" role="alert">{error}</p>}
     </div>
     <div className="titulo-grilla"><h2>Grupo {equipo}</h2><span>{colaboradores.length} colaboradores · {sedes.length} {sedes.length === 1 ? "sede" : "sedes"}</span><span className="aviso-desplazamiento">Desplácese horizontalmente para ver la semana completa.</span></div><ul aria-label="Estados de la planificación" className="leyenda-estados leyenda-plan">{ESTADOS_DE_HORARIO.map((estado) => <li className={`estado-color-${estado}`} key={estado}><EtiquetaEstado estado={estado} /></li>)}</ul><div className="tabla-plan-semanal"><table><thead><tr><th>Colaborador</th>{dias.map((fecha) => <th key={fecha}>{new Intl.DateTimeFormat("es-PE", { weekday: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${fecha}T00:00:00Z`))}</th>)}</tr></thead><tbody>
-      {colaboradores.map((colaborador) => { const semana = resumenesPorColaborador.get(colaborador.dni)!; return <tr key={colaborador.dni}><th scope="row"><div className="persona"><span className="ini">{iniciales(colaborador.nombre)}</span><span>{colaborador.nombre}<small><EtiquetaEstado estado={semana.estado} /></small>{!soloLectura && elegiblesParaPublicar.has(colaborador.dni) && <label className="checkbox-publicar-fila"><input checked={seleccionados.has(colaborador.dni)} disabled={publicando} onChange={(evento) => alternarSeleccion(colaborador.dni, evento.target.checked)} type="checkbox" />Publicar</label>}{!soloLectura && !semana.semanaLiquidada && <button aria-haspopup="dialog" className="boton-secundario" disabled={publicando} onClick={() => abrirCompletarSemana(colaborador)} type="button">Completar semana</button>}{!soloLectura && semana.tieneCambiosSinPublicar && !semana.semanaLiquidada && <button className="boton-secundario" disabled={publicando} onClick={() => pedirConfirmacion({ tipo: "republicar", dni: colaborador.dni, nombre: colaborador.nombre })} type="button">Republicar cambios</button>}</span></div></th>{dias.map((fecha) => renderCelda(colaborador, fecha, semana.semanaLiquidada))}</tr>; })}
+      {colaboradores.map((colaborador) => { const semana = resumenesPorColaborador.get(colaborador.dni)!; return <tr key={colaborador.dni}><th scope="row"><div className="persona"><span className="ini">{iniciales(colaborador.nombre)}</span><span>{colaborador.nombre}<small><EtiquetaEstado estado={semana.estado} /></small>{semana.semanaSinRelacionLaboral && !semana.semanaPublicada && <small className="aviso-sin-relacion">No se puede publicar: no tiene una relación laboral confirmada en esta semana. Recursos Humanos debe registrar y confirmar su ingreso.</small>}{!soloLectura && elegiblesParaPublicar.has(colaborador.dni) && <label className="checkbox-publicar-fila"><input checked={seleccionados.has(colaborador.dni)} disabled={publicando} onChange={(evento) => alternarSeleccion(colaborador.dni, evento.target.checked)} type="checkbox" />Publicar</label>}{!soloLectura && !semana.semanaLiquidada && <button aria-haspopup="dialog" className="boton-secundario" disabled={publicando} onClick={() => abrirCompletarSemana(colaborador)} type="button">Completar semana</button>}{!soloLectura && semana.tieneCambiosSinPublicar && !semana.semanaLiquidada && <button className="boton-secundario" disabled={publicando} onClick={() => pedirConfirmacion({ tipo: "republicar", dni: colaborador.dni, nombre: colaborador.nombre })} type="button">Republicar cambios</button>}</span></div></th>{dias.map((fecha) => renderCelda(colaborador, fecha, semana.semanaLiquidada))}</tr>; })}
     </tbody></table></div>
     <footer className="pie-plan-semanal"><p><strong>{resumen.asignadas} de {resumen.total} días asignados</strong>{!soloLectura && <span>{textoDeCobertura(resumen.faltantesPorColaborador.length, seleccionados.size)}</span>}</p>{!soloLectura && <div><button aria-describedby={motivosDeAccionesDeshabilitadas ? "motivo-acciones-plan" : undefined} className="boton-secundario" disabled={!cambios || guardando} onClick={guardar} type="button">Guardar borrador</button><button aria-describedby={motivosDeAccionesDeshabilitadas ? "motivo-acciones-plan" : undefined} className="boton-principal" disabled={publicando || !seleccionados.size} onClick={solicitarPublicacion} type="button">Publicar planificación</button></div>}</footer>
     {!soloLectura && <>
@@ -278,10 +289,10 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
     <dialog aria-labelledby="titulo-dialogo-personalizado" ref={dialogoPersonalizado}><form action={guardarPersonalizado} key={personalizado ? `${personalizado.colaborador.dni}:${personalizado.fecha}:${personalizado.apertura}` : "sin-personalizar"}><h2 id="titulo-dialogo-personalizado">Horario personalizado</h2><label>Sede<select defaultValue={personalizado?.celda?.sede ?? sedes[0]} name="sede" required>{sedes.map((sede) => <option key={sede} value={sede}>{sede}</option>)}</select></label><label>Entrada<input defaultValue={personalizado?.celda?.entradaProgramada ?? "09:00"} name="entrada" type="time" required /></label><label>Salida<input defaultValue={personalizado?.celda?.salidaProgramada ?? "18:00"} name="salida" type="time" required /></label><button className="boton-principal" type="submit">Usar horario</button><button className="boton-secundario" onClick={cerrarPersonalizado} type="button">Cancelar</button></form></dialog>
     <dialog aria-labelledby="titulo-dialogo-completar-semana" className="dialogo-confirmacion dialogo-completar-semana" ref={dialogoCompletarSemana}><form action={confirmarCompletarSemana} key={completarSemana ? `${completarSemana.colaborador.dni}:${completarSemana.apertura}` : "sin-completar"}>
       <h2 id="titulo-dialogo-completar-semana">Completar semana de {completarSemana?.colaborador.nombre ?? ""}</h2>
-      <p>Elija la sede y el modelo por defecto, y decida qué días son laborales o un motivo de no asistencia. Confirmar reemplaza los siete días editables de esta fila.</p>
+      <p>Elija la sede y el modelo por defecto, y decida qué días son laborales o un motivo de no asistencia. Confirmar reemplaza los días editables de esta fila; los días fuera de la relación laboral confirmada quedan «Sin relación laboral».</p>
       <label>Sede por defecto<select defaultValue={sedes[0] ?? ""} name="sede" onChange={(evento) => setSedeCompletarSemana(evento.target.value)} required>{sedes.map((sede) => <option key={sede} value={sede}>{sede}</option>)}</select></label>
       <label>Modelo por defecto (solo necesario para los días laborales)<select key={sedeCompletarSemana} name="modelo">{modelos.filter((modelo) => modelo.activo && modelo.sede === sedeCompletarSemana).map((modelo) => <option key={modelo.id} value={modelo.id}>{modelo.nombre} · {modelo.entrada} a {modelo.salida}</option>)}</select></label>
-      <div className="dias-completar-semana">{dias.map((fecha) => <label key={fecha}>{formatearDiaLargo(fecha)}<select defaultValue="laboral" name={`dia-${fecha}`}><option value="laboral">Laboral</option>{MOTIVOS_PLANIFICADOS_DE_NO_ASISTENCIA.map((motivo) => <option key={motivo} value={motivo}>{ETIQUETA_DE_MOTIVO[motivo]}</option>)}</select></label>)}</div>
+      <div className="dias-completar-semana">{dias.map((fecha) => <label key={fecha}>{formatearDiaLargo(fecha)}{completarSemana && !estaVigenteEn(vigencias[completarSemana.colaborador.dni] ?? [], fecha) ? <select aria-label={`${formatearDiaLargo(fecha)}: Sin relación laboral`} defaultValue="sin_relacion_laboral" disabled><option value="sin_relacion_laboral">Sin relación laboral</option></select> : <select defaultValue="laboral" name={`dia-${fecha}`}><option value="laboral">Laboral</option>{MOTIVOS_ELEGIBLES_DE_NO_ASISTENCIA.map((motivo) => <option key={motivo} value={motivo}>{ETIQUETA_DE_MOTIVO[motivo]}</option>)}</select>}</label>)}</div>
       <div className="acciones-dialogo"><button className="boton-secundario" onClick={cerrarCompletarSemana} type="button">Cancelar</button><button className="boton-principal" type="submit">Completar semana</button></div>
     </form></dialog>
     </>}
@@ -315,6 +326,7 @@ const ETIQUETA_DE_MOTIVO: Record<MotivoPlanificadoDeNoAsistencia, string> = {
   vacaciones: "Vacaciones",
   permiso: "Permiso",
   suspension: "Suspensión",
+  sin_relacion_laboral: "Sin relación laboral",
 };
 function crearDesdeModelo(dni: string, fecha: string, modelo: Modelo): Celda { return { dni, fecha, sede: modelo.sede, modeloHorarioId: modelo.id, entradaProgramada: modelo.entrada, salidaProgramada: modelo.salida, descanso: false, motivoNoAsistencia: null }; }
 function crearNoAsistencia(dni: string, fecha: string, motivoNoAsistencia: MotivoPlanificadoDeNoAsistencia): Celda { return { dni, fecha, sede: null, modeloHorarioId: null, entradaProgramada: null, salidaProgramada: null, descanso: true, motivoNoAsistencia }; }
@@ -334,6 +346,14 @@ export function valorDe(celda: Celda | Publicado | undefined) {
   if (celda?.motivoNoAsistencia) return `motivo:${celda.motivoNoAsistencia}`;
   if (celda?.modeloHorarioId) return `modelo:${celda.modeloHorarioId}`;
   return celda ? "personalizado" : "";
+}
+// Celdas del plan ajustadas a la relación laboral confirmada de cada persona: días fuera = «Sin relación laboral».
+export function celdasAjustadasALaRelacion(celdas: Celda[], colaboradores: Colaborador[], dias: string[], vigencias: Record<string, Vigencia[]>): Celda[] {
+  const conocidos = new Set(colaboradores.map(({ dni }) => dni));
+  return [
+    ...celdas.filter(({ dni }) => !conocidos.has(dni)),
+    ...colaboradores.flatMap(({ dni }) => ajustarSemanaALaRelacionLaboral(vigencias[dni] ?? [], dni, dias, celdas.filter((celda) => celda.dni === dni)) as Celda[]),
+  ];
 }
 function iniciales(nombre: string) { return nombre.split(/\s+/).map((parte) => parte[0]).join("").slice(0, 2).toUpperCase(); }
 function formatearFecha(valor: string) { return new Intl.DateTimeFormat("es-PE", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(valor)); }
@@ -381,13 +401,14 @@ function hayCambiosSinPublicar(dni: string, dias: string[], celdas: Map<string, 
 
 // Estado de la semana de un colaborador, más los intermedios que la fila también necesita
 // (incluida su elegibilidad para el checkbox de publicación selectiva).
-function resumenSemanalDe(dni: string, dias: string[], celdas: Map<string, Celda>, publicados: Map<string, Publicado>, liquidadas: Set<string>) {
+function resumenSemanalDe(dni: string, dias: string[], celdas: Map<string, Celda>, publicados: Map<string, Publicado>, liquidadas: Set<string>, vigencias: Vigencia[]) {
   const semanaPublicada = estaPublicadaLaSemana(dni, dias, publicados);
   const semanaLiquidada = liquidadas.has(dni);
   const tieneCambiosSinPublicar = semanaPublicada && hayCambiosSinPublicar(dni, dias, celdas, publicados);
   const filaCompleta = filaCompletaDe(dni, dias, celdas, publicados);
+  const semanaSinRelacionLaboral = !dias.some((fecha) => estaVigenteEn(vigencias, fecha));
   return {
-    semanaPublicada, semanaLiquidada, tieneCambiosSinPublicar, filaCompleta,
+    semanaPublicada, semanaLiquidada, tieneCambiosSinPublicar, filaCompleta, semanaSinRelacionLaboral,
     estado: estadoDeSemana({ semanaPublicada, semanaLiquidada, hayCambiosSinPublicar: tieneCambiosSinPublicar }),
   };
 }

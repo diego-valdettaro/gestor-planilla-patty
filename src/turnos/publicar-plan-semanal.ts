@@ -3,8 +3,11 @@ import { exigir, puedeConsultarHorarios, puedeOperarAsistenciaDelGrupo } from "@
 
 import type { PlanSemanalEnBorrador, RepositorioDePlanesSemanales } from "./plan-semanal-en-borrador";
 import type { RepositorioDeTurnos, TurnoPublicado } from "./publicar-turno-semanal";
+import { verificarQueLaSemanaTengaRelacion } from "@/relaciones-laborales/vigencia";
+
 import { validarJornadaPlanificada } from "./jornada-planificada";
 import { diasDeLaSemana } from "./semana";
+import { ajustarSemanaALaRelacionLaboral } from "./semana-con-relacion-laboral";
 
 export interface ErrorDePublicacionDePlan {
   dni: string;
@@ -27,9 +30,8 @@ export async function publicarPlanSemanal(
   const { idsSeleccionados, plan, errores } = await revisarPlanSemanal(repositorio, actor, planId, personasSeleccionadas);
   if (errores.length) return { publicados: 0, errores };
 
-  const turnos = plan.celdas
-    .filter((celda) => idsSeleccionados.includes(celda.dni))
-    .map(({ planId: _planId, ...turno }) => turno);
+  const turnos = (await Promise.all(idsSeleccionados.map((dni) => celdasEfectivasDe(repositorio, plan, dni)))).flat()
+    .map(({ planId: _planId, ...turno }) => turno as TurnoPublicado & { planId?: string });
   try {
     await repositorio.publicarEnLote(turnos, actor);
   } catch (error) {
@@ -55,6 +57,16 @@ export async function revisarPlanSemanal(
   return { idsSeleccionados, plan, errores };
 }
 
+/** Las siete celdas de la persona ajustadas a su relación laboral confirmada: los días fuera de ella quedan «Sin relación laboral». */
+async function celdasEfectivasDe(
+  repositorio: RepositorioParaPublicarPlan,
+  plan: PlanSemanalEnBorrador,
+  dni: string,
+): Promise<Array<TurnoPublicado & { planId?: string }>> {
+  const vigencias = await repositorio.listarVigenciasConfirmadas(dni);
+  return ajustarSemanaALaRelacionLaboral(vigencias, dni, diasDeLaSemana(plan.semana), plan.celdas.filter((celda) => celda.dni === dni));
+}
+
 async function validarPersona(
   repositorio: RepositorioParaPublicarPlan,
   plan: PlanSemanalEnBorrador,
@@ -62,11 +74,16 @@ async function validarPersona(
 ): Promise<ErrorDePublicacionDePlan[]> {
   const errores: ErrorDePublicacionDePlan[] = [];
   const fechas = diasDeLaSemana(plan.semana);
-  const celdasPorFecha = new Map(plan.celdas.filter((celda) => celda.dni === dni).map((celda) => [celda.fecha, celda]));
 
   if (!(await repositorio.colaboradorPerteneceAEquipo(dni, plan.equipo))) {
     return fechas.map((fecha) => ({ dni, fecha, mensaje: "El colaborador no pertenece al equipo operativo del plan." }));
   }
+  try {
+    verificarQueLaSemanaTengaRelacion(await repositorio.listarVigenciasConfirmadas(dni), fechas);
+  } catch (error) {
+    return fechas.map((fecha) => ({ dni, fecha, mensaje: error instanceof Error ? error.message : "La persona no tiene una relación laboral confirmada." }));
+  }
+  const celdasPorFecha = new Map((await celdasEfectivasDe(repositorio, plan, dni)).map((celda) => [celda.fecha, celda]));
 
   for (const fecha of fechas) {
     const celda = celdasPorFecha.get(fecha);

@@ -21,8 +21,12 @@ Sede a la que se imputa contablemente un colaborador durante una vigencia, sin l
 _Evitar_: sede fija operativa, centro de costo, última sede trabajada
 
 **Relación laboral**:
-Intervalo entre el ingreso y el cese de un colaborador que acredita sus días remunerables, aunque no tenga jornadas trabajadas en el período.
-_Evitar_: estado activo actual, presencia en el resumen de asistencia
+Intervalo entre el ingreso y el cese de un colaborador que acredita sus días remunerables, aunque no tenga jornadas trabajadas en el período. Recursos Humanos registra y confirma cada fecha por separado: solo el ingreso confirmado la abre y solo el cese confirmado la cierra. Una persona con reingreso conserva su DNI y tiene otra relación laboral.
+_Evitar_: estado activo actual, presencia en el resumen de asistencia, fecha inferida de la primera asistencia
+
+**Sin relación laboral**:
+Estado planificado que el sistema fija en los días de una semana que quedan fuera de la relación laboral confirmada (antes del ingreso, después del cese o entre dos relaciones). Mantiene los siete días de la semana con estado, no genera asistencia por registrar y el gerente no lo elige ni lo cambia.
+_Evitar_: descanso, vacaciones, falta, día sin planificación
 
 **Gerente de área**:
 Responsable de publicar horarios y gestionar y aprobar asistencias de los colaboradores de los grupos operativos que tiene asignados. Un grupo tiene un gerente; un gerente puede tener varios grupos. Su alcance se comprueba en el servidor.

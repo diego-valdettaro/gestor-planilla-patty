@@ -18,17 +18,17 @@ const rutas = (actor: Actor) => enlacesPermitidos(actor).map((enlace) => enlace.
 
 describe("enlaces de navegación", () => {
   it("muestra a cada rol exactamente las rutas que puede abrir", () => {
-    expect(rutas(administrador)).toEqual(["/configuracion", "/cuentas", "/turnos", "/asistencias", "/periodos"]);
+    expect(rutas(administrador)).toEqual(["/configuracion", "/cuentas", "/turnos", "/asistencias", "/periodos", "/relaciones-laborales"]);
     expect(rutas(gerenteDeTiendas)).toEqual(["/configuracion", "/turnos", "/asistencias"]);
     expect(rutas(gerenteDeAdministracion)).toEqual(["/configuracion"]);
     expect(rutas(gerenteSinGrupos)).toEqual([]);
-    expect(rutas(finanzas)).toEqual(["/cuentas", "/asistencias", "/periodos"]);
-    expect(rutas(recursosHumanos)).toEqual([]);
+    expect(rutas(finanzas)).toEqual(["/cuentas", "/asistencias", "/periodos", "/relaciones-laborales"]);
+    expect(rutas(recursosHumanos)).toEqual(["/relaciones-laborales"]);
   });
 
   it("nombra cada sección con el vocabulario del dominio", () => {
-    expect(enlacesPermitidos(administrador).map((enlace) => enlace.etiqueta)).toEqual(["Configuración", "Cuentas", "Horarios", "Asistencia", "Períodos de planilla"]);
-    expect(enlacesPermitidos(finanzas).map((enlace) => enlace.etiqueta)).toEqual(["Cuentas", "Asistencia", "Períodos de planilla"]);
+    expect(enlacesPermitidos(administrador).map((enlace) => enlace.etiqueta)).toEqual(["Configuración", "Cuentas", "Horarios", "Asistencia", "Períodos de planilla", "Relaciones laborales"]);
+    expect(enlacesPermitidos(finanzas).map((enlace) => enlace.etiqueta)).toEqual(["Cuentas", "Asistencia", "Períodos de planilla", "Relaciones laborales"]);
   });
 
   it("marca activa la ruta y sus subrutas, sin confundir prefijos parecidos", () => {
@@ -47,7 +47,7 @@ describe("enlaces de navegación", () => {
     expect(rutaDeInicio(gerenteDeTiendas)).toBe("/turnos");
     expect(rutaDeInicio(gerenteDeAdministracion)).toBe("/configuracion");
     expect(rutaDeInicio(finanzas)).toBe("/asistencias");
-    expect(rutaDeInicio(recursosHumanos)).toBeUndefined();
+    expect(rutaDeInicio(recursosHumanos)).toBe("/relaciones-laborales");
     expect(rutaDeInicio(gerenteSinGrupos)).toBeUndefined();
   });
 });

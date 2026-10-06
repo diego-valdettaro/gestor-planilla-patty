@@ -7,6 +7,7 @@ import { Pool } from "pg";
 import { afterAll, describe, expect, it } from "vitest";
 
 import * as schema from "@/db/schema";
+import { eliminarRelacionesDePrueba, registrarRelacionConfirmadaDePrueba } from "@/relaciones-laborales/relacion-de-prueba";
 
 import { republicarPlanSemanal } from "./republicar-plan-semanal";
 import { RepositorioPostgresDeTurnos } from "./repositorio-postgres";
@@ -46,6 +47,7 @@ describe.skipIf(!databaseUrl)("republicarPlanSemanal (atomicidad, integración P
     await db.delete(schema.turnosPublicados).where(and(eq(schema.turnosPublicados.dni, huId), inArray(schema.turnosPublicados.fecha, dias)));
     await db.delete(schema.asistenciasEsperadas).where(and(eq(schema.asistenciasEsperadas.dni, huId), inArray(schema.asistenciasEsperadas.fecha, dias)));
 
+    await eliminarRelacionesDePrueba(db, [huId]);
     await db.delete(schema.colaboradores).where(eq(schema.colaboradores.dni, huId));
     await db.delete(schema.sedes).where(eq(schema.sedes.nombre, sede));
     await db.delete(schema.periodosPlanilla).where(eq(schema.periodosPlanilla.inicio, dias[0]));
@@ -58,6 +60,7 @@ describe.skipIf(!databaseUrl)("republicarPlanSemanal (atomicidad, integración P
     await db.insert(schema.grupos).values({ nombre: grupo });
     await db.insert(schema.sedes).values({ nombre: sede, grupo, activa: true });
     await db.insert(schema.colaboradores).values({ dni: huId, nombre: "Colaborador republicación", sede, grupo, activo: true });
+    await registrarRelacionConfirmadaDePrueba(db, huId);
     await db.insert(schema.periodosPlanilla).values({ inicio: dias[0], fin: dias[6], estado: "abierto" });
     await db.insert(schema.cuentasLocales).values({ id: cuentaId, nombreUsuario: `republicacion-${cuentaId}`, hashContrasena: "prueba", rol: "administrador" });
 

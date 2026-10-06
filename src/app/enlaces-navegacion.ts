@@ -4,6 +4,7 @@ import {
   puedeConsultarAsistencias,
   puedeConsultarConfiguracion,
   puedeConsultarHorarios,
+  puedeConsultarRelacionesLaborales,
   puedeGestionarPeriodos,
 } from "@/autenticacion/permisos";
 
@@ -16,9 +17,10 @@ const enlacesDeLaAplicacion: (EnlaceDeNavegacion & { permitido: (actor: Actor) =
   { href: "/turnos", etiqueta: "Horarios", icono: "▣", permitido: puedeConsultarHorarios },
   { href: "/asistencias", etiqueta: "Asistencia", icono: "◷", permitido: puedeConsultarAsistencias },
   { href: "/periodos", etiqueta: "Períodos de planilla", icono: "▤", permitido: puedeGestionarPeriodos },
+  { href: "/relaciones-laborales", etiqueta: "Relaciones laborales", icono: "☰", permitido: puedeConsultarRelacionesLaborales },
 ];
 
-const RUTAS_DE_INICIO_EN_ORDEN = ["/turnos", "/asistencias", "/periodos", "/cuentas", "/configuracion"];
+const RUTAS_DE_INICIO_EN_ORDEN = ["/turnos", "/asistencias", "/periodos", "/cuentas", "/configuracion", "/relaciones-laborales"];
 
 export function enlacesPermitidos(actor: Actor): EnlaceDeNavegacion[] {
   return enlacesDeLaAplicacion.filter((enlace) => enlace.permitido(actor)).map(({ href, etiqueta, icono }) => ({ href, etiqueta, icono }));

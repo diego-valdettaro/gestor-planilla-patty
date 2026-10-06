@@ -12,6 +12,7 @@ const listarPublicadosPorColaboradoresYSemana = vi.fn();
 const listarProcesamientosDeSemana = vi.fn();
 const listarModelosPorSede = vi.fn();
 const listarSedesActivasPorGrupo = vi.fn();
+const listarVigenciasConfirmadas = vi.fn();
 
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 vi.mock("@/autenticacion/sesion-del-servidor", () => ({ obtenerActorActual }));
@@ -28,6 +29,7 @@ vi.mock("@/turnos/servicio", () => ({
     listarProcesamientosDeSemana,
     listarPublicadosPorColaboradoresYSemana,
     listarSedesActivasPorGrupo,
+    listarVigenciasConfirmadas,
   },
 }));
 vi.mock("./planificador-semanal", () => ({
@@ -53,6 +55,7 @@ describe("página de Horarios (/turnos)", () => {
     listarPublicadosPorColaboradoresYSemana.mockResolvedValue([]);
     listarProcesamientosDeSemana.mockResolvedValue([]);
     listarSedesActivasPorGrupo.mockResolvedValue([]);
+    listarVigenciasConfirmadas.mockResolvedValue([{ ingreso: "2026-01-01", cese: null }]);
     obtenerOCrear.mockResolvedValue({ id: "plan-1", celdas: [] });
   });
 

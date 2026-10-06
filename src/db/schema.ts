@@ -25,6 +25,25 @@ export const colaboradores = pgTable("colaboradores", {
   actualizadoEn: timestamp("actualizado_en", { withTimezone: true }).notNull().defaultNow(),
 });
 
+// Relación laboral (ADR 0012): intervalo entre el ingreso y el cese de una persona. Solo cuenta para
+// publicar horarios y para Pagos la parte que Recursos Humanos confirmó; un cese sin confirmar no corta
+// la vigencia. Una persona con el mismo DNI puede tener varias relaciones sucesivas.
+export const relacionesLaborales = pgTable("relaciones_laborales", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  dni: text("dni").notNull().references(() => colaboradores.dni),
+  ingreso: date("ingreso", { mode: "string" }).notNull(),
+  cese: date("cese", { mode: "string" }),
+  ingresoConfirmadoPorId: uuid("ingreso_confirmado_por_id").references(() => cuentasLocales.id),
+  ingresoConfirmadoEn: timestamp("ingreso_confirmado_en", { withTimezone: true }),
+  ceseConfirmadoPorId: uuid("cese_confirmado_por_id").references(() => cuentasLocales.id),
+  ceseConfirmadoEn: timestamp("cese_confirmado_en", { withTimezone: true }),
+  registradaPorId: uuid("registrada_por_id").notNull().references(() => cuentasLocales.id),
+  registradaEn: timestamp("registrada_en", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("relaciones_laborales_dni").on(table.dni, table.ingreso),
+  uniqueIndex("relaciones_laborales_una_sin_cese_por_dni").on(table.dni).where(sql`${table.cese} IS NULL`),
+]);
+
 export const sedes = pgTable("sedes", {
   id: uuid("id").primaryKey().defaultRandom(),
   nombre: text("nombre").notNull().unique(),
@@ -143,7 +162,7 @@ export const turnosPublicados = pgTable(
     entradaProgramada: text("entrada_programada"),
     salidaProgramada: text("salida_programada"),
     descanso: boolean("descanso").notNull(),
-    motivoNoAsistencia: text("motivo_no_asistencia", { enum: ["descanso", "feriado", "vacaciones", "permiso", "suspension"] }),
+    motivoNoAsistencia: text("motivo_no_asistencia", { enum: ["descanso", "feriado", "vacaciones", "permiso", "suspension", "sin_relacion_laboral"] }),
     publicadoEn: timestamp("publicado_en", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [uniqueIndex("turnos_publicados_colaborador_fecha").on(table.dni, table.fecha)],
@@ -164,7 +183,7 @@ export const historialDeTurnosPublicados = pgTable("historial_turnos_publicados"
     entradaProgramada: string | null;
     salidaProgramada: string | null;
     descanso: boolean;
-    motivoNoAsistencia: "descanso" | "feriado" | "vacaciones" | "permiso" | "suspension" | null;
+    motivoNoAsistencia: "descanso" | "feriado" | "vacaciones" | "permiso" | "suspension" | "sin_relacion_laboral" | null;
   }>().notNull(),
   responsableId: uuid("responsable_id").references(() => cuentasLocales.id),
   motivo: text("motivo"),
@@ -199,7 +218,7 @@ export const celdasDePlanesSemanalesEnBorrador = pgTable(
     entradaProgramada: text("entrada_programada"),
     salidaProgramada: text("salida_programada"),
     descanso: boolean("descanso").notNull(),
-    motivoNoAsistencia: text("motivo_no_asistencia", { enum: ["descanso", "feriado", "vacaciones", "permiso", "suspension"] }),
+    motivoNoAsistencia: text("motivo_no_asistencia", { enum: ["descanso", "feriado", "vacaciones", "permiso", "suspension", "sin_relacion_laboral"] }),
   },
   (table) => [uniqueIndex("celdas_borrador_plan_colaborador_fecha").on(table.planId, table.dni, table.fecha)],
 );

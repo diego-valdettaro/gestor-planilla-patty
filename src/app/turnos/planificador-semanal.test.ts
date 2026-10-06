@@ -1,4 +1,4 @@
-import { createElement } from "react";
+import { createElement, type ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
@@ -16,7 +16,14 @@ vi.mock("./actions", () => ({
 
 import type { MotivoPlanificadoDeNoAsistencia } from "@/turnos/jornada-planificada";
 
-import { PlanificadorSemanal, celdasDeSemanaCompleta, valorDe } from "./planificador-semanal";
+import { PlanificadorSemanal as PlanificadorSemanalBase, celdasDeSemanaCompleta, valorDe } from "./planificador-semanal";
+
+// Salvo que una prueba indique otra cosa, todos los colaboradores tienen una relación laboral confirmada y vigente.
+const RELACION_VIGENTE = [{ ingreso: "2026-01-01", cese: null }];
+function PlanificadorSemanal(props: ComponentProps<typeof PlanificadorSemanalBase>) {
+  const vigencias = props.vigencias ?? Object.fromEntries(props.colaboradores.map(({ dni }) => [dni, RELACION_VIGENTE]));
+  return createElement(PlanificadorSemanalBase, { ...props, vigencias });
+}
 
 const jornadaPersonalizada = {
   dni: "00001024",
@@ -283,5 +290,60 @@ describe("selección de publicación", () => {
     expect(html).not.toContain("marca-edit");
     expect(html).toContain("Sin asignar");
     expect(html).not.toContain("＋ Asignar");
+  });
+});
+
+describe("relación laboral confirmada en el planificador", () => {
+  const dias = ["2026-09-07", "2026-09-08", "2026-09-09"];
+  const colaboradores = [{ dni: "00000011", nombre: "Ana Pérez", sede: "Tienda Norte" }, { dni: "00000012", nombre: "Beto Ruiz", sede: "Tienda Norte" }];
+  const laboral = (dni: string, fecha: string) => ({ dni, fecha, sede: "Tienda Norte", modeloHorarioId: null, entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false, motivoNoAsistencia: null });
+  const base = { equipos: ["tiendas"], planId: "plan-1", semana: "2026-09-07", equipo: "tiendas", colaboradores, dias, publicados: [], procesados: [], modelos: [modeloApertura], sedes: ["Tienda Norte"] };
+
+  it("muestra «Sin relación laboral» y bloquea la celda antes del ingreso sin exigir que el gerente la complete", () => {
+    const html = renderToStaticMarkup(createElement(PlanificadorSemanal, {
+      ...base,
+      vigencias: { "00000011": [{ ingreso: "2026-09-09", cese: null }], "00000012": [{ ingreso: "2026-01-01", cese: null }] },
+      celdasIniciales: [laboral("00000011", "2026-09-09"), ...dias.map((fecha) => laboral("00000012", fecha))],
+    }));
+
+    expect(html.match(/<b>Sin relación laboral<\/b>/g)).toHaveLength(2);
+    expect(html).toContain("Fuera de la relación laboral confirmada por Recursos Humanos; no se puede editar.");
+    // Ana tiene la fila completa (2 días automáticos + 1 laboral) y se puede publicar: aparece su casilla.
+    expect(html).toContain("Publicar</label>");
+    expect(html.match(/checkbox-publicar-fila/g)).toHaveLength(2);
+    expect(html).toContain("6 de 6 días asignados");
+  });
+
+  it("una semana sin ningún día dentro de la relación no se puede publicar y la interfaz explica la causa y el siguiente paso", () => {
+    const html = renderToStaticMarkup(createElement(PlanificadorSemanal, {
+      ...base,
+      colaboradores: [colaboradores[0]],
+      vigencias: { "00000011": [] },
+      celdasIniciales: [],
+    }));
+
+    expect(html).toContain("No se puede publicar: no tiene una relación laboral confirmada en esta semana. Recursos Humanos debe registrar y confirmar su ingreso.");
+    expect(html).not.toContain("checkbox-publicar-fila");
+    expect(html).toContain('class="boton-principal" disabled=""');
+    expect(html).toContain("Recursos Humanos debe confirmar la relación laboral de quienes no la tienen en esta semana.");
+  });
+
+  it("ignora un «Sin relación laboral» guardado en un día que ya está dentro de la relación", () => {
+    const html = renderToStaticMarkup(createElement(PlanificadorSemanal, {
+      ...base,
+      colaboradores: [colaboradores[0]],
+      vigencias: { "00000011": [{ ingreso: "2026-01-01", cese: null }] },
+      celdasIniciales: [{ dni: "00000011", fecha: "2026-09-07", sede: null, modeloHorarioId: null, entradaProgramada: null, salidaProgramada: null, descanso: true, motivoNoAsistencia: "sin_relacion_laboral" as const }],
+    }));
+
+    expect(html).not.toContain("<b>Sin relación laboral</b>");
+    expect(html).toContain("＋ Asignar");
+  });
+
+  it("no ofrece «Sin relación laboral» como opción que el gerente pueda elegir", () => {
+    const html = renderToStaticMarkup(createElement(PlanificadorSemanal, { ...base, vigencias: { "00000011": [{ ingreso: "2026-01-01", cese: null }], "00000012": [{ ingreso: "2026-01-01", cese: null }] }, celdasIniciales: [] }));
+
+    expect(html).not.toContain('value="motivo:sin_relacion_laboral"');
+    expect(html).not.toContain('<option value="sin_relacion_laboral">Sin relación laboral</option><option');
   });
 });

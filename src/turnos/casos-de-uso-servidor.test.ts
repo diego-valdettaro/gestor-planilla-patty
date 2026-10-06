@@ -40,6 +40,7 @@ function crearRepositorioEnMemoria(): {
       },
       perteneceAPeriodoAbierto: async (fecha) => fecha >= "2026-08-26" && fecha <= "2026-09-25",
       obtenerGrupoDelColaborador: async () => "Tiendas",
+      listarVigenciasConfirmadas: async () => [{ ingreso: "2026-01-01", cese: null }],
       sedeActivaPerteneceAlGrupo: async (sede, grupo) => sede === "Lima" && grupo === "Tiendas",
       buscarModeloDeHorario: async () => undefined,
       asistenciaEstaProcesada: async () => false,

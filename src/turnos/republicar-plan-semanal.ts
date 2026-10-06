@@ -5,6 +5,7 @@ import type { PlanSemanalEnBorrador, RepositorioDePlanesSemanales } from "./plan
 import type { RepositorioDeTurnos, TurnoPublicado } from "./publicar-turno-semanal";
 import { jornadasPlanificadasSonIguales, validarJornadaPlanificada } from "./jornada-planificada";
 import { diasDeLaSemana } from "./semana";
+import { ajustarSemanaALaRelacionLaboral } from "./semana-con-relacion-laboral";
 
 type RepositorioParaRepublicar = RepositorioDePlanesSemanales & RepositorioDeTurnos;
 
@@ -33,7 +34,8 @@ export async function republicarPlanSemanal(
 
 async function obtenerSemanaCorregida(repositorio: RepositorioParaRepublicar, plan: PlanSemanalEnBorrador, dni: string): Promise<TurnoPublicado[]> {
   const fechas = diasDeLaSemana(plan.semana);
-  const celdas = new Map(plan.celdas.filter((celda) => celda.dni === dni).map((celda) => [celda.fecha, celda]));
+  const vigencias = await repositorio.listarVigenciasConfirmadas(dni);
+  const celdas = new Map(ajustarSemanaALaRelacionLaboral(vigencias, dni, fechas, plan.celdas.filter((celda) => celda.dni === dni)).map((celda) => [celda.fecha, celda]));
   const turnos: TurnoPublicado[] = [];
   let hayCambios = false;
   for (const fecha of fechas) {
