@@ -1,6 +1,6 @@
 import { nombreDelMotivoPlanificado, type MotivoPlanificadoDeNoAsistencia, type TipoDeEstadoManual } from "@/asistencias/estado-manual";
 import type { Actor } from "@/autenticacion/permisos";
-import { exigir, puedeImportarMarcas } from "@/autenticacion/permisos";
+import { exigir, puedeImportarMarcas, puedeOperarAsistenciaDelGrupo } from "@/autenticacion/permisos";
 
 import type { ErrorDeImportacion, FilaDeAsistenciaImportada } from "./parsear-archivo-huellero";
 
@@ -100,7 +100,7 @@ export interface AsistenciaExistente {
 }
 
 export interface RepositorioDeImportaciones {
-  buscarColaborador(dni: string): Promise<{ dni: string } | undefined>;
+  buscarColaborador(dni: string): Promise<{ dni: string; grupo: string } | undefined>;
   buscarSede(nombre: string): Promise<string | undefined>;
   buscarTurnoPublicado(dni: string, fecha: string): Promise<{
     dni: string;
@@ -135,6 +135,7 @@ export async function prevalidarImportacion(
 
     const colaborador = await repositorio.buscarColaborador(fila.dni);
     if (!colaborador) errores.push(errorDe(fila, "DNI desconocido."));
+    else if (!puedeImportarMarcasDelGrupo(actor, colaborador.grupo)) errores.push(errorDe(fila, "El colaborador no pertenece a un grupo que usted gestiona."));
 
     const sede = await repositorio.buscarSede(fila.sede);
     if (!sede) errores.push(errorDe(fila, "Sede desconocida."));
@@ -158,6 +159,11 @@ export async function prevalidarImportacion(
     }
   }
   return errores;
+}
+
+/** Finanzas y el Administrador importan marcas de cualquier grupo; un gerente, solo las de las personas de sus grupos. */
+function puedeImportarMarcasDelGrupo(actor: Actor, grupo: string): boolean {
+  return actor.rol !== "gerente_de_area" || puedeOperarAsistenciaDelGrupo(actor, grupo);
 }
 
 export async function previsualizarImportacion(

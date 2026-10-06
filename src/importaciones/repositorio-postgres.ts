@@ -22,8 +22,8 @@ import type { AsistenciaExistente, ImportacionDeAsistencias, RepositorioDeImport
 export class RepositorioPostgresDeImportaciones implements RepositorioDeImportaciones {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}
 
-  async buscarColaborador(dni: string): Promise<{ dni: string } | undefined> {
-    const [colaborador] = await this.db.select({ dni: colaboradores.dni })
+  async buscarColaborador(dni: string): Promise<{ dni: string; grupo: string } | undefined> {
+    const [colaborador] = await this.db.select({ dni: colaboradores.dni, grupo: colaboradores.grupo })
       .from(colaboradores).where(eq(colaboradores.dni, dni));
     return colaborador;
   }

@@ -48,7 +48,7 @@ function crearRepositorioEnMemoria(): {
       listarSemanaPublicada: async (_dni, semana) => ["2026-08-31", "2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04", "2026-09-05", "2026-09-06"]
         .filter((fecha) => fecha >= semana).map((fecha) => ({ fecha, descanso: false })),
       asistenciasLaboralesEstanProcesadas: async () => true,
-      obtenerEquipoOperativo: async () => "tiendas",
+      obtenerEquipoOperativo: async () => "Tiendas",
       registrarProcesamiento: async () => undefined,
     },
   };
@@ -172,12 +172,41 @@ describe("casos de uso de turnos en el servidor", () => {
     expect(asistenciasEsperadas).toHaveLength(0);
   });
 
-  it("permite a Finanzas procesar un horario semanal desde el servidor", async () => {
-    const { repositorio } = crearRepositorioEnMemoria();
-    const casosDeUso = crearCasosDeUsoDeTurnos(repositorio, {
-      obtenerActorActual: async () => ({ id: "finanzas-1", rol: "finanzas" }),
+  describe("procesar un horario semanal", () => {
+    const gerente = (...grupos: Array<[string, boolean]>) => ({
+      id: "gerente-1", rol: "gerente_de_area" as const, grupos: grupos.map(([nombre, gestionaAsistencia]) => ({ nombre, gestionaAsistencia })),
     });
 
-    await expect(casosDeUso.procesar("00001024", "2026-08-31")).resolves.toBeUndefined();
+    function procesarComo(actor: { id: string; rol: "administrador" | "gerente_de_area" | "recursos_humanos" | "finanzas"; grupos?: Array<{ nombre: string; gestionaAsistencia: boolean }> }) {
+      const { repositorio } = crearRepositorioEnMemoria();
+      const registrados: unknown[] = [];
+      repositorio.registrarProcesamiento = async (procesamiento) => { registrados.push(procesamiento); };
+      const casosDeUso = crearCasosDeUsoDeTurnos(repositorio, { obtenerActorActual: async () => actor });
+      return { registrados, procesar: () => casosDeUso.procesar("00001024", "2026-08-31") };
+    }
+
+    it.each([
+      ["el gerente del grupo de la persona", gerente(["Tiendas", true])],
+      ["un gerente con varios grupos, uno de ellos el de la persona", gerente(["Taller", true], ["Tiendas", true])],
+      ["el Administrador", { id: "admin-1", rol: "administrador" as const }],
+    ])("permite a %s", async (_nombre, actor) => {
+      const { procesar, registrados } = procesarComo(actor);
+
+      await expect(procesar()).resolves.toBeUndefined();
+      expect(registrados).toEqual([expect.objectContaining({ dni: "00001024", semana: "2026-08-31", equipo: "Tiendas", responsableId: actor.id })]);
+    });
+
+    it.each([
+      ["un gerente de otro grupo", gerente(["Taller", true])],
+      ["un gerente sin grupos", gerente()],
+      ["un gerente de un grupo que no gestiona asistencia", gerente(["Tiendas", false])],
+      ["Finanzas, que no confirma asistencias en nombre de un gerente", { id: "finanzas-1", rol: "finanzas" as const }],
+      ["Recursos Humanos", { id: "rrhh-1", rol: "recursos_humanos" as const }],
+    ])("rechaza a %s sin registrar el procesamiento", async (_nombre, actor) => {
+      const { procesar, registrados } = procesarComo(actor);
+
+      await expect(procesar()).rejects.toThrow(/No tiene permiso para procesar horarios semanales/);
+      expect(registrados).toEqual([]);
+    });
   });
 });

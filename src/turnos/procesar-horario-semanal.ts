@@ -1,5 +1,5 @@
 import type { Actor } from "@/autenticacion/permisos";
-import { exigir, puedeGestionarPeriodos } from "@/autenticacion/permisos";
+import { exigir, puedeOperarAsistenciaDelGrupo, puedeRevisarAsistencias } from "@/autenticacion/permisos";
 
 import { diasDeLaSemana, inicioDeSemana } from "./semana";
 import type { Grupo } from "./configurar-equipos-operativos";
@@ -18,13 +18,18 @@ export interface RepositorioParaProcesarHorarioSemanal {
   registrarProcesamiento(procesamiento: ProcesamientoDeHorarioSemanal): Promise<void>;
 }
 
+const MENSAJE_SIN_PERMISO = "No tiene permiso para procesar horarios semanales.";
+
 export async function procesarHorarioSemanal(
   repositorio: RepositorioParaProcesarHorarioSemanal,
   actor: Actor,
   dni: string,
   semana: string,
 ): Promise<void> {
-  exigir(puedeGestionarPeriodos(actor), "No tiene permiso para procesar horarios semanales.");
+  exigir(puedeRevisarAsistencias(actor), MENSAJE_SIN_PERMISO);
+  // Procesar la semana confirma las jornadas de la persona: solo quien opera su grupo, no Finanzas en nombre del gerente.
+  const equipo = await repositorio.obtenerEquipoOperativo(dni);
+  if (equipo === undefined || !puedeOperarAsistenciaDelGrupo(actor, equipo)) throw new Error(MENSAJE_SIN_PERMISO);
   if (inicioDeSemana(semana) !== semana) throw new Error("La semana a procesar debe comenzar un lunes.");
 
   const horarios = await repositorio.listarSemanaPublicada(dni, semana);
@@ -35,7 +40,5 @@ export async function procesarHorarioSemanal(
   if (!await repositorio.asistenciasLaboralesEstanProcesadas(dni, semana)) {
     throw new Error("Todas las asistencias laborales de la semana deben estar confirmadas o tener un estado manual.");
   }
-  const equipo = await repositorio.obtenerEquipoOperativo(dni);
-  if (!equipo) throw new Error("El colaborador no pertenece a un equipo operativo.");
   await repositorio.registrarProcesamiento({ dni, semana, equipo, responsableId: actor.id });
 }
