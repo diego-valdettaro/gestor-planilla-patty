@@ -19,7 +19,7 @@ const rutas = (actor: Actor) => enlacesPermitidos(actor).map((enlace) => enlace.
 describe("enlaces de navegación", () => {
   it("muestra a cada rol exactamente las rutas que puede abrir", () => {
     expect(rutas(administrador)).toEqual(["/configuracion", "/cuentas", "/turnos", "/asistencias", "/periodos", "/relaciones-laborales"]);
-    expect(rutas(gerenteDeTiendas)).toEqual(["/configuracion", "/turnos", "/asistencias"]);
+    expect(rutas(gerenteDeTiendas)).toEqual(["/configuracion", "/turnos", "/asistencias", "/periodos"]);
     expect(rutas(gerenteDeAdministracion)).toEqual(["/configuracion"]);
     expect(rutas(gerenteSinGrupos)).toEqual([]);
     expect(rutas(finanzas)).toEqual(["/cuentas", "/asistencias", "/periodos", "/relaciones-laborales"]);

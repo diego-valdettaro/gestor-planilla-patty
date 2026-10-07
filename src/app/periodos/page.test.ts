@@ -6,12 +6,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const obtenerActorActual = vi.fn();
 const listar = vi.fn();
 const listarResumen = vi.fn();
+const listarAprobaciones = vi.fn();
 const listarSedesConColaboradoresActivos = vi.fn();
 const listarColaboradoresActivos = vi.fn();
 
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 vi.mock("@/autenticacion/sesion-del-servidor", () => ({ obtenerActorActual }));
-vi.mock("@/periodos/servicio", () => ({ repositorioDePeriodos: { listar, listarResumen } }));
+vi.mock("@/periodos/servicio", () => ({ repositorioDePeriodos: { listar, listarResumen, listarAprobaciones } }));
 vi.mock("@/turnos/servicio", () => ({
   repositorioDeTurnos: { listarSedesConColaboradoresActivos, listarColaboradoresActivos },
 }));
@@ -19,10 +20,15 @@ vi.mock("@/app/boton-de-accion-confirmada", () => ({
   BotonDeAccionConfirmada: ({ etiqueta, titulo, descripcion, children }: { etiqueta: string; titulo?: string; descripcion?: string; children?: ReactNode }) => createElement("div", undefined, createElement("button", undefined, etiqueta), createElement("dialog", undefined, createElement("h2", undefined, titulo), createElement("p", undefined, descripcion), children, createElement("button", undefined, "Cancelar"))),
 }));
 vi.mock("./actions", () => ({
+  aprobarAsistenciaDesdeFormulario: vi.fn(),
   cerrarPeriodoDesdeFormulario: vi.fn(),
   decidirHorasExtraDesdeFormulario: vi.fn(),
   reabrirPeriodoDesdeFormulario: vi.fn(),
   crearPeriodoDesdeFormulario: vi.fn(),
+}));
+vi.mock("./aprobador-de-asistencia", () => ({
+  AprobadorDeAsistencia: ({ grupo, periodoId, renovar }: { grupo: string; periodoId: string; renovar?: boolean }) =>
+    createElement("button", { "data-aprobar": `${periodoId}:${grupo}` }, renovar ? "Aprobar de nuevo" : "Aprobar asistencia"),
 }));
 vi.mock("./creador-de-periodo", () => ({
   CreadorDePeriodo: ({ sugerencia }: { sugerencia: { inicio: string; fin: string } }) =>
@@ -38,6 +44,7 @@ describe("página de Períodos de planilla (/periodos)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     obtenerActorActual.mockResolvedValue({ rol: "finanzas" });
+    listarAprobaciones.mockResolvedValue([]);
     listarSedesConColaboradoresActivos.mockResolvedValue(["Centro"]);
     listarColaboradoresActivos.mockResolvedValue([{ dni: "00000001", nombre: "Ana" }]);
     listarResumen.mockResolvedValue({ filas: [], bloqueos: [], totales: { jornadasTrabajadas: 0, minutosTrabajados: 0, noAsistencias: { falta: 0, descanso: 0, feriado: 0, vacaciones: 0, permiso: 0, suspension: 0 }, cantidadTardanzas: 0, minutosPenalizados: 0, horasExtra: { pendiente: { minutosAl25: 0, minutosAl35: 0 }, aprobada: { minutosAl25: 0, minutosAl35: 0 }, descartada: { minutosAl25: 0, minutosAl35: 0 } } } });
@@ -101,18 +108,140 @@ describe("página de Períodos de planilla (/periodos)", () => {
     expect(html).toContain('data-testid="creador-de-periodo"');
   });
 
-  it.each([
-    ["gerente de área", { rol: "gerente_de_area", grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] }],
-    ["Recursos Humanos", { rol: "recursos_humanos" }],
-  ])("niega el acceso a %s sin mostrar controles de cierre ni reapertura", async (_nombre, actor) => {
-    obtenerActorActual.mockResolvedValue(actor);
-    listar.mockResolvedValue([{ id: "p1", inicio: "2026-01-01", fin: "2026-01-31", estado: "abierto" }]);
+  it("niega el acceso a Recursos Humanos y a un gerente sin grupos que gestionen asistencia", async () => {
+    for (const actor of [{ rol: "recursos_humanos" }, { rol: "gerente_de_area", grupos: [{ nombre: "Administración", gestionaAsistencia: false }] }, { rol: "gerente_de_area", grupos: [] }]) {
+      obtenerActorActual.mockResolvedValue(actor);
+      listar.mockResolvedValue([{ id: "p1", inicio: "2026-01-01", fin: "2026-01-31", estado: "abierto" }]);
 
-    const html = await render();
+      const html = await render();
 
-    expect(html).toContain("Sin permiso");
-    expect(html).not.toContain("Cerrar período");
-    expect(html).not.toContain("Reabrir período");
+      expect(html).toContain("Sin permiso");
+      expect(html).not.toContain("Cerrar período");
+      expect(html).not.toContain("Reabrir período");
+    }
+    expect(listarAprobaciones).not.toHaveBeenCalled();
+  });
+
+  describe("aprobación de asistencia por grupo", () => {
+    const periodoAbierto = { id: "p1", inicio: "2026-01-01", fin: "2026-01-31", estado: "abierto" };
+    const aprobada = { grupo: "Taller", gerente: "gerente-taller", estado: "aprobada", aprobadaPor: "gerente-taller", aprobadaEn: new Date("2026-01-20T15:30:00Z"), invalidadaEn: null, motivoDeInvalidacion: null, bloqueos: [] };
+    const bloqueada = { grupo: "Tiendas", gerente: "gerente-tiendas", estado: "pendiente", aprobadaPor: null, aprobadaEn: null, invalidadaEn: null, motivoDeInvalidacion: null, bloqueos: [
+      { dni: "00000001", nombre: "Ana", causa: "sin_horario", fechas: ["2026-01-29", "2026-01-30", "2026-01-31"] },
+      { dni: "00000002", nombre: "Beto", causa: "asistencia_pendiente", fechas: ["2026-01-05"] },
+    ] };
+    const invalidada = { grupo: "Tiendas", gerente: "gerente-tiendas", estado: "invalidada", aprobadaPor: null, aprobadaEn: null, invalidadaEn: new Date("2026-01-22T10:00:00Z"), motivoDeInvalidacion: "Se ajustó la asistencia del 2026-01-05.", bloqueos: [] };
+
+    it("muestra a Finanzas el estado de cada grupo y a quién bloquea, con enlace a Asistencias, sin ofrecerle aprobar", async () => {
+      listar.mockResolvedValue([periodoAbierto]);
+      listarAprobaciones.mockResolvedValue([aprobada, bloqueada]);
+
+      const html = await render();
+
+      expect(html).toContain("Aprobación de asistencia");
+      expect(html).toContain("Aprobada por gerente-taller el 2026-01-20 15:30 UTC");
+      expect(html).toContain("Pendiente de aprobación");
+      expect(html).toContain("Personas que bloquean la aprobación de Tiendas");
+      expect(html).toContain("Ana (00000001): Sin horario publicado, 3 días (entre el 2026-01-29 y el 2026-01-31)");
+      expect(html).toContain("Beto (00000002): Asistencia pendiente de revisión, el 2026-01-05");
+      expect(html).toContain('href="/asistencias?vista=mensual&amp;grupo=Tiendas&amp;fecha=2026-01-29&amp;colaborador=00000001"');
+      expect(html).not.toContain("data-aprobar");
+      expect(html).toContain("Solo el gerente gerente-tiendas puede aprobar");
+    });
+
+    it("explica a Finanzas por qué no puede cerrar y no ofrece cerrar mientras falte un grupo", async () => {
+      listar.mockResolvedValue([periodoAbierto]);
+      listarAprobaciones.mockResolvedValue([aprobada, bloqueada]);
+
+      const html = await render();
+
+      expect(html).toContain("No se puede cerrar: falta la aprobación de asistencia del grupo Tiendas");
+      expect(html).toContain("Finanzas no aprueba en su nombre");
+      expect(html).toMatch(/<button[^>]*disabled[^>]*>Cerrar período<\/button>/);
+      expect(html).not.toContain("¿Cerrar este período de planilla?");
+    });
+
+    it("ofrece el cierre cuando todos los grupos están aprobados", async () => {
+      listar.mockResolvedValue([periodoAbierto]);
+      listarAprobaciones.mockResolvedValue([aprobada]);
+
+      const html = await render();
+
+      expect(html).toContain("¿Cerrar este período de planilla?");
+      expect(html).not.toContain("No se puede cerrar");
+    });
+
+    it("muestra la aprobación invalidada con su motivo y pide aprobar de nuevo al gerente", async () => {
+      obtenerActorActual.mockResolvedValue({ rol: "gerente_de_area", grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] });
+      listar.mockResolvedValue([periodoAbierto]);
+      listarAprobaciones.mockResolvedValue([invalidada]);
+
+      const html = await render();
+
+      expect(html).toContain("Invalidada por una corrección");
+      expect(html).toContain("Se ajustó la asistencia del 2026-01-05.");
+      expect(html).toContain('data-aprobar="p1:Tiendas"');
+      expect(html).toContain("Aprobar de nuevo");
+    });
+
+    it("un gerente ve solo la aprobación de sus grupos, sin exportación, totales, cierre, reapertura ni horas extra", async () => {
+      obtenerActorActual.mockResolvedValue({ rol: "gerente_de_area", grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] });
+      listar.mockResolvedValue([periodoAbierto]);
+      listarAprobaciones.mockResolvedValue([aprobada, { ...bloqueada, bloqueos: [] }]);
+
+      const html = await render();
+
+      expect(html).toContain("Aprobación de asistencia");
+      expect(html).toContain("<th scope=\"row\">Tiendas</th>");
+      expect(html).not.toContain("<th scope=\"row\">Taller</th>");
+      expect(html).toContain('data-aprobar="p1:Tiendas"');
+      expect(listarResumen).not.toHaveBeenCalled();
+      for (const prohibido of ["Exportar XLSX", "/exportar", "Totales del período completo", "Cerrar período", "Reabrir período", "Aprobar horas extra", "Nuevo período"]) {
+        expect(html).not.toContain(prohibido);
+      }
+    });
+
+    it("a un gerente no le ofrece aprobar mientras su grupo tenga personas que bloquean, y le dice quiénes", async () => {
+      obtenerActorActual.mockResolvedValue({ rol: "gerente_de_area", grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] });
+      listar.mockResolvedValue([periodoAbierto]);
+      listarAprobaciones.mockResolvedValue([bloqueada]);
+
+      const html = await render();
+
+      expect(html).toContain("Resuelva primero a quienes bloquean");
+      expect(html).toContain("Ana (00000001)");
+      expect(html).not.toContain("data-aprobar");
+    });
+
+    it("el Administrador del sistema, superusuario temporal, puede aprobar cualquier grupo y avisa si un grupo no tiene gerente", async () => {
+      obtenerActorActual.mockResolvedValue({ rol: "administrador" });
+      listar.mockResolvedValue([periodoAbierto]);
+      listarAprobaciones.mockResolvedValue([{ ...bloqueada, gerente: null, bloqueos: [] }]);
+
+      const html = await render();
+
+      expect(html).toContain("Sin gerente asignado");
+      expect(html).toContain('data-aprobar="p1:Tiendas"');
+    });
+
+    it("en un período cerrado no ofrece aprobar y mantiene el historial visible", async () => {
+      obtenerActorActual.mockResolvedValue({ rol: "gerente_de_area", grupos: [{ nombre: "Taller", gestionaAsistencia: true }] });
+      listar.mockResolvedValue([{ ...periodoAbierto, estado: "cerrado" }]);
+      listarAprobaciones.mockResolvedValue([aprobada]);
+
+      const html = await render();
+
+      expect(html).toContain("Aprobada por gerente-taller");
+      expect(html).not.toContain("data-aprobar");
+    });
+
+    it("indica que no hay grupos que aprobar cuando ninguno gestiona asistencia", async () => {
+      listar.mockResolvedValue([periodoAbierto]);
+      listarAprobaciones.mockResolvedValue([]);
+
+      const html = await render();
+
+      expect(html).toContain("Sin grupos que aprobar");
+    });
   });
 
   it("ofrece el cierre y la reapertura al Administrador del sistema, superusuario temporal", async () => {

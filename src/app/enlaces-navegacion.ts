@@ -5,7 +5,7 @@ import {
   puedeConsultarConfiguracion,
   puedeConsultarHorarios,
   puedeConsultarRelacionesLaborales,
-  puedeGestionarPeriodos,
+  puedeConsultarPeriodos,
 } from "@/autenticacion/permisos";
 
 export type EnlaceDeNavegacion = { href: string; etiqueta: string; icono: string };
@@ -16,7 +16,7 @@ const enlacesDeLaAplicacion: (EnlaceDeNavegacion & { permitido: (actor: Actor) =
   { href: "/cuentas", etiqueta: "Cuentas", icono: "◉", permitido: puedeAdministrarCuentas },
   { href: "/turnos", etiqueta: "Horarios", icono: "▣", permitido: puedeConsultarHorarios },
   { href: "/asistencias", etiqueta: "Asistencia", icono: "◷", permitido: puedeConsultarAsistencias },
-  { href: "/periodos", etiqueta: "Períodos de planilla", icono: "▤", permitido: puedeGestionarPeriodos },
+  { href: "/periodos", etiqueta: "Períodos de planilla", icono: "▤", permitido: puedeConsultarPeriodos },
   { href: "/relaciones-laborales", etiqueta: "Relaciones laborales", icono: "☰", permitido: puedeConsultarRelacionesLaborales },
 ];
 

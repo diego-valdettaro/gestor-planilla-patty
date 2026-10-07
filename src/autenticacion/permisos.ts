@@ -61,6 +61,19 @@ export function puedeGestionarPeriodos(actor: Actor): boolean {
   return actor.rol === "administrador" || actor.rol === "finanzas";
 }
 
+/**
+ * Consultar /periodos: Finanzas y el Administrador ven todo; un gerente de área con algún grupo que gestiona asistencia
+ * entra solo a ver y aprobar la asistencia de sus grupos (sin exportación, totales, cierre ni horas extra).
+ */
+export function puedeConsultarPeriodos(actor: Actor): boolean {
+  return puedeGestionarPeriodos(actor) || gerenteConGrupoQueGestionaAsistencia(actor);
+}
+
+/** Aprobar la asistencia de un grupo y período: solo quien opera el grupo. Finanzas no aprueba en nombre del gerente (ADR 0012). */
+export function puedeAprobarAsistenciaDelGrupo(actor: Actor, grupo: string): boolean {
+  return puedeOperarAsistenciaDelGrupo(actor, grupo);
+}
+
 export function puedeImportarMarcas(actor: Actor): boolean {
   return actor.rol === "administrador" || actor.rol === "finanzas" || gerenteConGrupoQueGestionaAsistencia(actor);
 }

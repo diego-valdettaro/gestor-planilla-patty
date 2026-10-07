@@ -24,10 +24,18 @@ import type { CeldaDePlanSemanalEnBorrador, PlanSemanalEnBorrador, RepositorioDe
 import type { RepositorioDeTurnos, TurnoPublicado } from "./publicar-turno-semanal";
 import type { ProcesamientoDeHorarioSemanal } from "./procesar-horario-semanal";
 import type { Actor } from "@/colaboradores/registrar-colaborador";
+import { invalidarAprobacionesDeAsistencia, rangoDeFechas, type ConexionDeAprobaciones } from "@/periodos/aprobaciones";
 import { vigenciasConfirmadasDe } from "@/relaciones-laborales/repositorio-postgres";
 import { verificarQueLaSemanaTengaRelacion, type Vigencia } from "@/relaciones-laborales/vigencia";
 import { motivoPlanificadoDe, validarJornadaPlanificada } from "./jornada-planificada";
 import { desplazarFecha, diasDeLaSemana, inicioDeSemana } from "./semana";
+
+/** Publicar o corregir horarios cambia la situación de las personas del grupo: invalida su aprobación de asistencia (ADR 0012). */
+async function invalidarPorHorarios(tx: ConexionDeAprobaciones, turnos: TurnoPublicado[], motivo: string): Promise<void> {
+  if (!turnos.length) return;
+  const rango = rangoDeFechas(turnos.map(({ fecha }) => fecha));
+  await invalidarAprobacionesDeAsistencia(tx, { dnis: turnos.map(({ dni }) => dni), ...rango, motivo: `${motivo} del ${rango.desde} al ${rango.hasta}.` });
+}
 
 export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, RepositorioDeGruposDeSedes, RepositorioDePlanesSemanales {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}
@@ -100,6 +108,7 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
 
   async publicarEnLote(turnos: TurnoPublicado[], actor?: Actor): Promise<void> {
     await this.db.transaction(async (tx) => {
+      await invalidarPorHorarios(tx, turnos, "Se publicó un horario");
       const jornadas: Array<TurnoPublicado & { grupo: Grupo; descanso: boolean }> = [];
       for (const turno of turnos) {
         // FOR SHARE espera a que termine quien confirma un ingreso o cese de la persona (que la bloquea FOR UPDATE)
@@ -218,6 +227,7 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
 
   async reemplazarSemanaPublicada(turnos: TurnoPublicado[], actor: Actor, motivo: string): Promise<void> {
     await this.db.transaction(async (tx) => {
+      await invalidarPorHorarios(tx, turnos, "Se corrigió un horario publicado");
       for (const { dni, fecha } of turnos) {
         const [procesado] = await tx.select({ id: horariosSemanalesProcesados.id }).from(horariosSemanalesProcesados).where(and(
           eq(horariosSemanalesProcesados.dni, dni), eq(horariosSemanalesProcesados.semana, inicioDeSemana(fecha)),

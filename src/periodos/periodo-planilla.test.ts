@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  aprobacionesVisiblesPara,
+  aprobarAsistenciaDelGrupo,
+  AprobacionBloqueadaError,
   calcularSugerenciaDePeriodo,
   cerrarPeriodo,
   crearPeriodo,
@@ -7,6 +10,7 @@ import {
   HuecoEntrePeriodosError,
   PeriodosSolapadosError,
   reabrirPeriodo,
+  type AprobacionDeGrupo,
   type PeriodoPlanilla,
   type RepositorioDePeriodos,
 } from "./periodo-planilla";
@@ -22,6 +26,8 @@ function repositorio(periodos: PeriodoPlanilla[] = []): RepositorioDePeriodos {
     cerrar: vi.fn(),
     reabrir: vi.fn(),
     listarRevisiones: vi.fn(),
+    listarAprobaciones: vi.fn(),
+    aprobarAsistencia: vi.fn(),
   } as unknown as RepositorioDePeriodos;
 }
 function periodo(inicio: string, fin: string, estado: "abierto" | "cerrado" = "cerrado"): PeriodoPlanilla {
@@ -182,5 +188,62 @@ describe("creación de períodos de planilla", () => {
     const repo = repositorio([periodo("2026-01-26", "2026-02-25"), periodo("2030-01-01", "2030-01-31")]);
     await expect(crearPeriodo(repo, actor("finanzas"), { inicio: "2026-01-26", fin: "2026-02-25" })).rejects.toThrow(PeriodosSolapadosError);
     expect(repo.crear).not.toHaveBeenCalled();
+  });
+});
+
+describe("aprobación de la asistencia de un grupo", () => {
+  const gerenteDeTiendas = { id: "gerente-1", rol: "gerente_de_area" as const, grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] };
+  const solicitud = { periodoId: "periodo-1", grupo: "Tiendas" };
+
+  it("permite al gerente del grupo aprobar y registra quién y cuándo", async () => {
+    const repo = repositorio();
+    const ahora = new Date("2026-09-20T10:00:00Z");
+
+    await aprobarAsistenciaDelGrupo(repo, gerenteDeTiendas, solicitud, ahora);
+
+    expect(repo.aprobarAsistencia).toHaveBeenCalledWith("periodo-1", "Tiendas", "gerente-1", ahora);
+  });
+
+  it("permite al Administrador del sistema, superusuario temporal, aprobar cualquier grupo", async () => {
+    const repo = repositorio();
+    await aprobarAsistenciaDelGrupo(repo, actor("administrador"), solicitud);
+    expect(repo.aprobarAsistencia).toHaveBeenCalled();
+  });
+
+  it("Finanzas no aprueba en nombre del gerente", async () => {
+    const repo = repositorio();
+    await expect(aprobarAsistenciaDelGrupo(repo, actor("finanzas"), solicitud)).rejects.toThrow("Finanzas no aprueba la asistencia en nombre del gerente");
+    expect(repo.aprobarAsistencia).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["Recursos Humanos", actor("recursos_humanos")],
+    ["un gerente de otro grupo", { id: "g2", rol: "gerente_de_area" as const, grupos: [{ nombre: "Taller", gestionaAsistencia: true }] }],
+    ["un gerente cuyo grupo no gestiona asistencia", { id: "g3", rol: "gerente_de_area" as const, grupos: [{ nombre: "Tiendas", gestionaAsistencia: false }] }],
+  ])("rechaza a %s sin tocar el repositorio", async (_nombre, quien) => {
+    const repo = repositorio();
+    await expect(aprobarAsistenciaDelGrupo(repo, quien, solicitud)).rejects.toThrow("No tiene permiso para aprobar la asistencia de este grupo");
+    expect(repo.aprobarAsistencia).not.toHaveBeenCalled();
+  });
+
+  it("el error de bloqueo cuenta personas distintas y conserva la lista para la interfaz", () => {
+    const bloqueos = [
+      { dni: "1", nombre: "Ana", causa: "sin_horario" as const, fechas: ["2026-09-26"] },
+      { dni: "1", nombre: "Ana", causa: "asistencia_pendiente" as const, fechas: ["2026-09-27"] },
+      { dni: "2", nombre: "Beto", causa: "sin_horario" as const, fechas: ["2026-09-26"] },
+    ];
+    const error = new AprobacionBloqueadaError(bloqueos);
+    expect(error.message).toContain("2 personas tienen");
+    expect(error.bloqueos).toBe(bloqueos);
+    expect(new AprobacionBloqueadaError(bloqueos.slice(0, 1)).message).toContain("1 persona tiene");
+  });
+
+  it("cada gerente ve solo sus grupos; Finanzas y el Administrador ven todos", () => {
+    const aprobacion = (grupo: string): AprobacionDeGrupo => ({ grupo, gerente: null, estado: "pendiente", aprobadaPor: null, aprobadaEn: null, invalidadaEn: null, motivoDeInvalidacion: null, bloqueos: [] });
+    const todas = [aprobacion("Taller"), aprobacion("Tiendas")];
+    expect(aprobacionesVisiblesPara(gerenteDeTiendas, todas).map(({ grupo }) => grupo)).toEqual(["Tiendas"]);
+    expect(aprobacionesVisiblesPara(actor("finanzas"), todas)).toHaveLength(2);
+    expect(aprobacionesVisiblesPara(actor("administrador"), todas)).toHaveLength(2);
+    expect(aprobacionesVisiblesPara(actor("recursos_humanos"), todas)).toEqual([]);
   });
 });

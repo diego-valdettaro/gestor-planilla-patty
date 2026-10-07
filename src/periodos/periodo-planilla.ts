@@ -1,6 +1,7 @@
 import type { Actor } from "@/autenticacion/permisos";
-import { exigir, puedeGestionarPeriodos } from "@/autenticacion/permisos";
+import { exigir, puedeAprobarAsistenciaDelGrupo, puedeGestionarPeriodos } from "@/autenticacion/permisos";
 import { validarDescarteDeHoraExtra, type DecisionDeHoraExtra } from "@/asistencias/descarte-de-hora-extra";
+import type { BloqueoDeAprobacion } from "./aprobacion-de-asistencia";
 
 export type EstadoDePeriodo = "abierto" | "cerrado";
 export type AccionDePeriodo = "cierre" | "reapertura";
@@ -96,6 +97,24 @@ export function crearResumenVacio(): ResumenDePeriodo {
   };
 }
 
+export type EstadoDeAprobacion = "aprobada" | "pendiente" | "invalidada";
+
+/** Estado de la aprobación de asistencia de un grupo que gestiona asistencia en un período, con quién la bloquea. */
+export interface AprobacionDeGrupo {
+  grupo: string;
+  /** Nombre de usuario del gerente de área asignado; null si el grupo no tiene gerente. */
+  gerente: string | null;
+  estado: EstadoDeAprobacion;
+  aprobadaPor: string | null;
+  aprobadaEn: Date | null;
+  invalidadaEn: Date | null;
+  motivoDeInvalidacion: string | null;
+  /** Personas que impiden aprobar; vacío cuando ya está aprobada. */
+  bloqueos: BloqueoDeAprobacion[];
+}
+
+export interface SolicitudDeAprobacionDeAsistencia { periodoId: string; grupo: string; }
+
 export interface NuevoPeriodo { inicio: string; fin: string; confirmarHueco?: boolean; }
 
 export interface RepositorioDePeriodos {
@@ -103,6 +122,8 @@ export interface RepositorioDePeriodos {
   buscar(id: string): Promise<PeriodoPlanilla | undefined>;
   listarResumen(filtros: FiltrosDeResumen): Promise<ResumenDePeriodo>;
   listarRevisiones(periodoId: string): Promise<RevisionDePeriodo[]>;
+  listarAprobaciones(periodoId: string): Promise<AprobacionDeGrupo[]>;
+  aprobarAsistencia(periodoId: string, grupo: string, responsableId: string, aprobadaEn: Date): Promise<void>;
   crear(inicio: string, fin: string): Promise<void>;
   decidirHorasExtra(periodoId: string, horasExtraIds: string[], decision: DecisionDeHoraExtra, responsableId: string, registradaEn: Date): Promise<void>;
   cerrar(id: string, responsableId: string, registradoEn: Date): Promise<void>;
@@ -112,6 +133,14 @@ export interface RepositorioDePeriodos {
 export class PeriodosSolapadosError extends Error {
   constructor() {
     super("El período se superpone con uno existente.");
+  }
+}
+
+/** La aprobación no se registra mientras alguien del grupo tenga el período sin horario o sin situación resuelta. */
+export class AprobacionBloqueadaError extends Error {
+  constructor(public readonly bloqueos: BloqueoDeAprobacion[]) {
+    const personas = new Set(bloqueos.map(({ dni }) => dni)).size;
+    super(`No se puede aprobar: ${personas} ${personas === 1 ? "persona tiene" : "personas tienen"} el período sin horario o con la asistencia sin resolver. Revise la lista de personas que bloquean.`);
   }
 }
 
@@ -127,6 +156,28 @@ export function autorizarGestionDePeriodos(actor: Actor): void {
 
 export function autorizarCierreDePeriodos(actor: Actor): void {
   exigir(puedeGestionarPeriodos(actor), "Solo Finanzas y el Administrador del sistema pueden cerrar o reabrir períodos de planilla.");
+}
+
+/** Quien opera el grupo aprueba su asistencia; Finanzas cierra pero no aprueba en nombre del gerente (ADR 0012). */
+export function autorizarAprobacionDeAsistencia(actor: Actor, grupo: string): void {
+  exigir(actor.rol !== "finanzas", "Finanzas no aprueba la asistencia en nombre del gerente de área: pida al gerente del grupo que apruebe.");
+  exigir(puedeAprobarAsistenciaDelGrupo(actor, grupo), "No tiene permiso para aprobar la asistencia de este grupo.");
+}
+
+export async function aprobarAsistenciaDelGrupo(
+  repositorio: RepositorioDePeriodos,
+  actor: Actor,
+  solicitud: SolicitudDeAprobacionDeAsistencia,
+  ahora = new Date(),
+): Promise<void> {
+  autorizarAprobacionDeAsistencia(actor, solicitud.grupo);
+  await repositorio.aprobarAsistencia(solicitud.periodoId, solicitud.grupo, actor.id, ahora);
+}
+
+/** Aprobaciones que el actor puede ver en /periodos: todas para Finanzas y el Administrador; un gerente, solo las de sus grupos. */
+export function aprobacionesVisiblesPara(actor: Actor, aprobaciones: AprobacionDeGrupo[]): AprobacionDeGrupo[] {
+  if (puedeGestionarPeriodos(actor)) return aprobaciones;
+  return aprobaciones.filter(({ grupo }) => puedeAprobarAsistenciaDelGrupo(actor, grupo));
 }
 
 export async function decidirHorasExtra(
