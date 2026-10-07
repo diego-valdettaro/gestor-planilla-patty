@@ -841,3 +841,109 @@ test("Condiciones laborales cabe en 375 px: las tablas se desplazan dentro de su
   await expect(page.getByRole("dialog")).toBeHidden();
   expect(errores).toEqual([]);
 });
+
+/** Abre un diálogo de Pagos; si el clic llega antes de la hidratación de la página, lo repite hasta que el diálogo se vea. */
+async function abrirDialogo(page: Page, boton: ReturnType<Page["getByRole"]>): Promise<void> {
+  await expect(async () => {
+    await boton.click();
+    await expect(page.getByRole("dialog")).toBeVisible({ timeout: 1_500 });
+  }).toPass({ timeout: 20_000 });
+}
+
+test("Finanzas activa una regla legal con su fuente, la corrige con motivo y consulta una fecha; el Administrador no entra", async ({ page }) => {
+  test.setTimeout(90_000);
+  const errores = observarErroresDelNavegador(page);
+
+  await iniciarSesion(page, "finanzas");
+  await page.getByRole("navigation", { name: "Navegación principal" }).getByRole("link", { name: /Pagos/ }).click();
+  await page.getByRole("navigation", { name: "Secciones de Pagos" }).getByRole("link", { name: "Reglas legales" }).click();
+  await expect(page).toHaveURL(/\/pagos\/reglas-legales$/, { timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: "Reglas legales", level: 1 })).toBeVisible({ timeout: 30_000 });
+  const lista = page.getByRole("region", { name: "Reglas legales vigentes hoy" });
+  await expect(lista.locator("tbody tr").filter({ hasText: "Tasa de EsSalud" })).toContainText("9,00 %");
+  await expect(lista.locator("tbody tr").filter({ hasText: "RMV (remuneración mínima vital)" })).toContainText("S/ 1.000,00");
+  await expect(lista.locator("tbody tr").filter({ hasText: "Tasa de ONP" })).toContainText("Programado: 13,00 %");
+  await expect(lista.locator("tbody tr").filter({ hasText: "Comisión AFP Habitat sobre flujo" })).toContainText("Pendiente");
+  await expect(lista.locator("tbody tr").filter({ hasText: "Comisión AFP Habitat sobre flujo" })).not.toContainText("0,00 %");
+
+  // Activar un valor que todavía no tiene regla, con fecha y fuente.
+  const dialogo = page.getByRole("dialog");
+  await abrirDialogo(page, page.getByRole("button", { name: "Activar nuevo valor" }));
+  await dialogo.getByLabel("Valor legal").selectOption({ label: "Comisión AFP Habitat sobre flujo" });
+  await dialogo.getByLabel("Valor (%)").fill("1,5");
+  await dialogo.getByLabel("Vigente desde").fill("2030-01-01");
+  await dialogo.getByLabel("Fuente oficial (norma o enlace)").fill("Resolución sintética de prueba");
+  await expect(dialogo.getByRole("heading", { name: "¿Activar la Comisión AFP Habitat sobre flujo de 1,50 % desde el 01/01/2030?" })).toBeVisible();
+  await expect(dialogo.getByText("Quedará registrado a nombre de finanzas.")).toBeVisible();
+  await dialogo.getByRole("button", { name: "Activar valor" }).click();
+  await expect(dialogo).toBeHidden();
+  await expect(lista.locator("tbody tr").filter({ hasText: "Comisión AFP Habitat sobre flujo" })).toContainText("Programado: 1,50 % desde el 01/01/2030");
+
+  // Historial, consulta por fecha y corrección con motivo.
+  await lista.getByRole("link", { name: "Comisión AFP Habitat sobre flujo" }).click();
+  await expect(page.getByRole("heading", { name: "Comisión AFP Habitat sobre flujo", level: 1 })).toBeVisible({ timeout: 30_000 });
+  const historial = page.getByRole("region", { name: "Historial de Comisión AFP Habitat sobre flujo" });
+  await expect(historial.locator("tbody tr")).toHaveCount(1);
+  await expect(historial.locator("tbody tr")).toContainText("Resolución sintética de prueba");
+  await expect(historial.locator("tbody tr")).toContainText("finanzas");
+  await expect(historial.locator("tbody tr")).toContainText("Programado");
+
+  await page.getByLabel("Fecha", { exact: true }).fill("2030-06-01");
+  await page.getByRole("button", { name: "Consultar" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "rige 1,50 %" })).toContainText("vigente desde el 01/01/2030");
+  await page.getByLabel("Fecha", { exact: true }).fill("2029-12-31");
+  await page.getByRole("button", { name: "Consultar" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Sin regla vigente en esa fecha (31/12/2029)" })).toBeVisible();
+
+  await abrirDialogo(page, historial.getByRole("button", { name: /Corregir/ }));
+  await dialogo.getByLabel("Valor (%)").fill("1,6");
+  await dialogo.getByLabel("Motivo de la corrección").fill("Error de digitación");
+  await dialogo.getByRole("button", { name: "Reemplazar valor" }).click();
+  await expect(dialogo).toBeHidden();
+  await expect(historial.locator("tbody tr")).toHaveCount(2);
+  await expect(historial.locator("tbody tr").first()).toContainText("Reemplazado");
+  await expect(historial.locator("tbody tr").first()).toContainText("Motivo: Error de digitación");
+  await expect(historial.locator("tbody tr").last()).toContainText("1,60 %");
+
+  // Una vigencia repetida se rechaza junto al formulario y no cambia el historial.
+  await abrirDialogo(page, page.getByRole("button", { name: "Activar nuevo valor" }));
+  await dialogo.getByLabel("Valor (%)").fill("1,7");
+  await dialogo.getByLabel("Vigente desde").fill("2030-01-01");
+  await dialogo.getByLabel("Fuente oficial (norma o enlace)").fill("Otra fuente");
+  await dialogo.getByRole("button", { name: "Activar valor" }).click();
+  await expect(dialogo.getByRole("alert")).toContainText("use «Corregir»");
+  await dialogo.getByRole("button", { name: "Cancelar" }).click();
+  await expect(historial.locator("tbody tr")).toHaveCount(2);
+
+  await page.context().clearCookies();
+  await iniciarSesion(page, "admin");
+  await page.goto("/pagos/reglas-legales");
+  await expect(page.getByRole("heading", { name: "Sin permiso" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("S/ ")).toHaveCount(0);
+  await page.goto("/pagos/reglas-legales/rmv");
+  await expect(page.getByRole("heading", { name: "Sin permiso" })).toBeVisible({ timeout: 30_000 });
+  expect(errores).toEqual([]);
+});
+
+test("Reglas legales cabe en 375 px: la tabla se desplaza dentro de su región", async ({ page }) => {
+  const errores = observarErroresDelNavegador(page);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await iniciarSesion(page, "finanzas");
+
+  await page.goto("/pagos/reglas-legales");
+  await expect(page.getByRole("heading", { name: "Reglas legales", level: 1 })).toBeVisible({ timeout: 30_000 });
+  expect(await desbordeHorizontalDeLaPagina(page)).toBeLessThanOrEqual(0);
+  const lista = page.getByRole("region", { name: "Reglas legales vigentes hoy" });
+  expect(await lista.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+
+  await lista.getByRole("link", { name: "Tasa de EsSalud" }).click();
+  await expect(page.getByRole("heading", { name: "Tasa de EsSalud", level: 1 })).toBeVisible({ timeout: 30_000 });
+  expect(await desbordeHorizontalDeLaPagina(page)).toBeLessThanOrEqual(0);
+  await abrirDialogo(page, page.getByRole("button", { name: "Activar nuevo valor" }));
+  const cajaDelDialogo = await page.getByRole("dialog").boundingBox();
+  expect(cajaDelDialogo!.x).toBeGreaterThanOrEqual(0);
+  expect(cajaDelDialogo!.x + cajaDelDialogo!.width).toBeLessThanOrEqual(375);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toBeHidden();
+  expect(errores).toEqual([]);
+});

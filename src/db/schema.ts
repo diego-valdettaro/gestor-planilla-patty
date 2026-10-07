@@ -511,3 +511,35 @@ export const condicionesLaborales = pgTable(
     check("condiciones_laborales_reemplazo_con_motivo", sql`(${table.reemplazadaEn} IS NULL) = (${table.motivoDeReemplazo} IS NULL)`),
   ],
 );
+
+// Reglas legales con vigencia (issue #117, ADR 0008): tasas, topes, RMV y demás valores legales que Finanzas activa con
+// fecha de vigencia, fuente oficial y responsable. Cada fila es una versión de un valor; una versión nueva agrega otra
+// fila y nunca reescribe las anteriores. Exactamente una columna de valor está llena: porcentaje en centésimas de punto
+// (9,00 % = 900) o importe en céntimos, según la unidad del código en el catálogo de `src/reglas-legales`. El catálogo
+// de códigos vive en código para que ampliarlo no exija migración. Una corrección marca la fila anterior como
+// reemplazada (con motivo) e inserta otra con la misma vigencia.
+export const reglasLegales = pgTable(
+  "reglas_legales",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    codigo: text("codigo").notNull(),
+    tasaCentesimasDePunto: integer("tasa_centesimas_de_punto"),
+    importeCentimos: integer("importe_centimos"),
+    vigenteDesde: date("vigente_desde", { mode: "string" }).notNull(),
+    fuenteOficial: text("fuente_oficial").notNull(),
+    activadaPorId: uuid("activada_por_id").notNull().references(() => cuentasLocales.id),
+    activadaEn: timestamp("activada_en", { withTimezone: true }).notNull().defaultNow(),
+    reemplazadaEn: timestamp("reemplazada_en", { withTimezone: true }),
+    motivoDeReemplazo: text("motivo_de_reemplazo"),
+  },
+  (table) => [
+    index("reglas_legales_codigo").on(table.codigo),
+    uniqueIndex("reglas_legales_una_activa_por_vigencia").on(table.codigo, table.vigenteDesde).where(sql`${table.reemplazadaEn} IS NULL`),
+    check("reglas_legales_una_sola_columna", sql`num_nonnulls(${table.tasaCentesimasDePunto}, ${table.importeCentimos}) = 1`),
+    check("reglas_legales_tasa_valida", sql`${table.tasaCentesimasDePunto} IS NULL OR ${table.tasaCentesimasDePunto} BETWEEN 0 AND 10000`),
+    check("reglas_legales_importe_positivo", sql`${table.importeCentimos} IS NULL OR ${table.importeCentimos} > 0`),
+    check("reglas_legales_fuente_valida", sql`char_length(btrim(${table.fuenteOficial})) BETWEEN 1 AND 500`),
+    check("reglas_legales_reemplazo_con_motivo", sql`(${table.reemplazadaEn} IS NULL) = (${table.motivoDeReemplazo} IS NULL)`),
+    check("reglas_legales_motivo_valido", sql`${table.motivoDeReemplazo} IS NULL OR char_length(btrim(${table.motivoDeReemplazo})) BETWEEN 1 AND 250`),
+  ],
+);

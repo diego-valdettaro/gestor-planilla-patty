@@ -182,6 +182,10 @@ _Evitar_: orden de transferencia, preliquidación finalizada, subsanación
 Dato de una relación laboral que Finanzas mantiene con fecha de vigencia y del que depende el cálculo: sueldo, jornada ordinaria diaria, régimen laboral, afiliación pensionaria, esquema de comisión AFP, elegibilidad familiar y sede de adscripción. Un valor nuevo agrega una vigencia y no reescribe las anteriores; una corrección reemplaza el valor con motivo, y un dato sin vigencia es «Pendiente», nunca cero.
 _Evitar_: valor actual que reescribe la historia, ficha editable sin vigencia, dato de la persona (es de la relación laboral)
 
+**Regla legal**:
+Valor legal o tributario que Finanzas activa con fecha de vigencia y fuente oficial, como una tasa, un tope o la RMV; no es una constante del código ni se consulta a un servicio externo. Cada versión conserva su vigencia, su fuente y quién la activó; una versión nueva no reescribe las anteriores, una corrección reemplaza el valor con motivo, y consultar una fecha sin versión vigente deja la falta explícita («Pendiente», «Sin regla vigente»), nunca cero.
+_Evitar_: tasa fija en el código, parámetro global editable sin vigencia, constante legal
+
 **Remuneración ordinaria computable**:
 Suma de los conceptos remunerativos regulares que forman la base para valorar una hora ordinaria y las horas extra.
 _Evitar_: sueldo base, total de ingresos, neto
