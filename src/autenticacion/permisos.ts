@@ -132,3 +132,12 @@ export function puedeConsultarRelacionesLaborales(actor: Actor): boolean {
 export function puedeGestionarCalendarioLaboral(actor: Actor): boolean {
   return actor.rol === "administrador" || actor.rol === "finanzas";
 }
+
+/**
+ * Consultar y editar Pagos (condiciones laborales con vigencia): solo Finanzas. A diferencia del resto de la matriz,
+ * el Administrador del sistema no entra: el criterio de #116 y la historia 2 de #96 reservan los importes y datos
+ * salariales a Finanzas, y los demás roles reciben un rechazo del servidor.
+ */
+export function puedeGestionarPagos(actor: Actor): boolean {
+  return actor.rol === "finanzas";
+}

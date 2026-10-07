@@ -22,13 +22,13 @@ describe("enlaces de navegación", () => {
     expect(rutas(gerenteDeTiendas)).toEqual(["/configuracion", "/turnos", "/asistencias", "/periodos"]);
     expect(rutas(gerenteDeAdministracion)).toEqual(["/configuracion"]);
     expect(rutas(gerenteSinGrupos)).toEqual([]);
-    expect(rutas(finanzas)).toEqual(["/cuentas", "/asistencias", "/periodos", "/relaciones-laborales"]);
+    expect(rutas(finanzas)).toEqual(["/cuentas", "/asistencias", "/periodos", "/relaciones-laborales", "/pagos"]);
     expect(rutas(recursosHumanos)).toEqual(["/relaciones-laborales"]);
   });
 
   it("nombra cada sección con el vocabulario del dominio", () => {
     expect(enlacesPermitidos(administrador).map((enlace) => enlace.etiqueta)).toEqual(["Configuración", "Cuentas", "Horarios", "Asistencia", "Períodos de planilla", "Relaciones laborales"]);
-    expect(enlacesPermitidos(finanzas).map((enlace) => enlace.etiqueta)).toEqual(["Cuentas", "Asistencia", "Períodos de planilla", "Relaciones laborales"]);
+    expect(enlacesPermitidos(finanzas).map((enlace) => enlace.etiqueta)).toEqual(["Cuentas", "Asistencia", "Períodos de planilla", "Relaciones laborales", "Pagos"]);
   });
 
   it("marca activa la ruta y sus subrutas, sin confundir prefijos parecidos", () => {
