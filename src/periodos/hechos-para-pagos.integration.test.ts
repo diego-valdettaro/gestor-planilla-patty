@@ -121,15 +121,21 @@ describe.skipIf(!databaseUrl)("hechos de asistencia para Pagos en PostgreSQL", (
     await pool.end();
   });
 
-  /** Otra prueba puede crear un grupo que gestiona asistencia entre la aprobación y el cierre: se reintenta. */
+  /**
+   * El cierre exige aprobar todos los grupos que gestionan asistencia en la base compartida, también los de pruebas
+   * que corren en paralelo. Las aprobaciones solo hacen falta en ese instante: se borran enseguida para no impedir
+   * que esas pruebas eliminen su grupo, y se reintenta si un grupo ajeno aparece o desaparece a mitad de camino.
+   */
   async function cerrar(periodoId: string, instante: string) {
     for (let intento = 1; ; intento += 1) {
-      await aprobarGruposQueGestionanAsistenciaDePrueba(db, periodoId, finanzasId);
       try {
+        await aprobarGruposQueGestionanAsistenciaDePrueba(db, periodoId, finanzasId);
         await repositorio.cerrar(periodoId, finanzasId, new Date(instante));
         return;
       } catch (error) {
-        if (intento === 3 || !(error instanceof Error) || !error.message.includes("falta la aprobación")) throw error;
+        if (intento === 3) throw error;
+      } finally {
+        await eliminarAprobacionesDePrueba(db, [periodoId]);
       }
     }
   }
