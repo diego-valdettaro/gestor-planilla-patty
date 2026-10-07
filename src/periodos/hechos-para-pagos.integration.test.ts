@@ -52,7 +52,9 @@ describe.skipIf(!databaseUrl)("hechos de asistencia para Pagos en PostgreSQL", (
   }
 
   beforeAll(async () => {
-    await db.insert(schema.grupos).values({ nombre: grupo });
+    // Sin gestión de asistencia: el cierre exige aprobar todos los grupos que la gestionan en la base compartida, y
+    // un grupo nuestro sin aprobar haría fallar el cierre de otras pruebas que corren en paralelo.
+    await db.insert(schema.grupos).values({ nombre: grupo, gestionaAsistencia: false });
     await db.insert(schema.cuentasLocales).values({ id: finanzasId, nombreUsuario: `finanzas-115-${sufijo}`, hashContrasena: "prueba", rol: "finanzas" });
     await db.insert(schema.colaboradores).values([
       { dni: dniAna, nombre: "Ana Hechos", sede: "Centro", grupo },
@@ -119,9 +121,17 @@ describe.skipIf(!databaseUrl)("hechos de asistencia para Pagos en PostgreSQL", (
     await pool.end();
   });
 
+  /** Otra prueba puede crear un grupo que gestiona asistencia entre la aprobación y el cierre: se reintenta. */
   async function cerrar(periodoId: string, instante: string) {
-    await aprobarGruposQueGestionanAsistenciaDePrueba(db, periodoId, finanzasId);
-    await repositorio.cerrar(periodoId, finanzasId, new Date(instante));
+    for (let intento = 1; ; intento += 1) {
+      await aprobarGruposQueGestionanAsistenciaDePrueba(db, periodoId, finanzasId);
+      try {
+        await repositorio.cerrar(periodoId, finanzasId, new Date(instante));
+        return;
+      } catch (error) {
+        if (intento === 3 || !(error instanceof Error) || !error.message.includes("falta la aprobación")) throw error;
+      }
+    }
   }
 
   const porFecha = (hechos: HechoDiarioDeAsistencia[], fecha: string) => hechos.find((hecho) => hecho.fecha === fecha)!;
