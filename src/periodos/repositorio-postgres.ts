@@ -21,6 +21,8 @@ import {
 
 import { vigenciasConfirmadas, type RelacionLaboral } from "@/relaciones-laborales/vigencia";
 
+import { construirHechosDiarios } from "./hechos-de-asistencia-postgres";
+import type { LectorDeHechosDeAsistencia, RevisionDeAsistenciaParaPagos } from "./hechos-para-pagos";
 import { calcularBloqueosDeAprobacion, type BloqueoDeAprobacion, type JornadaParaAprobar } from "./aprobacion-de-asistencia";
 import {
   AprobacionBloqueadaError,
@@ -40,7 +42,7 @@ import {
   type RevisionDePeriodo,
 } from "./periodo-planilla";
 
-export class RepositorioPostgresDePeriodos implements RepositorioDePeriodos {
+export class RepositorioPostgresDePeriodos implements RepositorioDePeriodos, LectorDeHechosDeAsistencia {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}
 
   async listar(): Promise<PeriodoPlanilla[]> {
@@ -66,9 +68,44 @@ export class RepositorioPostgresDePeriodos implements RepositorioDePeriodos {
   }
 
   async listarRevisiones(periodoId: string): Promise<RevisionDePeriodo[]> {
-    return this.db.select().from(revisionesDePeriodosPlanilla)
+    return this.db.select({
+      id: revisionesDePeriodosPlanilla.id,
+      periodoId: revisionesDePeriodosPlanilla.periodoId,
+      numero: revisionesDePeriodosPlanilla.numero,
+      resumen: revisionesDePeriodosPlanilla.resumen,
+      responsableId: revisionesDePeriodosPlanilla.responsableId,
+      cerradaEn: revisionesDePeriodosPlanilla.cerradaEn,
+    }).from(revisionesDePeriodosPlanilla)
       .where(eq(revisionesDePeriodosPlanilla.periodoId, periodoId))
       .orderBy(asc(revisionesDePeriodosPlanilla.numero));
+  }
+
+  /** Hechos congelados de la última revisión de un período cerrado, o en vivo y provisionales si sigue abierto. */
+  async leerHechosDelPeriodo(periodoId: string): Promise<RevisionDeAsistenciaParaPagos> {
+    const periodo = await this.buscar(periodoId);
+    if (!periodo) throw new Error("No existe el período de planilla.");
+    if (periodo.estado === "abierto") {
+      return {
+        periodoId,
+        revisionId: null,
+        numero: null,
+        inicio: periodo.inicio,
+        fin: periodo.fin,
+        provisional: true,
+        hechos: await construirHechosDiarios(this.db, periodo),
+      };
+    }
+    const [revision] = await this.db.select({
+      id: revisionesDePeriodosPlanilla.id,
+      numero: revisionesDePeriodosPlanilla.numero,
+      hechos: revisionesDePeriodosPlanilla.hechos,
+    }).from(revisionesDePeriodosPlanilla)
+      .where(eq(revisionesDePeriodosPlanilla.periodoId, periodoId))
+      .orderBy(desc(revisionesDePeriodosPlanilla.numero))
+      .limit(1);
+    if (!revision) throw new Error("El período cerrado no tiene una revisión.");
+    if (!revision.hechos) throw new Error(`La revisión ${revision.numero} del período ${periodo.inicio} al ${periodo.fin} no tiene hechos congelados: reábralo y ciérrelo de nuevo.`);
+    return { periodoId, revisionId: revision.id, numero: revision.numero, inicio: periodo.inicio, fin: periodo.fin, provisional: false, hechos: revision.hechos };
   }
 
   async listarAprobaciones(periodoId: string): Promise<AprobacionDeGrupo[]> {
@@ -213,6 +250,7 @@ export class RepositorioPostgresDePeriodos implements RepositorioDePeriodos {
         periodoId: id,
         numero: (anterior?.numero ?? 0) + 1,
         resumen,
+        hechos: await construirHechosDiarios(tx, periodo),
         responsableId,
         cerradaEn: registradoEn,
       });
