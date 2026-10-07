@@ -57,7 +57,7 @@ export default async function PaginaDeCondicionesLaborales({ searchParams }: { s
               <td>{valorOPendiente(fila, "regimen_laboral")}</td>
               <td>{afiliacion(fila)}</td>
               <td>{valorOPendiente(fila, "sede_de_adscripcion")}</td>
-              <td>{fila.faltantes.length ? <span className="insignia advertencia">Falta: {fila.faltantes.map((dato) => enMinuscula(NOMBRE_DE_DATO[dato])).join(", ")}</span> : <span className="insignia ok">Completa</span>}</td>
+              <td className="celda-estado">{fila.faltantes.length ? <span className="insignia advertencia">Falta: {fila.faltantes.map((dato) => enMinuscula(NOMBRE_DE_DATO[dato])).join(", ")}</span> : <span className="insignia ok">Completa</span>}</td>
             </tr>)}</tbody></table></div>
         </> : <section className="estado-vacio"><h3>Ninguna relación coincide con los filtros</h3><p>Cambie los criterios o <Link href="/pagos/condiciones-laborales">quite los filtros</Link> para ver las {total} relaciones confirmadas.</p></section>}
       </section>
