@@ -70,6 +70,8 @@ describe.skipIf(!databaseUrl)("condiciones laborales con vigencia (integración 
     await db.delete(schema.relacionesLaborales).where(inArray(schema.relacionesLaborales.id, relaciones));
     await db.delete(schema.colaboradores).where(inArray(schema.colaboradores.dni, dniDeTodos));
     await db.delete(schema.sedes).where(inArray(schema.sedes.nombre, [sede, sedeInactiva]));
+    // Otras pruebas aprueban todos los grupos de la base, también los que crea esta: sin esto el borrado falla según el orden de ejecución.
+    await db.delete(schema.aprobacionesDeAsistencia).where(eq(schema.aprobacionesDeAsistencia.grupo, grupo));
     await db.delete(schema.grupos).where(eq(schema.grupos.nombre, grupo));
     await db.delete(schema.cuentasLocales).where(inArray(schema.cuentasLocales.id, [cuentaFinanzas, cuentaAdministrador]));
     await pool.end();
