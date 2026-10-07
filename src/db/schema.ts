@@ -13,6 +13,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
+import type { HechoDiarioDeAsistencia } from "@/periodos/hechos-para-pagos";
 import type { ResumenDePeriodo } from "@/periodos/periodo-planilla";
 
 export const colaboradores = pgTable("colaboradores", {
@@ -113,6 +114,9 @@ export const revisionesDePeriodosPlanilla = pgTable(
     periodoId: uuid("periodo_id").notNull().references(() => periodosPlanilla.id),
     numero: integer("numero").notNull(),
     resumen: jsonb("resumen").$type<ResumenDePeriodo>().notNull(),
+    // Hechos diarios que Asistencia entrega a Pagos (issue #115), congelados al cerrar. Nulo en las revisiones
+    // anteriores al contrato: Pagos no las acepta como fuente.
+    hechos: jsonb("hechos").$type<HechoDiarioDeAsistencia[]>(),
     responsableId: uuid("responsable_id").notNull().references(() => cuentasLocales.id),
     cerradaEn: timestamp("cerrada_en", { withTimezone: true }).notNull(),
   },

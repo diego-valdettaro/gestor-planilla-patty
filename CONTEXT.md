@@ -132,6 +132,14 @@ _Evitar_: mes calendario, registro mensual, rango fijo obligatorio
 Período de planilla cuyo resumen y reglas aplicadas quedaron fijados para auditoría; solo Finanzas puede reabrirlo dejando un motivo.
 _Evitar_: mes bloqueado, período definitivo sin trazabilidad
 
+**Revisión cerrada de asistencia**:
+Versión fijada de un período de planilla cerrado que Asistencia entrega a Pagos con los hechos diarios de cada persona. Una revisión sobre un período abierto no está cerrada: sus hechos son provisionales y solo sirven a un borrador. Pagos solo finaliza con revisiones cerradas que cubren exactamente el corte de incidencias.
+_Evitar_: resumen del período, aprobación del grupo, preliquidación
+
+**Hecho diario de asistencia**:
+Situación resuelta de una persona en una fecha, tal como la entrega Asistencia a Pagos: grupo, sede de la jornada, horario aplicado, trabajo real o motivo de no asistencia, minutos pertinentes, decisiones que afectan la valoración y una referencia a su evidencia en Asistencia. No lleva importes ni copia la aprobación de los gerentes: una jornada puede originar varios conceptos, ninguno o una reclasificación de sueldo.
+_Evitar_: línea de pago, estado con importe, jornada aprobada
+
 ## Pago
 
 **Preliquidación**:
