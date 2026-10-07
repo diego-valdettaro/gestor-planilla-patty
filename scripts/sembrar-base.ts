@@ -11,6 +11,8 @@ import { RepositorioPostgresDeCuentas } from "@/autenticacion/repositorio-postgr
 import { asignarGerenteAGrupo } from "@/autenticacion/gestionar-cuentas";
 import type { Actor } from "@/autenticacion/permisos";
 import { registrarColaborador } from "@/colaboradores/registrar-colaborador";
+import { registrarCondicionLaboral } from "@/condiciones-laborales/gestionar-condiciones-laborales";
+import { RepositorioPostgresDeCondicionesLaborales } from "@/condiciones-laborales/repositorio-postgres";
 import { confirmarCese, confirmarIngreso, registrarCese, registrarIngreso } from "@/relaciones-laborales/gestionar-relaciones-laborales";
 import { RepositorioPostgresDeRelacionesLaborales } from "@/relaciones-laborales/repositorio-postgres";
 import { RepositorioPostgresDeColaboradores } from "@/colaboradores/repositorio-postgres";
@@ -172,6 +174,7 @@ async function limpiar(pool: Pool): Promise<void> {
     DELETE FROM aprobaciones_de_asistencia WHERE periodo_id IN (SELECT id FROM periodos_planilla WHERE inicio IN ('${PERIODO_ACTUAL.inicio}', '${PERIODO_ANTERIOR.inicio}'));
     DELETE FROM auditoria_periodos_planilla WHERE periodo_id IN (SELECT id FROM periodos_planilla WHERE inicio IN ('${PERIODO_ACTUAL.inicio}', '${PERIODO_ANTERIOR.inicio}'));
     DELETE FROM periodos_planilla WHERE inicio IN ('${PERIODO_ACTUAL.inicio}', '${PERIODO_ANTERIOR.inicio}');
+    DELETE FROM condiciones_laborales WHERE relacion_laboral_id IN (SELECT id FROM relaciones_laborales WHERE dni LIKE '${PATRON_DNI_DEMO}');
     DELETE FROM relaciones_laborales WHERE dni LIKE '${PATRON_DNI_DEMO}';
     DELETE FROM colaboradores WHERE dni LIKE '${PATRON_DNI_DEMO}';
     DELETE FROM sedes WHERE nombre IN (${sedes});
@@ -234,6 +237,51 @@ async function registrarRelacionesLaborales(db: Db, actor: Actor): Promise<void>
   await confirmada("99900013", lunes[1]);
   // Luis tiene el ingreso registrado pero Recursos Humanos aún no lo confirmó: no se le pueden publicar horarios.
   await registrarIngreso(repositorio, actor, { dni: "99900014", ingreso: lunes[0] });
+}
+
+/**
+ * Condiciones laborales con vigencia (#116), registradas por Finanzas con el caso de uso real. Ana tiene un cambio de
+ * sueldo el día 16 del mes actual (dos vigencias en el mismo mes; antes del 16 la segunda aparece como «Programado»);
+ * Beto usa AFP con esquema de comisión; Carla, REMYPE y elegibilidad familiar; Darío y Elena quedan incompletos y el
+ * resto sin ningún dato, para ver «Pendiente» y «Falta: …». Karen conserva un historial por cada relación laboral.
+ */
+async function registrarCondicionesLaborales(db: Db, actor: Actor): Promise<void> {
+  const repositorio = new RepositorioPostgresDeCondicionesLaborales(db);
+  const relaciones = await repositorio.listarRelaciones();
+  const sedeDe = (dni: string) => COLABORADORES.find((colaborador) => colaborador.dni === dni)!.sede;
+  const relacionDe = (dni: string, ingreso?: string) => {
+    const relacion = relaciones.find((candidata) => candidata.dni === dni && (!ingreso || candidata.ingreso === ingreso));
+    if (!relacion) throw new Error(`El seed no encontró la relación laboral de ${dni}.`);
+    return relacion;
+  };
+  const registrar = (relacion: { id: string; ingreso: string }, dato: string, valor: string, vigenteDesde = relacion.ingreso) =>
+    registrarCondicionLaboral(repositorio, actor, { relacionId: relacion.id, dato, valor, vigenteDesde });
+  const completar = async (dni: string, perfil: { afiliacion: string; esquema?: string; regimen?: string; elegible?: string; sueldo: string }) => {
+    const relacion = relacionDe(dni);
+    await registrar(relacion, "sueldo", perfil.sueldo);
+    await registrar(relacion, "jornada_ordinaria_diaria", "8");
+    await registrar(relacion, "regimen_laboral", perfil.regimen ?? "general");
+    await registrar(relacion, "afiliacion_pensionaria", perfil.afiliacion);
+    if (perfil.esquema) await registrar(relacion, "comision_afp", perfil.esquema);
+    await registrar(relacion, "elegibilidad_familiar", perfil.elegible ?? "no");
+    await registrar(relacion, "sede_de_adscripcion", sedeDe(dni));
+  };
+
+  await completar("99900001", { sueldo: "1500", afiliacion: "onp" });
+  const DIA_16_DEL_MES = 15; // índice 0-based dentro del período
+  const cambioDeSueldo = fechasDelRango(PERIODO_ACTUAL.inicio, PERIODO_ACTUAL.fin)[DIA_16_DEL_MES];
+  await registrar(relacionDe("99900001"), "sueldo", "1800", cambioDeSueldo);
+  await completar("99900002", { sueldo: "1650,50", afiliacion: "afp_integra", esquema: "mixta", elegible: "si" });
+  await completar("99900003", { sueldo: "1300", afiliacion: "afp_prima", esquema: "flujo", regimen: "remype_pequena_empresa", elegible: "si" });
+  await completar("99900007", { sueldo: "2200", afiliacion: "onp" });
+  await completar("99900009", { sueldo: "3500", afiliacion: "afp_habitat", esquema: "flujo" });
+  // Incompletos: ven «Pendiente» y «Falta: …».
+  await registrar(relacionDe("99900004"), "sueldo", "1400");
+  await registrar(relacionDe("99900005"), "sueldo", "1450");
+  await registrar(relacionDe("99900005"), "jornada_ordinaria_diaria", "7,5");
+  // Karen: una relación que terminó y su reingreso, cada una con su propio historial.
+  await registrar(relacionDe("99900013", "2024-02-05"), "sueldo", "1200");
+  await registrar(relacionDe("99900013", diasDeLaSemana(SEMANA_ACTUAL)[1]), "sueldo", "1700");
 }
 
 function turnosDeSemana(dni: string, sede: string, semana: string) {
@@ -349,6 +397,14 @@ async function verificarInvariantes(pool: Pool): Promise<void> {
   if (Number(relaciones.karen) !== 2) fallos.push(`Karen debería tener 2 relaciones laborales, tiene ${relaciones.karen}`);
   if (Number(relaciones.confirmadas) !== COLABORADORES.length) fallos.push(`se esperaban ${COLABORADORES.length} relaciones con ingreso confirmado (una por persona más el reingreso, menos Luis), hay ${relaciones.confirmadas}`);
 
+  const { rows: [condiciones] } = await pool.query<{ sueldosDeAna: string; completas: string }>(
+    `SELECT count(*) FILTER (WHERE c.dato = 'sueldo' AND r.dni = '99900001' AND c.reemplazada_en IS NULL)::text AS "sueldosDeAna",
+            count(DISTINCT r.id) FILTER (WHERE c.dato = 'sede_de_adscripcion')::text AS completas
+       FROM condiciones_laborales c JOIN relaciones_laborales r ON r.id = c.relacion_laboral_id WHERE r.dni LIKE '${PATRON_DNI_DEMO}'`,
+  );
+  if (Number(condiciones.sueldosDeAna) !== 2) fallos.push(`Ana debería tener 2 vigencias de sueldo, tiene ${condiciones.sueldosDeAna}`);
+  if (Number(condiciones.completas) !== 5) fallos.push(`se esperaban 5 relaciones con condiciones completas, hay ${condiciones.completas}`);
+
   if (fallos.length) throw new Error(`Invariantes del seed no se cumplen:\n- ${fallos.join("\n- ")}`);
 }
 
@@ -391,6 +447,12 @@ function resumen(): string {
     "  Julia Ingreso    -> ingresa el miércoles de la semana de actividad (lun/mar = «Sin relación laboral»)",
     "  Karen Reingreso  -> dos relaciones con el mismo DNI; reingresó el martes de la semana de actividad",
     "  Luis Pendiente   -> ingreso sin confirmar: no se le puede publicar el horario",
+    "",
+    "Pagos · Condiciones laborales (finanzas / finanzas; el Administrador no tiene acceso):",
+    "  Ana Borrador     -> dos vigencias de sueldo en el mes actual (cambio el día 16; antes del 16 la segunda es «Programado»)",
+    "  Beto Publicado   -> AFP Integra con esquema mixto y elegible a asignación familiar; Carla Cambios -> REMYPE",
+    "  Darío / Elena    -> datos incompletos («Pendiente» y «Falta: …»); el resto, sin ningún dato",
+    "  Karen Reingreso  -> un historial por cada una de sus dos relaciones laborales",
     "",
     "Calendario de asistencias de Beto Publicado (mes actual):",
     "  lun/mar -> Registrada ; mié -> Registrada (Feriado) ; jue -> Pendiente de revisión ; vie/sáb -> Esperada",
@@ -464,6 +526,9 @@ async function main(): Promise<void> {
 
     // --- Relaciones laborales (casos de uso: las registra y confirma Recursos Humanos) ---
     await registrarRelacionesLaborales(db, actorRrhh);
+
+    // --- Condiciones laborales con vigencia (caso de uso: las registra Finanzas) ---
+    await registrarCondicionesLaborales(db, actorFinanzas);
 
     // --- Períodos: ambos abiertos al principio para poder publicar dentro ---
     await db.insert(schema.periodosPlanilla).values([

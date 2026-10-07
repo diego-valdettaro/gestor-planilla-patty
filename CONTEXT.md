@@ -178,6 +178,10 @@ _Evitar_: preliquidación, neto calculado
 Constancia registrada por Finanzas de que se efectuó fuera del sistema el desembolso del mes de pago completo. Marca el cierre operativo para reemplazar su preliquidación y reabrir los períodos de asistencia que la sustentan.
 _Evitar_: orden de transferencia, preliquidación finalizada, subsanación
 
+**Condición laboral**:
+Dato de una relación laboral que Finanzas mantiene con fecha de vigencia y del que depende el cálculo: sueldo, jornada ordinaria diaria, régimen laboral, afiliación pensionaria, esquema de comisión AFP, elegibilidad familiar y sede de adscripción. Un valor nuevo agrega una vigencia y no reescribe las anteriores; una corrección reemplaza el valor con motivo, y un dato sin vigencia es «Pendiente», nunca cero.
+_Evitar_: valor actual que reescribe la historia, ficha editable sin vigencia, dato de la persona (es de la relación laboral)
+
 **Remuneración ordinaria computable**:
 Suma de los conceptos remunerativos regulares que forman la base para valorar una hora ordinaria y las horas extra.
 _Evitar_: sueldo base, total de ingresos, neto

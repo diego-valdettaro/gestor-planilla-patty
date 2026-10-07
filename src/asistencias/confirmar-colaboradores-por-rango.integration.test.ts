@@ -113,6 +113,8 @@ describe.skipIf(!databaseUrl)("confirmación por rango en PostgreSQL", () => {
     await db.delete(schema.colaboradores).where(inArray(schema.colaboradores.dni, ids));
     await db.delete(schema.cuentasLocales).where(eq(schema.cuentasLocales.id, cuentaId));
     await db.delete(schema.sedes).where(eq(schema.sedes.nombre, sede));
+    // Otras pruebas aprueban todos los grupos de la base, también los que crea esta: sin esto el borrado falla según el orden de ejecución.
+    await db.delete(schema.aprobacionesDeAsistencia).where(eq(schema.aprobacionesDeAsistencia.grupo, grupo));
     await db.delete(schema.grupos).where(eq(schema.grupos.nombre, grupo));
     await pool.end();
   });

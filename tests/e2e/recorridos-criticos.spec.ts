@@ -380,7 +380,7 @@ test("cada rol ve en el menú exactamente las rutas que puede abrir", async ({ p
   const errores = observarErroresDelNavegador(page);
   const casos: Array<[string, string[]]> = [
     ["admin", ["Configuración", "Cuentas", "Horarios", "Asistencia", "Períodos de planilla", "Relaciones laborales"]],
-    ["finanzas", ["Cuentas", "Asistencia", "Períodos de planilla", "Relaciones laborales"]],
+    ["finanzas", ["Cuentas", "Asistencia", "Períodos de planilla", "Relaciones laborales", "Pagos"]],
     ["gerente-tiendas", ["Configuración", "Horarios", "Asistencia", "Períodos de planilla"]],
     ["gerente-administracion", ["Configuración"]],
     ["gerente-sin-grupos", []],
@@ -766,5 +766,78 @@ test("las tablas de /periodos se desplazan dentro de su región a 375 px sin tru
   await regiones.first().focus();
   await expect(regiones.first()).toBeFocused();
   expect(await desbordeHorizontalDeLaPagina(page)).toBeLessThanOrEqual(0);
+  expect(errores).toEqual([]);
+});
+
+test("Finanzas registra un segundo sueldo con vigencia en Condiciones laborales y el Administrador no entra", async ({ page }) => {
+  test.setTimeout(90_000);
+  const errores = observarErroresDelNavegador(page);
+
+  await iniciarSesion(page, "finanzas");
+  await page.getByRole("navigation", { name: "Navegación principal" }).getByRole("link", { name: /Pagos/ }).click();
+  await expect(page).toHaveURL(/\/pagos\/condiciones-laborales$/, { timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: "Condiciones laborales", level: 1 })).toBeVisible({ timeout: 30_000 });
+  const lista = page.getByRole("region", { name: "Condiciones laborales vigentes hoy" });
+  await expect(lista.locator("tbody tr").filter({ hasText: "Beto Publicado" })).toContainText("AFP Integra · comisión mixta");
+  await expect(lista.locator("tbody tr").filter({ hasText: "Carla Cambios" })).toContainText("REMYPE pequeña empresa");
+  await expect(lista.locator("tbody tr").filter({ hasText: "Eva Confirmable" })).toContainText("Falta: sueldo");
+  await expect(lista.locator("tbody tr").filter({ hasText: "Eva Confirmable" })).not.toContainText("S/ 0,00");
+
+  await lista.getByRole("link", { name: "Darío Liquidado" }).click();
+  await expect(page.getByRole("heading", { name: "Condiciones laborales de Darío Liquidado", level: 1 })).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("button", { name: "Registrar nuevo valor" }).click();
+  const dialogo = page.getByRole("dialog");
+  await dialogo.getByLabel("Sueldo mensual (S/)").fill("1600");
+  await dialogo.getByLabel("Vigente desde").fill("2030-01-16");
+  await expect(dialogo.getByRole("heading", { name: "¿Registrar el nuevo sueldo de Darío Liquidado desde el 16/01/2030?" })).toBeVisible();
+  await expect(dialogo.getByText("El valor anterior queda vigente hasta el 15/01/2030 y no se reescribe.")).toBeVisible();
+  await dialogo.getByRole("button", { name: "Registrar valor" }).click();
+  await expect(dialogo).toBeHidden();
+
+  const historial = page.getByRole("region", { name: "Historial de sueldo" });
+  await expect(historial.locator("tbody tr")).toHaveCount(2);
+  await expect(historial.locator("tbody tr").first()).toContainText("S/ 1.400,00");
+  await expect(historial.locator("tbody tr").first()).toContainText("15/01/2030");
+  await expect(historial.locator("tbody tr").last()).toContainText("S/ 1.600,00");
+  await expect(historial.locator("tbody tr").last()).toContainText("Programado");
+
+  await page.getByRole("button", { name: "Registrar nuevo valor" }).click();
+  await dialogo.getByLabel("Sueldo mensual (S/)").fill("1700");
+  await dialogo.getByLabel("Vigente desde").fill("2030-01-16");
+  await dialogo.getByRole("button", { name: "Registrar valor" }).click();
+  // El campo «Vigente desde» no admite una fecha igual o anterior a la última vigencia: el formulario no se envía.
+  await expect(dialogo).toBeVisible();
+  await expect(historial.locator("tbody tr")).toHaveCount(2);
+  await dialogo.getByRole("button", { name: "Cancelar" }).click();
+  await expect(historial.locator("tbody tr")).toHaveCount(2);
+
+  await page.context().clearCookies();
+  await iniciarSesion(page, "admin");
+  await page.goto("/pagos/condiciones-laborales");
+  await expect(page.getByRole("heading", { name: "Sin permiso" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("S/ ")).toHaveCount(0);
+  expect(errores).toEqual([]);
+});
+
+test("Condiciones laborales cabe en 375 px: las tablas se desplazan dentro de su región", async ({ page }) => {
+  const errores = observarErroresDelNavegador(page);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await iniciarSesion(page, "finanzas");
+
+  await page.goto("/pagos/condiciones-laborales");
+  await expect(page.getByRole("heading", { name: "Condiciones laborales", level: 1 })).toBeVisible({ timeout: 30_000 });
+  expect(await desbordeHorizontalDeLaPagina(page)).toBeLessThanOrEqual(0);
+  const lista = page.getByRole("region", { name: "Condiciones laborales vigentes hoy" });
+  expect(await lista.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+
+  await lista.getByRole("link", { name: "Beto Publicado" }).click();
+  await expect(page.getByRole("heading", { name: "Condiciones laborales de Beto Publicado", level: 1 })).toBeVisible({ timeout: 30_000 });
+  expect(await desbordeHorizontalDeLaPagina(page)).toBeLessThanOrEqual(0);
+  await page.getByRole("button", { name: "Registrar nuevo valor" }).click();
+  const cajaDelDialogo = await page.getByRole("dialog").boundingBox();
+  expect(cajaDelDialogo!.x).toBeGreaterThanOrEqual(0);
+  expect(cajaDelDialogo!.x + cajaDelDialogo!.width).toBeLessThanOrEqual(375);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toBeHidden();
   expect(errores).toEqual([]);
 });

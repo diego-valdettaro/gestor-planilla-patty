@@ -61,7 +61,7 @@ Cada pantalla de la sección 4 hereda estos seis estados y solo detalla lo que c
 
 Las referencias «(Dn)» remiten a la decisión correspondiente de la sección 9.
 
-Estructura de páginas (D2): un acceso «Pagos» en la navegación abre la lista de meses (4.1); cada mes tiene su propia página (4.2) y el detalle por persona es otra página enlazable dentro de ese mes (4.3). Las fuentes externas, la importación, la finalización, la constancia de pago y la exportación se alcanzan desde la página del mes. Las condiciones laborales con vigencia (4.9) y las reglas legales (4.10) también son secciones de Pagos, visibles solo para Finanzas, y se alcanzan desde la navegación secundaria de Pagos (V7); si son un panel, una subpágina o un diálogo lo decide el ticket que las construya, respetando lo descrito aquí. Las URL exactas también las fija el primer ticket con interfaz. Los enlaces entre pantallas se describen por nombre.
+Estructura de páginas (D2): un acceso «Pagos» en la navegación abre la lista de meses (4.1); cada mes tiene su propia página (4.2) y el detalle por persona es otra página enlazable dentro de ese mes (4.3). Las fuentes externas, la importación, la finalización, la constancia de pago y la exportación se alcanzan desde la página del mes. Las condiciones laborales con vigencia (4.9) y las reglas legales (4.10) también son secciones de Pagos, visibles solo para Finanzas, y se alcanzan desde la navegación secundaria de Pagos (V7); si son un panel, una subpágina o un diálogo lo decide el ticket que las construya, respetando lo descrito aquí. Las URL exactas también las fija el primer ticket con interfaz: el ticket #116 fijó `/pagos` (redirige a la primera sección disponible), `/pagos/condiciones-laborales` y `/pagos/condiciones-laborales/[relacionId]`; los tickets siguientes cuelgan sus pantallas de `/pagos`. Los enlaces entre pantallas se describen por nombre.
 
 ```mermaid
 flowchart LR
@@ -272,7 +272,7 @@ La finalización no es una pantalla propia: se dispara desde 4.2 con «Finalizar
 | Vigente desde | `01/03/2025`. |
 | Vigente hasta | Fecha, o «Vigente». El valor siguiente cierra al anterior el día previo. |
 | Registrado por | Responsable y fecha de registro. |
-| Estado | «Vigente», «Anterior» o «Reemplazado» (corrección, con su motivo). |
+| Estado | «Vigente», «Anterior», «Programado» (empieza después de hoy) o «Reemplazado» (corrección, con su motivo). |
 
 Un cambio de sueldo dentro de un mes aparece como dos filas con vigencias contiguas; el detalle de 4.3 muestra ambas al explicar el prorrateo.
 
@@ -436,7 +436,7 @@ La página no se desplaza horizontalmente; solo lo hace el contenedor de cada ta
 
 ## 8. Variantes nuevas del sistema compartido (decisiones explícitas)
 
-Cada una se justifica porque ningún patrón actual cubre la necesidad. Hasta que Diego las apruebe, ningún ticket debe añadirlas a `global.css`.
+Cada una se justifica porque ningún patrón actual cubre la necesidad. Hasta que Diego las apruebe, ningún ticket debe añadirlas a `global.css`. El ticket #116, el primero con interfaz de Pagos, añadió a `global.css` solo lo que su pantalla necesita: V1 (carga y error de ruta), V2, V3 y V7; las demás las añade el ticket que las use. Las pendientes de revisión de Diego siguen siendo V7 y las secciones 4.9, 6.6.
 
 | Id | Variante | Por qué hace falta | Dónde se usa |
 | --- | --- | --- | --- |

@@ -480,3 +480,34 @@ export const descansosSustitutorios = pgTable(
     check("descansos_sustitutorios_verificacion_completa", sql`(${table.estado} = 'previsto' AND ${table.verificadoPorId} IS NULL AND ${table.verificadoEn} IS NULL) OR (${table.estado} <> 'previsto' AND ${table.verificadoPorId} IS NOT NULL AND ${table.verificadoEn} IS NOT NULL)`),
   ],
 );
+
+// Condiciones laborales con vigencia por relación laboral (issue #116, ADR 0008): sueldo, jornada ordinaria diaria,
+// régimen, afiliación pensionaria, esquema de comisión AFP, elegibilidad familiar y sede de adscripción. Cada fila
+// es un dato con su vigencia; un valor nuevo agrega otra fila y nunca reescribe las anteriores. Exactamente una
+// columna de valor está llena, la que corresponde a `dato`. Una corrección marca la fila anterior como reemplazada
+// (con motivo) e inserta otra con la misma vigencia. La sede de adscripción es una FK a las sedes existentes.
+export const condicionesLaborales = pgTable(
+  "condiciones_laborales",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    relacionLaboralId: uuid("relacion_laboral_id").notNull().references(() => relacionesLaborales.id),
+    dato: text("dato", { enum: ["sueldo", "jornada_ordinaria_diaria", "regimen_laboral", "afiliacion_pensionaria", "comision_afp", "elegibilidad_familiar", "sede_de_adscripcion"] }).notNull(),
+    sueldoCentimos: integer("sueldo_centimos"),
+    jornadaMinutos: integer("jornada_minutos"),
+    regimen: text("regimen", { enum: ["general", "remype_pequena_empresa"] }),
+    afiliacionPensionaria: text("afiliacion_pensionaria", { enum: ["onp", "afp_habitat", "afp_integra", "afp_prima", "afp_profuturo"] }),
+    comisionAfp: text("comision_afp", { enum: ["flujo", "mixta"] }),
+    elegibleAsignacionFamiliar: boolean("elegible_asignacion_familiar"),
+    sedeDeAdscripcion: text("sede_de_adscripcion").references(() => sedes.nombre),
+    vigenteDesde: date("vigente_desde", { mode: "string" }).notNull(),
+    registradoPorId: uuid("registrado_por_id").notNull().references(() => cuentasLocales.id),
+    registradoEn: timestamp("registrado_en", { withTimezone: true }).notNull().defaultNow(),
+    reemplazadaEn: timestamp("reemplazada_en", { withTimezone: true }),
+    motivoDeReemplazo: text("motivo_de_reemplazo"),
+  },
+  (table) => [
+    index("condiciones_laborales_relacion_dato").on(table.relacionLaboralId, table.dato),
+    uniqueIndex("condiciones_laborales_una_activa_por_vigencia").on(table.relacionLaboralId, table.dato, table.vigenteDesde).where(sql`${table.reemplazadaEn} IS NULL`),
+    check("condiciones_laborales_reemplazo_con_motivo", sql`(${table.reemplazadaEn} IS NULL) = (${table.motivoDeReemplazo} IS NULL)`),
+  ],
+);
