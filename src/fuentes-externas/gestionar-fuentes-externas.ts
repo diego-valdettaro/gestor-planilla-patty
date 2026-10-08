@@ -19,6 +19,48 @@ export interface ImporteExterno extends ClaveDeImporte {
   /** Un importe anulado queda en el historial con su motivo y ya no cuenta. */
   anuladoEn: Date | null;
   motivoDeAnulacion: string | null;
+  /** El archivo fuente de preliquidación del que viene; null en la carga manual. */
+  importacionId: string | null;
+}
+
+/** Conteos de la validación que aprobó un archivo fuente; con todo o nada, un archivo importado no tiene filas con error. */
+export interface ConteosDeValidacion {
+  filasValidas: number;
+  filasConError: number;
+  duplicadas: number;
+  personasDesconocidas: number;
+}
+
+/** Un archivo fuente de preliquidación importado: el XLSX conservado con su hash, responsable, tipo, mes y validación. */
+export interface ImportacionDeFuente {
+  id: string;
+  tipoDeFuente: CodigoDeTipoDeFuente;
+  mesDeAplicacion: string;
+  archivoNombre: string;
+  archivoUbicacion: string;
+  archivoHashSha256: string;
+  usuarioId: string;
+  usuario: string;
+  importadaEn: Date;
+  filas: number;
+  /** Céntimos. */
+  total: number;
+  validacion: ConteosDeValidacion;
+  /** Otro archivo del mismo tipo y mes lo reemplazó; sus importes se anularon. */
+  reemplazadaEn: Date | null;
+}
+
+export interface NuevaImportacionDeFuente {
+  tipoDeFuente: CodigoDeTipoDeFuente;
+  mesDeAplicacion: string;
+  archivoNombre: string;
+  archivoUbicacion: string;
+  archivoHashSha256: string;
+  usuarioId: string;
+  importadaEn: Date;
+  filas: number;
+  total: number;
+  validacion: ConteosDeValidacion;
 }
 
 export interface ConfirmacionDeFuente {
@@ -33,6 +75,8 @@ export interface NuevoImporteExterno extends ClaveDeImporte {
   tipoDeFuente: CodigoDeTipoDeFuente;
   procedencia: string;
   responsableId: string;
+  /** El archivo fuente del que viene el importe; ausente en la carga manual. */
+  importacionId?: string;
 }
 
 /** Operaciones sobre una fuente (tipo y mes de aplicación); dentro de `ejecutarSobreFuente` corren en una transacción con la fuente bloqueada. */
@@ -49,6 +93,11 @@ export interface AlmacenDeFuentesExternas {
   confirmar(tipo: CodigoDeTipoDeFuente, mes: string, responsableId: string, confirmadaEn: Date): Promise<boolean>;
   /** false si la fuente estaba pendiente. */
   quitarConfirmacion(tipo: CodigoDeTipoDeFuente, mes: string): Promise<boolean>;
+  /** La importación de archivo vigente (no reemplazada) de la fuente, con los importes que conserva sin anular. */
+  buscarImportacionVigente(tipo: CodigoDeTipoDeFuente, mes: string): Promise<(ImportacionDeFuente & { importesVigentes: number }) | undefined>;
+  insertarImportacion(nueva: NuevaImportacionDeFuente): Promise<ImportacionDeFuente>;
+  /** Marca la importación como reemplazada y anula con motivo los importes que aún conserva; devuelve cuántos anuló. */
+  reemplazarImportacion(id: string, motivo: string, reemplazadaEn: Date): Promise<number>;
   /**
    * Si Pagos ya finalizó una versión de este mes de pago. Pagos todavía no finaliza versiones: el ticket de finalización
    * debe implementar esta consulta, que hoy devuelve siempre false, y desde entonces el mes finalizado no admite cambios.
@@ -102,17 +151,17 @@ export interface ResultadoDeCambio {
 const MAXIMO_DE_CARACTERES_DEL_MOTIVO = 250;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function exigirPermiso(actor: Actor): void {
+export function exigirPermiso(actor: Actor): void {
   exigir(puedeGestionarPagos(actor), "No tiene permiso para consultar ni editar Pagos.");
 }
 
-function exigirTipo(codigo: string): TipoDeFuente {
+export function exigirTipo(codigo: string): TipoDeFuente {
   const tipo = buscarTipoDeFuente(codigo);
   if (!tipo) throw new Error("Elija el tipo de fuente de la lista.");
   return tipo;
 }
 
-async function exigirMesAbierto(almacen: AlmacenDeFuentesExternas, mes: string): Promise<void> {
+export async function exigirMesAbierto(almacen: AlmacenDeFuentesExternas, mes: string): Promise<void> {
   if (await almacen.mesFinalizado(mes)) {
     throw new Error(`El mes de pago ${formatearMes(mes)} ya está finalizado: sus fuentes externas no admiten cambios.`);
   }

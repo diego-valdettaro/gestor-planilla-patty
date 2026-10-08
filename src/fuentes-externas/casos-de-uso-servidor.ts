@@ -15,6 +15,14 @@ import {
   type RepositorioDeFuentesExternas,
   type ResultadoDeCambio,
 } from "./gestionar-fuentes-externas";
+import {
+  importarFuente,
+  previsualizarImportacionDeFuente,
+  type AlmacenamientoDeArchivos,
+  type ResultadoDeImportacionDeFuente,
+  type SolicitudDeImportacionDeFuente,
+  type VistaPreviaDeImportacionDeFuente,
+} from "./importar-fuente";
 import type { CodigoDeTipoDeFuente } from "./tipos-de-fuente";
 
 /** Casos de uso de fuentes externas con el actor tomado de la sesión del servidor. */
@@ -34,6 +42,12 @@ export function crearCasosDeUsoDeFuentesExternas(repositorio: RepositorioDeFuent
     },
     async anular(solicitud: { importeId: string; motivo: string }): Promise<ResultadoDeCambio> {
       return anularImporte(repositorio, await sesion.obtenerActorActual(), solicitud);
+    },
+    async previsualizarImportacion(solicitud: SolicitudDeImportacionDeFuente): Promise<VistaPreviaDeImportacionDeFuente> {
+      return previsualizarImportacionDeFuente(repositorio, await sesion.obtenerActorActual(), solicitud);
+    },
+    async importar(solicitud: SolicitudDeImportacionDeFuente, almacenamiento: AlmacenamientoDeArchivos): Promise<ResultadoDeImportacionDeFuente> {
+      return importarFuente(repositorio, await sesion.obtenerActorActual(), solicitud, almacenamiento);
     },
     async confirmar(solicitud: { tipoDeFuente: string; mes: string }): Promise<ConfirmacionDeFuente> {
       return confirmarFuente(repositorio, await sesion.obtenerActorActual(), solicitud);

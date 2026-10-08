@@ -179,6 +179,7 @@ async function limpiar(pool: Pool): Promise<void> {
     DELETE FROM auditoria_periodos_planilla WHERE periodo_id IN (SELECT id FROM periodos_planilla WHERE inicio IN ('${PERIODO_ACTUAL.inicio}', '${PERIODO_ANTERIOR.inicio}'));
     DELETE FROM periodos_planilla WHERE inicio IN ('${PERIODO_ACTUAL.inicio}', '${PERIODO_ANTERIOR.inicio}');
     DELETE FROM importes_externos WHERE dni LIKE '${PATRON_DNI_DEMO}' OR registrado_por_id IN (SELECT id FROM cuentas_locales WHERE nombre_usuario IN (${usuarios}));
+    DELETE FROM importaciones_de_fuente WHERE usuario_id IN (SELECT id FROM cuentas_locales WHERE nombre_usuario IN (${usuarios}));
     DELETE FROM confirmaciones_de_fuente WHERE confirmada_por_id IN (SELECT id FROM cuentas_locales WHERE nombre_usuario IN (${usuarios}));
     DELETE FROM condiciones_laborales WHERE relacion_laboral_id IN (SELECT id FROM relaciones_laborales WHERE dni LIKE '${PATRON_DNI_DEMO}');
     DELETE FROM relaciones_laborales WHERE dni LIKE '${PATRON_DNI_DEMO}';

@@ -2,12 +2,14 @@ import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import * as schema from "@/db/schema";
-import { colaboradores, confirmacionesDeFuente, cuentasLocales, importesExternos } from "@/db/schema";
+import { colaboradores, confirmacionesDeFuente, cuentasLocales, importacionesDeFuente, importesExternos } from "@/db/schema";
 
 import type {
   AlmacenDeFuentesExternas,
   ConfirmacionDeFuente,
+  ImportacionDeFuente,
   ImporteExterno,
+  NuevaImportacionDeFuente,
   NuevoImporteExterno,
   RepositorioDeFuentesExternas,
 } from "./gestionar-fuentes-externas";
@@ -31,7 +33,30 @@ const columnas = {
   registradoEn: importesExternos.registradoEn,
   anuladoEn: importesExternos.anuladoEn,
   motivoDeAnulacion: importesExternos.motivoDeAnulacion,
+  importacionId: importesExternos.importacionId,
 };
+
+const columnasDeImportacion = {
+  id: importacionesDeFuente.id,
+  tipoDeFuente: importacionesDeFuente.tipoDeFuente,
+  mesDeAplicacion: importacionesDeFuente.mesDeAplicacion,
+  archivoNombre: importacionesDeFuente.archivoNombre,
+  archivoUbicacion: importacionesDeFuente.archivoUbicacion,
+  archivoHashSha256: importacionesDeFuente.archivoHashSha256,
+  usuarioId: importacionesDeFuente.usuarioId,
+  usuario: cuentasLocales.nombreUsuario,
+  importadaEn: importacionesDeFuente.importadaEn,
+  filas: importacionesDeFuente.filas,
+  total: importacionesDeFuente.totalCentimos,
+  validacion: importacionesDeFuente.validacion,
+  reemplazadaEn: importacionesDeFuente.reemplazadaEn,
+};
+
+type FilaDeImportacion = Omit<ImportacionDeFuente, "tipoDeFuente"> & { tipoDeFuente: string };
+
+function aImportacion(fila: FilaDeImportacion): ImportacionDeFuente {
+  return { ...fila, tipoDeFuente: fila.tipoDeFuente as CodigoDeTipoDeFuente };
+}
 
 type Fila = Omit<ImporteExterno, "tipoDeFuente"> & { tipoDeFuente: string };
 
@@ -64,7 +89,7 @@ class AlmacenPostgresDeFuentesExternas implements AlmacenDeFuentesExternas {
     const [insertado] = await this.db.insert(importesExternos).values({
       tipoDeFuente: nuevo.tipoDeFuente, dni: nuevo.dni, concepto: nuevo.concepto, fechaDelHecho: nuevo.fechaDelHecho,
       mesDeDevengue: nuevo.mesDeDevengue, mesDeAplicacion: nuevo.mesDeAplicacion, montoCentimos: nuevo.monto,
-      procedencia: nuevo.procedencia, registradoPorId: nuevo.responsableId,
+      procedencia: nuevo.procedencia, registradoPorId: nuevo.responsableId, importacionId: nuevo.importacionId ?? null,
     }).onConflictDoNothing().returning({ id: importesExternos.id });
     return insertado && this.buscarImporte(insertado.id);
   }
@@ -89,6 +114,34 @@ class AlmacenPostgresDeFuentesExternas implements AlmacenDeFuentesExternas {
     const filas = await this.db.delete(confirmacionesDeFuente)
       .where(and(eq(confirmacionesDeFuente.tipoDeFuente, tipo), eq(confirmacionesDeFuente.mesDeAplicacion, mes))).returning({ tipo: confirmacionesDeFuente.tipoDeFuente });
     return filas.length > 0;
+  }
+
+  protected importaciones() {
+    return this.db.select(columnasDeImportacion).from(importacionesDeFuente).innerJoin(cuentasLocales, eq(cuentasLocales.id, importacionesDeFuente.usuarioId));
+  }
+
+  async buscarImportacionVigente(tipo: CodigoDeTipoDeFuente, mes: string): Promise<(ImportacionDeFuente & { importesVigentes: number }) | undefined> {
+    const [fila] = await this.importaciones().where(and(eq(importacionesDeFuente.tipoDeFuente, tipo), eq(importacionesDeFuente.mesDeAplicacion, mes), isNull(importacionesDeFuente.reemplazadaEn)));
+    if (!fila) return undefined;
+    const [{ cantidad }] = await this.db.select({ cantidad: sql<number>`count(*)::int` }).from(importesExternos)
+      .where(and(eq(importesExternos.importacionId, fila.id), isNull(importesExternos.anuladoEn)));
+    return { ...aImportacion(fila), importesVigentes: cantidad };
+  }
+
+  async insertarImportacion(nueva: NuevaImportacionDeFuente): Promise<ImportacionDeFuente> {
+    const [insertada] = await this.db.insert(importacionesDeFuente).values({
+      tipoDeFuente: nueva.tipoDeFuente, mesDeAplicacion: nueva.mesDeAplicacion, archivoNombre: nueva.archivoNombre, archivoUbicacion: nueva.archivoUbicacion,
+      archivoHashSha256: nueva.archivoHashSha256, usuarioId: nueva.usuarioId, importadaEn: nueva.importadaEn, filas: nueva.filas, totalCentimos: nueva.total, validacion: nueva.validacion,
+    }).returning({ id: importacionesDeFuente.id });
+    const [fila] = await this.importaciones().where(eq(importacionesDeFuente.id, insertada.id));
+    return aImportacion(fila);
+  }
+
+  async reemplazarImportacion(id: string, motivo: string, reemplazadaEn: Date): Promise<number> {
+    await this.db.update(importacionesDeFuente).set({ reemplazadaEn }).where(and(eq(importacionesDeFuente.id, id), isNull(importacionesDeFuente.reemplazadaEn)));
+    const anulados = await this.db.update(importesExternos).set({ anuladoEn: reemplazadaEn, motivoDeAnulacion: motivo })
+      .where(and(eq(importesExternos.importacionId, id), isNull(importesExternos.anuladoEn))).returning({ id: importesExternos.id });
+    return anulados.length;
   }
 
   // Pagos todavía no finaliza versiones; el ticket de finalización debe consultar aquí si el mes ya tiene una versión finalizada.

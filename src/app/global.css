@@ -308,3 +308,10 @@ th, td { border: 1px solid #e2e8f0; padding: 0.6rem; text-align: left; }
 .dialogo-de-pagos .boton-principal { background: #079557; border: 0; border-radius: .4rem; color: #fff; font-size: .9rem; font-weight: 700; padding: .68rem 1rem; }
 .dialogo-de-pagos .boton-secundario { background: #fff; border: 1px solid #d0d7e1; border-radius: .4rem; color: #1c3152; font-size: .9rem; padding: .68rem 1rem; }
 @media (max-width: 900px) { .dialogo-de-pagos .acciones-dialogo { flex-direction: column-reverse; } .dialogo-de-pagos .acciones-dialogo button { width: 100%; } }
+/* Importación de fuentes externas de Pagos (issue #119): conteos de la validación del archivo, uno por rótulo, sin tabla. */
+.resumen-de-validacion { display: grid; gap: .5rem; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); margin: .5rem 0; }
+.resumen-de-validacion div { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: .4rem; padding: .5rem .65rem; }
+.resumen-de-validacion dt { color: #526174; font-size: .76rem; font-weight: 700; }
+.resumen-de-validacion dd { font-size: 1.05rem; font-weight: 700; margin: .15rem 0 0; }
+.formulario-de-importacion-de-fuente .acciones-dialogo { align-items: center; flex-wrap: wrap; justify-content: flex-start; }
+.resultado-de-validacion h2, .resultado-de-importacion h2 { color: #152f56; font-size: 1.1rem; letter-spacing: -.02em; margin: 0 0 .3rem; }

@@ -53,9 +53,12 @@ export default async function PaginaDeUnaFuenteExterna({ params, searchParams }:
         <p>Estado: <InsigniaDeEstado estado={detalle.estado} />{detalle.confirmacion && <> Confirmada por {detalle.confirmacion.confirmadaPor} el {formatearFechaDeRelacion(fechaDeHoyEnLima(detalle.confirmacion.confirmadaEn))}.</>}</p>
         <p><Link href={`/pagos/fuentes-externas?mes=${mes}`}>Volver a fuentes externas</Link></p>
       </div>
-      {confirmada
-        ? <VolverAPendiente mes={mes} nombre={tipo.nombre} tipoDeFuente={tipo.codigo} />
-        : <ConfirmacionDeListado filas={detalle.filas} mes={mes} nombre={tipo.nombre} tipoDeFuente={tipo.codigo} total={detalle.total} />}
+      <span className="acciones-configuracion">
+        <Link className="boton-secundario" href={`/pagos/fuentes-externas/importar?mes=${mes}&tipo=${tipo.codigo}`}>Importar XLSX<span className="sr-only"> de {tipo.nombre}</span></Link>
+        {confirmada
+          ? <VolverAPendiente mes={mes} nombre={tipo.nombre} tipoDeFuente={tipo.codigo} />
+          : <ConfirmacionDeListado filas={detalle.filas} mes={mes} nombre={tipo.nombre} tipoDeFuente={tipo.codigo} total={detalle.total} />}
+      </span>
     </header>
     <NavegacionDePagos actual="fuentes-externas" />
     <AnuncioDelResultado />

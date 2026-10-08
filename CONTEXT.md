@@ -113,7 +113,7 @@ Archivo XLSX del huellero que aporta marcas para una o más sedes y fechas, cons
 _Evitar_: importación semanal por sede, carga acumulativa, marcas duplicadas
 
 **Archivo fuente de preliquidación**:
-Archivo XLSX normalizado que aporta conceptos externos y se conserva con su hash, responsable, período y resultado de validación.
+Archivo XLSX normalizado que aporta conceptos externos de un tipo de fuente para un mes de pago y se conserva con su hash, responsable, período y resultado de validación. Se importa todo o nada.
 _Evitar_: Excel histórico de planilla, archivo descartable, carga sin trazabilidad
 
 **Incidencia de importación**:

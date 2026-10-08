@@ -1,8 +1,20 @@
-/** Procedencia de un importe: hoy solo la carga manual; la importación de un archivo fuente agrega la suya. */
+/** Procedencia de un importe: la carga manual, o el archivo fuente de preliquidación del que se importó (`archivo:<nombre>`). */
 export const PROCEDENCIA_CARGA_MANUAL = "carga_manual";
+const PREFIJO_DE_PROCEDENCIA_DE_ARCHIVO = "archivo:";
+const MAXIMO_DE_CARACTERES_DE_PROCEDENCIA = 200;
+
+export function procedenciaDeArchivo(nombreDelArchivo: string): string {
+  return `${PREFIJO_DE_PROCEDENCIA_DE_ARCHIVO}${nombreDelArchivo}`.slice(0, MAXIMO_DE_CARACTERES_DE_PROCEDENCIA);
+}
 
 export function textoDeProcedencia(procedencia: string): string {
-  return procedencia === PROCEDENCIA_CARGA_MANUAL ? "Carga manual" : procedencia;
+  if (procedencia === PROCEDENCIA_CARGA_MANUAL) return "Carga manual";
+  return procedencia.startsWith(PREFIJO_DE_PROCEDENCIA_DE_ARCHIVO) ? `Archivo ${procedencia.slice(PREFIJO_DE_PROCEDENCIA_DE_ARCHIVO.length)}` : procedencia;
+}
+
+/** Los primeros 8 caracteres del hash, suficientes para reconocer un archivo en pantalla. */
+export function hashAbreviado(hash: string): string {
+  return hash.slice(0, 8);
 }
 
 const MAXIMO_DE_CENTIMOS = 2_147_483_647;
