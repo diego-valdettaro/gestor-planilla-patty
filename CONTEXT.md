@@ -234,6 +234,18 @@ _Evitar_: ajuste de asistencia, edición de una preliquidación finalizada, arra
 Tipo catalogado de ingreso, reducción, deducción o aporte patronal cuyo efecto sobre el neto y las bases de cálculo está definido de antemano.
 _Evitar_: línea libre, bono inafecto genérico, otros descuentos
 
+**Tipo de fuente externa**:
+Agrupación de los conceptos que Finanzas carga por persona desde fuera del huellero, como comisiones de ventas, movilidad, adelantos, préstamos, retención de quinta o gratificación. Finanzas lo confirma para el mes de pago completo; hasta entonces es «Pendiente».
+_Evitar_: línea libre, hoja del Excel, categoría de gasto
+
+**Importe externo**:
+Monto de un concepto catalogado cargado para una persona (por DNI) con su fecha del hecho, mes de devengue, mes de aplicación y procedencia; no se edita, se anula con motivo. Dos importes con la misma persona, concepto, fecha, devengue, aplicación y monto son duplicados y no se cargan.
+_Evitar_: línea calculada, ajuste de preliquidación, descuento libre
+
+**Fuente confirmada**:
+Tipo de fuente externa que Finanzas declaró completo para el mes de pago y la población aplicable, incluso sin importes. Solo entonces la ausencia de una fila vale cero («cero confirmado»); antes es dato pendiente, y cambiar sus filas la devuelve a «Pendiente».
+_Evitar_: fuente vacía, fuente sin datos, cero por defecto
+
 **Movilidad supeditada a asistencia**:
 Importe razonable para el traslado entre domicilio y centro de trabajo, condicionado a la asistencia. No integra las bases de EsSalud ni pensiones, pero sí la base de quinta categoría.
 _Evitar_: movilidad de libre disposición, condición de trabajo, movilidad inafecta genérica

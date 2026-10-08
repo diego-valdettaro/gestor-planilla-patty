@@ -13,6 +13,8 @@ import type { Actor } from "@/autenticacion/permisos";
 import { registrarColaborador } from "@/colaboradores/registrar-colaborador";
 import { registrarCondicionLaboral } from "@/condiciones-laborales/gestionar-condiciones-laborales";
 import { RepositorioPostgresDeCondicionesLaborales } from "@/condiciones-laborales/repositorio-postgres";
+import { confirmarFuente, registrarImporte } from "@/fuentes-externas/gestionar-fuentes-externas";
+import { RepositorioPostgresDeFuentesExternas } from "@/fuentes-externas/repositorio-postgres";
 import { activarReglaLegal } from "@/reglas-legales/gestionar-reglas-legales";
 import { RepositorioPostgresDeReglasLegales } from "@/reglas-legales/repositorio-postgres";
 import { confirmarCese, confirmarIngreso, registrarCese, registrarIngreso } from "@/relaciones-laborales/gestionar-relaciones-laborales";
@@ -176,6 +178,8 @@ async function limpiar(pool: Pool): Promise<void> {
     DELETE FROM aprobaciones_de_asistencia WHERE periodo_id IN (SELECT id FROM periodos_planilla WHERE inicio IN ('${PERIODO_ACTUAL.inicio}', '${PERIODO_ANTERIOR.inicio}'));
     DELETE FROM auditoria_periodos_planilla WHERE periodo_id IN (SELECT id FROM periodos_planilla WHERE inicio IN ('${PERIODO_ACTUAL.inicio}', '${PERIODO_ANTERIOR.inicio}'));
     DELETE FROM periodos_planilla WHERE inicio IN ('${PERIODO_ACTUAL.inicio}', '${PERIODO_ANTERIOR.inicio}');
+    DELETE FROM importes_externos WHERE dni LIKE '${PATRON_DNI_DEMO}' OR registrado_por_id IN (SELECT id FROM cuentas_locales WHERE nombre_usuario IN (${usuarios}));
+    DELETE FROM confirmaciones_de_fuente WHERE confirmada_por_id IN (SELECT id FROM cuentas_locales WHERE nombre_usuario IN (${usuarios}));
     DELETE FROM condiciones_laborales WHERE relacion_laboral_id IN (SELECT id FROM relaciones_laborales WHERE dni LIKE '${PATRON_DNI_DEMO}');
     DELETE FROM relaciones_laborales WHERE dni LIKE '${PATRON_DNI_DEMO}';
     DELETE FROM colaboradores WHERE dni LIKE '${PATRON_DNI_DEMO}';
@@ -305,6 +309,25 @@ async function activarReglasLegales(db: Db, actor: Actor): Promise<void> {
   await activar("essalud_tasa", "9", PERIODO_ACTUAL.inicio);
   await activar("onp_tasa", "12", PERIODO_ANTERIOR.inicio);
   await activar("onp_tasa", "13", primeraDelMesSiguiente);
+}
+
+/**
+ * Fuentes externas del mes de pago actual (#118), cargadas con los casos de uso reales de Finanzas: Comisiones de ventas
+ * confirmada con importes (uno con devengue del mes anterior), Adelantos confirmada sin importes (cero confirmado),
+ * Movilidad con un importe sin confirmar y las demás fuentes pendientes.
+ */
+async function cargarFuentesExternas(db: Db, actor: Actor): Promise<void> {
+  const repositorio = new RepositorioPostgresDeFuentesExternas(db);
+  const mesDePago = PERIODO_ACTUAL.inicio.slice(0, 7);
+  const mesDevengado = PERIODO_ANTERIOR.inicio.slice(0, 7);
+  const cargar = (tipoDeFuente: string, dni: string, concepto: string, fechaDelHecho: string, mesDeDevengue: string, monto: string) =>
+    registrarImporte(repositorio, actor, { tipoDeFuente, dni, concepto, fechaDelHecho, mesDeDevengue, mesDeAplicacion: mesDePago, monto });
+
+  await cargar("comisiones_de_ventas", "99900001", "comision_de_ventas", PERIODO_ANTERIOR.fin, mesDevengado, "320,50");
+  await cargar("comisiones_de_ventas", "99900002", "comision_de_ventas", PERIODO_ACTUAL.inicio, mesDePago, "150");
+  await cargar("movilidad_supeditada_a_asistencia", "99900002", "movilidad_supeditada_a_asistencia", PERIODO_ACTUAL.inicio, mesDePago, "90");
+  await confirmarFuente(repositorio, actor, { tipoDeFuente: "comisiones_de_ventas", mes: mesDePago });
+  await confirmarFuente(repositorio, actor, { tipoDeFuente: "adelantos", mes: mesDePago });
 }
 
 function turnosDeSemana(dni: string, sede: string, semana: string) {
@@ -437,6 +460,16 @@ async function verificarInvariantes(pool: Pool): Promise<void> {
   if (Number(reglas.essalud) !== 2) fallos.push(`la Tasa de EsSalud debería tener 2 vigencias, tiene ${reglas.essalud}`);
   if (Number(reglas.onp) !== 1) fallos.push(`la Tasa de ONP debería tener 1 versión programada, tiene ${reglas.onp}`);
 
+  const { rows: [fuentes] } = await pool.query<{ importes: string; confirmadas: string; sinImportes: string }>(
+    `SELECT (SELECT count(*) FROM importes_externos WHERE dni LIKE '${PATRON_DNI_DEMO}' AND anulado_en IS NULL)::text AS importes,
+            (SELECT count(*) FROM confirmaciones_de_fuente WHERE mes_de_aplicacion = $1)::text AS confirmadas,
+            (SELECT count(*) FROM confirmaciones_de_fuente c WHERE mes_de_aplicacion = $1 AND NOT EXISTS (SELECT 1 FROM importes_externos i WHERE i.tipo_de_fuente = c.tipo_de_fuente AND i.mes_de_aplicacion = c.mes_de_aplicacion AND i.anulado_en IS NULL))::text AS "sinImportes"`,
+    [PERIODO_ACTUAL.inicio.slice(0, 7)],
+  );
+  if (Number(fuentes.importes) !== 3) fallos.push(`se esperaban 3 importes externos de demo, hay ${fuentes.importes}`);
+  if (Number(fuentes.confirmadas) !== 2) fallos.push(`se esperaban 2 fuentes confirmadas, hay ${fuentes.confirmadas}`);
+  if (Number(fuentes.sinImportes) !== 1) fallos.push(`se esperaba 1 fuente confirmada sin importes, hay ${fuentes.sinImportes}`);
+
   if (fallos.length) throw new Error(`Invariantes del seed no se cumplen:\n- ${fallos.join("\n- ")}`);
 }
 
@@ -490,6 +523,12 @@ function resumen(): string {
     "  Tasa de EsSalud  -> dos vigencias (anterior y la del mes actual)",
     "  Tasa de ONP      -> una versión «Programado» para el mes siguiente; RMV con una vigencia",
     "  Los demás valores legales (AFP, horas extra, etc.) quedan sin regla vigente: «Pendiente»",
+    "",
+    "Pagos · Fuentes externas (finanzas / finanzas; importes de DEMOSTRACIÓN, mes de pago actual):",
+    "  Comisiones de ventas -> Confirmada con importes (Ana con devengue del mes anterior, Beto del mes actual)",
+    "  Adelantos            -> Confirmada sin importes (cero confirmado)",
+    "  Movilidad            -> un importe de Beto, sin confirmar (Pendiente)",
+    "  Préstamos, retención de quinta, gratificación y bonificación -> Pendiente",
     "",
     "Calendario de asistencias de Beto Publicado (mes actual):",
     "  lun/mar -> Registrada ; mié -> Registrada (Feriado) ; jue -> Pendiente de revisión ; vie/sáb -> Esperada",
@@ -569,6 +608,9 @@ async function main(): Promise<void> {
 
     // --- Reglas legales con vigencia (caso de uso: las activa Finanzas) ---
     await activarReglasLegales(db, actorFinanzas);
+
+    // --- Fuentes externas de Pagos (caso de uso: las carga y confirma Finanzas) ---
+    await cargarFuentesExternas(db, actorFinanzas);
 
     // --- Períodos: ambos abiertos al principio para poder publicar dentro ---
     await db.insert(schema.periodosPlanilla).values([

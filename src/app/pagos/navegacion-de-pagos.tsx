@@ -5,6 +5,7 @@ import Link from "next/link";
 const SECCIONES = [
   { clave: "condiciones-laborales", href: "/pagos/condiciones-laborales", etiqueta: "Condiciones laborales" },
   { clave: "reglas-legales", href: "/pagos/reglas-legales", etiqueta: "Reglas legales" },
+  { clave: "fuentes-externas", href: "/pagos/fuentes-externas", etiqueta: "Fuentes externas" },
 ] as const;
 
 export type SeccionDePagos = (typeof SECCIONES)[number]["clave"];

@@ -947,3 +947,127 @@ test("Reglas legales cabe en 375 px: la tabla se desplaza dentro de su región",
   await expect(page.getByRole("dialog")).toBeHidden();
   expect(errores).toEqual([]);
 });
+
+test("Finanzas distingue una fuente pendiente de un cero confirmado, carga un importe, ve el duplicado rechazado, anula con motivo y deshace una confirmación; el Administrador no entra", async ({ page }) => {
+  test.setTimeout(120_000);
+  const errores = observarErroresDelNavegador(page);
+
+  await iniciarSesion(page, "finanzas");
+  await page.getByRole("navigation", { name: "Navegación principal" }).getByRole("link", { name: /Pagos/ }).click();
+  await page.getByRole("navigation", { name: "Secciones de Pagos" }).getByRole("link", { name: "Fuentes externas" }).click();
+  await expect(page).toHaveURL(/\/pagos\/fuentes-externas$/, { timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: /^Fuentes externas del mes de pago \d{2}\/\d{4}$/, level: 1 })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("Una persona sin fila cuenta como cero solo cuando confirma el tipo de fuente.")).toBeVisible();
+
+  // Estados sembrados: confirmada con importes, confirmada sin importes (cero confirmado) y pendientes.
+  const tipos = page.getByRole("region", { name: /^Tipos de fuente de / });
+  const fila = (nombre: string) => tipos.locator("tbody tr").filter({ has: page.getByRole("link", { name: nombre, exact: true }) });
+  await expect(fila("Comisiones de ventas")).toContainText("Confirmada con importes");
+  await expect(fila("Comisiones de ventas")).toContainText("S/ 470,50");
+  await expect(fila("Adelantos")).toContainText("Confirmada sin importes");
+  await expect(fila("Adelantos")).toContainText("S/ 0,00");
+  await expect(fila("Movilidad supeditada a asistencia")).toContainText("Pendiente");
+  await expect(fila("Préstamos (cuotas)")).toContainText("Pendiente");
+
+  // Detalle de una fuente con importes: cada fila conserva persona, concepto, fecha, devengue, aplicación, monto y procedencia.
+  await fila("Comisiones de ventas").getByRole("link", { name: /Ver filas/ }).click();
+  await expect(page.getByRole("heading", { name: /^Comisiones de ventas · mes de pago/, level: 1 })).toBeVisible({ timeout: 30_000 });
+  const filas = page.getByRole("region", { name: /^Filas de Comisiones de ventas/ });
+  await expect(filas.locator("tbody tr")).toHaveCount(2);
+  await expect(filas.locator("tbody tr").filter({ hasText: "Ana Borrador" })).toContainText("Devengue anterior");
+  await expect(filas.locator("tbody tr").filter({ hasText: "Ana Borrador" })).toContainText("S/ 320,50");
+  await expect(filas.locator("tbody tr").filter({ hasText: "Beto Publicado" })).toContainText("Carga manual");
+
+  // Cargar un importe en una fuente confirmada la devuelve a Pendiente; el mismo importe dos veces se rechaza.
+  const formulario = page.locator("form.formulario-de-importe");
+  const registrar = async (dni: string) => {
+    await formulario.getByLabel("DNI de la persona").fill(dni);
+    await formulario.getByLabel("Fecha del hecho").fill(await fechaDelMesDePago(page));
+    await formulario.getByLabel("Importe (S/)").fill("40");
+    await formulario.getByRole("button", { name: "Registrar importe" }).click();
+  };
+  await registrar("99900003");
+  await expect(formulario.getByRole("status")).toContainText("Importe registrado.");
+  await expect(formulario.getByRole("status")).toContainText("volvió a Pendiente");
+  await expect(filas.locator("tbody tr")).toHaveCount(3);
+  await expect(page.getByText("Estado:").locator("..")).toContainText("Pendiente");
+  await registrar("99900003");
+  await expect(formulario.getByRole("alert")).toContainText("Ya existe ese importe");
+  await expect(filas.locator("tbody tr")).toHaveCount(3);
+
+  // Un DNI desconocido se rechaza junto al formulario.
+  await registrar("00000000");
+  await expect(formulario.getByRole("alert")).toContainText("No existe una persona con DNI 00000000");
+
+  // Anular con motivo (obligatorio) conserva el historial y baja el conteo.
+  const dialogo = page.getByRole("dialog");
+  await abrirDialogo(page, filas.locator("tbody tr").filter({ hasText: "Carla Cambios" }).getByRole("button", { name: /Anular/ }));
+  await dialogo.getByLabel("Motivo de la anulación").fill("Monto mal digitado");
+  await dialogo.getByRole("button", { name: "Anular importe" }).click();
+  await expect(dialogo).toBeHidden();
+  await expect(filas.locator("tbody tr")).toHaveCount(2);
+  // La fila anulada ya no existe: el foco pasa al título y el resultado se anuncia.
+  await expect(page.getByRole("heading", { level: 1 })).toBeFocused();
+  await expect(page.locator("#anuncio-de-fuentes-externas")).toHaveText("Importe de Carla Cambios anulado.");
+
+  // Confirmar el listado y volver a pendiente, con los diálogos del diseño.
+  await abrirDialogo(page, page.getByRole("button", { name: /Confirmar listado completo/ }).first());
+  await expect(dialogo.getByText("A partir de ahora, las personas sin fila cuentan como S/ 0,00 en esta fuente.")).toBeVisible();
+  await expect(dialogo.getByText("Cancelar deja la fuente pendiente.")).toBeVisible();
+  await dialogo.getByRole("button", { name: "Confirmar listado completo" }).click();
+  await expect(dialogo).toBeHidden();
+  await expect(page.getByText("Estado:").locator("..")).toContainText("Confirmada con importes");
+  await abrirDialogo(page, page.getByRole("button", { name: /Volver a pendiente/ }).first());
+  await expect(dialogo.getByText("Cancelar deja la fuente confirmada.")).toBeVisible();
+  await dialogo.getByRole("button", { name: "Volver a pendiente" }).click();
+  await expect(dialogo).toBeHidden();
+  await expect(page.getByText("Estado:").locator("..")).toContainText("Pendiente");
+
+  // Confirmar sin importes una fuente sin filas la deja como cero confirmado, distinto de pendiente.
+  await page.getByRole("link", { name: "Volver a fuentes externas" }).click();
+  await expect(fila("Préstamos (cuotas)")).toContainText("Pendiente");
+  await abrirDialogo(page, fila("Préstamos (cuotas)").getByRole("button", { name: /Confirmar sin importes/ }));
+  await expect(dialogo.getByRole("heading", { name: /^¿Confirmar sin importes Préstamos \(cuotas\) de \d{2}\/\d{4}\?$/ })).toBeVisible();
+  await dialogo.getByRole("button", { name: "Confirmar listado completo" }).click();
+  await expect(dialogo).toBeHidden();
+  await expect(fila("Préstamos (cuotas)")).toContainText("Confirmada sin importes");
+
+  await page.context().clearCookies();
+  await iniciarSesion(page, "admin");
+  await page.goto("/pagos/fuentes-externas");
+  await expect(page.getByRole("heading", { name: "Sin permiso" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("S/ ")).toHaveCount(0);
+  await page.goto("/pagos/fuentes-externas/comisiones_de_ventas");
+  await expect(page.getByRole("heading", { name: "Sin permiso" })).toBeVisible({ timeout: 30_000 });
+  expect(errores).toEqual([]);
+});
+
+/** Un día del mes de pago que muestra la pantalla (AAAA-MM-01), para la fecha del hecho de un importe de prueba. */
+async function fechaDelMesDePago(page: Page): Promise<string> {
+  const titulo = (await page.getByRole("heading", { level: 1 }).textContent()) ?? "";
+  const [, mes, anio] = /(\d{2})\/(\d{4})/.exec(titulo) ?? [];
+  return `${anio}-${mes}-01`;
+}
+
+test("Fuentes externas cabe en 375 px: las tablas se desplazan dentro de su región y los diálogos caben", async ({ page }) => {
+  const errores = observarErroresDelNavegador(page);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await iniciarSesion(page, "finanzas");
+
+  await page.goto("/pagos/fuentes-externas");
+  await expect(page.getByRole("heading", { name: /^Fuentes externas del mes de pago/, level: 1 })).toBeVisible({ timeout: 30_000 });
+  expect(await desbordeHorizontalDeLaPagina(page)).toBeLessThanOrEqual(0);
+  const tipos = page.getByRole("region", { name: /^Tipos de fuente de / });
+  expect(await tipos.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+
+  await tipos.getByRole("link", { name: "Comisiones de ventas", exact: true }).click();
+  await expect(page.getByRole("heading", { name: /^Comisiones de ventas · mes de pago/, level: 1 })).toBeVisible({ timeout: 30_000 });
+  expect(await desbordeHorizontalDeLaPagina(page)).toBeLessThanOrEqual(0);
+  await abrirDialogo(page, page.getByRole("button", { name: /Volver a pendiente|Confirmar listado completo|Confirmar sin importes/ }).first());
+  const cajaDelDialogo = await page.getByRole("dialog").boundingBox();
+  expect(cajaDelDialogo!.x).toBeGreaterThanOrEqual(0);
+  expect(cajaDelDialogo!.x + cajaDelDialogo!.width).toBeLessThanOrEqual(375);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toBeHidden();
+  expect(errores).toEqual([]);
+});
