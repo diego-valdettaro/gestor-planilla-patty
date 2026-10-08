@@ -52,7 +52,7 @@ export default async function PaginaDeFuentesExternas({ searchParams }: { search
     <section aria-labelledby="titulo-fuentes" className="tarjeta panel">
       <header className="panel-cabecera"><div><h2 id="titulo-fuentes">Tipos de fuente</h2><p>Confirme cada tipo para el mes completo, incluso si no tiene importes.</p></div><span className={pendientes ? "insignia advertencia" : "insignia ok"}>{pendientes ? `${pendientes} ${pendientes === 1 ? "pendiente" : "pendientes"}` : "Todas confirmadas"}</span></header>
       <p className="aviso-desplazamiento">Desplácese horizontalmente para ver todas las columnas.</p>
-      <div className="panel-tabla primera-columna-fija" role="region" aria-label={`Tipos de fuente de ${formatearMes(mes)}`} tabIndex={0}><table><thead><tr><th>Tipo de fuente</th><th>Estado</th><th className="numerico">Filas (n.º)</th><th className="numerico">Importe total (S/)</th><th>Último origen</th><th><span className="sr-only">Acciones</span></th></tr></thead>
+      <div className="panel-tabla primera-columna-fija tabla-de-fuentes" role="region" aria-label={`Tipos de fuente de ${formatearMes(mes)}`} tabIndex={0}><table><thead><tr><th>Tipo de fuente</th><th>Estado</th><th className="numerico">Filas (n.º)</th><th className="numerico">Importe total (S/)</th><th>Último origen</th><th><span className="sr-only">Acciones</span></th></tr></thead>
         <tbody>{filas.map((fila) => <FilaDeFuenteExterna fila={fila} key={fila.tipo.codigo} mes={mes} />)}</tbody></table></div>
     </section>
   </main>;
@@ -64,7 +64,7 @@ function FilaDeFuenteExterna({ fila, mes }: { fila: FilaDeFuente; mes: string })
     <th scope="row"><Link href={`/pagos/fuentes-externas/${tipo.codigo}?mes=${mes}`}>{tipo.nombre}</Link></th>
     <td className="celda-estado"><InsigniaDeEstado estado={estado} />{confirmacion && <small className="linea-de-relacion">Confirmada por {confirmacion.confirmadaPor} el {formatearFechaDeRelacion(fechaDeHoyEnLima(confirmacion.confirmadaEn))}</small>}</td>
     <td className="numerico">{fila.filas}</td>
-    <td className="numerico">{formatearSoles(fila.total)}</td>
+    <td className="numerico">{estado === "pendiente" && !fila.filas ? "—" : formatearSoles(fila.total)}</td>
     <td>{ultimoOrigen ? <>{textoDeProcedencia(ultimoOrigen.procedencia)}<small className="linea-de-relacion">{ultimoOrigen.registradoPor}, {formatearFechaDeRelacion(fechaDeHoyEnLima(ultimoOrigen.registradoEn))}</small></> : "Sin filas"}</td>
     <td><span className="acciones-configuracion">
       <Link className="boton-secundario" href={`/pagos/fuentes-externas/${tipo.codigo}?mes=${mes}`}>Ver filas<span className="sr-only"> de {tipo.nombre}</span></Link>

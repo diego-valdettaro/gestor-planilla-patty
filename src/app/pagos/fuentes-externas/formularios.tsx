@@ -133,7 +133,7 @@ export function RegistroDeImporte({ tipoDeFuente, mes, conceptos }: { tipoDeFuen
     <label>Fecha del hecho<input name="fechaDelHecho" required type="date" /></label>
     <label>Mes de devengue<input defaultValue={mes} name="mesDeDevengue" required type="month" /></label>
     <label>Importe (S/)<input autoComplete="off" inputMode="decimal" name="monto" placeholder="250,00" required /></label>
-    <p className="nota-de-formulario">Se aplica en el mes de pago {formatearMes(mes)}. El signo sobre el neto lo da el concepto; escriba siempre un importe positivo.</p>
+    <small className="linea-de-relacion">Se aplica en el mes de pago {formatearMes(mes)}. El signo sobre el neto lo da el concepto; escriba siempre un importe positivo.</small>
     {estado.error && <p className="mensaje-operacion error" role="alert">{estado.error}</p>}
     {estado.listo && !estado.error && <p className="mensaje-operacion listo" role="status">Importe registrado.{estado.aviso ? ` ${estado.aviso}` : ""}</p>}
     <div><button className="boton-principal" disabled={pendiente} type="submit">{pendiente ? "Registrando…" : "Registrar importe"}</button></div>

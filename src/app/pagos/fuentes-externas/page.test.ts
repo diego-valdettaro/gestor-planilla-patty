@@ -59,6 +59,8 @@ describe("página de Fuentes externas (/pagos/fuentes-externas)", () => {
     expect(html).toContain('href="/pagos/fuentes-externas/comisiones_de_ventas?mes=2026-10"');
     expect(html).toContain("Confirmar sin importes");
     expect(html).toContain("Sin filas");
+    // Una fuente pendiente sin filas no muestra S/ 0,00: el faltante no es cero.
+    expect(html.match(/<td class="numerico">—<\/td>/g)).toHaveLength(6);
   });
 
   it("distingue Pendiente, Confirmada con importes y Confirmada sin importes con texto, filas e importe total", async () => {
