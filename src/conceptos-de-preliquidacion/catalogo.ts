@@ -113,3 +113,23 @@ export const CONCEPTOS: readonly ConceptoDePreliquidacion[] = [
 export function buscarConcepto(codigo: string): ConceptoDePreliquidacion | undefined {
   return CONCEPTOS.find((candidato) => candidato.codigo === codigo);
 }
+
+/** Un ajuste cambia el monto del concepto corregido; su neto y cada base siguen la misma regla, invertida al restar. */
+export function efectosDeAjuste(codigo: string, sentido: "suma" | "resta") {
+  const corregido = buscarConcepto(codigo);
+  if (!corregido || !tieneTipoPropio(corregido)) throw new Error("Elija un concepto del catálogo para corregir.");
+  const invertir = (efecto: EfectoEnNeto | EfectoEnBase) => {
+    if (efecto === "del_concepto_ajustado") throw new Error("Un ajuste no puede corregir otro ajuste.");
+    return sentido === "suma" || efecto === "ninguno" || efecto === "no_afecta" ? efecto : efecto === "suma" ? "resta" : "suma";
+  };
+  return {
+    conceptoAjustado: corregido,
+    efectoEnNeto: invertir(corregido.efectoEnNeto),
+    bases: {
+      pensionaria: invertir(corregido.bases.pensionaria),
+      essalud: invertir(corregido.bases.essalud),
+      quinta: invertir(corregido.bases.quinta),
+    },
+    codigoPlame: corregido.codigoPlame,
+  };
+}

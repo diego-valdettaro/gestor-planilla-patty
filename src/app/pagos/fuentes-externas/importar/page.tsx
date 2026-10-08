@@ -21,7 +21,7 @@ export default async function PaginaDeImportacionDeFuentes({ searchParams }: { s
 
   const { mes: mesPedido, tipo: tipoPedido } = await searchParams;
   const { mes, error: errorDeMes } = mesDePagoDeLaConsulta(mesPedido);
-  const tipos = TIPOS_DE_FUENTE.map(({ codigo, nombre }) => ({ codigo, nombre }));
+  const tipos = TIPOS_DE_FUENTE.filter((tipo) => !tipo.flujoPropio).map(({ codigo, nombre }) => ({ codigo, nombre }));
   const tipoInicial = tipos.find((tipo) => tipo.codigo === tipoPedido)?.codigo ?? tipos[0].codigo;
 
   return <main className="contenido pagina">

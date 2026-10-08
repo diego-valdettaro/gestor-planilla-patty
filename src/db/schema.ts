@@ -571,18 +571,30 @@ export const importesExternos = pgTable(
     motivoDeAnulacion: text("motivo_de_anulacion"),
     /** El archivo fuente de preliquidación del que viene el importe; null en la carga manual. */
     importacionId: uuid("importacion_id").references((): AnyPgColumn => importacionesDeFuente.id),
+    estadoDeIncidencia: text("estado_de_incidencia"),
+    sustento: text("sustento"),
+    autorizadoPor: text("autorizado_por"),
+    fechaDeAutorizacion: date("fecha_de_autorizacion", { mode: "string" }),
+    conceptoAjustado: text("concepto_ajustado"),
+    sentidoAjuste: text("sentido_ajuste"),
+    motivoDeAjuste: text("motivo_de_ajuste"),
   },
   (table) => [
     index("importes_externos_fuente").on(table.tipoDeFuente, table.mesDeAplicacion),
     index("importes_externos_dni").on(table.dni, table.mesDeAplicacion),
     uniqueIndex("importes_externos_sin_duplicados")
       .on(table.dni, table.concepto, table.fechaDelHecho, table.mesDeDevengue, table.mesDeAplicacion, table.montoCentimos)
-      .where(sql`${table.anuladoEn} IS NULL`),
+      .where(sql`${table.anuladoEn} IS NULL AND ${table.tipoDeFuente} <> 'ajustes_de_preliquidacion'`),
+    uniqueIndex("ajustes_de_preliquidacion_sin_duplicados")
+      .on(table.dni, table.conceptoAjustado, table.sentidoAjuste, table.fechaDelHecho, table.mesDeDevengue, table.mesDeAplicacion, table.montoCentimos)
+      .where(sql`${table.anuladoEn} IS NULL AND ${table.tipoDeFuente} = 'ajustes_de_preliquidacion'`),
     check("importes_externos_monto_positivo", sql`${table.montoCentimos} > 0`),
     check("importes_externos_meses_validos", sql`${table.mesDeDevengue} ~ '^\\d{4}-(0[1-9]|1[0-2])$' AND ${table.mesDeAplicacion} ~ '^\\d{4}-(0[1-9]|1[0-2])$'`),
     check("importes_externos_procedencia_valida", sql`char_length(btrim(${table.procedencia})) BETWEEN 1 AND 200`),
     check("importes_externos_anulacion_con_motivo", sql`(${table.anuladoEn} IS NULL) = (${table.motivoDeAnulacion} IS NULL)`),
     check("importes_externos_motivo_valido", sql`${table.motivoDeAnulacion} IS NULL OR char_length(btrim(${table.motivoDeAnulacion})) BETWEEN 1 AND 250`),
+    check("importes_externos_incidencia_completa", sql`${table.tipoDeFuente} <> 'incidencias_de_tienda' OR (${table.concepto} = 'descuento_autorizado_por_incidencia' AND ${table.estadoDeIncidencia} IS NOT NULL AND ${table.estadoDeIncidencia} IN ('sin_sustento', 'en_investigacion', 'descuento_autorizado') AND (${table.estadoDeIncidencia} <> 'descuento_autorizado' OR (nullif(btrim(${table.sustento}), '') IS NOT NULL AND nullif(btrim(${table.autorizadoPor}), '') IS NOT NULL AND ${table.fechaDeAutorizacion} IS NOT NULL)))`),
+    check("importes_externos_ajuste_completo", sql`${table.tipoDeFuente} <> 'ajustes_de_preliquidacion' OR (${table.concepto} = 'ajuste_de_preliquidacion' AND nullif(btrim(${table.conceptoAjustado}), '') IS NOT NULL AND ${table.sentidoAjuste} IS NOT NULL AND ${table.sentidoAjuste} IN ('suma', 'resta') AND nullif(btrim(${table.motivoDeAjuste}), '') IS NOT NULL)`),
   ],
 );
 

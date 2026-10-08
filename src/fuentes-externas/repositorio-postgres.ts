@@ -34,6 +34,13 @@ const columnas = {
   anuladoEn: importesExternos.anuladoEn,
   motivoDeAnulacion: importesExternos.motivoDeAnulacion,
   importacionId: importesExternos.importacionId,
+  estadoDeIncidencia: importesExternos.estadoDeIncidencia,
+  sustento: importesExternos.sustento,
+  autorizadoPor: importesExternos.autorizadoPor,
+  fechaDeAutorizacion: importesExternos.fechaDeAutorizacion,
+  conceptoAjustado: importesExternos.conceptoAjustado,
+  sentidoAjuste: importesExternos.sentidoAjuste,
+  motivoDeAjuste: importesExternos.motivoDeAjuste,
 };
 
 const columnasDeImportacion = {
@@ -58,10 +65,10 @@ function aImportacion(fila: FilaDeImportacion): ImportacionDeFuente {
   return { ...fila, tipoDeFuente: fila.tipoDeFuente as CodigoDeTipoDeFuente };
 }
 
-type Fila = Omit<ImporteExterno, "tipoDeFuente"> & { tipoDeFuente: string };
+type Fila = Omit<ImporteExterno, "tipoDeFuente" | "estadoDeIncidencia" | "sentidoAjuste"> & { tipoDeFuente: string; estadoDeIncidencia: string | null; sentidoAjuste: string | null };
 
 function aImporte(fila: Fila): ImporteExterno {
-  return { ...fila, tipoDeFuente: fila.tipoDeFuente as CodigoDeTipoDeFuente };
+  return { ...fila, tipoDeFuente: fila.tipoDeFuente as CodigoDeTipoDeFuente, estadoDeIncidencia: fila.estadoDeIncidencia as ImporteExterno["estadoDeIncidencia"], sentidoAjuste: fila.sentidoAjuste as ImporteExterno["sentidoAjuste"] };
 }
 
 class AlmacenPostgresDeFuentesExternas implements AlmacenDeFuentesExternas {
@@ -90,6 +97,8 @@ class AlmacenPostgresDeFuentesExternas implements AlmacenDeFuentesExternas {
       tipoDeFuente: nuevo.tipoDeFuente, dni: nuevo.dni, concepto: nuevo.concepto, fechaDelHecho: nuevo.fechaDelHecho,
       mesDeDevengue: nuevo.mesDeDevengue, mesDeAplicacion: nuevo.mesDeAplicacion, montoCentimos: nuevo.monto,
       procedencia: nuevo.procedencia, registradoPorId: nuevo.responsableId, importacionId: nuevo.importacionId ?? null,
+      estadoDeIncidencia: nuevo.estadoDeIncidencia, conceptoAjustado: nuevo.conceptoAjustado,
+      sentidoAjuste: nuevo.sentidoAjuste, motivoDeAjuste: nuevo.motivoDeAjuste,
     }).onConflictDoNothing().returning({ id: importesExternos.id });
     return insertado && this.buscarImporte(insertado.id);
   }
@@ -97,6 +106,13 @@ class AlmacenPostgresDeFuentesExternas implements AlmacenDeFuentesExternas {
   async anularImporte(id: string, motivo: string, anuladoEn: Date): Promise<boolean> {
     const filas = await this.db.update(importesExternos).set({ anuladoEn, motivoDeAnulacion: motivo })
       .where(and(eq(importesExternos.id, id), isNull(importesExternos.anuladoEn))).returning({ id: importesExternos.id });
+    return filas.length > 0;
+  }
+
+  async cambiarIncidencia(id: string, estado: NonNullable<ImporteExterno["estadoDeIncidencia"]>, sustento?: string, autorizadoPor?: string, fechaDeAutorizacion?: string): Promise<boolean> {
+    const filas = await this.db.update(importesExternos).set({ estadoDeIncidencia: estado, sustento: sustento ?? null, autorizadoPor: autorizadoPor ?? null, fechaDeAutorizacion: fechaDeAutorizacion ?? null })
+      .where(and(eq(importesExternos.id, id), eq(importesExternos.tipoDeFuente, "incidencias_de_tienda"), isNull(importesExternos.anuladoEn)))
+      .returning({ id: importesExternos.id });
     return filas.length > 0;
   }
 
@@ -144,7 +160,12 @@ class AlmacenPostgresDeFuentesExternas implements AlmacenDeFuentesExternas {
     return anulados.length;
   }
 
-  // Pagos todavía no finaliza versiones; el ticket de finalización debe consultar aquí si el mes ya tiene una versión finalizada.
+  // Pagos todavía no confirma pagos; el ticket de pago debe consultar aquí si el mes ya tiene una versión pagada.
+  async mesConPagoConfirmado(_mes: string): Promise<boolean> {
+    return false;
+  }
+
+  // El ticket de finalización debe consultar aquí las versiones finales; aún no existe su tabla.
   async mesFinalizado(_mes: string): Promise<boolean> {
     return false;
   }

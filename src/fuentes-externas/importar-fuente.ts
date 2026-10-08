@@ -191,6 +191,7 @@ export async function previsualizarImportacionDeFuente(
 ): Promise<VistaPreviaDeImportacionDeFuente> {
   exigirPermiso(actor);
   const tipo = exigirTipo(solicitud.tipoDeFuente);
+  if (tipo.flujoPropio) throw new Error(`${tipo.nombre} se registra en su formulario propio.`);
   validarMes(solicitud.mes, "mes de pago");
   await exigirMesAbierto(repositorio, solicitud.mes);
   const { filasValidas: _filasValidas, ...vista } = await evaluar(repositorio, await resolverPersonas(repositorio, solicitud.contenido, solicitud.nombre), tipo, solicitud);
@@ -209,6 +210,7 @@ export async function importarFuente(
 ): Promise<ResultadoDeImportacionDeFuente> {
   exigirPermiso(actor);
   const tipo = exigirTipo(solicitud.tipoDeFuente);
+  if (tipo.flujoPropio) throw new Error(`${tipo.nombre} se registra en su formulario propio.`);
   validarMes(solicitud.mes, "mes de pago");
   const personas = await resolverPersonas(repositorio, solicitud.contenido, solicitud.nombre);
 

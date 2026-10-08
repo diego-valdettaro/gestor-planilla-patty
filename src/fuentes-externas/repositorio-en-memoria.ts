@@ -8,6 +8,7 @@ export function crearRepositorioEnMemoria(personas: Record<string, string> = {})
   let importes: ImporteExterno[] = [];
   let confirmaciones: ConfirmacionDeFuente[] = [];
   let importaciones: ImportacionDeFuente[] = [];
+  const mesesConPagoConfirmado = new Set<string>();
   const mesesFinalizados = new Set<string>();
 
   const almacen: AlmacenDeFuentesExternas = {
@@ -15,12 +16,14 @@ export function crearRepositorioEnMemoria(personas: Record<string, string> = {})
     buscarImporte: async (id) => importes.find((importe) => importe.id === id),
     insertarImporte: async (nuevo) => {
       const clave = claveDeImporte(nuevo);
-      if (importes.some((importe) => importe.anuladoEn === null && claveDeImporte(importe) === clave)) return undefined;
+      if (importes.some((importe) => importe.anuladoEn === null && claveDeImporte(importe) === clave && (nuevo.tipoDeFuente !== "ajustes_de_preliquidacion" || (importe.conceptoAjustado === nuevo.conceptoAjustado && importe.sentidoAjuste === nuevo.sentidoAjuste)))) return undefined;
       const importe: ImporteExterno = {
         id: randomUUID(), nombre: personas[nuevo.dni] ?? nuevo.dni, tipoDeFuente: nuevo.tipoDeFuente, dni: nuevo.dni, concepto: nuevo.concepto,
         fechaDelHecho: nuevo.fechaDelHecho, mesDeDevengue: nuevo.mesDeDevengue, mesDeAplicacion: nuevo.mesDeAplicacion, monto: nuevo.monto,
         procedencia: nuevo.procedencia, registradoPorId: nuevo.responsableId, registradoPor: `usuario-${nuevo.responsableId}`, registradoEn: new Date(),
         anuladoEn: null, motivoDeAnulacion: null, importacionId: nuevo.importacionId ?? null,
+        estadoDeIncidencia: nuevo.estadoDeIncidencia ?? null, sustento: null, autorizadoPor: null, fechaDeAutorizacion: null,
+        conceptoAjustado: nuevo.conceptoAjustado ?? null, sentidoAjuste: nuevo.sentidoAjuste ?? null, motivoDeAjuste: nuevo.motivoDeAjuste ?? null,
       };
       importes.push(importe);
       return importe;
@@ -29,6 +32,12 @@ export function crearRepositorioEnMemoria(personas: Record<string, string> = {})
       const importe = importes.find((existente) => existente.id === id);
       if (!importe || importe.anuladoEn !== null) return false;
       Object.assign(importe, { anuladoEn, motivoDeAnulacion: motivo });
+      return true;
+    },
+    cambiarIncidencia: async (id, estado, sustento, autorizadoPor, fechaDeAutorizacion) => {
+      const importe = importes.find((existente) => existente.id === id && existente.anuladoEn === null && existente.tipoDeFuente === "incidencias_de_tienda");
+      if (!importe) return false;
+      Object.assign(importe, { estadoDeIncidencia: estado, sustento: sustento ?? null, autorizadoPor: autorizadoPor ?? null, fechaDeAutorizacion: fechaDeAutorizacion ?? null });
       return true;
     },
     buscarConfirmacion: async (tipo, mes) => confirmaciones.find((c) => c.tipoDeFuente === tipo && c.mesDeAplicacion === mes),
@@ -58,6 +67,7 @@ export function crearRepositorioEnMemoria(personas: Record<string, string> = {})
       for (const importe of propios) Object.assign(importe, { anuladoEn: reemplazadaEn, motivoDeAnulacion: motivo });
       return propios.length;
     },
+    mesConPagoConfirmado: async (mes) => mesesConPagoConfirmado.has(mes),
     mesFinalizado: async (mes) => mesesFinalizados.has(mes),
   };
 
@@ -81,5 +91,5 @@ export function crearRepositorioEnMemoria(personas: Record<string, string> = {})
       }
     },
   };
-  return { repositorio, mesesFinalizados, importes: () => importes, confirmaciones: () => confirmaciones, importaciones: () => importaciones };
+  return { repositorio, mesesConPagoConfirmado, mesesFinalizados, importes: () => importes, confirmaciones: () => confirmaciones, importaciones: () => importaciones };
 }

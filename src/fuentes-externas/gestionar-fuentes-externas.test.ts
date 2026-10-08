@@ -52,12 +52,12 @@ describe("fuentes externas del mes de pago", () => {
     expect((await consultarFuente(repositorio, finanzas, "comisiones_de_ventas", MES))?.importes).toEqual([importe]);
   });
 
-  it("todos los tipos de fuente aparecen en el mes y solo cargan conceptos de fuente externa del catálogo", async () => {
+  it("todos los tipos aparecen en el mes y cada uno usa conceptos de su flujo", async () => {
     const filas = await consultarEstadoDeFuentes(repositorio, finanzas, MES);
 
     expect(filas.map((fila) => fila.tipo.codigo)).toEqual(TIPOS_DE_FUENTE.map((tipo) => tipo.codigo));
     for (const tipo of TIPOS_DE_FUENTE) {
-      for (const concepto of tipo.conceptos) expect(buscarConcepto(concepto)?.origen, concepto).toBe("fuente_externa");
+      for (const concepto of tipo.conceptos) expect(buscarConcepto(concepto)?.origen, concepto).toBe(tipo.codigo === "ajustes_de_preliquidacion" ? "ajuste" : "fuente_externa");
     }
   });
 
@@ -231,14 +231,14 @@ describe("fuentes externas del mes de pago", () => {
       await expect(anularImporte(repositorio, finanzas, { importeId: importe.id, motivo: "otra vez" })).rejects.toThrow(/ya fue anulado/);
     });
 
-    it("un mes de pago finalizado no admite cambios en sus fuentes", async () => {
+    it("un mes con pago confirmado no admite cambios en sus fuentes", async () => {
       const { importe } = await registrar();
-      contexto.mesesFinalizados.add(MES);
+      contexto.mesesConPagoConfirmado.add(MES);
 
-      await expect(registrar({ monto: "1" })).rejects.toThrow(/ya está finalizado/);
-      await expect(anularImporte(repositorio, finanzas, { importeId: importe.id, motivo: "x" })).rejects.toThrow(/ya está finalizado/);
-      await expect(confirmarFuente(repositorio, finanzas, { tipoDeFuente: "adelantos", mes: MES })).rejects.toThrow(/ya está finalizado/);
-      await expect(volverAPendiente(repositorio, finanzas, { tipoDeFuente: "adelantos", mes: MES })).rejects.toThrow(/ya está finalizado/);
+      await expect(registrar({ monto: "1" })).rejects.toThrow(/tiene el pago realizado confirmado/);
+      await expect(anularImporte(repositorio, finanzas, { importeId: importe.id, motivo: "x" })).rejects.toThrow(/tiene el pago realizado confirmado/);
+      await expect(confirmarFuente(repositorio, finanzas, { tipoDeFuente: "adelantos", mes: MES })).rejects.toThrow(/tiene el pago realizado confirmado/);
+      await expect(volverAPendiente(repositorio, finanzas, { tipoDeFuente: "adelantos", mes: MES })).rejects.toThrow(/tiene el pago realizado confirmado/);
     });
   });
 
