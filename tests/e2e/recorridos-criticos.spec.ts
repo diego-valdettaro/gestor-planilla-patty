@@ -1112,6 +1112,8 @@ test("Finanzas valida un XLSX normalizado, ve los errores por fila, importa todo
   await expect(page.getByRole("button", { name: "Importar", exact: true })).toBeDisabled();
   await expect(page.getByText("Corrija el archivo y vuelva a validarlo.")).toBeVisible();
   await expect(page.getByRole("button", { name: /^Importar \d+ fila/ })).toHaveCount(0);
+  // React reinicia el formulario tras la acción: el tipo elegido al entrar por el enlace de la fila debe seguir siendo el mismo.
+  await expect(page.getByLabel("Tipo de fuente")).toHaveValue("retencion_de_quinta");
 
   // Corregido: «Importar N filas» es la única acción principal y el diálogo trae alcance y consecuencia.
   await archivo.setInputFiles(archivoDeRetencion(fecha, [["99900001", 120], ["99900002", 50.5]]));
@@ -1120,6 +1122,7 @@ test("Finanzas valida un XLSX normalizado, ve los errores por fila, importa todo
   await expect(page.getByText("Filas válidas", { exact: true }).locator("..")).toContainText("2");
   await expect(page.getByText("Total de filas válidas", { exact: true }).locator("..")).toContainText("S/ 170,50");
   await expect(validar).toHaveClass(/boton-secundario/);
+  await expect(page.getByLabel("Tipo de fuente")).toHaveValue("retencion_de_quinta");
   const dialogo = page.getByRole("dialog");
   await abrirDialogo(page, page.getByRole("button", { name: "Importar 2 filas" }));
   await expect(dialogo.getByRole("heading", { name: /^¿Importar 2 filas de Retención de quinta categoría de \d{2}\/\d{4}\?$/ })).toBeVisible();

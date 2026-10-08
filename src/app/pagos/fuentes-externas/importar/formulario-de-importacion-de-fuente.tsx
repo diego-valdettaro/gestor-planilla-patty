@@ -26,6 +26,7 @@ export function FormularioDeImportacionDeFuente({ tipos, tipoInicial, mes }: { t
   const [obsoletaDe, setObsoletaDe] = useState<EstadoDeImportacionDeFuente | undefined>();
   const { dialogo, titulo, abrir } = useDialogo(undefined);
   const archivoInput = useRef<HTMLInputElement>(null);
+  const tipoInput = useRef<HTMLSelectElement>(null);
   const archivoSeleccionado = useRef<File | null>(null);
   const resultado = useRef<HTMLElement>(null);
   const tituloDeResultadoId = useId();
@@ -44,6 +45,11 @@ export function FormularioDeImportacionDeFuente({ tipos, tipoInicial, mes }: { t
     archivoInput.current.files = transferencia.files;
   }, [estado]);
 
+  // El mismo reinicio devuelve el select a su primera opción sin que cambie el estado `tipo`: se vuelve a asignar para que lo visible y lo enviado coincidan.
+  useEffect(() => {
+    if (tipoInput.current) tipoInput.current.value = tipo;
+  }, [estado, tipo]);
+
   useEffect(() => { if (estado.resultado) resultado.current?.focus(); }, [estado.resultado]);
 
   const tipoElegido = tipos.find((candidato) => candidato.codigo === tipo);
@@ -53,7 +59,7 @@ export function FormularioDeImportacionDeFuente({ tipos, tipoInicial, mes }: { t
     <form action={accion} className="formulario-dialogo formulario-de-importacion-de-fuente">
       <input name="mes" type="hidden" value={mes} />
       <label>Tipo de fuente
-        <select name="tipoDeFuente" onChange={(evento) => { setTipo(evento.target.value); invalidar(); }} value={tipo}>
+        <select name="tipoDeFuente" onChange={(evento) => { setTipo(evento.target.value); invalidar(); }} ref={tipoInput} value={tipo}>
           {tipos.map((opcion) => <option key={opcion.codigo} value={opcion.codigo}>{opcion.nombre}</option>)}
         </select>
       </label>
@@ -105,7 +111,7 @@ export function FormularioDeImportacionDeFuente({ tipos, tipoInicial, mes }: { t
       </dialog>}
     </form>
 
-    {estado.resultado && <section aria-labelledby={tituloDeResultadoId} className="mensaje-operacion listo" ref={resultado} role="status" tabIndex={-1}>
+    {estado.resultado && <section aria-labelledby={tituloDeResultadoId} className="mensaje-operacion listo resultado-de-importacion" ref={resultado} role="status" tabIndex={-1}>
       <h2 id={tituloDeResultadoId}>Archivo importado</h2>
       <p>Se importaron {estado.resultado.filas} {estado.resultado.filas === 1 ? "fila" : "filas"} ({formatearSoles(estado.resultado.total)}) de {estado.resultado.tipoNombre} para el mes de pago {formatearMes(estado.resultado.mes)}.</p>
       <p>Archivo {estado.resultado.nombre} · hash {estado.resultado.hashAbreviado} · importado por {estado.resultado.responsable} el {estado.resultado.fecha}.</p>

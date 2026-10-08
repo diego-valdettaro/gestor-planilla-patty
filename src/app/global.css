@@ -314,3 +314,4 @@ th, td { border: 1px solid #e2e8f0; padding: 0.6rem; text-align: left; }
 .resumen-de-validacion dt { color: #526174; font-size: .76rem; font-weight: 700; }
 .resumen-de-validacion dd { font-size: 1.05rem; font-weight: 700; margin: .15rem 0 0; }
 .formulario-de-importacion-de-fuente .acciones-dialogo { align-items: center; flex-wrap: wrap; justify-content: flex-start; }
+.resultado-de-validacion h2, .resultado-de-importacion h2 { color: #152f56; font-size: 1.1rem; letter-spacing: -.02em; margin: 0 0 .3rem; }
