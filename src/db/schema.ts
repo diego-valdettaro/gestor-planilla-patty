@@ -6,6 +6,7 @@ import {
   index,
   jsonb,
   pgTable,
+  primaryKey,
   smallint,
   text,
   timestamp,
@@ -541,5 +542,59 @@ export const reglasLegales = pgTable(
     check("reglas_legales_fuente_valida", sql`char_length(btrim(${table.fuenteOficial})) BETWEEN 1 AND 500`),
     check("reglas_legales_reemplazo_con_motivo", sql`(${table.reemplazadaEn} IS NULL) = (${table.motivoDeReemplazo} IS NULL)`),
     check("reglas_legales_motivo_valido", sql`${table.motivoDeReemplazo} IS NULL OR char_length(btrim(${table.motivoDeReemplazo})) BETWEEN 1 AND 250`),
+  ],
+);
+
+// Fuentes externas de Pagos (issue #118, ADR 0009). Un importe externo es un monto por persona de un concepto catalogado
+// (`src/conceptos-de-preliquidacion`) que Finanzas carga desde fuera del huellero. Conserva el DNI, la fecha del hecho,
+// el mes de devengue, el mes de aplicación (el mes de pago al que pertenece), el monto en céntimos (siempre positivo: el
+// signo lo da el concepto) y su procedencia. Un importe no se edita: se anula con motivo y queda en el historial. El mes
+// es texto AAAA-MM. El índice único parcial rechaza un duplicado entre importes no anulados. Los catálogos de conceptos y de
+// tipos de fuente viven en código para que ampliarlos no exija migración.
+export const importesExternos = pgTable(
+  "importes_externos",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tipoDeFuente: text("tipo_de_fuente").notNull(),
+    dni: text("dni").notNull().references(() => colaboradores.dni),
+    concepto: text("concepto").notNull(),
+    fechaDelHecho: date("fecha_del_hecho", { mode: "string" }).notNull(),
+    mesDeDevengue: text("mes_de_devengue").notNull(),
+    mesDeAplicacion: text("mes_de_aplicacion").notNull(),
+    montoCentimos: integer("monto_centimos").notNull(),
+    procedencia: text("procedencia").notNull(),
+    registradoPorId: uuid("registrado_por_id").notNull().references(() => cuentasLocales.id),
+    registradoEn: timestamp("registrado_en", { withTimezone: true }).notNull().defaultNow(),
+    anuladoEn: timestamp("anulado_en", { withTimezone: true }),
+    motivoDeAnulacion: text("motivo_de_anulacion"),
+  },
+  (table) => [
+    index("importes_externos_fuente").on(table.tipoDeFuente, table.mesDeAplicacion),
+    index("importes_externos_dni").on(table.dni, table.mesDeAplicacion),
+    uniqueIndex("importes_externos_sin_duplicados")
+      .on(table.dni, table.concepto, table.fechaDelHecho, table.mesDeDevengue, table.mesDeAplicacion, table.montoCentimos)
+      .where(sql`${table.anuladoEn} IS NULL`),
+    check("importes_externos_monto_positivo", sql`${table.montoCentimos} > 0`),
+    check("importes_externos_meses_validos", sql`${table.mesDeDevengue} ~ '^\\d{4}-(0[1-9]|1[0-2])$' AND ${table.mesDeAplicacion} ~ '^\\d{4}-(0[1-9]|1[0-2])$'`),
+    check("importes_externos_procedencia_valida", sql`char_length(btrim(${table.procedencia})) BETWEEN 1 AND 200`),
+    check("importes_externos_anulacion_con_motivo", sql`(${table.anuladoEn} IS NULL) = (${table.motivoDeAnulacion} IS NULL)`),
+    check("importes_externos_motivo_valido", sql`${table.motivoDeAnulacion} IS NULL OR char_length(btrim(${table.motivoDeAnulacion})) BETWEEN 1 AND 250`),
+  ],
+);
+
+// Confirmación de un tipo de fuente para un mes de pago: Finanzas declara completo el listado para la población aplicable,
+// incluso sin importes. Su existencia es el estado «Confirmada»; sin fila la fuente está pendiente. Es reversible antes
+// de finalizar el mes (se borra la fila) y cualquier cambio de importes del tipo la borra.
+export const confirmacionesDeFuente = pgTable(
+  "confirmaciones_de_fuente",
+  {
+    tipoDeFuente: text("tipo_de_fuente").notNull(),
+    mesDeAplicacion: text("mes_de_aplicacion").notNull(),
+    confirmadaPorId: uuid("confirmada_por_id").notNull().references(() => cuentasLocales.id),
+    confirmadaEn: timestamp("confirmada_en", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.tipoDeFuente, table.mesDeAplicacion], name: "confirmaciones_de_fuente_pk" }),
+    check("confirmaciones_de_fuente_mes_valido", sql`${table.mesDeAplicacion} ~ '^\\d{4}-(0[1-9]|1[0-2])$'`),
   ],
 );

@@ -297,6 +297,8 @@ th, td { border: 1px solid #e2e8f0; padding: 0.6rem; text-align: left; }
 .panel-tabla.primera-columna-fija table { min-width: 0; }
 .panel-tabla.primera-columna-fija th, .panel-tabla.primera-columna-fija td { padding: .6rem .5rem; }
 .panel-tabla.primera-columna-fija tbody tr:last-child th { border-bottom: 0; }
+/* Tipos de fuente de Pagos: el nombre del tipo puede ser largo; que baje de línea evita esconder las acciones de la fila. */
+.panel-tabla.tabla-de-fuentes tbody th { max-width: 12rem; white-space: normal; }
 .panel-tabla.primera-columna-fija .celda-estado { min-width: 14rem; white-space: normal; }
 .panel-tabla.primera-columna-fija .celda-estado .insignia { border-radius: .6rem; text-align: left; white-space: normal; }
 .formulario-dialogo { display: grid; gap: .75rem; }
