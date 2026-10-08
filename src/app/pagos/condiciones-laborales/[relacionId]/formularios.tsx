@@ -1,11 +1,12 @@
 "use client";
 
-import { useActionState, useEffect, useId, useRef, useState } from "react";
+import { useActionState, useEffect, useId, useState } from "react";
 
 import { AFILIACIONES, DATOS_LABORALES, ESQUEMAS_DE_COMISION, NOMBRE_DE_AFILIACION, NOMBRE_DE_DATO, NOMBRE_DE_ESQUEMA, NOMBRE_DE_REGIMEN, REGIMENES, enMinuscula, type DatoLaboral } from "@/condiciones-laborales/catalogo";
 import { formatearFechaDeRelacion } from "@/relaciones-laborales/vigencia";
 import { desplazarFecha } from "@/turnos/semana";
 
+import { useDialogo } from "../../usar-dialogo";
 import { corregirCondicionDesdeFormulario, registrarCondicionDesdeFormulario, type EstadoDeFormularioDeCondicion } from "../actions";
 
 const estadoInicial: EstadoDeFormularioDeCondicion = {};
@@ -28,16 +29,6 @@ function CampoDeValor({ dato, sedes }: { dato: DatoLaboral; sedes: string[] }) {
     case "sede_de_adscripcion":
       return <label>Sede de adscripción<select defaultValue="" name="valor" required><option disabled value="">Elija una sede…</option>{sedes.map((sede) => <option key={sede} value={sede}>{sede}</option>)}</select></label>;
   }
-}
-
-/** Cierra el diálogo cuando el servidor guarda y devuelve el foco al botón que lo abrió (lo hace el `<dialog>`). */
-function useDialogo(listo: number | undefined) {
-  const dialogo = useRef<HTMLDialogElement>(null);
-  const titulo = useRef<HTMLHeadingElement>(null);
-  useEffect(() => { if (listo) dialogo.current?.close(); }, [listo]);
-  // El foco inicial va en el título, nunca en la acción de confirmar.
-  const abrir = () => { dialogo.current?.showModal(); titulo.current?.focus(); };
-  return { dialogo, titulo, abrir };
 }
 
 /** Diálogo 6.6: dato, valor y «Vigente desde», con el alcance y la consecuencia escritos antes de confirmar. */

@@ -13,6 +13,8 @@ import type { Actor } from "@/autenticacion/permisos";
 import { registrarColaborador } from "@/colaboradores/registrar-colaborador";
 import { registrarCondicionLaboral } from "@/condiciones-laborales/gestionar-condiciones-laborales";
 import { RepositorioPostgresDeCondicionesLaborales } from "@/condiciones-laborales/repositorio-postgres";
+import { activarReglaLegal } from "@/reglas-legales/gestionar-reglas-legales";
+import { RepositorioPostgresDeReglasLegales } from "@/reglas-legales/repositorio-postgres";
 import { confirmarCese, confirmarIngreso, registrarCese, registrarIngreso } from "@/relaciones-laborales/gestionar-relaciones-laborales";
 import { RepositorioPostgresDeRelacionesLaborales } from "@/relaciones-laborales/repositorio-postgres";
 import { RepositorioPostgresDeColaboradores } from "@/colaboradores/repositorio-postgres";
@@ -23,7 +25,7 @@ import { RepositorioPostgresDeTardanzas } from "@/tardanzas/repositorio-postgres
 import { crearModeloDeHorario } from "@/turnos/gestionar-modelos-de-horario";
 import { RepositorioPostgresDeModelosDeHorario } from "@/turnos/repositorio-postgres-modelos-de-horario";
 import { RepositorioPostgresDeTurnos } from "@/turnos/repositorio-postgres";
-import { diasDeLaSemana } from "@/turnos/semana";
+import { desplazarFecha, diasDeLaSemana } from "@/turnos/semana";
 
 // Datos de demo para el entorno de revisión (`pnpm revisar`). NO usar contra la base `planilla`.
 // Se apoya en los casos de uso reales donde protegen correctness (hash de contraseña; cascada
@@ -178,6 +180,7 @@ async function limpiar(pool: Pool): Promise<void> {
     DELETE FROM relaciones_laborales WHERE dni LIKE '${PATRON_DNI_DEMO}';
     DELETE FROM colaboradores WHERE dni LIKE '${PATRON_DNI_DEMO}';
     DELETE FROM sedes WHERE nombre IN (${sedes});
+    DELETE FROM reglas_legales WHERE activada_por_id IN (SELECT id FROM cuentas_locales WHERE nombre_usuario IN (${usuarios}));
     DELETE FROM gerentes_de_grupo WHERE cuenta_id IN (SELECT id FROM cuentas_locales WHERE nombre_usuario IN (${usuarios}));
     DELETE FROM grupos WHERE nombre IN (${NOMBRES_DE_GRUPO.map((nombre) => `'${nombre.replace(/'/g, "''")}'`).join(", ")});
     DELETE FROM sesiones WHERE cuenta_id IN (SELECT id FROM cuentas_locales WHERE nombre_usuario IN (${usuarios}));
@@ -282,6 +285,26 @@ async function registrarCondicionesLaborales(db: Db, actor: Actor): Promise<void
   // Karen: una relación que terminó y su reingreso, cada una con su propio historial.
   await registrar(relacionDe("99900013", "2024-02-05"), "sueldo", "1200");
   await registrar(relacionDe("99900013", diasDeLaSemana(SEMANA_ACTUAL)[1]), "sueldo", "1700");
+}
+
+const FUENTE_DE_DEMOSTRACION = "Dato de demostración (seed de revisión), no es una fuente oficial";
+
+/**
+ * Reglas legales con vigencia (#117), activadas por Finanzas con el caso de uso real. Los valores son de DEMOSTRACIÓN
+ * (la fuente lo dice) y solo sirven para revisar la pantalla: la Tasa de EsSalud tiene dos vigencias, la de ONP tiene una
+ * versión programada para el mes siguiente y los demás valores legales quedan sin regla vigente («Pendiente»).
+ */
+async function activarReglasLegales(db: Db, actor: Actor): Promise<void> {
+  const repositorio = new RepositorioPostgresDeReglasLegales(db);
+  const activar = (codigo: string, valor: string, vigenteDesde: string) =>
+    activarReglaLegal(repositorio, actor, { codigo, valor, vigenteDesde, fuenteOficial: FUENTE_DE_DEMOSTRACION });
+  const primeraDelMesSiguiente = desplazarFecha(PERIODO_ACTUAL.fin, 1);
+
+  await activar("rmv", "1000", PERIODO_ANTERIOR.inicio);
+  await activar("essalud_tasa", "8", PERIODO_ANTERIOR.inicio);
+  await activar("essalud_tasa", "9", PERIODO_ACTUAL.inicio);
+  await activar("onp_tasa", "12", PERIODO_ANTERIOR.inicio);
+  await activar("onp_tasa", "13", primeraDelMesSiguiente);
 }
 
 function turnosDeSemana(dni: string, sede: string, semana: string) {
@@ -405,6 +428,15 @@ async function verificarInvariantes(pool: Pool): Promise<void> {
   if (Number(condiciones.sueldosDeAna) !== 2) fallos.push(`Ana debería tener 2 vigencias de sueldo, tiene ${condiciones.sueldosDeAna}`);
   if (Number(condiciones.completas) !== 5) fallos.push(`se esperaban 5 relaciones con condiciones completas, hay ${condiciones.completas}`);
 
+  const { rows: [reglas] } = await pool.query<{ essalud: string; onp: string }>(
+    `SELECT count(*) FILTER (WHERE codigo = 'essalud_tasa' AND reemplazada_en IS NULL)::text AS essalud,
+            count(*) FILTER (WHERE codigo = 'onp_tasa' AND reemplazada_en IS NULL AND vigente_desde > $1)::text AS onp
+       FROM reglas_legales WHERE fuente_oficial = '${FUENTE_DE_DEMOSTRACION}'`,
+    [PERIODO_ACTUAL.fin],
+  );
+  if (Number(reglas.essalud) !== 2) fallos.push(`la Tasa de EsSalud debería tener 2 vigencias, tiene ${reglas.essalud}`);
+  if (Number(reglas.onp) !== 1) fallos.push(`la Tasa de ONP debería tener 1 versión programada, tiene ${reglas.onp}`);
+
   if (fallos.length) throw new Error(`Invariantes del seed no se cumplen:\n- ${fallos.join("\n- ")}`);
 }
 
@@ -453,6 +485,11 @@ function resumen(): string {
     "  Beto Publicado   -> AFP Integra con esquema mixto y elegible a asignación familiar; Carla Cambios -> REMYPE",
     "  Darío / Elena    -> datos incompletos («Pendiente» y «Falta: …»); el resto, sin ningún dato",
     "  Karen Reingreso  -> un historial por cada una de sus dos relaciones laborales",
+    "",
+    "Pagos · Reglas legales (finanzas / finanzas; valores de DEMOSTRACIÓN, no oficiales):",
+    "  Tasa de EsSalud  -> dos vigencias (anterior y la del mes actual)",
+    "  Tasa de ONP      -> una versión «Programado» para el mes siguiente; RMV con una vigencia",
+    "  Los demás valores legales (AFP, horas extra, etc.) quedan sin regla vigente: «Pendiente»",
     "",
     "Calendario de asistencias de Beto Publicado (mes actual):",
     "  lun/mar -> Registrada ; mié -> Registrada (Feriado) ; jue -> Pendiente de revisión ; vie/sáb -> Esperada",
@@ -529,6 +566,9 @@ async function main(): Promise<void> {
 
     // --- Condiciones laborales con vigencia (caso de uso: las registra Finanzas) ---
     await registrarCondicionesLaborales(db, actorFinanzas);
+
+    // --- Reglas legales con vigencia (caso de uso: las activa Finanzas) ---
+    await activarReglasLegales(db, actorFinanzas);
 
     // --- Períodos: ambos abiertos al principio para poder publicar dentro ---
     await db.insert(schema.periodosPlanilla).values([
