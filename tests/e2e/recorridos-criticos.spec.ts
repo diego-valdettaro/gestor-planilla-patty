@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import * as XLSX from "xlsx";
 
 function observarErroresDelNavegador(page: Page): string[] {
   const errores: string[] = [];
@@ -1069,5 +1070,116 @@ test("Fuentes externas cabe en 375 px: las tablas se desplazan dentro de su regi
   expect(cajaDelDialogo!.x + cajaDelDialogo!.width).toBeLessThanOrEqual(375);
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toBeHidden();
+  expect(errores).toEqual([]);
+});
+
+/** Un XLSX normalizado de retención de quinta (datos sintéticos) para subirlo desde el navegador. */
+function archivoDeRetencion(fecha: string, filas: Array<[string, number]>): { name: string; mimeType: string; buffer: Buffer } {
+  const libro = XLSX.utils.book_new();
+  const mesDeDevengue = fecha.slice(0, 7);
+  XLSX.utils.book_append_sheet(libro, XLSX.utils.aoa_to_sheet([
+    ["DNI", "Concepto", "Fecha del hecho", "Mes de devengue", "Importe"],
+    ...filas.map(([dni, importe]) => [dni, "retencion_de_quinta", fecha, mesDeDevengue, importe]),
+  ]), "Importes");
+  return { name: "retencion.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer: XLSX.write(libro, { type: "buffer", bookType: "xlsx" }) };
+}
+
+test("Finanzas valida un XLSX normalizado, ve los errores por fila, importa todo o nada, detecta el mismo archivo y reemplaza el anterior", async ({ page }) => {
+  test.setTimeout(150_000);
+  const errores = observarErroresDelNavegador(page);
+
+  await iniciarSesion(page, "finanzas");
+  await page.goto("/pagos/fuentes-externas");
+  const fila = page.getByRole("region", { name: /^Tipos de fuente de / }).locator("tbody tr").filter({ has: page.getByRole("link", { name: "Retención de quinta categoría", exact: true }) });
+  await fila.getByRole("link", { name: /Importar XLSX/ }).click();
+  await expect(page.getByRole("heading", { name: /^Importar fuente externa · mes de pago/, level: 1 })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByLabel("Tipo de fuente")).toHaveValue("retencion_de_quinta");
+  await expect(page.getByRole("link", { name: /Descargar plantilla normalizada/ })).toHaveAttribute("href", "/pagos/fuentes-externas/plantilla?tipo=retencion_de_quinta");
+  // Sin archivo validado solo existe «Validar archivo» y no hay vista previa.
+  await expect(page.getByRole("button", { name: "Validar archivo" })).toBeVisible();
+  await expect(page.getByText("Resultado de la validación")).toHaveCount(0);
+
+  const fecha = await fechaDelMesDePago(page);
+  const archivo = page.getByLabel("Archivo XLSX normalizado");
+  const validar = page.getByRole("button", { name: "Validar archivo" });
+
+  // Un archivo con un DNI desconocido se rechaza completo: errores por fila y «Importar» deshabilitado.
+  await archivo.setInputFiles(archivoDeRetencion(fecha, [["99900001", 120], ["00000000", 50]]));
+  await validar.click();
+  const alerta = page.getByRole("alert").filter({ hasText: "no se importa ninguna fila" });
+  await expect(alerta).toContainText("Fila 3 · 00000000 · DNI desconocido", { timeout: 30_000 });
+  await expect(page.getByText("Personas desconocidas", { exact: true }).locator("..")).toContainText("1");
+  await expect(page.getByRole("button", { name: "Importar", exact: true })).toBeDisabled();
+  await expect(page.getByText("Corrija el archivo y vuelva a validarlo.")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Importar \d+ fila/ })).toHaveCount(0);
+
+  // Corregido: «Importar N filas» es la única acción principal y el diálogo trae alcance y consecuencia.
+  await archivo.setInputFiles(archivoDeRetencion(fecha, [["99900001", 120], ["99900002", 50.5]]));
+  await validar.click();
+  await expect(page.getByText("El archivo no tiene errores.")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("Filas válidas", { exact: true }).locator("..")).toContainText("2");
+  await expect(page.getByText("Total de filas válidas", { exact: true }).locator("..")).toContainText("S/ 170,50");
+  await expect(validar).toHaveClass(/boton-secundario/);
+  const dialogo = page.getByRole("dialog");
+  await abrirDialogo(page, page.getByRole("button", { name: "Importar 2 filas" }));
+  await expect(dialogo.getByRole("heading", { name: /^¿Importar 2 filas de Retención de quinta categoría de \d{2}\/\d{4}\?$/ })).toBeVisible();
+  await expect(dialogo.getByText("Importar no la confirma")).toBeVisible();
+  await dialogo.getByRole("button", { name: "Importar 2 filas" }).click();
+  const resultado = page.getByRole("status").filter({ hasText: "Archivo importado" });
+  await expect(resultado).toContainText("Se importaron 2 filas (S/ 170,50)", { timeout: 30_000 });
+  await expect(resultado).toContainText("retencion.xlsx");
+  await expect(resultado).toContainText(/hash [0-9a-f]{8}/);
+
+  // Las filas quedan en la fuente con su procedencia de archivo, y la fuente sigue Pendiente (importar no confirma).
+  await resultado.getByRole("link", { name: "Volver a fuentes externas" }).click();
+  await expect(fila).toContainText("Pendiente", { timeout: 30_000 });
+  await expect(fila).toContainText("Archivo retencion.xlsx");
+  await fila.getByRole("link", { name: /Ver filas/ }).click();
+  const filas = page.getByRole("region", { name: /^Filas de Retención de quinta categoría/ });
+  await expect(filas.locator("tbody tr")).toHaveCount(2, { timeout: 30_000 });
+  await expect(filas.locator("tbody tr").filter({ hasText: "Ana Borrador" })).toContainText("Archivo retencion.xlsx");
+
+  // El mismo archivo otra vez se detecta.
+  await page.getByRole("link", { name: /Importar XLSX/ }).click();
+  await expect(page.getByRole("heading", { name: /^Importar fuente externa/, level: 1 })).toBeVisible({ timeout: 30_000 });
+  await archivo.setInputFiles(archivoDeRetencion(fecha, [["99900001", 120], ["99900002", 50.5]]));
+  await validar.click();
+  await expect(page.getByRole("alert").filter({ hasText: "Este archivo ya se importó" })).toBeVisible({ timeout: 30_000 });
+
+  // Un archivo distinto del mismo tipo y mes lo reemplaza: el diálogo lo dice y las filas anteriores se anulan.
+  await archivo.setInputFiles(archivoDeRetencion(fecha, [["99900003", 75]]));
+  await validar.click();
+  await expect(page.getByText("Ya hay un archivo de Retención de quinta categoría para este mes")).toBeVisible({ timeout: 30_000 });
+  await abrirDialogo(page, page.getByRole("button", { name: "Importar 1 fila" }));
+  await expect(dialogo.getByText("Reemplaza las filas del archivo anterior y devuelve la fuente a Pendiente.")).toBeVisible();
+  await dialogo.getByRole("button", { name: "Importar 1 fila" }).click();
+  const resultadoDelReemplazo = page.getByRole("status").filter({ hasText: "Archivo importado" });
+  await expect(resultadoDelReemplazo).toContainText("Reemplazó las filas del archivo anterior", { timeout: 30_000 });
+  await resultadoDelReemplazo.getByRole("link", { name: "Volver a fuentes externas" }).click();
+  await fila.getByRole("link", { name: /Ver filas/ }).click();
+  await expect(filas.locator("tbody tr")).toHaveCount(1, { timeout: 30_000 });
+  await expect(filas.locator("tbody tr")).toContainText("Carla Cambios");
+
+  // El Administrador no ve la pantalla ni la plantilla.
+  await page.context().clearCookies();
+  await iniciarSesion(page, "admin");
+  await page.goto("/pagos/fuentes-externas/importar");
+  await expect(page.getByRole("heading", { name: "Sin permiso" })).toBeVisible({ timeout: 30_000 });
+  expect((await page.request.get("/pagos/fuentes-externas/plantilla?tipo=retencion_de_quinta")).status()).toBe(403);
+  expect(errores).toEqual([]);
+});
+
+test("Importar fuentes externas cabe en 375 px y la lista de errores no desborda la página", async ({ page }) => {
+  const errores = observarErroresDelNavegador(page);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await iniciarSesion(page, "finanzas");
+
+  await page.goto("/pagos/fuentes-externas/importar?tipo=prestamos");
+  await expect(page.getByRole("heading", { name: /^Importar fuente externa/, level: 1 })).toBeVisible({ timeout: 30_000 });
+  expect(await desbordeHorizontalDeLaPagina(page)).toBeLessThanOrEqual(0);
+  await page.getByLabel("Archivo XLSX normalizado").setInputFiles(archivoDeRetencion(await fechaDelMesDePago(page), [["00000000", 50], ["abc", 10]]));
+  await page.getByRole("button", { name: "Validar archivo" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "no se importa ninguna fila" })).toBeVisible({ timeout: 30_000 });
+  expect(await desbordeHorizontalDeLaPagina(page)).toBeLessThanOrEqual(0);
   expect(errores).toEqual([]);
 });

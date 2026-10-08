@@ -1,4 +1,6 @@
 import {
+  type AnyPgColumn,
+  bigint,
   boolean,
   check,
   date,
@@ -567,6 +569,8 @@ export const importesExternos = pgTable(
     registradoEn: timestamp("registrado_en", { withTimezone: true }).notNull().defaultNow(),
     anuladoEn: timestamp("anulado_en", { withTimezone: true }),
     motivoDeAnulacion: text("motivo_de_anulacion"),
+    /** El archivo fuente de preliquidación del que viene el importe; null en la carga manual. */
+    importacionId: uuid("importacion_id").references((): AnyPgColumn => importacionesDeFuente.id),
   },
   (table) => [
     index("importes_externos_fuente").on(table.tipoDeFuente, table.mesDeAplicacion),
@@ -579,6 +583,34 @@ export const importesExternos = pgTable(
     check("importes_externos_procedencia_valida", sql`char_length(btrim(${table.procedencia})) BETWEEN 1 AND 200`),
     check("importes_externos_anulacion_con_motivo", sql`(${table.anuladoEn} IS NULL) = (${table.motivoDeAnulacion} IS NULL)`),
     check("importes_externos_motivo_valido", sql`${table.motivoDeAnulacion} IS NULL OR char_length(btrim(${table.motivoDeAnulacion})) BETWEEN 1 AND 250`),
+  ],
+);
+
+// Archivo fuente de preliquidación (ADR 0005 y 0009): el XLSX normalizado que aportó los importes de un tipo de fuente en un mes
+// de pago, con su hash, quién lo importó y el resultado de la validación. Es todo o nada: un archivo rechazado no deja registro.
+// Importar otro archivo del mismo tipo y mes reemplaza al anterior (`reemplazadaEn`); el archivo anterior se conserva.
+export const importacionesDeFuente = pgTable(
+  "importaciones_de_fuente",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tipoDeFuente: text("tipo_de_fuente").notNull(),
+    mesDeAplicacion: text("mes_de_aplicacion").notNull(),
+    archivoNombre: text("archivo_nombre").notNull(),
+    archivoUbicacion: text("archivo_ubicacion").notNull(),
+    archivoHashSha256: text("archivo_hash_sha256").notNull(),
+    usuarioId: uuid("usuario_id").notNull().references(() => cuentasLocales.id),
+    importadaEn: timestamp("importada_en", { withTimezone: true }).notNull().defaultNow(),
+    filas: integer("filas").notNull(),
+    totalCentimos: bigint("total_centimos", { mode: "number" }).notNull(),
+    validacion: jsonb("validacion").$type<{ filasValidas: number; filasConError: number; duplicadas: number; personasDesconocidas: number }>().notNull(),
+    reemplazadaEn: timestamp("reemplazada_en", { withTimezone: true }),
+  },
+  (table) => [
+    index("importaciones_de_fuente_fuente").on(table.tipoDeFuente, table.mesDeAplicacion),
+    uniqueIndex("importaciones_de_fuente_vigente").on(table.tipoDeFuente, table.mesDeAplicacion).where(sql`${table.reemplazadaEn} IS NULL`),
+    check("importaciones_de_fuente_mes_valido", sql`${table.mesDeAplicacion} ~ '^\\d{4}-(0[1-9]|1[0-2])$'`),
+    check("importaciones_de_fuente_hash_valido", sql`${table.archivoHashSha256} ~ '^[0-9a-f]{64}$'`),
+    check("importaciones_de_fuente_filas_positivas", sql`${table.filas} > 0 AND ${table.totalCentimos} > 0`),
   ],
 );
 

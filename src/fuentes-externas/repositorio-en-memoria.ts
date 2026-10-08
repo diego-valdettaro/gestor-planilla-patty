@@ -1,12 +1,13 @@
 import { randomUUID } from "node:crypto";
 
 import { claveDeImporte } from "./duplicados";
-import type { AlmacenDeFuentesExternas, ConfirmacionDeFuente, ImporteExterno, RepositorioDeFuentesExternas } from "./gestionar-fuentes-externas";
+import type { AlmacenDeFuentesExternas, ConfirmacionDeFuente, ImporteExterno, ImportacionDeFuente, RepositorioDeFuentesExternas } from "./gestionar-fuentes-externas";
 
 // Apoyo de pruebas: repositorio en memoria. Los DNI y nombres que las pruebas registran son sintéticos.
 export function crearRepositorioEnMemoria(personas: Record<string, string> = {}) {
   let importes: ImporteExterno[] = [];
   let confirmaciones: ConfirmacionDeFuente[] = [];
+  let importaciones: ImportacionDeFuente[] = [];
   const mesesFinalizados = new Set<string>();
 
   const almacen: AlmacenDeFuentesExternas = {
@@ -19,7 +20,7 @@ export function crearRepositorioEnMemoria(personas: Record<string, string> = {})
         id: randomUUID(), nombre: personas[nuevo.dni] ?? nuevo.dni, tipoDeFuente: nuevo.tipoDeFuente, dni: nuevo.dni, concepto: nuevo.concepto,
         fechaDelHecho: nuevo.fechaDelHecho, mesDeDevengue: nuevo.mesDeDevengue, mesDeAplicacion: nuevo.mesDeAplicacion, monto: nuevo.monto,
         procedencia: nuevo.procedencia, registradoPorId: nuevo.responsableId, registradoPor: `usuario-${nuevo.responsableId}`, registradoEn: new Date(),
-        anuladoEn: null, motivoDeAnulacion: null,
+        anuladoEn: null, motivoDeAnulacion: null, importacionId: nuevo.importacionId ?? null,
       };
       importes.push(importe);
       return importe;
@@ -41,6 +42,22 @@ export function crearRepositorioEnMemoria(personas: Record<string, string> = {})
       confirmaciones = confirmaciones.filter((c) => !(c.tipoDeFuente === tipo && c.mesDeAplicacion === mes));
       return confirmaciones.length < antes;
     },
+    buscarImportacionVigente: async (tipo, mes) => {
+      const importacion = importaciones.find((candidata) => candidata.tipoDeFuente === tipo && candidata.mesDeAplicacion === mes && candidata.reemplazadaEn === null);
+      return importacion && { ...importacion, importesVigentes: importes.filter((importe) => importe.importacionId === importacion.id && importe.anuladoEn === null).length };
+    },
+    insertarImportacion: async (nueva) => {
+      const importacion: ImportacionDeFuente = { id: randomUUID(), ...nueva, usuario: `usuario-${nueva.usuarioId}`, reemplazadaEn: null };
+      importaciones.push(importacion);
+      return importacion;
+    },
+    reemplazarImportacion: async (id, motivo, reemplazadaEn) => {
+      const importacion = importaciones.find((candidata) => candidata.id === id);
+      if (importacion) importacion.reemplazadaEn = reemplazadaEn;
+      const propios = importes.filter((importe) => importe.importacionId === id && importe.anuladoEn === null);
+      for (const importe of propios) Object.assign(importe, { anuladoEn: reemplazadaEn, motivoDeAnulacion: motivo });
+      return propios.length;
+    },
     mesFinalizado: async (mes) => mesesFinalizados.has(mes),
   };
 
@@ -53,14 +70,16 @@ export function crearRepositorioEnMemoria(personas: Record<string, string> = {})
     ejecutarSobreFuente: async (_tipo, _mes, operacion) => {
       const respaldoDeImportes = importes.map((importe) => ({ ...importe }));
       const respaldoDeConfirmaciones = confirmaciones.map((c) => ({ ...c }));
+      const respaldoDeImportaciones = importaciones.map((importacion) => ({ ...importacion }));
       try {
         return await operacion(almacen);
       } catch (error) {
         importes = respaldoDeImportes;
         confirmaciones = respaldoDeConfirmaciones;
+        importaciones = respaldoDeImportaciones;
         throw error;
       }
     },
   };
-  return { repositorio, mesesFinalizados, importes: () => importes, confirmaciones: () => confirmaciones };
+  return { repositorio, mesesFinalizados, importes: () => importes, confirmaciones: () => confirmaciones, importaciones: () => importaciones };
 }

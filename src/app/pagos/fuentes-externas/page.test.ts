@@ -58,6 +58,8 @@ describe("página de Fuentes externas (/pagos/fuentes-externas)", () => {
     expect(html.match(/>Pendiente</g)).toHaveLength(6);
     expect(html).toContain('href="/pagos/fuentes-externas/comisiones_de_ventas?mes=2026-10"');
     expect(html).toContain("Confirmar sin importes");
+    expect(html).toContain('href="/pagos/fuentes-externas/importar?mes=2026-10&amp;tipo=comisiones_de_ventas"');
+    expect(html.match(/>Importar XLSX</g)).toHaveLength(6);
     expect(html).toContain("Sin filas");
     // Una fuente pendiente sin filas no muestra S/ 0,00: el faltante no es cero.
     expect(html.match(/<td class="numerico">—<\/td>/g)).toHaveLength(6);
