@@ -786,6 +786,7 @@ test("Finanzas registra un segundo sueldo con vigencia en Condiciones laborales 
 
   await iniciarSesion(page, "finanzas");
   await page.getByRole("navigation", { name: "Navegación principal" }).getByRole("link", { name: /Pagos/ }).click();
+  await page.getByRole("navigation", { name: "Secciones de Pagos" }).getByRole("link", { name: "Condiciones laborales" }).click();
   await expect(page).toHaveURL(/\/pagos\/condiciones-laborales$/, { timeout: 30_000 });
   await expect(page.getByRole("heading", { name: "Condiciones laborales", level: 1 })).toBeVisible({ timeout: 30_000 });
   const lista = page.getByRole("region", { name: "Condiciones laborales vigentes hoy" });
