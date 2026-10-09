@@ -9,5 +9,7 @@ export default defineConfig({
   },
   test: {
     include: ["src/**/*.test.ts"],
+    // Las integraciones comparten PostgreSQL: un archivo puede crear un grupo entre la aprobación y el cierre de otro.
+    fileParallelism: !process.env.TEST_DATABASE_URL,
   },
 });
