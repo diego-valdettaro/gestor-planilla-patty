@@ -22,6 +22,7 @@ import { RepositorioPostgresDeRelacionesLaborales } from "@/relaciones-laborales
 import { RepositorioPostgresDeColaboradores } from "@/colaboradores/repositorio-postgres";
 import * as schema from "@/db/schema";
 import { RepositorioPostgresDePeriodos } from "@/periodos/repositorio-postgres";
+import { construirHechosDiarios } from "@/periodos/hechos-de-asistencia-postgres";
 import { configurarPoliticaDePenalizacionPorTardanzas } from "@/tardanzas/politica-de-penalizacion";
 import { RepositorioPostgresDeTardanzas } from "@/tardanzas/repositorio-postgres";
 import { crearModeloDeHorario } from "@/turnos/gestionar-modelos-de-horario";
@@ -176,6 +177,7 @@ async function limpiar(pool: Pool): Promise<void> {
     DELETE FROM modelos_de_horario WHERE sede IN (${sedes});
     DELETE FROM politicas_de_penalizacion_por_tardanzas WHERE sede IN (${sedes});
     DELETE FROM aprobaciones_de_asistencia WHERE periodo_id IN (SELECT id FROM periodos_planilla WHERE inicio IN ('${PERIODO_ACTUAL.inicio}', '${PERIODO_ANTERIOR.inicio}'));
+    DELETE FROM revisiones_periodos_planilla WHERE periodo_id IN (SELECT id FROM periodos_planilla WHERE inicio IN ('${PERIODO_ACTUAL.inicio}', '${PERIODO_ANTERIOR.inicio}'));
     DELETE FROM auditoria_periodos_planilla WHERE periodo_id IN (SELECT id FROM periodos_planilla WHERE inicio IN ('${PERIODO_ACTUAL.inicio}', '${PERIODO_ANTERIOR.inicio}'));
     DELETE FROM periodos_planilla WHERE inicio IN ('${PERIODO_ACTUAL.inicio}', '${PERIODO_ANTERIOR.inicio}');
     DELETE FROM importes_externos WHERE dni LIKE '${PATRON_DNI_DEMO}' OR registrado_por_id IN (SELECT id FROM cuentas_locales WHERE nombre_usuario IN (${usuarios}));
@@ -670,6 +672,14 @@ async function main(): Promise<void> {
     await db.insert(schema.aprobacionesDeAsistencia).values([GRUPOS.tiendas, GRUPOS.taller].map((grupo) => ({
       periodoId: periodoAnterior.id, grupo, aprobadaPorId: gerenteTiendas.id, aprobadaEn: new Date(),
     })));
+    // Pagos lee hechos congelados de la revisión cerrada. El cierre directo de demo también debe dejar esa revisión.
+    const periodosDeDemo = new RepositorioPostgresDePeriodos(db);
+    await db.insert(schema.revisionesDePeriodosPlanilla).values({
+      periodoId: periodoAnterior.id, numero: 1,
+      resumen: await periodosDeDemo.listarResumen({ periodoId: periodoAnterior.id }),
+      hechos: await construirHechosDiarios(db, PERIODO_ANTERIOR),
+      responsableId: finanzas.id, cerradaEn: new Date(),
+    });
 
     // --- Asistencias en sus estados actuales (pendiente / confirmada / manual) + tardanza + hora extra.
     // Sin caso de uso limpio para fabricar estos estados; escritura directa.

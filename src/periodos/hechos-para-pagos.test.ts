@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { PeriodoPlanilla } from "./periodo-planilla";
 import {
   CoberturaDelCorteInvalidaError,
+  RevisionDeAsistenciaNoDisponibleError,
   corteDeIncidencias,
   hechosParaFinalizar,
   obtenerHechosDelCorte,
@@ -158,6 +159,24 @@ describe("verificarCoberturaDelCorte", () => {
 });
 
 describe("obtenerHechosDelCorte", () => {
+  it("muestra un bloqueo si un período cerrado carece de revisión y conserva las demás fuentes", async () => {
+    const fuente: LectorDeHechosDeAsistencia = {
+      listar: async () => [
+        periodo("sin-revision", "2026-09-26", "2026-10-05") as PeriodoPlanilla,
+        periodo("con-revision", "2026-10-06", "2026-10-25") as PeriodoPlanilla,
+      ],
+      leerHechosDelPeriodo: async (id) => {
+        if (id === "sin-revision") throw new RevisionDeAsistenciaNoDisponibleError("El período cerrado no tiene una revisión.");
+        return revision(id, "2026-10-06", "2026-10-25", [hecho("12345678", "2026-10-10")]);
+      },
+    };
+    const resultado = await obtenerHechosDelCorte(fuente, corte);
+    expect(resultado.problemas).toEqual([expect.objectContaining({ tipo: "revision_no_disponible", periodoId: "sin-revision" })]);
+    expect(resultado.revisiones).toHaveLength(1);
+    expect(resultado.hechosPorDni["12345678"]).toHaveLength(1);
+    expect(resultado.finalizable).toBe(false);
+    await expect(hechosParaFinalizar(fuente, corte)).rejects.toThrow(/no tiene una revisión de asistencia/);
+  });
   const periodos: PeriodoPlanilla[] = [
     { id: "a", inicio: "2026-09-26", fin: "2026-10-05", estado: "cerrado" },
     { id: "b", inicio: "2026-10-06", fin: "2026-10-25", estado: "cerrado" },

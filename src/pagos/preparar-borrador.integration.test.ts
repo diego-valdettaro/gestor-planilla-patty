@@ -85,8 +85,15 @@ describe.skipIf(!databaseUrl)("borrador mensual completo desde PostgreSQL", () =
     expect((await prepararBorrador(fuentes, "2090-10")).personas.find(({ relacion }) => relacion.dni === dni)?.lineas).toEqual(ana?.lineas);
   });
 
-  it("usa revisión cerrada exacta y cero confirmado; conserva el devengue del ingreso tardío", async () => {
+  it("muestra un bloqueo del mes si un período cerrado no tiene revisión congelada", async () => {
     await db.update(schema.periodosPlanilla).set({ estado: "cerrado" }).where(eq(schema.periodosPlanilla.id, periodoId));
+    const borrador = await prepararBorrador(fuentes, "2090-10");
+    expect(borrador.bloqueosDelMes).toContainEqual(expect.stringContaining("no tiene una revisión de asistencia con hechos congelados"));
+    expect(borrador.revisiones).toEqual([]);
+    expect(borrador.personas.find(({ relacion }) => relacion.dni === dni)?.netoCentimos).toBeNull();
+  });
+
+  it("usa revisión cerrada exacta y cero confirmado; conserva el devengue del ingreso tardío", async () => {
     await db.insert(schema.revisionesDePeriodosPlanilla).values({
       periodoId, numero: 1, resumen: { filas: [], bloqueos: [], totales: {} } as never,
       hechos: [{ dni, fecha: "2090-10-12", grupo, sede: null, horarioAplicado: { entradaProgramada: null, salidaProgramada: null },
