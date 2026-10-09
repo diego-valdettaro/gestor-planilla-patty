@@ -21,6 +21,13 @@ export interface ImporteExterno extends ClaveDeImporte {
   motivoDeAnulacion: string | null;
   /** El archivo fuente de preliquidación del que viene; null en la carga manual. */
   importacionId: string | null;
+  estadoDeIncidencia: "sin_sustento" | "en_investigacion" | "descuento_autorizado" | null;
+  sustento: string | null;
+  autorizadoPor: string | null;
+  fechaDeAutorizacion: string | null;
+  conceptoAjustado: string | null;
+  sentidoAjuste: "suma" | "resta" | null;
+  motivoDeAjuste: string | null;
 }
 
 /** Conteos de la validación que aprobó un archivo fuente; con todo o nada, un archivo importado no tiene filas con error. */
@@ -77,6 +84,10 @@ export interface NuevoImporteExterno extends ClaveDeImporte {
   responsableId: string;
   /** El archivo fuente del que viene el importe; ausente en la carga manual. */
   importacionId?: string;
+  estadoDeIncidencia?: ImporteExterno["estadoDeIncidencia"];
+  conceptoAjustado?: string;
+  sentidoAjuste?: ImporteExterno["sentidoAjuste"];
+  motivoDeAjuste?: string;
 }
 
 /** Operaciones sobre una fuente (tipo y mes de aplicación); dentro de `ejecutarSobreFuente` corren en una transacción con la fuente bloqueada. */
@@ -88,6 +99,7 @@ export interface AlmacenDeFuentesExternas {
   insertarImporte(nuevo: NuevoImporteExterno): Promise<ImporteExterno | undefined>;
   /** false si ya estaba anulado. */
   anularImporte(id: string, motivo: string, anuladoEn: Date): Promise<boolean>;
+  cambiarIncidencia(id: string, estado: NonNullable<ImporteExterno["estadoDeIncidencia"]>, sustento?: string, autorizadoPor?: string, fechaDeAutorizacion?: string): Promise<boolean>;
   buscarConfirmacion(tipo: CodigoDeTipoDeFuente, mes: string): Promise<ConfirmacionDeFuente | undefined>;
   /** false si la fuente ya estaba confirmada. */
   confirmar(tipo: CodigoDeTipoDeFuente, mes: string, responsableId: string, confirmadaEn: Date): Promise<boolean>;
@@ -98,11 +110,9 @@ export interface AlmacenDeFuentesExternas {
   insertarImportacion(nueva: NuevaImportacionDeFuente): Promise<ImportacionDeFuente>;
   /** Marca la importación como reemplazada y anula con motivo los importes que aún conserva; devuelve cuántos anuló. */
   reemplazarImportacion(id: string, motivo: string, reemplazadaEn: Date): Promise<number>;
-  /**
-   * Si Pagos ya finalizó una versión de este mes de pago. Pagos todavía no finaliza versiones: el ticket de finalización
-   * debe implementar esta consulta, que hoy devuelve siempre false, y desde entonces el mes finalizado no admite cambios.
-   * Forma parte del almacén para consultarse dentro del candado de la fuente, junto con el cambio que protege.
-   */
+  /** La versión pagada no admite cambios; una versión final aún no pagada permite otra versión sin editar la anterior. */
+  mesConPagoConfirmado(mes: string): Promise<boolean>;
+  /** «Volver a pendiente» explícito solo se ofrece antes de la primera finalización; cambios de filas sí la invalidan. */
   mesFinalizado(mes: string): Promise<boolean>;
 }
 
@@ -162,9 +172,21 @@ export function exigirTipo(codigo: string): TipoDeFuente {
 }
 
 export async function exigirMesAbierto(almacen: AlmacenDeFuentesExternas, mes: string): Promise<void> {
-  if (await almacen.mesFinalizado(mes)) {
-    throw new Error(`El mes de pago ${formatearMes(mes)} ya está finalizado: sus fuentes externas no admiten cambios.`);
+  if (await almacen.mesConPagoConfirmado(mes)) {
+    throw new Error(`El mes de pago ${formatearMes(mes)} tiene el pago realizado confirmado: sus fuentes externas no admiten cambios.`);
   }
+}
+
+/** Validación compartida por carga manual, incidencias y ajustes antes de entrar en la transacción de la fuente. */
+export async function validarDatosDeImporte(repositorio: RepositorioDeFuentesExternas, datos: Pick<ClaveDeImporte, "dni" | "fechaDelHecho" | "mesDeDevengue" | "mesDeAplicacion"> & { monto: string }): Promise<{ monto: number; nombre: string }> {
+  validarDni(datos.dni);
+  validarFechaDeRelacion(datos.fechaDelHecho, "la fecha del hecho");
+  validarMes(datos.mesDeDevengue, "mes de devengue");
+  validarMes(datos.mesDeAplicacion, "mes de aplicación");
+  const monto = interpretarMonto(datos.monto);
+  const persona = await repositorio.buscarPersona(datos.dni);
+  if (!persona) throw new Error(`No existe una persona con DNI ${datos.dni}.`);
+  return { monto, nombre: persona.nombre };
 }
 
 function sumar(importes: ImporteExterno[]): number {
@@ -178,7 +200,8 @@ function estadoDe(confirmacion: ConfirmacionDeFuente | undefined, filas: number)
 
 function armarFila(tipo: TipoDeFuente, importes: ImporteExterno[], confirmacion: ConfirmacionDeFuente | undefined): FilaDeFuente {
   const ultimoOrigen = [...importes].sort((a, b) => b.registradoEn.getTime() - a.registradoEn.getTime())[0];
-  return { tipo, estado: estadoDe(confirmacion, importes.length), filas: importes.length, total: sumar(importes), confirmacion, ultimoOrigen };
+  const sumables = tipo.codigo === "incidencias_de_tienda" ? importes.filter((importe) => importe.estadoDeIncidencia === "descuento_autorizado") : importes;
+  return { tipo, estado: estadoDe(confirmacion, importes.length), filas: importes.length, total: sumar(sumables), confirmacion, ultimoOrigen };
 }
 
 /** Cambiar las filas de una fuente confirmada la devuelve a «Pendiente»: el listado dejó de ser el que se confirmó. */
@@ -198,6 +221,7 @@ export async function registrarImporte(
 ): Promise<ResultadoDeCambio & { importe: ImporteExterno }> {
   exigirPermiso(actor);
   const tipo = exigirTipo(solicitud.tipoDeFuente);
+  if (tipo.flujoPropio) throw new Error(`${tipo.nombre} se registra en su formulario propio.`);
   const concepto = buscarConcepto(solicitud.concepto);
   if (!concepto) throw new Error("Elija el concepto de la lista.");
   if (concepto.origen === "calculado") {
@@ -206,13 +230,7 @@ export async function registrarImporte(
   if (concepto.origen === "ajuste" || !tipo.conceptos.includes(concepto.codigo)) {
     throw new Error(`${concepto.nombre} no se carga en ${tipo.nombre}. Elija un concepto de este tipo de fuente; las correcciones se registran como ajuste de preliquidación.`);
   }
-  validarDni(solicitud.dni);
-  validarFechaDeRelacion(solicitud.fechaDelHecho, "la fecha del hecho");
-  validarMes(solicitud.mesDeDevengue, "mes de devengue");
-  validarMes(solicitud.mesDeAplicacion, "mes de aplicación");
-  const monto = interpretarMonto(solicitud.monto);
-  const persona = await repositorio.buscarPersona(solicitud.dni);
-  if (!persona) throw new Error(`No existe una persona con DNI ${solicitud.dni}.`);
+  const { monto, nombre } = await validarDatosDeImporte(repositorio, solicitud);
 
   return repositorio.ejecutarSobreFuente(tipo.codigo, solicitud.mesDeAplicacion, async (almacen) => {
     await exigirMesAbierto(almacen, solicitud.mesDeAplicacion);
@@ -221,7 +239,7 @@ export async function registrarImporte(
       mesDeDevengue: solicitud.mesDeDevengue, mesDeAplicacion: solicitud.mesDeAplicacion, monto,
       procedencia: PROCEDENCIA_CARGA_MANUAL, responsableId: actor.id,
     });
-    if (!importe) throw new Error(`Ya existe ese importe: ${persona.nombre} (${solicitud.dni}) tiene ${concepto.nombre} con la misma fecha del hecho, mes de devengue, mes de aplicación y monto. No se carga dos veces.`);
+    if (!importe) throw new Error(`Ya existe ese importe: ${nombre} (${solicitud.dni}) tiene ${concepto.nombre} con la misma fecha del hecho, mes de devengue, mes de aplicación y monto. No se carga dos veces.`);
     return { importe, ...(await devolverAPendienteSiEstabaConfirmada(almacen, tipo.codigo, solicitud.mesDeAplicacion)) };
   });
 }
@@ -261,6 +279,9 @@ export async function confirmarFuente(
 
   return repositorio.ejecutarSobreFuente(tipo.codigo, solicitud.mes, async (almacen) => {
     await exigirMesAbierto(almacen, solicitud.mes);
+    if (tipo.codigo === "incidencias_de_tienda" && (await almacen.listarImportes(tipo.codigo, solicitud.mes)).some((importe) => importe.estadoDeIncidencia === "sin_sustento")) {
+      throw new Error("Hay incidencias de tienda sin sustento. Autorice el descuento o use «No descontar en este pago» antes de confirmar.");
+    }
     if (!(await almacen.confirmar(tipo.codigo, solicitud.mes, actor.id, new Date()))) {
       throw new Error(`${tipo.nombre} de ${formatearMes(solicitud.mes)} ya está confirmada.`);
     }
@@ -282,6 +303,7 @@ export async function volverAPendiente(
 
   await repositorio.ejecutarSobreFuente(tipo.codigo, solicitud.mes, async (almacen) => {
     await exigirMesAbierto(almacen, solicitud.mes);
+    if (await almacen.mesFinalizado(solicitud.mes)) throw new Error("No se puede volver a pendiente un listado de un mes finalizado. Corrija la fuente para crear otra versión.");
     if (!(await almacen.quitarConfirmacion(tipo.codigo, solicitud.mes))) throw new Error(`${tipo.nombre} de ${formatearMes(solicitud.mes)} ya está pendiente.`);
   });
 }
@@ -324,7 +346,7 @@ export async function consultarImportesDePersona(
       porTipo[tipo.codigo] = { estado: "pendiente" };
       continue;
     }
-    const delTipo = importes.filter((importe) => importe.tipoDeFuente === tipo.codigo && importe.dni === dni);
+    const delTipo = importes.filter((importe) => importe.tipoDeFuente === tipo.codigo && importe.dni === dni && (tipo.codigo !== "incidencias_de_tienda" || importe.estadoDeIncidencia === "descuento_autorizado"));
     porTipo[tipo.codigo] = { estado: "confirmado", importes: delTipo, total: sumar(delTipo) };
   }
   return porTipo;

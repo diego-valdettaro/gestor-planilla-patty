@@ -1,0 +1,12 @@
+ALTER TABLE "importes_externos" ADD COLUMN "estado_de_incidencia" text;
+ALTER TABLE "importes_externos" ADD COLUMN "sustento" text;
+ALTER TABLE "importes_externos" ADD COLUMN "autorizado_por" text;
+ALTER TABLE "importes_externos" ADD COLUMN "fecha_de_autorizacion" date;
+ALTER TABLE "importes_externos" ADD COLUMN "concepto_ajustado" text;
+ALTER TABLE "importes_externos" ADD COLUMN "sentido_ajuste" text;
+ALTER TABLE "importes_externos" ADD COLUMN "motivo_de_ajuste" text;
+ALTER TABLE "importes_externos" ADD CONSTRAINT "importes_externos_incidencia_completa" CHECK ("tipo_de_fuente" <> 'incidencias_de_tienda' OR ("concepto" = 'descuento_autorizado_por_incidencia' AND "estado_de_incidencia" IS NOT NULL AND "estado_de_incidencia" IN ('sin_sustento', 'en_investigacion', 'descuento_autorizado') AND ("estado_de_incidencia" <> 'descuento_autorizado' OR (nullif(btrim("sustento"), '') IS NOT NULL AND nullif(btrim("autorizado_por"), '') IS NOT NULL AND "fecha_de_autorizacion" IS NOT NULL))));
+ALTER TABLE "importes_externos" ADD CONSTRAINT "importes_externos_ajuste_completo" CHECK ("tipo_de_fuente" <> 'ajustes_de_preliquidacion' OR ("concepto" = 'ajuste_de_preliquidacion' AND nullif(btrim("concepto_ajustado"), '') IS NOT NULL AND "sentido_ajuste" IS NOT NULL AND "sentido_ajuste" IN ('suma', 'resta') AND nullif(btrim("motivo_de_ajuste"), '') IS NOT NULL));
+DROP INDEX "importes_externos_sin_duplicados";
+CREATE UNIQUE INDEX "importes_externos_sin_duplicados" ON "importes_externos" ("dni", "concepto", "fecha_del_hecho", "mes_de_devengue", "mes_de_aplicacion", "monto_centimos") WHERE "anulado_en" IS NULL AND "tipo_de_fuente" <> 'ajustes_de_preliquidacion';
+CREATE UNIQUE INDEX "ajustes_de_preliquidacion_sin_duplicados" ON "importes_externos" ("dni", "concepto_ajustado", "sentido_ajuste", "fecha_del_hecho", "mes_de_devengue", "mes_de_aplicacion", "monto_centimos") WHERE "anulado_en" IS NULL AND "tipo_de_fuente" = 'ajustes_de_preliquidacion';

@@ -10,7 +10,7 @@ export async function GET(solicitud: NextRequest) {
   const actor = await obtenerActorActual().catch(() => undefined);
   if (!actor || !puedeGestionarPagos(actor)) return new Response("No autorizado", { status: 403 });
   const tipo = buscarTipoDeFuente(solicitud.nextUrl.searchParams.get("tipo") ?? "");
-  if (!tipo) return new Response("Elija un tipo de fuente de la lista.", { status: 400 });
+  if (!tipo || tipo.flujoPropio) return new Response("Elija un tipo de fuente importable de la lista.", { status: 400 });
   return new Response(new Uint8Array(crearPlantillaDeFuente(tipo)), { headers: {
     "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "Content-Disposition": `attachment; filename="plantilla-${tipo.codigo}.xlsx"`,

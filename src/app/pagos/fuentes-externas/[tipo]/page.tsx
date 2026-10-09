@@ -18,6 +18,7 @@ import { SinPermisoDePagos } from "../../sin-permiso";
 import { InsigniaDeEstado } from "../insignia-de-estado";
 import { AnuncioDelResultado } from "../anuncio";
 import { AnulacionDeImporte, ConfirmacionDeListado, RegistroDeImporte, VolverAPendiente } from "../formularios";
+import { DecisionDeIncidencia, RegistroDeAjuste, RegistroDeIncidencia } from "../formularios-especiales";
 import { mesDePagoDeLaConsulta } from "../mes-de-pago";
 
 export const dynamic = "force-dynamic";
@@ -54,7 +55,7 @@ export default async function PaginaDeUnaFuenteExterna({ params, searchParams }:
         <p><Link href={`/pagos/fuentes-externas?mes=${mes}`}>Volver a fuentes externas</Link></p>
       </div>
       <span className="acciones-configuracion">
-        <Link className="boton-secundario" href={`/pagos/fuentes-externas/importar?mes=${mes}&tipo=${tipo.codigo}`}>Importar XLSX<span className="sr-only"> de {tipo.nombre}</span></Link>
+        {!tipo.flujoPropio && <Link className="boton-secundario" href={`/pagos/fuentes-externas/importar?mes=${mes}&tipo=${tipo.codigo}`}>Importar XLSX<span className="sr-only"> de {tipo.nombre}</span></Link>}
         {confirmada
           ? <VolverAPendiente mes={mes} nombre={tipo.nombre} tipoDeFuente={tipo.codigo} />
           : <ConfirmacionDeListado filas={detalle.filas} mes={mes} nombre={tipo.nombre} tipoDeFuente={tipo.codigo} total={detalle.total} />}
@@ -77,7 +78,7 @@ export default async function PaginaDeUnaFuenteExterna({ params, searchParams }:
 
     <section aria-labelledby="titulo-registro" className="tarjeta panel">
       <header className="panel-cabecera"><div><h2 id="titulo-registro">Registrar un importe</h2><p>Carga manual. Un importe no se edita: si está mal, anúlelo con motivo y regístrelo de nuevo. Las líneas calculadas se corrigen en su fuente o con un ajuste de preliquidación.</p></div></header>
-      <RegistroDeImporte conceptos={conceptos} mes={mes} tipoDeFuente={tipo.codigo} />
+      {tipo.codigo === "incidencias_de_tienda" ? <RegistroDeIncidencia mes={mes} /> : tipo.codigo === "ajustes_de_preliquidacion" ? <RegistroDeAjuste mes={mes} /> : <RegistroDeImporte conceptos={conceptos} mes={mes} tipoDeFuente={tipo.codigo} />}
     </section>
   </main>;
 }
@@ -87,12 +88,12 @@ function FilaDeImporte({ importe, confirmada }: { importe: ImporteExterno; confi
   const nombreDelConcepto = concepto?.nombre ?? importe.concepto;
   return <tr>
     <th scope="row">{importe.nombre}<small className="linea-de-relacion">DNI {importe.dni}</small></th>
-    <td>{nombreDelConcepto}{concepto && <small className="linea-de-relacion">{TEXTO_DE_EFECTO[concepto.efectoEnNeto]}</small>}</td>
+    <td>{nombreDelConcepto}{importe.conceptoAjustado && <small className="linea-de-relacion">Corrige {buscarConcepto(importe.conceptoAjustado)?.nombre ?? importe.conceptoAjustado} · {importe.sentidoAjuste === "suma" ? "aumenta" : "reduce"}</small>}{concepto && !importe.conceptoAjustado && <small className="linea-de-relacion">{TEXTO_DE_EFECTO[concepto.efectoEnNeto]}</small>}{importe.estadoDeIncidencia && <small className="linea-de-relacion">{importe.estadoDeIncidencia === "sin_sustento" ? "Sin sustento" : importe.estadoDeIncidencia === "en_investigacion" ? "En investigación (fuera del neto)" : "Descuento autorizado"}</small>}{importe.motivoDeAjuste && <small className="linea-de-relacion">Motivo: {importe.motivoDeAjuste}</small>}{importe.sustento && <small className="linea-de-relacion">Sustento: {importe.sustento}. Autorizó {importe.autorizadoPor} el {importe.fechaDeAutorizacion && formatearFechaDeRelacion(importe.fechaDeAutorizacion)}.</small>}</td>
     <td>{formatearFechaDeRelacion(importe.fechaDelHecho)}</td>
     <td>{formatearMes(importe.mesDeDevengue)}{importe.mesDeDevengue < importe.mesDeAplicacion && <small className="linea-de-relacion">Devengue anterior</small>}</td>
     <td>{formatearMes(importe.mesDeAplicacion)}</td>
     <td className="numerico">{formatearSoles(importe.monto)}</td>
     <td>{textoDeProcedencia(importe.procedencia)}<small className="linea-de-relacion">{importe.registradoPor}, {formatearFechaDeRelacion(fechaDeHoyEnLima(importe.registradoEn))}</small></td>
-    <td><span className="acciones-configuracion"><AnulacionDeImporte concepto={nombreDelConcepto} confirmada={confirmada} dni={importe.dni} importeId={importe.id} monto={importe.monto} persona={importe.nombre} /></span></td>
+    <td><span className="acciones-configuracion"><DecisionDeIncidencia estadoActual={importe.estadoDeIncidencia} id={importe.id} /><AnulacionDeImporte concepto={nombreDelConcepto} confirmada={confirmada} dni={importe.dni} importeId={importe.id} monto={importe.monto} persona={importe.nombre} /></span></td>
   </tr>;
 }

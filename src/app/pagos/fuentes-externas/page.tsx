@@ -68,7 +68,7 @@ function FilaDeFuenteExterna({ fila, mes }: { fila: FilaDeFuente; mes: string })
     <td>{ultimoOrigen ? <>{textoDeProcedencia(ultimoOrigen.procedencia)}<small className="linea-de-relacion">{ultimoOrigen.registradoPor}, {formatearFechaDeRelacion(fechaDeHoyEnLima(ultimoOrigen.registradoEn))}</small></> : "Sin filas"}</td>
     <td><span className="acciones-configuracion">
       <Link className="boton-secundario" href={`/pagos/fuentes-externas/${tipo.codigo}?mes=${mes}`}>Ver filas<span className="sr-only"> de {tipo.nombre}</span></Link>
-      <Link className="boton-secundario" href={`/pagos/fuentes-externas/importar?mes=${mes}&tipo=${tipo.codigo}`}>Importar XLSX<span className="sr-only"> de {tipo.nombre}</span></Link>
+      {!tipo.flujoPropio && <Link className="boton-secundario" href={`/pagos/fuentes-externas/importar?mes=${mes}&tipo=${tipo.codigo}`}>Importar XLSX<span className="sr-only"> de {tipo.nombre}</span></Link>}
       {estado === "pendiente"
         ? <ConfirmacionDeListado filas={fila.filas} mes={mes} nombre={tipo.nombre} tipoDeFuente={tipo.codigo} total={fila.total} />
         : <VolverAPendiente mes={mes} nombre={tipo.nombre} tipoDeFuente={tipo.codigo} />}

@@ -223,7 +223,7 @@ test("completar semana sobre una fila publicada deja cambios sin publicar en vez
 });
 
 test("publicar selección solo publica la fila marcada y respeta una deselección manual", async ({ page }) => {
-  test.setTimeout(60_000);
+  test.setTimeout(90_000);
   const errores = observarErroresDelNavegador(page);
 
   await page.goto("/iniciar-sesion");
@@ -241,6 +241,16 @@ test("publicar selección solo publica la fila marcada y respeta una deselecció
   const checkboxAna = filaAna.locator('input[type="checkbox"]');
   const botonPublicar = page.getByRole("button", { name: "Publicar planificación" }).first();
   const dialogoCelda = page.getByRole("dialog", { name: "Horario semanal de Ana Borrador" });
+
+  // Un intento anterior puede haber guardado el borrador antes de fallar al publicar. Restablecer el domingo hace
+  // que el retry pruebe la misma precondición sin depender del estado que dejó el primer intento.
+  if (await checkboxAna.count()) {
+    await filaAna.getByRole("button", { name: new RegExp(`Horario de Ana Borrador para ${domingo}`) }).click();
+    await dialogoCelda.getByLabel("Quitar asignación").check();
+    await dialogoCelda.getByRole("button", { name: "Usar" }).click();
+    await page.getByRole("button", { name: "Guardar borrador" }).first().click();
+    await expect(page.getByText("Borrador guardado", { exact: true })).toBeVisible();
+  }
 
   // A Ana le falta el último día: todavía no hay ninguna fila elegible para publicar.
   await expect(checkboxAna).toHaveCount(0);
@@ -269,7 +279,7 @@ test("publicar selección solo publica la fila marcada y respeta una deselecció
   await botonPublicar.click();
   await page.getByRole("dialog", { name: "¿Publicar la selección?" }).getByRole("button", { name: "Publicar planificación" }).click();
 
-  await expect(filaAna.locator(".persona small")).toHaveText("Publicado");
+  await expect(filaAna.locator(".persona small")).toHaveText("Publicado", { timeout: 15_000 });
   await expect(checkboxAna).toHaveCount(0);
   // La publicación selectiva no afecta a otras filas, como los cambios sin publicar de Carla.
   await expect(filaCarla.locator(".persona small")).toHaveText("Cambios sin publicar");

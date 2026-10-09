@@ -13,10 +13,12 @@ vi.mock("@/fuentes-externas/servicio", () => ({
 vi.mock("../actions", () => ({
   registrarImporteDesdeFormulario: vi.fn(), anularImporteDesdeFormulario: vi.fn(), confirmarFuenteDesdeFormulario: vi.fn(), volverAPendienteDesdeFormulario: vi.fn(),
 }));
+vi.mock("../acciones-especiales", () => ({ registrarIncidenciaDesdeFormulario: vi.fn(), decidirIncidenciaDesdeFormulario: vi.fn(), registrarAjusteDesdeFormulario: vi.fn() }));
 
 import type { Actor } from "@/autenticacion/permisos";
 import { confirmarFuente, registrarImporte } from "@/fuentes-externas/gestionar-fuentes-externas";
 import { crearRepositorioEnMemoria } from "@/fuentes-externas/repositorio-en-memoria";
+import { decidirIncidencia, registrarAjuste, registrarIncidencia } from "@/fuentes-externas/incidencias-y-ajustes";
 
 const finanzas: Actor = { id: "fin-1", rol: "finanzas", nombreUsuario: "finanzas" };
 const ANA = "11111111";
@@ -73,6 +75,28 @@ describe("página de un tipo de fuente (/pagos/fuentes-externas/[tipo])", () => 
 
     expect(html).toContain("Resta del neto");
     expect(html).not.toContain("Devengue anterior");
+  });
+
+  it("muestra estado y decisiones de incidencia sin ofrecer XLSX ni carga genérica", async () => {
+    const incidencia = await registrarIncidencia(contexto.repositorio, finanzas, { dni: ANA, fechaDelHecho: "2026-09-28", mesDeDevengue: "2026-09", mesDeAplicacion: "2026-10", monto: "25" });
+    const pendiente = await render("incidencias_de_tienda", "2026-10");
+    expect(pendiente).toContain("Sin sustento");
+    expect(pendiente).toContain("No descontar en este pago");
+    expect(pendiente).toContain("Autorizar descuento");
+    expect(pendiente).toContain('type="hidden" name="decision" value="autorizar"');
+    expect(pendiente).toContain('type="hidden" name="decision" value="no_descontar"');
+    expect(pendiente).not.toContain("Importar XLSX");
+    await decidirIncidencia(contexto.repositorio, finanzas, { id: incidencia.id, decision: "no_descontar" });
+    expect(await render("incidencias_de_tienda", "2026-10")).toContain("En investigación (fuera del neto)");
+  });
+
+  it("muestra el ajuste con concepto corregido, motivo y formulario dedicado", async () => {
+    await registrarAjuste(contexto.repositorio, finanzas, { dni: ANA, fechaDelHecho: "2026-09-28", mesDeDevengue: "2026-09", mesDeAplicacion: "2026-10", monto: "25", conceptoAjustado: "sueldo_basico", sentidoAjuste: "resta", motivo: "Diferencia previa" });
+    const html = await render("ajustes_de_preliquidacion", "2026-10");
+    expect(html).toContain("Corrige Sueldo básico · reduce");
+    expect(html).toContain("Motivo: Diferencia previa");
+    expect(html).toContain("Registrar ajuste de preliquidación");
+    expect(html).not.toContain("Importar XLSX");
   });
 
   it("sin filas muestra el estado vacío con su siguiente paso y «Confirmar sin importes»", async () => {

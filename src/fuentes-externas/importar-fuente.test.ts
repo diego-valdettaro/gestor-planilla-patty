@@ -173,10 +173,10 @@ describe("importar un XLSX normalizado de una fuente externa", () => {
       sinEfectos();
     });
 
-    it("rechaza el archivo si el mes de pago ya está finalizado", async () => {
-      contexto.mesesFinalizados.add(MES);
+    it("rechaza el archivo si el mes de pago tiene el pago realizado confirmado", async () => {
+      contexto.mesesConPagoConfirmado.add(MES);
 
-      expect((await rechazo(libro(comision(ANA, 1)))).message).toMatch(/ya está finalizado/);
+      expect((await rechazo(libro(comision(ANA, 1)))).message).toMatch(/tiene el pago realizado confirmado/);
       sinEfectos();
     });
 
