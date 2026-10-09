@@ -3,6 +3,7 @@ import Link from "next/link";
 // Navegación secundaria de Pagos (diseño de interacción, V7). Cada ticket de Pagos agrega aquí su sección
 // cuando existe su pantalla: «Meses de pago» no tiene enlace hasta entonces.
 const SECCIONES = [
+  { clave: "meses", href: "/pagos", etiqueta: "Meses de pago" },
   { clave: "condiciones-laborales", href: "/pagos/condiciones-laborales", etiqueta: "Condiciones laborales" },
   { clave: "reglas-legales", href: "/pagos/reglas-legales", etiqueta: "Reglas legales" },
   { clave: "fuentes-externas", href: "/pagos/fuentes-externas", etiqueta: "Fuentes externas" },

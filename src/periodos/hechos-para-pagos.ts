@@ -79,7 +79,11 @@ export type ProblemaDeCobertura =
   | { tipo: "hueco"; desde: string; hasta: string; mensaje: string }
   | { tipo: "solapamiento"; periodoIds: [string, string]; desde: string; hasta: string; mensaje: string }
   | { tipo: "cruza_corte"; periodoId: string; inicio: string; fin: string; mensaje: string }
-  | { tipo: "periodo_abierto"; periodoId: string; inicio: string; fin: string; mensaje: string };
+  | { tipo: "periodo_abierto"; periodoId: string; inicio: string; fin: string; mensaje: string }
+  | { tipo: "revision_no_disponible"; periodoId: string; inicio: string; fin: string; mensaje: string };
+
+/** Un período cerrado sin hechos congelados no puede alimentar Pagos, pero sí debe aparecer como bloqueo del borrador. */
+export class RevisionDeAsistenciaNoDisponibleError extends Error {}
 
 export interface VerificacionDeCobertura {
   problemas: ProblemaDeCobertura[];
@@ -216,8 +220,20 @@ export interface HechosDelCorte {
 export async function obtenerHechosDelCorte(lector: LectorDeHechosDeAsistencia, corte: Corte): Promise<HechosDelCorte> {
   const periodos = (await lector.listar()).filter((periodo) => seSuperponeConElCorte(corte, periodo));
   const verificacion = verificarCoberturaDelCorte(corte, periodos);
-  const revisiones = (await Promise.all(periodos.map((periodo) => lector.leerHechosDelPeriodo(periodo.id))))
+  const lecturas = await Promise.all(periodos.map(async (periodo) => {
+    try {
+      return { revision: await lector.leerHechosDelPeriodo(periodo.id) };
+    } catch (error) {
+      if (!(error instanceof RevisionDeAsistenciaNoDisponibleError)) throw error;
+      return { problema: {
+        tipo: "revision_no_disponible" as const, periodoId: periodo.id, inicio: periodo.inicio, fin: periodo.fin,
+        mensaje: `El período ${rango(periodo.inicio, periodo.fin)} está cerrado pero no tiene una revisión de asistencia con hechos congelados. Reábralo y ciérrelo de nuevo en Períodos.`,
+      } };
+    }
+  }));
+  const revisiones = lecturas.flatMap((lectura) => "revision" in lectura && lectura.revision ? [lectura.revision] : [])
     .sort((a, b) => a.inicio.localeCompare(b.inicio) || a.periodoId.localeCompare(b.periodoId));
+  const problemas = [...verificacion.problemas, ...lecturas.flatMap((lectura) => "problema" in lectura && lectura.problema ? [lectura.problema] : [])];
 
   const hechosPorDni: Record<string, HechoDiarioDeAsistencia[]> = {};
   for (const revision of revisiones) {
@@ -230,9 +246,9 @@ export async function obtenerHechosDelCorte(lector: LectorDeHechosDeAsistencia, 
 
   return {
     corte,
-    problemas: verificacion.problemas,
+    problemas,
     cubreExactamente: verificacion.cubreExactamente,
-    finalizable: verificacion.problemas.length === 0,
+    finalizable: problemas.length === 0,
     provisional: revisiones.some(({ provisional }) => provisional),
     revisiones,
     hechosPorDni,

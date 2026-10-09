@@ -22,7 +22,7 @@ import {
 import { vigenciasConfirmadas, type RelacionLaboral } from "@/relaciones-laborales/vigencia";
 
 import { construirHechosDiarios } from "./hechos-de-asistencia-postgres";
-import type { LectorDeHechosDeAsistencia, RevisionDeAsistenciaParaPagos } from "./hechos-para-pagos";
+import { RevisionDeAsistenciaNoDisponibleError, type LectorDeHechosDeAsistencia, type RevisionDeAsistenciaParaPagos } from "./hechos-para-pagos";
 import { calcularBloqueosDeAprobacion, type BloqueoDeAprobacion, type JornadaParaAprobar } from "./aprobacion-de-asistencia";
 import {
   AprobacionBloqueadaError,
@@ -103,8 +103,8 @@ export class RepositorioPostgresDePeriodos implements RepositorioDePeriodos, Lec
       .where(eq(revisionesDePeriodosPlanilla.periodoId, periodoId))
       .orderBy(desc(revisionesDePeriodosPlanilla.numero))
       .limit(1);
-    if (!revision) throw new Error("El período cerrado no tiene una revisión.");
-    if (!revision.hechos) throw new Error(`La revisión ${revision.numero} del período ${periodo.inicio} al ${periodo.fin} no tiene hechos congelados: reábralo y ciérrelo de nuevo.`);
+    if (!revision) throw new RevisionDeAsistenciaNoDisponibleError("El período cerrado no tiene una revisión.");
+    if (!revision.hechos) throw new RevisionDeAsistenciaNoDisponibleError(`La revisión ${revision.numero} del período ${periodo.inicio} al ${periodo.fin} no tiene hechos congelados: reábralo y ciérrelo de nuevo.`);
     return { periodoId, revisionId: revision.id, numero: revision.numero, inicio: periodo.inicio, fin: periodo.fin, provisional: false, hechos: revision.hechos };
   }
 

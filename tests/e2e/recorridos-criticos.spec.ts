@@ -368,6 +368,21 @@ async function iniciarSesion(page: Page, usuario: string) {
   await page.waitForURL((url) => !url.pathname.startsWith("/iniciar-sesion"), { timeout: 30_000 });
 }
 
+test("Finanzas abre los meses de pago con una revisión cerrada de demo", async ({ page }) => {
+  const errores = observarErroresDelNavegador(page);
+  await iniciarSesion(page, "finanzas");
+  await page.goto("/pagos");
+  await expect(page.getByRole("heading", { name: "Pagos", level: 1 })).toBeVisible();
+  const meses = page.getByRole("region", { name: "Meses de pago" });
+  await expect(meses.getByRole("link").first()).toBeVisible();
+  await meses.getByRole("link").first().click();
+  await expect(page.getByRole("heading", { name: /Mes de pago/, level: 1 })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: /Bloqueos del mes/ })).toBeVisible();
+  await expect(page.getByText("Revisiones de asistencia: 2 períodos")).toBeVisible();
+  await expect(page.getByText(/no tiene una revisión de asistencia con hechos congelados/)).toHaveCount(0);
+  expect(errores).toEqual([]);
+});
+
 test("Finanzas no ve Horarios y consulta Asistencias en solo lectura", async ({ page }) => {
   const errores = observarErroresDelNavegador(page);
 
@@ -786,6 +801,7 @@ test("Finanzas registra un segundo sueldo con vigencia en Condiciones laborales 
 
   await iniciarSesion(page, "finanzas");
   await page.getByRole("navigation", { name: "Navegación principal" }).getByRole("link", { name: /Pagos/ }).click();
+  await page.getByRole("navigation", { name: "Secciones de Pagos" }).getByRole("link", { name: "Condiciones laborales" }).click();
   await expect(page).toHaveURL(/\/pagos\/condiciones-laborales$/, { timeout: 30_000 });
   await expect(page.getByRole("heading", { name: "Condiciones laborales", level: 1 })).toBeVisible({ timeout: 30_000 });
   const lista = page.getByRole("region", { name: "Condiciones laborales vigentes hoy" });
