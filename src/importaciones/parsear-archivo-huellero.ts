@@ -66,8 +66,8 @@ export async function parsearArchivoHuellero(archivo: File): Promise<ResultadoDe
     if (!dni) errores.push({ ...contexto, motivo: "DNI es obligatorio." });
     if (!sede) errores.push({ ...contexto, motivo: "Sede es obligatoria." });
     if (!fecha) errores.push({ ...contexto, motivo: fechaOriginal ? "Fecha debe ser una fecha Excel o usar YYYY-MM-DD." : "Fecha es obligatoria." });
-    if (!entrada) errores.push({ ...contexto, motivo: entradaOriginal ? "Entrada debe ser una hora Excel o usar HH:MM." : "Entrada es obligatoria." });
-    if (!salida) errores.push({ ...contexto, motivo: salidaOriginal ? "Salida debe ser una hora Excel o usar HH:MM." : "Salida es obligatoria." });
+    if (!entrada) errores.push({ ...contexto, motivo: entradaOriginal ? "Entrada debe ser una hora Excel o usar HH:MM o HH:MM:SS." : "Entrada es obligatoria." });
+    if (!salida) errores.push({ ...contexto, motivo: salidaOriginal ? "Salida debe ser una hora Excel o usar HH:MM o HH:MM:SS." : "Salida es obligatoria." });
     if (dni && fecha) {
       const clave = `${dni}\u0000${fecha}`;
       const primeraFila = primerasFilasPorJornada.get(clave);
@@ -114,13 +114,20 @@ function desdePartes(anio: number, mes: number, dia: number): string | undefined
 }
 
 function horaIso(valor: unknown): string | undefined {
-  if (valor instanceof Date && !Number.isNaN(valor.valueOf())) return `${String(valor.getUTCHours()).padStart(2, "0")}:${String(valor.getUTCMinutes()).padStart(2, "0")}`;
+  if (valor instanceof Date && !Number.isNaN(valor.valueOf())) return horaConSegundos(valor.getUTCHours() * 3600 + valor.getUTCMinutes() * 60 + valor.getUTCSeconds());
   if (typeof valor === "number" && valor >= 0 && valor < 1) {
-    const minutos = Math.round(valor * 24 * 60);
-    return minutos < 24 * 60 ? `${String(Math.floor(minutos / 60)).padStart(2, "0")}:${String(minutos % 60).padStart(2, "0")}` : undefined;
+    const segundos = Math.round(valor * 24 * 3600);
+    return segundos < 24 * 3600 ? horaConSegundos(segundos) : undefined;
   }
   const hora = texto(valor);
-  if (!/^\d{2}:\d{2}$/.test(hora)) return undefined;
-  const [horas, minutos] = hora.split(":").map(Number);
-  return horas < 24 && minutos < 60 ? hora : undefined;
+  if (!/^\d{2}:\d{2}(?::\d{2})?$/.test(hora)) return undefined;
+  const [horas, minutos, segundos = 0] = hora.split(":").map(Number);
+  return horas < 24 && minutos < 60 && segundos < 60 ? hora : undefined;
+}
+
+function horaConSegundos(segundos: number): string {
+  const horas = String(Math.floor(segundos / 3600)).padStart(2, "0");
+  const minutos = String(Math.floor(segundos % 3600 / 60)).padStart(2, "0");
+  const resto = segundos % 60;
+  return resto ? `${horas}:${minutos}:${String(resto).padStart(2, "0")}` : `${horas}:${minutos}`;
 }

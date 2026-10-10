@@ -299,7 +299,8 @@ const FUENTE_DE_DEMOSTRACION = "Dato de demostración (seed de revisión), no es
 /**
  * Reglas legales con vigencia (#117), activadas por Finanzas con el caso de uso real. Los valores son de DEMOSTRACIÓN
  * (la fuente lo dice) y solo sirven para revisar la pantalla: la Tasa de EsSalud tiene dos vigencias, la de ONP tiene una
- * versión programada para el mes siguiente y los demás valores legales quedan sin regla vigente («Pendiente»).
+ * versión programada para el mes siguiente. La asignación familiar y ambas sobretasas de horas extra tienen valores
+ * ficticios para que el borrador de Beto muestre el cálculo; los demás valores legales quedan pendientes.
  */
 async function activarReglasLegales(db: Db, actor: Actor): Promise<void> {
   const repositorio = new RepositorioPostgresDeReglasLegales(db);
@@ -312,6 +313,9 @@ async function activarReglasLegales(db: Db, actor: Actor): Promise<void> {
   await activar("essalud_tasa", "9", PERIODO_ACTUAL.inicio);
   await activar("onp_tasa", "12", PERIODO_ANTERIOR.inicio);
   await activar("onp_tasa", "13", primeraDelMesSiguiente);
+  await activar("asignacion_familiar_porcentaje_de_rmv", "10", PERIODO_ANTERIOR.inicio);
+  await activar("horas_extra_sobretasa_primeras_dos_horas", "25", PERIODO_ANTERIOR.inicio);
+  await activar("horas_extra_sobretasa_horas_posteriores", "35", PERIODO_ANTERIOR.inicio);
 }
 
 /**
@@ -345,9 +349,10 @@ async function marcarConfirmada(
   dni: string,
   fecha: string,
   modelo: { entrada: string; salida: string },
-  extras: { tardanzaMin?: number; horaExtra?: "pendiente" | "aprobada" },
+  extras: { tardanzaMin?: number; horaExtra?: "pendiente" | "aprobada"; minutosExtra?: number },
 ): Promise<void> {
   const entradaReal = extras.tardanzaMin ? sumarMinutos(modelo.entrada, extras.tardanzaMin) : modelo.entrada;
+  const salidaReal = extras.minutosExtra ? sumarMinutos(modelo.salida, extras.minutosExtra) : modelo.salida;
   // Como al confirmar de verdad, la asistencia conserva la instantánea del horario publicado: sin ella no se podría ajustar.
   const [turno] = await db.select().from(schema.turnosPublicados)
     .where(and(eq(schema.turnosPublicados.dni, dni), eq(schema.turnosPublicados.fecha, fecha)));
@@ -356,8 +361,8 @@ async function marcarConfirmada(
       estado: "confirmada",
       ...(turno?.sede ? { instantaneaDeTurno: { sede: turno.sede, entradaProgramada: turno.entradaProgramada, salidaProgramada: turno.salidaProgramada, descanso: false } } : {}),
       entradaReal: `${fecha}T${entradaReal}:00`,
-      salidaReal: `${fecha}T${modelo.salida}:00`,
-      minutosTrabajados: minutosEntre(entradaReal, modelo.salida),
+      salidaReal: `${fecha}T${salidaReal}:00`,
+      minutosTrabajados: minutosEntre(entradaReal, salidaReal),
     })
     .where(and(eq(schema.asistenciasEsperadas.dni, dni), eq(schema.asistenciasEsperadas.fecha, fecha)))
     .returning({ id: schema.asistenciasEsperadas.id });
@@ -366,7 +371,8 @@ async function marcarConfirmada(
     await db.insert(schema.tardanzas).values({ asistenciaId: fila.id, minutosDeTardanza: extras.tardanzaMin, minutosPenalizados: 0, politicaVersion: 1 });
   }
   if (extras.horaExtra) {
-    await db.insert(schema.horasExtra).values({ asistenciaId: fila.id, minutosAl25: 45, minutosAl35: 0, estado: extras.horaExtra });
+    const minutosExtra = extras.minutosExtra ?? 45;
+    await db.insert(schema.horasExtra).values({ asistenciaId: fila.id, minutosAl25: Math.min(minutosExtra, 120), minutosAl35: Math.max(0, minutosExtra - 120), estado: extras.horaExtra });
   }
 }
 
@@ -462,6 +468,14 @@ async function verificarInvariantes(pool: Pool): Promise<void> {
   );
   if (Number(reglas.essalud) !== 2) fallos.push(`la Tasa de EsSalud debería tener 2 vigencias, tiene ${reglas.essalud}`);
   if (Number(reglas.onp) !== 1) fallos.push(`la Tasa de ONP debería tener 1 versión programada, tiene ${reglas.onp}`);
+  const { rows: [horaExtraDeBeto] } = await pool.query<{ minutosAl25: number; minutosAl35: number; salidaReal: string }>(
+    `SELECT h.minutos_al_25 AS "minutosAl25", h.minutos_al_35 AS "minutosAl35", a.salida_real AS "salidaReal"
+       FROM horas_extra h JOIN asistencias_esperadas a ON a.id = h.asistencia_id
+      WHERE a.dni = '99900002' AND h.estado = 'aprobada'`,
+  );
+  if (horaExtraDeBeto?.minutosAl25 !== 120 || horaExtraDeBeto.minutosAl35 !== 30 || !horaExtraDeBeto.salidaReal.endsWith("18:30:00")) {
+    fallos.push("Beto debería tener una hora extra aprobada de 120 minutos al 25 % y 30 al 35 %, con salida real 18:30");
+  }
 
   const { rows: [fuentes] } = await pool.query<{ importes: string; confirmadas: string; sinImportes: string }>(
     `SELECT (SELECT count(*) FROM importes_externos WHERE dni LIKE '${PATRON_DNI_DEMO}' AND anulado_en IS NULL)::text AS importes,
@@ -518,14 +532,15 @@ function resumen(): string {
     "",
     "Pagos · Condiciones laborales (finanzas / finanzas; el Administrador no tiene acceso):",
     "  Ana Borrador     -> dos vigencias de sueldo en el mes actual (cambio el día 16; antes del 16 la segunda es «Programado»)",
-    "  Beto Publicado   -> AFP Integra con esquema mixto y elegible a asignación familiar; Carla Cambios -> REMYPE",
+    "  Beto Publicado   -> AFP Integra con esquema mixto y asignación familiar otorgada; Carla Cambios -> REMYPE con beneficio familiar otorgado",
     "  Darío / Elena    -> datos incompletos («Pendiente» y «Falta: …»); el resto, sin ningún dato",
     "  Karen Reingreso  -> un historial por cada una de sus dos relaciones laborales",
     "",
     "Pagos · Reglas legales (finanzas / finanzas; valores de DEMOSTRACIÓN, no oficiales):",
     "  Tasa de EsSalud  -> dos vigencias (anterior y la del mes actual)",
     "  Tasa de ONP      -> una versión «Programado» para el mes siguiente; RMV con una vigencia",
-    "  Los demás valores legales (AFP, horas extra, etc.) quedan sin regla vigente: «Pendiente»",
+    "  Asignación familiar y sobretasas 25 %/35 % -> valores ficticios vigentes para revisar horas extra de Beto",
+    "  Los demás valores legales (AFP, etc.) quedan sin regla vigente: «Pendiente»",
     "",
     "Pagos · Fuentes externas (finanzas / finanzas; importes de DEMOSTRACIÓN, mes de pago actual):",
     "  Comisiones de ventas -> Confirmada con importes (Ana con devengue del mes anterior, Beto del mes actual)",
@@ -534,7 +549,8 @@ function resumen(): string {
     "  Préstamos, retención de quinta, gratificación y bonificación -> Pendiente",
     "",
     "Calendario de asistencias de Beto Publicado (mes actual):",
-    "  lun/mar -> Registrada ; mié -> Registrada (Feriado) ; jue -> Pendiente de revisión ; vie/sáb -> Esperada",
+    "  lun/mar -> Registrada ; mar -> 120 min extra al 25 % y 30 min al 35 % aprobados ; mié -> Registrada (Feriado)",
+    "  jue -> Pendiente de revisión ; vie/sáb -> Esperada",
     "  Elena Sotelo, mes anterior -> Liquidado (período cerrado)",
   ].join("\n");
 }
@@ -685,8 +701,8 @@ async function main(): Promise<void> {
     // Sin caso de uso limpio para fabricar estos estados; escritura directa.
     const [lun, mar, mie] = diasActual;
     await marcarConfirmada(db, "99900002", lun, aperturaBenavides, { tardanzaMin: 18 });
-    await marcarConfirmada(db, "99900002", mar, aperturaBenavides, { horaExtra: "aprobada" });
-    await marcarConfirmada(db, "99900003", lun, aperturaBenavides, { horaExtra: "pendiente" });
+    await marcarConfirmada(db, "99900002", mar, aperturaBenavides, { horaExtra: "aprobada", minutosExtra: 150 });
+    await marcarConfirmada(db, "99900003", lun, aperturaBenavides, { horaExtra: "pendiente", minutosExtra: 45 });
     await marcarManual(db, "99900002", mie, "feriado", finanzas.id);
     await marcarPendienteDeRevision(db, "99900002", diasActual[3], SEDES.benavides, finanzas.id);
     // Beto: lun/mar Registrada, mié Registrada (feriado), jue Pendiente de revisión, vie/sáb Esperada.

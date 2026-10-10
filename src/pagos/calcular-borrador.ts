@@ -18,7 +18,7 @@ export interface EntradaDeBorrador {
   importes: ImporteExterno[];
 }
 
-export interface LineaDeBorrador {
+export interface LineaDeSueldo {
   concepto: "sueldo_basico";
   importeCentimos: number;
   dias: number;
@@ -31,6 +31,29 @@ export interface LineaDeBorrador {
   origen: "Condición laboral";
 }
 
+export interface LineaDeHoraExtra {
+  concepto: "horas_extra_25" | "horas_extra_35";
+  dias?: never;
+  importeCentimos: number;
+  minutos: number;
+  fecha: string;
+  grupo: string;
+  mesDePago: string;
+  corte: Corte;
+  mesDeDevengue: string;
+  origen: "Asistencia";
+  evidencia: HechoDiarioDeAsistencia["evidencia"];
+  remuneracionOrdinariaComputableCentimos: number;
+  jornadaOrdinariaDiariaMinutos: number;
+  sobretasaEnCentesimasDePunto: number;
+}
+
+export type LineaDeBorrador = LineaDeSueldo | LineaDeHoraExtra;
+
+export function totalDeHorasExtraCentimos(lineas: LineaDeBorrador[]): number {
+  return lineas.reduce((total, linea) => total + (linea.concepto === "horas_extra_25" || linea.concepto === "horas_extra_35" ? linea.importeCentimos : 0), 0);
+}
+
 export interface PersonaDeBorrador {
   relacion: RelacionConPersona;
   sedeDeAdscripcion: string | null;
@@ -40,7 +63,7 @@ export interface PersonaDeBorrador {
   netoCentimos: number | null;
 }
 
-export interface BorradorDeSueldo {
+export interface BorradorDePagos {
   mesDePago: string;
   corte: Corte;
   revisiones: RevisionDeAsistenciaParaPagos[];
@@ -82,7 +105,7 @@ function condicionEn(entrada: EntradaDeBorrador, relacionId: string, datoBuscado
   return vigentes.at(-1)?.valor;
 }
 
-function lineasDelMes(entrada: EntradaDeBorrador, relacion: RelacionConPersona, mes: string): { lineas: LineaDeBorrador[]; bloqueos: string[] } {
+function lineasDelMes(entrada: EntradaDeBorrador, relacion: RelacionConPersona, mes: string): { lineas: LineaDeSueldo[]; bloqueos: string[] } {
   const primero = `${mes}-01`;
   const ultimo = finDeMes(mes);
   const desde = relacion.ingreso > primero ? relacion.ingreso : primero;
@@ -93,7 +116,7 @@ function lineasDelMes(entrada: EntradaDeBorrador, relacion: RelacionConPersona, 
   const cambios = entrada.condiciones.filter((dato) => dato.relacionId === relacion.id && dato.dato === "sueldo" && dato.vigenteDesde > desde && dato.vigenteDesde <= hasta)
     .map((dato) => dato.vigenteDesde).sort();
   const inicios = [desde, ...new Set(cambios)];
-  const lineas: LineaDeBorrador[] = [];
+  const lineas: LineaDeSueldo[] = [];
   const bloqueos: string[] = [];
   let diasAsignados = 0;
   for (let i = 0; i < inicios.length; i += 1) {
@@ -115,8 +138,69 @@ function lineasDelMes(entrada: EntradaDeBorrador, relacion: RelacionConPersona, 
   return { lineas, bloqueos };
 }
 
-/** Sueldo calculable del borrador. Otros conceptos siguen pendientes hasta que sus reglas entren en tickets propios. */
-export function calcularBorrador(entrada: EntradaDeBorrador): BorradorDeSueldo {
+function reglaEn(entrada: EntradaDeBorrador, codigo: CodigoDeReglaLegal, fecha: string): number | undefined {
+  return entrada.reglas.filter((regla) => regla.codigo === codigo && regla.vigenteDesde <= fecha)
+    .sort((a, b) => a.vigenteDesde.localeCompare(b.vigenteDesde)).at(-1)?.valor;
+}
+
+function horasExtraDelCorte(entrada: EntradaDeBorrador, relacion: RelacionConPersona, hechos: HechoDiarioDeAsistencia[]): {
+  lineas: LineaDeHoraExtra[]; bloqueos: string[];
+} {
+  const lineas: LineaDeHoraExtra[] = [];
+  const bloqueos: string[] = [];
+  for (const hecho of hechos) {
+    const extra = hecho.horaExtra;
+    if (!extra) continue;
+    if (extra.estado === "descartada") continue;
+    if (extra.trabajoNocturno) {
+      bloqueos.push(`Trabajo entre 22:00 y 06:00 el ${hecho.fecha}. Aún no se calcula; la finalización queda bloqueada hasta definir y validar la regla.`);
+      continue;
+    }
+    if (extra.estado === "pendiente") {
+      bloqueos.push(`Hay horas extra pendientes de decisión el ${hecho.fecha}. Revise la candidata en Períodos.`);
+      continue;
+    }
+    const sueldo = sueldoEn(entrada, relacion.id, hecho.fecha);
+    const jornada = Number(condicionEn(entrada, relacion.id, "jornada_ordinaria_diaria", hecho.fecha));
+    // El booleano registra el beneficio que Patty ya otorgó, también en REMYPE; el DNI del menor se verifica fuera.
+    const familiar = condicionEn(entrada, relacion.id, "elegibilidad_familiar", hecho.fecha);
+    const rmv = reglaEn(entrada, "rmv", hecho.fecha);
+    const porcentajeFamiliar = reglaEn(entrada, "asignacion_familiar_porcentaje_de_rmv", hecho.fecha);
+    if (!sueldo || !jornada || familiar === undefined) {
+      bloqueos.push(`Falta remuneración ordinaria computable o jornada ordinaria diaria vigente el ${hecho.fecha}. Revise Condiciones laborales y Reglas legales.`);
+      continue;
+    }
+    if (familiar === true && (rmv === undefined || porcentajeFamiliar === undefined)) {
+      bloqueos.push(`Falta la regla de asignación familiar vigente el ${hecho.fecha}. Revise Reglas legales.`);
+      continue;
+    }
+    // Las comisiones externas son complementarias variables: no forman parte del valor hora de sobretiempo.
+    const asignacionFamiliarCentimos = familiar === true && rmv !== undefined && porcentajeFamiliar !== undefined
+      ? rmv * porcentajeFamiliar / 10_000 : 0;
+    const remuneracionOrdinariaComputableCentimos = sueldo + asignacionFamiliarCentimos;
+    for (const [concepto, minutos, codigo] of [
+      ["horas_extra_25", extra.minutosAl25, "horas_extra_sobretasa_primeras_dos_horas"],
+      ["horas_extra_35", extra.minutosAl35, "horas_extra_sobretasa_horas_posteriores"],
+    ] as const) {
+      if (minutos <= 0) continue;
+      const sobretasa = reglaEn(entrada, codigo, hecho.fecha);
+      if (sobretasa === undefined) {
+        bloqueos.push(`No hay ${buscarDefinicion(codigo)?.nombre ?? codigo} vigente el ${hecho.fecha}. Active el valor en Reglas legales.`);
+        continue;
+      }
+      lineas.push({ concepto, minutos, fecha: hecho.fecha, grupo: hecho.grupo, mesDePago: entrada.mesDePago, corte: entrada.corte,
+        mesDeDevengue: hecho.fecha.slice(0, 7), origen: "Asistencia", evidencia: hecho.evidencia,
+        remuneracionOrdinariaComputableCentimos, jornadaOrdinariaDiariaMinutos: jornada,
+        sobretasaEnCentesimasDePunto: sobretasa,
+        importeCentimos: Math.floor(remuneracionOrdinariaComputableCentimos * minutos * (10_000 + sobretasa) / (30 * jornada * 10_000) + 0.5),
+      });
+    }
+  }
+  return { lineas, bloqueos };
+}
+
+/** Calcula sueldo y sobretiempo del borrador; los demás conceptos entran en sus tickets propios. */
+export function calcularBorrador(entrada: EntradaDeBorrador): BorradorDePagos {
   const mes = entrada.mesDePago;
   const anterior = mesAnterior(mes);
   const bloqueosDelMes = [...entrada.problemasDelCorte, ...entrada.fuentesPendientes.map((tipo) => `Fuente externa pendiente: ${tipo}.`)];
@@ -132,7 +216,8 @@ export function calcularBorrador(entrada: EntradaDeBorrador): BorradorDeSueldo {
     const actual = lineasDelMes(entrada, relacion, mes);
     const arrastre = relacion.ingreso.slice(0, 7) === anterior && Number(relacion.ingreso.slice(-2)) > 25
       ? lineasDelMes(entrada, relacion, anterior) : { lineas: [], bloqueos: [] };
-    const hechos = entrada.hechosPorDni[relacion.dni] ?? [];
+    const hechos = (entrada.hechosPorDni[relacion.dni] ?? []).filter((hecho) =>
+      hecho.fecha >= relacion.ingreso && (!relacion.ceseConfirmado || relacion.cese === null || hecho.fecha <= relacion.cese));
     const bloqueos = [...actual.bloqueos, ...arrastre.bloqueos];
     const fechaDeConsulta = relacion.ingreso > `${mes}-25` ? relacion.ingreso : `${mes}-25`;
     const afiliacion = condicionEn(entrada, relacion.id, "afiliacion_pensionaria", fechaDeConsulta);
@@ -143,11 +228,12 @@ export function calcularBorrador(entrada: EntradaDeBorrador): BorradorDeSueldo {
       }
     }
     if (hechos.some((hecho) => hecho.resultado === "pendiente")) bloqueos.push("Hay jornadas pendientes de revisión en el corte de incidencias.");
-    if (hechos.some((hecho) => hecho.horaExtra?.trabajoNocturno)) bloqueos.push("Hay trabajo entre 22:00 y 06:00 sin regla de cálculo.");
+    const sobretiempo = horasExtraDelCorte(entrada, relacion, hechos);
+    bloqueos.push(...sobretiempo.bloqueos);
     // El sueldo es visible aun cuando otro concepto o la cobertura impida un neto confiable.
-    const lineas = [...arrastre.lineas, ...actual.lineas];
+    const lineas: LineaDeBorrador[] = [...arrastre.lineas, ...actual.lineas, ...sobretiempo.lineas];
     return { relacion, sedeDeAdscripcion: String(condicionEn(entrada, relacion.id, "sede_de_adscripcion", fechaDeConsulta) ?? "") || null,
-      lineas, bloqueos, sueldoCalculadoCentimos: lineas.reduce((suma, linea) => suma + linea.importeCentimos, 0), netoCentimos: null };
+      lineas, bloqueos, sueldoCalculadoCentimos: [...arrastre.lineas, ...actual.lineas].reduce((suma, linea) => suma + linea.importeCentimos, 0), netoCentimos: null };
   }).sort((a, b) => a.relacion.nombre.localeCompare(b.relacion.nombre) || a.relacion.dni.localeCompare(b.relacion.dni));
   if (personas.length) {
     const necesarias = new Set<CodigoDeReglaLegal>(["essalud_tasa", "essalud_base_minima"]);

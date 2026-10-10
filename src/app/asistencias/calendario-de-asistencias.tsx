@@ -112,7 +112,7 @@ export function CalendarioDeAsistencias({
         <input name="fecha" type="hidden" value={fechaSeleccionada} />
         <input name="estadoActual" type="hidden" value={asistencia.estado} />
         {asistencia.estado === "confirmada" ? <><input name="tipoDeAsistencia" type="hidden" value="trabajo" /><p>Asistencia confirmada: Jornada laboral</p></> : <label>Tipo de asistencia<select name="tipoDeAsistencia" onChange={(evento) => setTipoDeAsistencia(evento.target.value as TipoDeAsistencia)} value={tipoDeAsistencia}>{TIPOS_DE_ASISTENCIA.map((opcion) => <option key={opcion} value={opcion}>{etiquetaTipoDeAsistencia(opcion)}</option>)}</select></label>}
-        {tipoDeAsistencia === "trabajo" ? <>{asistencia.estado === "confirmada" ? <p>Sede planificada: {asistencia.sedeProgramada}</p> : <><label>Sede<input defaultValue={asistencia.sedeProgramada ?? ""} name="sede" required /></label><p className="ayuda-campo">Debe coincidir con la sede planificada.</p></>}<label>Hora de ingreso<input defaultValue={hora(asistencia.entrada) ?? ""} name="entrada" required type="time" /></label><label>Hora de salida<input defaultValue={hora(asistencia.salida) ?? ""} name="salida" required type="time" /></label>{asistencia.estado === "confirmada" ? <label>Motivo del ajuste<input name="motivo" required /></label> : null}</> : <label>Comentario<input name="comentario" required /></label>}</div>
+        {tipoDeAsistencia === "trabajo" ? <>{asistencia.estado === "confirmada" ? <p>Sede planificada: {asistencia.sedeProgramada}</p> : <><label>Sede<input defaultValue={asistencia.sedeProgramada ?? ""} name="sede" required /></label><p className="ayuda-campo">Debe coincidir con la sede planificada.</p></>}<label>Hora de ingreso<input defaultValue={hora(asistencia.entrada) ?? ""} name="entrada" required step="1" type="time" /></label><label>Hora de salida<input defaultValue={hora(asistencia.salida) ?? ""} name="salida" required step="1" type="time" /></label>{asistencia.estado === "confirmada" ? <label>Motivo del ajuste<input name="motivo" required /></label> : null}</> : <label>Comentario<input name="comentario" required /></label>}</div>
         <div className="acciones-dialogo">
           <button className="boton-secundario" onClick={() => dialogo.current?.close()} type="button">Cancelar</button>
           {resumen ? <><button className="boton-secundario" onClick={volverAlFormulario} type="button">Volver al formulario</button><button className="boton-principal" disabled={pendiente} type="submit">{pendiente ? "Guardando…" : "Confirmar ajuste"}</button></>
@@ -160,7 +160,7 @@ function textoSoloLectura(
   }
 }
 
-function hora(valor: string | null): string | undefined { return valor ? /T(\d{2}:\d{2})/.exec(valor)?.[1] : undefined; }
+function hora(valor: string | null): string | undefined { return valor ? /T(\d{2}:\d{2}(?::\d{2})?)/.exec(valor)?.[1] : undefined; }
 
 function etiquetaTipoDeAsistencia(tipo: TipoDeAsistencia): string {
   return tipo === "trabajo" ? "Jornada laboral" : tipo[0].toUpperCase() + tipo.slice(1);

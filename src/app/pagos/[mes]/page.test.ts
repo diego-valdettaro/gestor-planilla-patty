@@ -21,7 +21,7 @@ describe("mes de pago", () => {
     simulacro.preparar.mockClear();
     simulacro.preparar.mockResolvedValue({ mesDePago: "2026-10", corte: { inicio: "2026-09-26", fin: "2026-10-25" }, revisiones: [],
       bloqueosDelMes: ["Falta cobertura del corte."], sueldoCalculadoCentimos: 100000, personas: [
-        { relacion: { id: "r1", dni: "12345678", nombre: "Ana", grupo: "Taller" }, sedeDeAdscripcion: "Taller", sueldoCalculadoCentimos: 100000, netoCentimos: null, bloqueos: [] },
+        { relacion: { id: "r1", dni: "12345678", nombre: "Ana", grupo: "Taller" }, sedeDeAdscripcion: "Taller", sueldoCalculadoCentimos: 100000, netoCentimos: null, bloqueos: [], lineas: [] },
       ] });
   });
 
@@ -40,6 +40,19 @@ describe("mes de pago", () => {
     const html = await render("2026-10", { sede: "Otra" });
     expect(html).not.toContain('href="/pagos/2026-10/12345678"');
     expect(html).toContain("S/ 1.000,00");
+  });
+
+  it("excluye horas extra de personas bloqueadas del total calculado", async () => {
+    simulacro.preparar.mockResolvedValueOnce({ mesDePago: "2026-10", corte: { inicio: "2026-09-26", fin: "2026-10-25" }, revisiones: [],
+      bloqueosDelMes: [], sueldoCalculadoCentimos: 200000, personas: [
+        { relacion: { id: "r1", dni: "12345678", nombre: "Ana", grupo: "Taller" }, sedeDeAdscripcion: "Taller", sueldoCalculadoCentimos: 100000,
+          netoCentimos: null, bloqueos: [], lineas: [{ concepto: "horas_extra_25", importeCentimos: 1000 }] },
+        { relacion: { id: "r2", dni: "87654321", nombre: "Beto", grupo: "Taller" }, sedeDeAdscripcion: "Taller", sueldoCalculadoCentimos: 100000,
+          netoCentimos: null, bloqueos: ["Sin sueldo vigente."], lineas: [{ concepto: "horas_extra_25", importeCentimos: 9000 }] },
+      ] });
+    const html = await render();
+    expect(html).toContain("Horas extra S/ 10,00");
+    expect(html).not.toContain("Horas extra S/ 100,00");
   });
 
   it("rechaza otros roles antes de consultar importes", async () => {

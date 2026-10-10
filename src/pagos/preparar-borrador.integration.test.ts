@@ -50,6 +50,7 @@ describe.skipIf(!databaseUrl)("borrador mensual completo desde PostgreSQL", () =
   });
 
   afterAll(async () => {
+    await db.delete(schema.reglasLegales).where(eq(schema.reglasLegales.activadaPorId, cuentaId));
     await db.delete(schema.revisionesDePeriodosPlanilla).where(eq(schema.revisionesDePeriodosPlanilla.periodoId, periodoId));
     await db.delete(schema.periodosPlanilla).where(eq(schema.periodosPlanilla.id, periodoId));
     await db.delete(schema.confirmacionesDeFuente).where(eq(schema.confirmacionesDeFuente.mesDeAplicacion, "2090-10"));
@@ -109,5 +110,29 @@ describe.skipIf(!databaseUrl)("borrador mensual completo desde PostgreSQL", () =
     expect(octubre.personas.some(({ relacion }) => relacion.dni === dniTarde)).toBe(false);
     const noviembre = await prepararBorrador(fuentes, "2090-11");
     expect(noviembre.personas.find(({ relacion }) => relacion.dni === dniTarde)?.lineas[0]).toMatchObject({ mesDePago: "2090-11", mesDeDevengue: "2090-10", dias: 4 });
+  });
+
+  it("valora líneas 25 % y 35 % de hechos aprobados de una revisión cerrada", async () => {
+    await db.insert(schema.condicionesLaborales).values([
+      { relacionLaboralId: relacionId, dato: "jornada_ordinaria_diaria", jornadaMinutos: 360, vigenteDesde: "2090-10-10", registradoPorId: cuentaId },
+      { relacionLaboralId: relacionId, dato: "elegibilidad_familiar", elegibleAsignacionFamiliar: false, vigenteDesde: "2090-10-10", registradoPorId: cuentaId },
+    ]);
+    await db.insert(schema.reglasLegales).values([
+      { codigo: "horas_extra_sobretasa_primeras_dos_horas", tasaCentesimasDePunto: 2500, vigenteDesde: "2090-01-01", fuenteOficial: "Regla sintética de prueba", activadaPorId: cuentaId },
+      { codigo: "horas_extra_sobretasa_horas_posteriores", tasaCentesimasDePunto: 3500, vigenteDesde: "2090-01-01", fuenteOficial: "Regla sintética de prueba", activadaPorId: cuentaId },
+    ]);
+    const hecho = (fecha: string, minutosAl25: number, minutosAl35: number) => ({
+      dni, fecha, grupo, sede, horarioAplicado: { entradaProgramada: "09:00", salidaProgramada: "15:00" },
+      resultado: "trabajada" as const, minutosTrabajados: 360 + minutosAl25 + minutosAl35, tardanza: null,
+      horaExtra: { estado: "aprobada" as const, minutosAl25, minutosAl35, trabajoNocturno: false, causaDeDescarte: null },
+      diaEspecial: null, evidencia: { asistenciaId: randomUUID(), turnoPublicadoId: randomUUID() },
+    });
+    await db.insert(schema.revisionesDePeriodosPlanilla).values({
+      periodoId, numero: 2, resumen: { filas: [], bloqueos: [], totales: {} } as never,
+      hechos: [hecho("2090-10-20", 120.5, 60.25)], responsableId: cuentaId, cerradaEn: new Date("2090-10-26T11:00:00Z"),
+    });
+    const borrador = await prepararBorrador(fuentes, "2090-10");
+    expect(borrador.personas.find(({ relacion }) => relacion.dni === dni)?.lineas.filter(({ concepto }) => concepto.startsWith("horas_extra")))
+      .toMatchObject([{ concepto: "horas_extra_25", importeCentimos: 4602, minutos: 120.5 }, { concepto: "horas_extra_35", importeCentimos: 2485, minutos: 60.25 }]);
   });
 });

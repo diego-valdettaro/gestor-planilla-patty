@@ -179,7 +179,7 @@ Constancia registrada por Finanzas de que se efectuó fuera del sistema el desem
 _Evitar_: orden de transferencia, preliquidación finalizada, subsanación
 
 **Condición laboral**:
-Dato de una relación laboral que Finanzas mantiene con fecha de vigencia y del que depende el cálculo: sueldo, jornada ordinaria diaria, régimen laboral, afiliación pensionaria, esquema de comisión AFP, elegibilidad familiar y sede de adscripción. Un valor nuevo agrega una vigencia y no reescribe las anteriores; una corrección reemplaza el valor con motivo, y un dato sin vigencia es «Pendiente», nunca cero.
+Dato de una relación laboral que Finanzas mantiene con fecha de vigencia y del que depende el cálculo: sueldo, jornada ordinaria diaria, régimen laboral, afiliación pensionaria, esquema de comisión AFP, asignación familiar otorgada y sede de adscripción. El dato interno `elegibilidad_familiar` indica que Patty ya otorgó el beneficio tras verificarlo fuera del sistema, también en REMYPE; no registra datos del menor. Un valor nuevo agrega una vigencia y no reescribe las anteriores; una corrección reemplaza el valor con motivo, y un dato sin vigencia es «Pendiente», nunca cero.
 _Evitar_: valor actual que reescribe la historia, ficha editable sin vigencia, dato de la persona (es de la relación laboral)
 
 **Regla legal**:

@@ -250,7 +250,7 @@ La finalización no es una pantalla propia: se dispara desde 4.2 con «Finalizar
 
 ### 4.9 Condiciones laborales con vigencia
 
-**Para qué sirve.** Que Finanzas mantenga, por relación laboral y con fecha de vigencia, los datos de los que depende el cálculo: sueldo, jornada ordinaria diaria, régimen laboral (general o REMYPE pequeña empresa), afiliación pensionaria y esquema de comisión, elegibilidad familiar y sede de adscripción (ticket #116; #96, historias 5, 6, 22 y 34; ADR 0008). Un valor nuevo no reescribe la historia. Es una sección de Pagos, solo para Finanzas.
+**Para qué sirve.** Que Finanzas mantenga, por relación laboral y con fecha de vigencia, los datos de los que depende el cálculo: sueldo, jornada ordinaria diaria, régimen laboral (general o REMYPE pequeña empresa), afiliación pensionaria y esquema de comisión, asignación familiar otorgada y sede de adscripción (ticket #116; #96, historias 5, 6, 22 y 34; ADR 0008). «Otorgada» significa que Patty verificó el sustento fuera de la app y concedió el beneficio, también si la persona está en REMYPE pequeña empresa. La app no registra el DNI del menor. Un valor nuevo no reescribe la historia. Es una sección de Pagos, solo para Finanzas.
 
 **Orden del contenido.**
 1. **Lista.** Cabecera «Condiciones laborales» con la navegación secundaria de Pagos (V7). Criterios (`.panel-filtros`): Grupo operativo, Sede de adscripción, Persona (nombre o DNI) y «Solo con datos faltantes». `.panel-tabla` con una fila por relación laboral confirmada por Recursos Humanos:
@@ -270,7 +270,7 @@ La finalización no es una pantalla propia: se dispara desde 4.2 con «Finalizar
 
 | Columna | Contenido |
 | --- | --- |
-| Valor | `S/ 1.800,00`, «REMYPE pequeña empresa», «Elegible». |
+| Valor | `S/ 1.800,00`, «REMYPE pequeña empresa», «Otorgada». |
 | Vigente desde | `01/03/2025`. |
 | Vigente hasta | Fecha, o «Vigente». El valor siguiente cierra al anterior el día previo. |
 | Registrado por | Responsable y fecha de registro. |

@@ -40,6 +40,16 @@ describe("parsearArchivoHuellero", () => {
     });
   });
 
+  it("conserva segundos de una marca escrita o numérica en Excel", async () => {
+    const archivo = await archivoXlsx([
+      ["DNI", "Sede", "Fecha", "Entrada", "Salida"],
+      ["00001024", "Centro", "2026-09-01", "08:59:30", (18 * 3600 + 15) / 86400],
+    ]);
+    const resultado = await parsearArchivoHuellero(archivo);
+    expect(resultado.errores).toEqual([]);
+    expect(resultado.filas[0]).toMatchObject({ entrada: "08:59:30", salida: "18:00:15" });
+  });
+
   it("conserva el día de una fecha Excel en una zona horaria positiva", async () => {
     const zonaHorariaOriginal = process.env.TZ;
     process.env.TZ = "Europe/Amsterdam";
@@ -76,7 +86,7 @@ describe("parsearArchivoHuellero", () => {
       expect.objectContaining({ fila: 4, motivo: "DNI es obligatorio." }),
       expect.objectContaining({ fila: 4, motivo: "Sede es obligatoria." }),
       expect.objectContaining({ fila: 4, motivo: "Fecha debe ser una fecha Excel o usar YYYY-MM-DD." }),
-      expect.objectContaining({ fila: 4, motivo: "Entrada debe ser una hora Excel o usar HH:MM." }),
+      expect.objectContaining({ fila: 4, motivo: "Entrada debe ser una hora Excel o usar HH:MM o HH:MM:SS." }),
       expect.objectContaining({ fila: 4, motivo: "Salida es obligatoria." }),
       expect.objectContaining({ fila: 3, dni: "00001024", fecha: "2026-09-01", motivo: "La jornada duplica la fila 2." }),
     ]));
@@ -110,7 +120,7 @@ describe("parsearArchivoHuellero", () => {
 
     await expect(parsearArchivoHuellero(archivo)).resolves.toEqual(expect.objectContaining({
       errores: expect.arrayContaining([
-        expect.objectContaining({ fila: 3, motivo: "Entrada debe ser una hora Excel o usar HH:MM." }),
+        expect.objectContaining({ fila: 3, motivo: "Entrada debe ser una hora Excel o usar HH:MM o HH:MM:SS." }),
         expect.objectContaining({ fila: 3, motivo: "La jornada duplica la fila 2." }),
       ]),
     }));

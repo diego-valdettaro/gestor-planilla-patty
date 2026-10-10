@@ -74,7 +74,7 @@ describe("página de Condiciones laborales (/pagos/condiciones-laborales)", () =
     expect(html).toContain("Pendiente");
     expect(html).toContain("Falta: sueldo, jornada ordinaria diaria, régimen laboral");
     expect(html).not.toContain("S/ 0,00");
-    expect(html).toContain("Falta: jornada ordinaria diaria, régimen laboral, esquema de comisión AFP, elegibilidad familiar, sede de adscripción");
+    expect(html).toContain("Falta: jornada ordinaria diaria, régimen laboral, esquema de comisión AFP, asignación familiar otorgada, sede de adscripción");
   });
 
   it("filtra por grupo, sede, persona y datos faltantes y rotula el alcance", async () => {

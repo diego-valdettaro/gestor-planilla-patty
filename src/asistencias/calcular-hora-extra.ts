@@ -102,11 +102,12 @@ function tocaElHorarioNocturno(entrada: number, salida: number): boolean {
 
 /** Minutos desde el origen común; usa la hora tal como está escrita, igual que el resto del cálculo de asistencia. */
 function minutosAbsolutos(valor: string): number {
-  const coincidencia = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(valor);
+  const coincidencia = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/.exec(valor);
   if (!coincidencia) throw new Error("La hora debe usar el formato AAAA-MM-DDTHH:MM.");
-  const [, anio, mes, dia, horas, minutos] = coincidencia;
+  const [, anio, mes, dia, horas, minutos, segundos] = coincidencia;
   validarHora(Number(horas), Number(minutos));
-  return (Date.UTC(Number(anio), Number(mes) - 1, Number(dia)) / 60_000) + Number(horas) * 60 + Number(minutos);
+  if (segundos !== undefined && Number(segundos) > 59) throw new Error("La hora no es válida.");
+  return (Date.UTC(Number(anio), Number(mes) - 1, Number(dia)) / 60_000) + Number(horas) * 60 + Number(minutos) + Number(segundos ?? 0) / 60;
 }
 
 function minutosDelDia(valor: string): number {

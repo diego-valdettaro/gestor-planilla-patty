@@ -96,6 +96,16 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeAsistencias · horas extra p
     ]);
   });
 
+  it("persiste fracciones de minuto de las marcas con segundos", async () => {
+    const dni = await crearColaborador("segundos");
+    await confirmar(dni, lunes, "08:59:30", "18:00:15");
+    const [extra] = await horasExtra(dni);
+    expect(extra.minutosAl25).toBeCloseTo(0.75, 7);
+    const [asistencia] = await db.select({ minutosTrabajados: schema.asistenciasEsperadas.minutosTrabajados })
+      .from(schema.asistenciasEsperadas).where(and(eq(schema.asistenciasEsperadas.dni, dni), eq(schema.asistenciasEsperadas.fecha, lunes)));
+    expect(asistencia.minutosTrabajados).toBeCloseTo(540.75, 7);
+  });
+
   it("cuenta una sola vez el exceso semanal y el diario, sin importar el orden de confirmación", async () => {
     const dni = await crearColaborador("semana");
 
