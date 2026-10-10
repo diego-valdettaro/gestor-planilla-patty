@@ -3,6 +3,7 @@ import { repositorioDeCondicionesLaborales } from "@/condiciones-laborales/servi
 import { repositorioDeReglasLegales } from "@/reglas-legales/servicio";
 import { repositorioDePeriodos } from "@/periodos/servicio";
 import { repositorioDeFuentesExternas } from "@/fuentes-externas/servicio";
+import { repositorioDeDescansosYFeriados } from "@/descansos-y-feriados/servicio";
 
 import type { FuentesDelBorrador } from "./preparar-borrador";
 
@@ -12,4 +13,5 @@ export const fuentesDelBorrador: FuentesDelBorrador = {
   reglas: repositorioDeReglasLegales,
   asistencia: repositorioDePeriodos,
   externas: repositorioDeFuentesExternas,
+  descansos: repositorioDeDescansosYFeriados,
 };

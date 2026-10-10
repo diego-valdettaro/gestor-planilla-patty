@@ -1,11 +1,11 @@
-import { and, asc, desc, eq, gte, inArray, lte, ne } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lt, lte, ne, or, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import type { TipoDeEstadoManual } from "@/asistencias/estado-manual";
 import * as schema from "@/db/schema";
 import { asistenciasEsperadas, descansosSemanalesAsignados, descansosSustitutorios, estadosManuales, feriados } from "@/db/schema";
 
-import type { DescansoSustitutorio, RepositorioDeDescansosYFeriados } from "./gestionar-descansos-y-feriados";
+import type { DescansoSustitutorio, RepositorioDeDescansosYFeriados, SustitutorioParaPagos } from "./gestionar-descansos-y-feriados";
 import type { DescansoSemanalAsignado, Feriado } from "./reglas";
 
 type Db = NodePgDatabase<typeof schema>;
@@ -79,6 +79,17 @@ export class RepositorioPostgresDeDescansosYFeriados implements RepositorioDeDes
     return this.db.select(columnasDeSustitutorio).from(descansosSustitutorios)
       .where(and(eq(descansosSustitutorios.dni, dni), gte(descansosSustitutorios.origenFecha, desde), lte(descansosSustitutorios.origenFecha, hasta)))
       .orderBy(asc(descansosSustitutorios.origenFecha));
+  }
+
+  async listarSustitutoriosParaPagos(desde: string, hasta: string): Promise<SustitutorioParaPagos[]> {
+    const verificadoEnLima = sql<string | null>`(${descansosSustitutorios.verificadoEn} AT TIME ZONE 'America/Lima')::date::text`;
+    return this.db.select({
+      dni: descansosSustitutorios.dni, origenFecha: descansosSustitutorios.origenFecha, estado: descansosSustitutorios.estado, verificadoEnLima,
+    }).from(descansosSustitutorios).where(or(
+      and(gte(descansosSustitutorios.origenFecha, desde), lte(descansosSustitutorios.origenFecha, hasta)),
+      and(eq(descansosSustitutorios.estado, "no_otorgado"), lt(descansosSustitutorios.origenFecha, desde),
+        sql`${verificadoEnLima} BETWEEN ${desde} AND ${hasta}`),
+    )).orderBy(asc(descansosSustitutorios.origenFecha), asc(descansosSustitutorios.dni));
   }
 
   async insertarSustitutorio({ responsableId, ...datos }: Pick<DescansoSustitutorio, "dni" | "origenFecha" | "origenTipo" | "fechaPrevista"> & { responsableId: string }): Promise<DescansoSustitutorio | undefined> {

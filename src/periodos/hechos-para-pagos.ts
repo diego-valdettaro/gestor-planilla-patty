@@ -255,6 +255,38 @@ export async function obtenerHechosDelCorte(lector: LectorDeHechosDeAsistencia, 
   };
 }
 
+/**
+ * Hechos de jornadas puntuales, también anteriores al corte (p. ej. el día de origen de un descanso sustitutorio que se
+ * regulariza después). Lee la revisión del período que contiene cada fecha; si no está disponible, la jornada falta.
+ */
+export async function obtenerHechosDeJornadas(
+  lector: LectorDeHechosDeAsistencia,
+  jornadas: Array<{ dni: string; fecha: string }>,
+): Promise<Record<string, HechoDiarioDeAsistencia[]>> {
+  if (!jornadas.length) return {};
+  const periodos = await lector.listar();
+  const revisiones = new Map<string, Promise<RevisionDeAsistenciaParaPagos | null>>();
+  const leer = (periodoId: string) => {
+    if (!revisiones.has(periodoId)) {
+      revisiones.set(periodoId, lector.leerHechosDelPeriodo(periodoId).catch((error) => {
+        if (error instanceof RevisionDeAsistenciaNoDisponibleError) return null;
+        throw error;
+      }));
+    }
+    return revisiones.get(periodoId)!;
+  };
+  const resultado: Record<string, HechoDiarioDeAsistencia[]> = {};
+  for (const { dni, fecha } of jornadas) {
+    for (const periodo of periodos.filter(({ inicio, fin }) => inicio <= fecha && fecha <= fin)) {
+      const hecho = (await leer(periodo.id))?.hechos.find((candidato) => candidato.dni === dni && candidato.fecha === fecha);
+      if (!hecho) continue;
+      (resultado[dni] ??= []).push(hecho);
+      break;
+    }
+  }
+  return resultado;
+}
+
 export class CoberturaDelCorteInvalidaError extends Error {
   constructor(public readonly problemas: ProblemaDeCobertura[]) {
     super(`No se puede finalizar sobre este corte: ${problemas.map(({ mensaje }) => mensaje).join(" ")}`);

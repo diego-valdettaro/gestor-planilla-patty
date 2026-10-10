@@ -8,6 +8,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { dniDePrueba } from "@/colaboradores/dni-de-prueba";
 import { RepositorioPostgresDeCondicionesLaborales } from "@/condiciones-laborales/repositorio-postgres";
 import * as schema from "@/db/schema";
+import { RepositorioPostgresDeDescansosYFeriados } from "@/descansos-y-feriados/repositorio-postgres";
+import { construirHechosDiarios } from "@/periodos/hechos-de-asistencia-postgres";
 import { RepositorioPostgresDeFuentesExternas } from "@/fuentes-externas/repositorio-postgres";
 import { TIPOS_DE_FUENTE } from "@/fuentes-externas/tipos-de-fuente";
 import { RepositorioPostgresDePeriodos } from "@/periodos/repositorio-postgres";
@@ -72,6 +74,7 @@ describe.skipIf(!databaseUrl)("borrador mensual completo desde PostgreSQL", () =
     reglas: new RepositorioPostgresDeReglasLegales(db),
     asistencia: new RepositorioPostgresDePeriodos(db),
     externas: new RepositorioPostgresDeFuentesExternas(db),
+    descansos: new RepositorioPostgresDeDescansosYFeriados(db),
   };
 
   it("prepara la población sin marcas, vigencias, fuentes y cobertura provisional", async () => {
@@ -134,5 +137,70 @@ describe.skipIf(!databaseUrl)("borrador mensual completo desde PostgreSQL", () =
     const borrador = await prepararBorrador(fuentes, "2090-10");
     expect(borrador.personas.find(({ relacion }) => relacion.dni === dni)?.lineas.filter(({ concepto }) => concepto.startsWith("horas_extra")))
       .toMatchObject([{ concepto: "horas_extra_25", importeCentimos: 4602, minutos: 120.5 }, { concepto: "horas_extra_35", importeCentimos: 2485, minutos: 60.25 }]);
+  });
+
+  describe("trabajo en descanso o feriado con jornadas reales", () => {
+    // Octubre 2090: el 15 es domingo y el 16 es lunes; el descanso asignado es el lunes (nunca se asume el domingo).
+    const instantanea = { sede, entradaProgramada: "09:00", salidaProgramada: "15:00", descanso: false };
+    const fechas = ["2090-10-15", "2090-10-16"];
+    let periodoDescansoId: string;
+
+    beforeAll(async () => {
+      await db.insert(schema.reglasLegales).values([
+        { codigo: "trabajo_en_descanso_o_feriado_sobretasa", tasaCentesimasDePunto: 10000, vigenteDesde: "2090-01-01", fuenteOficial: "Regla sintética de prueba", activadaPorId: cuentaId },
+        { codigo: "trabajo_en_primero_de_mayo_sobretasa", tasaCentesimasDePunto: 7500, vigenteDesde: "2090-01-01", fuenteOficial: "Regla sintética de prueba", activadaPorId: cuentaId },
+      ]);
+      await db.insert(schema.descansosSemanalesAsignados).values({ dni, diaSemana: 1, vigenteDesde: "2090-01-01", registradoPorId: cuentaId });
+      await db.insert(schema.turnosPublicados).values(fechas.map((fecha) => ({ dni, fecha, grupo, sede, entradaProgramada: "09:00", salidaProgramada: "15:00", descanso: false })));
+      await db.insert(schema.asistenciasEsperadas).values(fechas.map((fecha) => ({
+        dni, fecha, estado: "confirmada" as const, entradaReal: `${fecha}T09:00:00Z`, salidaReal: `${fecha}T15:00:00Z`, minutosTrabajados: 360, instantaneaDeTurno: instantanea,
+      })));
+      // La revisión cerrada de octubre congela las jornadas reales recién creadas; noviembre queda abierto y provisional.
+      const hechos = (await construirHechosDiarios(db, { inicio: "2090-09-26", fin: "2090-10-25" })).filter((hecho) => hecho.dni === dni);
+      await db.insert(schema.revisionesDePeriodosPlanilla).values({
+        periodoId, numero: 3, resumen: { filas: [], bloqueos: [], totales: {} } as never, hechos, responsableId: cuentaId, cerradaEn: new Date("2090-10-26T12:00:00Z"),
+      });
+      const [periodo] = await db.insert(schema.periodosPlanilla).values({ inicio: "2090-10-26", fin: "2090-11-25", estado: "abierto" }).returning({ id: schema.periodosPlanilla.id });
+      periodoDescansoId = periodo.id;
+    });
+
+    afterAll(async () => {
+      await db.delete(schema.descansosSustitutorios).where(eq(schema.descansosSustitutorios.dni, dni));
+      await db.delete(schema.descansosSemanalesAsignados).where(eq(schema.descansosSemanalesAsignados.dni, dni));
+      await db.delete(schema.asistenciasEsperadas).where(eq(schema.asistenciasEsperadas.dni, dni));
+      await db.delete(schema.turnosPublicados).where(eq(schema.turnosPublicados.dni, dni));
+      await db.delete(schema.periodosPlanilla).where(eq(schema.periodosPlanilla.id, periodoDescansoId));
+    });
+
+    const lineasDeDescanso = async (mes: string) =>
+      (await prepararBorrador(fuentes, mes)).personas.find(({ relacion }) => relacion.dni === dni)?.lineas.filter(({ concepto }) => concepto === "trabajo_en_descanso_o_feriado");
+
+    it("valora el descanso asignado y no el domingo trabajado", async () => {
+      expect(await lineasDeDescanso("2090-10")).toMatchObject([{ fecha: "2090-10-16", clase: "descanso_semanal", minutos: 360, regularizacion: false }]);
+    });
+
+    it("un sustitutorio previsto evita el adicional; no otorgado después del corte se regulariza en el pago siguiente", async () => {
+      const [sustitutorio] = await db.insert(schema.descansosSustitutorios).values({
+        dni, origenFecha: "2090-10-16", origenTipo: "descanso_semanal", fechaPrevista: "2090-10-20", registradoPorId: cuentaId,
+      }).returning({ id: schema.descansosSustitutorios.id });
+      expect(await lineasDeDescanso("2090-10")).toEqual([]);
+
+      await db.update(schema.descansosSustitutorios).set({ estado: "no_otorgado", verificadoPorId: cuentaId, verificadoEn: new Date("2090-10-26T15:00:00Z") })
+        .where(eq(schema.descansosSustitutorios.id, sustitutorio.id));
+      expect(await lineasDeDescanso("2090-10")).toEqual([]);
+      expect(await lineasDeDescanso("2090-11")).toMatchObject([{ fecha: "2090-10-16", regularizacion: true, mesDePago: "2090-11", mesDeDevengue: "2090-10", importeCentimos: expect.any(Number) }]);
+      expect(await lineasDeDescanso("2090-12")).toEqual([]);
+
+      await db.update(schema.descansosSustitutorios).set({ verificadoEn: new Date("2090-10-20T15:00:00Z") }).where(eq(schema.descansosSustitutorios.id, sustitutorio.id));
+      expect(await lineasDeDescanso("2090-10")).toMatchObject([{ fecha: "2090-10-16", regularizacion: false, mesDePago: "2090-10" }]);
+      expect(await lineasDeDescanso("2090-11")).toEqual([]);
+
+      // El corte se mide en Lima: 23:00 del 25 aún es octubre y 00:00 del 26 ya es noviembre, aunque en UTC ambos sean 26.
+      await db.update(schema.descansosSustitutorios).set({ verificadoEn: new Date("2090-10-26T04:00:00Z") }).where(eq(schema.descansosSustitutorios.id, sustitutorio.id));
+      expect(await lineasDeDescanso("2090-10")).toMatchObject([{ regularizacion: false }]);
+      await db.update(schema.descansosSustitutorios).set({ verificadoEn: new Date("2090-10-26T05:00:00Z") }).where(eq(schema.descansosSustitutorios.id, sustitutorio.id));
+      expect(await lineasDeDescanso("2090-10")).toEqual([]);
+      expect(await lineasDeDescanso("2090-11")).toMatchObject([{ regularizacion: true }]);
+    });
   });
 });

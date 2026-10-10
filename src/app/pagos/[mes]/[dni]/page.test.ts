@@ -59,6 +59,21 @@ describe("desglose de una persona", () => {
     expect(html).toContain("/asistencias?vista=mensual&amp;grupo=Taller&amp;fecha=2026-10-02&amp;colaborador=12345678");
   });
 
+  it("muestra el trabajo en descanso o feriado con su regularización y la marca de validación legal", async () => {
+    const borrador = await simulacro.preparar.getMockImplementation()?.();
+    borrador.personas[0].lineas.push({ concepto: "trabajo_en_descanso_o_feriado", importeCentimos: 20000, minutos: 360, fecha: "2026-09-30",
+      grupo: "Taller", clase: "feriado", regularizacion: true, mesDeDevengue: "2026-09", mesDePago: "2026-10", corte: borrador.corte,
+      origen: "Asistencia", remuneracionOrdinariaComputableCentimos: 300000, jornadaOrdinariaDiariaMinutos: 360, sobretasaEnCentesimasDePunto: 10000,
+      evidencia: { asistenciaId: "a-2", turnoPublicadoId: "t-2" } });
+    simulacro.preparar.mockResolvedValueOnce(borrador);
+    const html = await render();
+    expect(html).toContain("Trabajo en descanso o feriado sin sustitución");
+    expect(html).toContain("Regularización de descanso sustitutorio no otorgado");
+    expect(html).toContain("Devengue anterior");
+    expect(html).toContain("sobretasa 100 %");
+    expect(html).toContain("pendiente de validación con Finanzas o el contador");
+  });
+
   it("no expone una persona fuera del mes", async () => {
     await expect(render("87654321")).rejects.toThrow("NOT FOUND");
   });

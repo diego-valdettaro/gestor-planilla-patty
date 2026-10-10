@@ -20,6 +20,8 @@ export type CodigoDeReglaLegal =
   | "asignacion_familiar_porcentaje_de_rmv"
   | "horas_extra_sobretasa_primeras_dos_horas"
   | "horas_extra_sobretasa_horas_posteriores"
+  | "trabajo_en_descanso_o_feriado_sobretasa"
+  | "trabajo_en_primero_de_mayo_sobretasa"
   | CodigoDeComision;
 
 export interface DefinicionDeReglaLegal {
@@ -54,6 +56,10 @@ export const REGLAS_LEGALES: readonly DefinicionDeReglaLegal[] = [
   { codigo: "afp_remuneracion_maxima_asegurable", nombre: "Remuneración máxima asegurable AFP", unidad: "importe" },
   { codigo: "horas_extra_sobretasa_primeras_dos_horas", nombre: "Sobretasa de horas extra: primeras dos horas diarias", unidad: "porcentaje" },
   { codigo: "horas_extra_sobretasa_horas_posteriores", nombre: "Sobretasa de horas extra: horas posteriores", unidad: "porcentaje" },
+  // VALIDAR CON FINANZAS O EL CONTADOR (#96, #124): estas dos sobretasas y la fórmula que las usa (ver
+  // `trabajoEnDescansoOFeriadoDelCorte` en pagos/calcular-borrador.ts) siguen pendientes de validación legal.
+  { codigo: "trabajo_en_descanso_o_feriado_sobretasa", nombre: "Sobretasa de trabajo en descanso o feriado sin sustitución", unidad: "porcentaje" },
+  { codigo: "trabajo_en_primero_de_mayo_sobretasa", nombre: "Sobretasa de trabajo el 1 de mayo", unidad: "porcentaje" },
 ];
 
 export function buscarDefinicion(codigo: string): DefinicionDeReglaLegal | undefined {
