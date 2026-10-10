@@ -255,6 +255,42 @@ export async function obtenerHechosDelCorte(lector: LectorDeHechosDeAsistencia, 
   };
 }
 
+export interface DiasDeVacaciones {
+  /** Fechas con jornada «vacaciones» por DNI, ordenadas y sin repetir. */
+  fechasPorDni: Record<string, string[]>;
+  /** Alguna de esas jornadas viene de un período abierto, es decir, puede cambiar hasta que se cierre. */
+  provisional: boolean;
+}
+
+/**
+ * Jornadas «vacaciones» de una ventana de fechas, que puede exceder el corte: el sueldo es del mes calendario, así que los
+ * días posteriores al día 25 (en un período normalmente abierto) también se desglosan. No altera la cobertura del corte ni lo
+ * que exige finalizar: reutiliza las revisiones ya leídas y salta, sin error, un período cerrado sin hechos congelados
+ * (el borrador ya lo reporta como bloqueo del corte).
+ */
+export async function obtenerDiasDeVacaciones(lector: LectorDeHechosDeAsistencia, ventana: Corte, yaLeidas: RevisionDeAsistenciaParaPagos[] = []): Promise<DiasDeVacaciones> {
+  const periodos = (await lector.listar()).filter((periodo) => seSuperponeConElCorte(ventana, periodo) && !yaLeidas.some((revision) => revision.periodoId === periodo.id));
+  const nuevas = await Promise.all(periodos.map(async (periodo) => {
+    try {
+      return await lector.leerHechosDelPeriodo(periodo.id);
+    } catch (error) {
+      if (error instanceof RevisionDeAsistenciaNoDisponibleError) return undefined;
+      throw error;
+    }
+  }));
+  const revisiones = [...yaLeidas, ...nuevas.flatMap((revision) => revision ? [revision] : [])];
+  const fechas: Record<string, Set<string>> = {};
+  let provisional = false;
+  for (const revision of revisiones) {
+    for (const hecho of revision.hechos) {
+      if (hecho.resultado !== "vacaciones" || hecho.fecha < ventana.inicio || hecho.fecha > ventana.fin) continue;
+      (fechas[hecho.dni] ??= new Set()).add(hecho.fecha);
+      if (revision.provisional) provisional = true;
+    }
+  }
+  return { fechasPorDni: Object.fromEntries(Object.entries(fechas).map(([dni, conjunto]) => [dni, [...conjunto].sort()])), provisional };
+}
+
 export class CoberturaDelCorteInvalidaError extends Error {
   constructor(public readonly problemas: ProblemaDeCobertura[]) {
     super(`No se puede finalizar sobre este corte: ${problemas.map(({ mensaje }) => mensaje).join(" ")}`);

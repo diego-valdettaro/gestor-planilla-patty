@@ -6,6 +6,7 @@ import {
   RevisionDeAsistenciaNoDisponibleError,
   corteDeIncidencias,
   hechosParaFinalizar,
+  obtenerDiasDeVacaciones,
   obtenerHechosDelCorte,
   verificarCoberturaDelCorte,
   type HechoDiarioDeAsistencia,
@@ -266,5 +267,65 @@ describe("contrato del hecho diario", () => {
       "diaEspecial", "dni", "evidencia", "fecha", "grupo", "horaExtra", "horarioAplicado",
       "minutosTrabajados", "resultado", "sede", "tardanza",
     ]);
+  });
+});
+
+describe("obtenerDiasDeVacaciones", () => {
+  const vacaciones = (fecha: string) => hecho("11111111", fecha, { resultado: "vacaciones", minutosTrabajados: 0 });
+
+  it("incluye los días posteriores al corte que viven en un período abierto y los marca provisionales", async () => {
+    const periodos = [periodo("p1", "2026-08-26", "2026-09-25"), periodo("p2", "2026-09-26", "2026-10-25", "abierto")];
+    const revisiones = [
+      revision("p1", "2026-08-26", "2026-09-25", [hecho("11111111", "2026-09-25")]),
+      revision("p2", "2026-09-26", "2026-10-25", ["2026-09-29", "2026-09-30", "2026-10-01"].map(vacaciones), true),
+    ];
+    const resultado = await obtenerDiasDeVacaciones(lector(periodos, revisiones), { inicio: "2026-08-01", fin: "2026-10-31" });
+    expect(resultado).toEqual({ fechasPorDni: { "11111111": ["2026-09-29", "2026-09-30", "2026-10-01"] }, provisional: true });
+  });
+
+  it("lee las revisiones congeladas de períodos cerrados y no marca provisional", async () => {
+    const periodos = [periodo("p1", "2026-09-26", "2026-10-25")];
+    const revisiones = [revision("p1", "2026-09-26", "2026-10-25", [vacaciones("2026-10-02"), hecho("11111111", "2026-10-03")])];
+    expect(await obtenerDiasDeVacaciones(lector(periodos, revisiones), { inicio: "2026-10-01", fin: "2026-10-31" }))
+      .toEqual({ fechasPorDni: { "11111111": ["2026-10-02"] }, provisional: false });
+  });
+
+  it("reutiliza las revisiones ya leídas sin volver a consultarlas y recorta a la ventana", async () => {
+    const leida = revision("p1", "2026-09-26", "2026-10-25", [vacaciones("2026-09-28"), vacaciones("2026-10-02")]);
+    const consultados: string[] = [];
+    const base = lector([periodo("p1", "2026-09-26", "2026-10-25")], [leida]);
+    const resultado = await obtenerDiasDeVacaciones({ listar: base.listar, leerHechosDelPeriodo: async (id) => { consultados.push(id); return base.leerHechosDelPeriodo(id); } },
+      { inicio: "2026-10-01", fin: "2026-10-31" }, [leida]);
+    expect(consultados).toEqual([]);
+    expect(resultado.fechasPorDni["11111111"]).toEqual(["2026-10-02"]);
+  });
+
+  it("salta un período cerrado sin hechos congelados y deduplica fechas de períodos solapados", async () => {
+    const periodos = [periodo("p1", "2026-09-26", "2026-10-10"), periodo("p2", "2026-10-05", "2026-10-25"), periodo("p3", "2026-10-26", "2026-11-25")];
+    const base = lector(periodos, [
+      revision("p1", "2026-09-26", "2026-10-10", [vacaciones("2026-10-06")]),
+      revision("p2", "2026-10-05", "2026-10-25", [vacaciones("2026-10-06")]),
+    ]);
+    const resultado = await obtenerDiasDeVacaciones({ listar: base.listar, leerHechosDelPeriodo: async (id) => {
+      if (id === "p3") throw new RevisionDeAsistenciaNoDisponibleError("sin hechos");
+      return base.leerHechosDelPeriodo(id);
+    } }, { inicio: "2026-10-01", fin: "2026-10-31" });
+    expect(resultado.fechasPorDni["11111111"]).toEqual(["2026-10-06"]);
+  });
+
+  it("solo marca provisional si las vacaciones vienen de un período abierto, no cualquier período abierto de la ventana", async () => {
+    const periodos = [periodo("p1", "2026-08-26", "2026-09-25"), periodo("p2", "2026-09-26", "2026-10-25", "abierto")];
+    const revisiones = [
+      revision("p1", "2026-08-26", "2026-09-25", [vacaciones("2026-09-10")]),
+      revision("p2", "2026-09-26", "2026-10-25", [hecho("11111111", "2026-10-02")], true),
+    ];
+    expect(await obtenerDiasDeVacaciones(lector(periodos, revisiones), { inicio: "2026-09-01", fin: "2026-10-31" }))
+      .toEqual({ fechasPorDni: { "11111111": ["2026-09-10"] }, provisional: false });
+  });
+
+  it("sin vacaciones entrega un mapa vacío", async () => {
+    const periodos = [periodo("p1", "2026-09-26", "2026-10-25")];
+    expect(await obtenerDiasDeVacaciones(lector(periodos, [revision("p1", "2026-09-26", "2026-10-25", [hecho("11111111", "2026-10-02")])]), { inicio: "2026-10-01", fin: "2026-10-31" }))
+      .toEqual({ fechasPorDni: {}, provisional: false });
   });
 });
