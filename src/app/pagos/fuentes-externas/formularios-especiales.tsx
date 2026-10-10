@@ -5,7 +5,7 @@ import { useActionState } from "react";
 import { CONCEPTOS } from "@/conceptos-de-preliquidacion/catalogo";
 import { formatearMes } from "@/fuentes-externas/valores";
 
-import { decidirIncidenciaDesdeFormulario, registrarAjusteDesdeFormulario, registrarIncidenciaDesdeFormulario, type EstadoEspecial } from "./acciones-especiales";
+import { decidirIncidenciaDesdeFormulario, registrarAbonoVacacionalDesdeFormulario, registrarAjusteDesdeFormulario, registrarIncidenciaDesdeFormulario, type EstadoEspecial } from "./acciones-especiales";
 
 const inicial: EstadoEspecial = {};
 
@@ -60,5 +60,18 @@ export function RegistroDeAjuste({ mes }: { mes: string }) {
     <label>Motivo<textarea maxLength={250} name="motivo" required rows={2} /></label>
     <p>El ajuste toma el efecto sobre el neto y las bases del concepto corregido. La versión finalizada anterior queda intacta.</p>
     <Resultado estado={estado} /><button className="boton-principal" disabled={pendiente} type="submit">Registrar ajuste de preliquidación</button>
+  </form>;
+}
+
+export function RegistroDeAbonoVacacional({ mes }: { mes: string }) {
+  const [estado, accion, pendiente] = useActionState(registrarAbonoVacacionalDesdeFormulario, inicial);
+  return <form action={accion} className="formulario-dialogo formulario-de-importe">
+    <label>DNI de la persona<input name="dni" inputMode="numeric" pattern="\d{8}" required /></label>
+    <label>Fecha del abono<input name="fechaDelAbono" required type="date" /></label>
+    <input name="mesDeAplicacion" type="hidden" value={mes} />
+    <label>Importe (S/)<input name="monto" inputMode="decimal" placeholder="300,00" required /></label>
+    <small className="linea-de-relacion">Mes de aplicación: {formatearMes(mes)}.</small>
+    <p>Los días del descanso salen de las vacaciones que el gerente aprobó en Asistencia. El abono se ata al descanso que empieza en o después de su fecha y se reparte por días calendario entre los meses del descanso: reduce el saldo de cada mes una sola vez y no cambia su mes de devengue.</p>
+    <Resultado estado={estado} /><button className="boton-principal" disabled={pendiente} type="submit">Registrar abono vacacional</button>
   </form>;
 }

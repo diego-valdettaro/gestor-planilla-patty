@@ -106,7 +106,8 @@ describe.skipIf(!databaseUrl)("borrador mensual completo desde PostgreSQL", () =
     const octubre = await prepararBorrador(fuentes, "2090-10");
     expect(octubre.bloqueosDelMes.some((bloqueo) => bloqueo.includes("Fuente externa pendiente") || bloqueo.includes("no está cerrado"))).toBe(false);
     expect(octubre.revisiones).toEqual([expect.objectContaining({ numero: 1, provisional: false })]);
-    expect(octubre.personas.find(({ relacion }) => relacion.dni === dni)?.lineas).toHaveLength(2);
+    // El día 12 de vacaciones sale del sueldo básico del tramo y se paga como remuneración vacacional.
+    expect(octubre.personas.find(({ relacion }) => relacion.dni === dni)?.lineas.map(({ concepto }) => concepto)).toEqual(["sueldo_basico", "remuneracion_vacacional", "sueldo_basico", "sueldo_basico"]);
     expect(octubre.personas.some(({ relacion }) => relacion.dni === dniTarde)).toBe(false);
     const noviembre = await prepararBorrador(fuentes, "2090-11");
     expect(noviembre.personas.find(({ relacion }) => relacion.dni === dniTarde)?.lineas[0]).toMatchObject({ mesDePago: "2090-11", mesDeDevengue: "2090-10", dias: 4 });

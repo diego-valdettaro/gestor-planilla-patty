@@ -3,6 +3,11 @@ import type { Corte, HechoDiarioDeAsistencia, RevisionDeAsistenciaParaPagos } fr
 import { DATOS_LABORALES, NOMBRE_DE_DATO, esAfp, type DatoLaboral, type ValorLaboral } from "@/condiciones-laborales/catalogo";
 import { buscarDefinicion, type CodigoDeReglaLegal } from "@/reglas-legales/catalogo";
 import type { ImporteExterno } from "@/fuentes-externas/gestionar-fuentes-externas";
+import { formatearSoles } from "@/condiciones-laborales/valores";
+import { formatearFechaDeRelacion } from "@/relaciones-laborales/vigencia";
+import { desplazarFecha } from "@/turnos/semana";
+
+import { asociarAbono, descansosDe, diasConvencionalesDelMes, fechasEnMes, mesesDelDescanso, repartirAbono, ventanaDeVacaciones, type DescansoVacacional } from "./vacaciones";
 
 /** Entrada coherente y ya leída. El cálculo nunca consulta la base. */
 export interface EntradaDeBorrador {
@@ -16,6 +21,15 @@ export interface EntradaDeBorrador {
   hechosPorDni: Record<string, HechoDiarioDeAsistencia[]>;
   fuentesPendientes: string[];
   importes: ImporteExterno[];
+  /**
+   * Fechas con jornada «vacaciones» aprobada en Asistencia por DNI, del mes anterior al siguiente al de pago: incluye los días
+   * del mes calendario posteriores al corte, que viven en períodos aún abiertos.
+   */
+  diasDeVacaciones: Record<string, string[]>;
+  /** Abonos vacacionales no anulados de cualquier mes de aplicación. */
+  abonosVacacionales: ImporteExterno[];
+  /** Algún día de vacaciones viene de un período abierto, es decir, todavía puede cambiar. */
+  vacacionesProvisionales: boolean;
 }
 
 export interface LineaDeSueldo {
@@ -48,7 +62,71 @@ export interface LineaDeHoraExtra {
   sobretasaEnCentesimasDePunto: number;
 }
 
-export type LineaDeBorrador = LineaDeSueldo | LineaDeHoraExtra;
+/** Reclasifica el sueldo básico de los días de descanso del mes; usa la base vigente al inicio del descanso. */
+export interface LineaDeRemuneracionVacacional {
+  concepto: "remuneracion_vacacional";
+  dias: number;
+  /** Días calendario de vacaciones de la línea; `dias` aplica la convención de 30 (el día 31 no suma). */
+  diasCalendario: number;
+  importeCentimos: number;
+  desde: string;
+  hasta: string;
+  baseSueldoCentimos: number;
+  inicioDelDescanso: string;
+  finDelDescanso: string;
+  mesDePago: string;
+  corte: Corte;
+  mesDeDevengue: string;
+  origen: "Vacaciones aprobadas en Asistencia";
+}
+
+/** Diferencia entre el sueldo vigente cada día del descanso y la base vacacional fijada al inicio; puede ser negativa. */
+export interface LineaDeAjusteDeVacaciones {
+  concepto: "ajuste_por_variacion_de_sueldo_en_vacaciones";
+  dias: number;
+  importeCentimos: number;
+  desde: string;
+  hasta: string;
+  baseSueldoCentimos: number;
+  sueldoVigenteCentimos: number;
+  inicioDelDescanso: string;
+  finDelDescanso: string;
+  mesDePago: string;
+  corte: Corte;
+  mesDeDevengue: string;
+  origen: "Variación de sueldo durante el descanso";
+}
+
+export type LineaDeBorrador = LineaDeSueldo | LineaDeRemuneracionVacacional | LineaDeAjusteDeVacaciones | LineaDeHoraExtra;
+type LineaDeRemuneracionMensual = LineaDeSueldo | LineaDeRemuneracionVacacional | LineaDeAjusteDeVacaciones;
+
+/** Un mes calendario de un descanso: días, remuneración vacacional y el saldo tras los abonos asignados a ese mes. */
+export interface VacacionesDelMes {
+  mes: string;
+  diasDeDescanso: number;
+  diasConvencionales: number;
+  /** null si falta el sueldo vigente al inicio del descanso. */
+  remuneracionCentimos: number | null;
+  abonosAsignadosCentimos: number;
+  saldoCentimos: number | null;
+}
+
+export interface AbonoDelDescanso {
+  id: string;
+  fechaDelAbono: string;
+  importeCentimos: number;
+  mesDeAplicacion: string;
+  asignaciones: Array<{ mes: string; centimos: number }>;
+}
+
+export interface DescansoVacacionalDelBorrador {
+  inicio: string;
+  fin: string;
+  dias: number;
+  baseSueldoCentimos: number | null;
+  meses: VacacionesDelMes[];
+  abonos: AbonoDelDescanso[];
+}
 
 export function totalDeHorasExtraCentimos(lineas: LineaDeBorrador[]): number {
   return lineas.reduce((total, linea) => total + (linea.concepto === "horas_extra_25" || linea.concepto === "horas_extra_35" ? linea.importeCentimos : 0), 0);
@@ -59,7 +137,9 @@ export interface PersonaDeBorrador {
   sedeDeAdscripcion: string | null;
   lineas: LineaDeBorrador[];
   bloqueos: string[];
+  /** Sueldo básico + remuneración vacacional + su ajuste: reclasificar vacaciones no cambia el total mensual. */
   sueldoCalculadoCentimos: number;
+  vacaciones: DescansoVacacionalDelBorrador[];
   netoCentimos: number | null;
 }
 
@@ -70,6 +150,7 @@ export interface BorradorDePagos {
   personas: PersonaDeBorrador[];
   bloqueosDelMes: string[];
   sueldoCalculadoCentimos: number;
+  vacacionesProvisionales: boolean;
 }
 
 function finDeMes(mes: string): string {
@@ -105,7 +186,25 @@ function condicionEn(entrada: EntradaDeBorrador, relacionId: string, datoBuscado
   return vigentes.at(-1)?.valor;
 }
 
-function lineasDelMes(entrada: EntradaDeBorrador, relacion: RelacionConPersona, mes: string): { lineas: LineaDeSueldo[]; bloqueos: string[] } {
+interface Pieza { inicio: string; fin: string; descanso: DescansoVacacional | null; vacaciones: number }
+
+/** Parte un tramo de sueldo en piezas de días normales y días de descanso, en orden de fecha. */
+function piezasDelTramo(inicio: string, fin: string, descansos: DescansoVacacional[]): Pieza[] {
+  const piezas: Pieza[] = [];
+  for (let fecha = inicio; fecha <= fin; fecha = desplazarFecha(fecha, 1)) {
+    const descanso = descansos.find((candidato) => candidato.fechas.includes(fecha)) ?? null;
+    const ultima = piezas.at(-1);
+    if (ultima && ultima.descanso === descanso) {
+      ultima.fin = fecha;
+      if (descanso) ultima.vacaciones += 1;
+    } else {
+      piezas.push({ inicio: fecha, fin: fecha, descanso, vacaciones: descanso ? 1 : 0 });
+    }
+  }
+  return piezas;
+}
+
+function lineasDelMes(entrada: EntradaDeBorrador, relacion: RelacionConPersona, mes: string, descansos: DescansoVacacional[]): { lineas: LineaDeRemuneracionMensual[]; bloqueos: string[] } {
   const primero = `${mes}-01`;
   const ultimo = finDeMes(mes);
   const desde = relacion.ingreso > primero ? relacion.ingreso : primero;
@@ -116,8 +215,9 @@ function lineasDelMes(entrada: EntradaDeBorrador, relacion: RelacionConPersona, 
   const cambios = entrada.condiciones.filter((dato) => dato.relacionId === relacion.id && dato.dato === "sueldo" && dato.vigenteDesde > desde && dato.vigenteDesde <= hasta)
     .map((dato) => dato.vigenteDesde).sort();
   const inicios = [desde, ...new Set(cambios)];
-  const lineas: LineaDeSueldo[] = [];
+  const lineas: LineaDeRemuneracionMensual[] = [];
   const bloqueos: string[] = [];
+  const sinBase = new Set<string>();
   let diasAsignados = 0;
   for (let i = 0; i < inicios.length; i += 1) {
     const inicio = inicios[i];
@@ -128,14 +228,68 @@ function lineasDelMes(entrada: EntradaDeBorrador, relacion: RelacionConPersona, 
       bloqueos.push(`Sin sueldo vigente el ${inicio}. Registre el valor en Condiciones laborales.`);
       continue;
     }
-    const dias = diasDeTreinta(inicio, fin, diasAsignados);
-    if (dias <= 0) continue;
-    diasAsignados += dias;
-    lineas.push({ concepto: "sueldo_basico", importeCentimos: mitadArriba(sueldo * dias, 30), dias,
-      sueldoMensualCentimos: sueldo, desde: inicio, hasta: fin, mesDePago: entrada.mesDePago,
-      corte: entrada.corte, mesDeDevengue: mes, origen: "Condición laboral" });
+    // Los días de descanso del tramo salen del sueldo básico y los paga la remuneración vacacional, sin sumar días.
+    for (const pieza of piezasDelTramo(inicio, fin, descansos)) {
+      const dias = diasDeTreinta(pieza.inicio, pieza.fin, diasAsignados);
+      if (dias <= 0) continue;
+      const comunes = { desde: pieza.inicio, hasta: pieza.fin, mesDePago: entrada.mesDePago, corte: entrada.corte, mesDeDevengue: mes };
+      if (!pieza.descanso) {
+        diasAsignados += dias;
+        lineas.push({ concepto: "sueldo_basico", importeCentimos: mitadArriba(sueldo * dias, 30), dias, sueldoMensualCentimos: sueldo, ...comunes, origen: "Condición laboral" });
+        continue;
+      }
+      const base = sueldoEn(entrada, relacion.id, pieza.descanso.inicio);
+      if (base === undefined) {
+        if (!sinBase.has(pieza.descanso.inicio)) bloqueos.push(`Sin sueldo vigente al inicio del descanso vacacional del ${formatearFechaDeRelacion(pieza.descanso.inicio)}. Registre el valor en Condiciones laborales.`);
+        sinBase.add(pieza.descanso.inicio);
+        continue;
+      }
+      diasAsignados += dias;
+      const remuneracion = mitadArriba(base * dias, 30);
+      const descanso = { inicioDelDescanso: pieza.descanso.inicio, finDelDescanso: pieza.descanso.fin };
+      lineas.push({ concepto: "remuneracion_vacacional", importeCentimos: remuneracion, dias, diasCalendario: pieza.vacaciones, baseSueldoCentimos: base, ...descanso, ...comunes, origen: "Vacaciones aprobadas en Asistencia" });
+      const ajuste = mitadArriba(sueldo * dias, 30) - remuneracion;
+      if (ajuste !== 0) lineas.push({ concepto: "ajuste_por_variacion_de_sueldo_en_vacaciones", importeCentimos: ajuste, dias, baseSueldoCentimos: base, sueldoVigenteCentimos: sueldo, ...descanso, ...comunes, origen: "Variación de sueldo durante el descanso" });
+    }
   }
   return { lineas, bloqueos };
+}
+
+/** Desglose por mes de los descansos que tocan el mes de pago y reparto de los abonos anticipados entre sus meses. */
+function vacacionesDeLaPersona(entrada: EntradaDeBorrador, relacion: RelacionConPersona, mesesDePago: string[], descansos: DescansoVacacional[], lineas: LineaDeBorrador[]): { vacaciones: DescansoVacacionalDelBorrador[]; bloqueos: string[] } {
+  const ventana = ventanaDeVacaciones(entrada.mesDePago);
+  const cese = relacion.ceseConfirmado ? relacion.cese : null;
+  const delDescanso = new Map<string, AbonoDelDescanso[]>();
+  const bloqueos: string[] = [];
+  for (const abono of entrada.abonosVacacionales.filter((candidato) => candidato.dni === relacion.dni && candidato.anuladoEn === null)) {
+    // Un abono entregado antes de la ventana solo se ata si se aplicó en este mes: su descanso podría ser uno anterior que no se leyó.
+    if (abono.fechaDelHecho < ventana.inicio && abono.mesDeAplicacion !== entrada.mesDePago) continue;
+    // El abono pertenece a la relación laboral en que se entregó, aunque otra del mismo DNI tenga descansos posteriores.
+    const enLaRelacion = abono.fechaDelHecho >= relacion.ingreso && (cese === null || abono.fechaDelHecho <= cese);
+    const descanso = enLaRelacion ? asociarAbono(descansos, abono.fechaDelHecho) : undefined;
+    if (!descanso) {
+      if (abono.mesDeAplicacion === entrada.mesDePago) {
+        bloqueos.push(`El abono vacacional del ${formatearFechaDeRelacion(abono.fechaDelHecho)} por ${formatearSoles(abono.monto)} no tiene un descanso con vacaciones aprobadas desde esa fecha. Revise las vacaciones en Asistencia o anule el abono.`);
+      }
+      continue;
+    }
+    const asignado: AbonoDelDescanso = { id: abono.id, fechaDelAbono: abono.fechaDelHecho, importeCentimos: abono.monto, mesDeAplicacion: abono.mesDeAplicacion, asignaciones: repartirAbono(descanso, abono.monto) };
+    delDescanso.set(descanso.inicio, [...(delDescanso.get(descanso.inicio) ?? []), asignado]);
+  }
+  const vacaciones = descansos.filter((descanso) => mesesDelDescanso(descanso).some((mes) => mesesDePago.includes(mes))).map((descanso): DescansoVacacionalDelBorrador => {
+    const base = sueldoEn(entrada, relacion.id, descanso.inicio) ?? null;
+    const asignados = delDescanso.get(descanso.inicio) ?? [];
+    const meses = mesesDelDescanso(descanso).map((mes): VacacionesDelMes => {
+      const fechas = fechasEnMes(descanso, mes);
+      const diasConvencionales = diasConvencionalesDelMes(fechas, mes);
+      const delMes = lineas.filter((linea): linea is LineaDeRemuneracionVacacional => linea.concepto === "remuneracion_vacacional" && linea.inicioDelDescanso === descanso.inicio && linea.mesDeDevengue === mes);
+      const remuneracion = delMes.length ? delMes.reduce((suma, linea) => suma + linea.importeCentimos, 0) : base === null ? null : mitadArriba(base * diasConvencionales, 30);
+      const abonosAsignados = asignados.reduce((suma, abono) => suma + (abono.asignaciones.find((asignacion) => asignacion.mes === mes)?.centimos ?? 0), 0);
+      return { mes, diasDeDescanso: fechas.length, diasConvencionales, remuneracionCentimos: remuneracion, abonosAsignadosCentimos: abonosAsignados, saldoCentimos: remuneracion === null ? null : remuneracion - abonosAsignados };
+    });
+    return { inicio: descanso.inicio, fin: descanso.fin, dias: descanso.fechas.length, baseSueldoCentimos: base, meses, abonos: asignados };
+  });
+  return { vacaciones, bloqueos };
 }
 
 function reglaEn(entrada: EntradaDeBorrador, codigo: CodigoDeReglaLegal, fecha: string): number | undefined {
@@ -213,9 +367,11 @@ export function calcularBorrador(entrada: EntradaDeBorrador): BorradorDePagos {
     const arrastre = relacion.ingreso.slice(0, 7) === anterior && Number(relacion.ingreso.slice(-2)) > 25;
     return enMes || arrastre;
   }).map((relacion): PersonaDeBorrador => {
-    const actual = lineasDelMes(entrada, relacion, mes);
-    const arrastre = relacion.ingreso.slice(0, 7) === anterior && Number(relacion.ingreso.slice(-2)) > 25
-      ? lineasDelMes(entrada, relacion, anterior) : { lineas: [], bloqueos: [] };
+    const descansos = descansosDe((entrada.diasDeVacaciones[relacion.dni] ?? []).filter((fecha) =>
+      fecha >= relacion.ingreso && (!relacion.ceseConfirmado || relacion.cese === null || fecha <= relacion.cese)));
+    const actual = lineasDelMes(entrada, relacion, mes, descansos);
+    const conArrastre = relacion.ingreso.slice(0, 7) === anterior && Number(relacion.ingreso.slice(-2)) > 25;
+    const arrastre = conArrastre ? lineasDelMes(entrada, relacion, anterior, descansos) : { lineas: [], bloqueos: [] };
     const hechos = (entrada.hechosPorDni[relacion.dni] ?? []).filter((hecho) =>
       hecho.fecha >= relacion.ingreso && (!relacion.ceseConfirmado || relacion.cese === null || hecho.fecha <= relacion.cese));
     const bloqueos = [...actual.bloqueos, ...arrastre.bloqueos];
@@ -232,7 +388,9 @@ export function calcularBorrador(entrada: EntradaDeBorrador): BorradorDePagos {
     bloqueos.push(...sobretiempo.bloqueos);
     // El sueldo es visible aun cuando otro concepto o la cobertura impida un neto confiable.
     const lineas: LineaDeBorrador[] = [...arrastre.lineas, ...actual.lineas, ...sobretiempo.lineas];
-    return { relacion, sedeDeAdscripcion: String(condicionEn(entrada, relacion.id, "sede_de_adscripcion", fechaDeConsulta) ?? "") || null,
+    const desglose = vacacionesDeLaPersona(entrada, relacion, conArrastre ? [anterior, mes] : [mes], descansos, lineas);
+    bloqueos.push(...desglose.bloqueos);
+    return { relacion, vacaciones: desglose.vacaciones, sedeDeAdscripcion: String(condicionEn(entrada, relacion.id, "sede_de_adscripcion", fechaDeConsulta) ?? "") || null,
       lineas, bloqueos, sueldoCalculadoCentimos: [...arrastre.lineas, ...actual.lineas].reduce((suma, linea) => suma + linea.importeCentimos, 0), netoCentimos: null };
   }).sort((a, b) => a.relacion.nombre.localeCompare(b.relacion.nombre) || a.relacion.dni.localeCompare(b.relacion.dni));
   if (personas.length) {
@@ -259,5 +417,6 @@ export function calcularBorrador(entrada: EntradaDeBorrador): BorradorDePagos {
     }
   }
   return { mesDePago: mes, corte: entrada.corte, revisiones: entrada.revisiones, personas, bloqueosDelMes,
+    vacacionesProvisionales: entrada.vacacionesProvisionales,
     sueldoCalculadoCentimos: personas.reduce((suma, persona) => suma + persona.sueldoCalculadoCentimos, 0) };
 }

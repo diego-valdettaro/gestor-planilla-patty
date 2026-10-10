@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
+import { registrarAbonoVacacional } from "@/fuentes-externas/abonos-vacacionales";
 import { decidirIncidencia, registrarAjuste, registrarIncidencia } from "@/fuentes-externas/incidencias-y-ajustes";
 import { repositorioDeFuentesExternas } from "@/fuentes-externas/servicio";
 
@@ -44,5 +45,13 @@ export async function decidirIncidenciaDesdeFormulario(anterior: EstadoEspecial,
 export async function registrarAjusteDesdeFormulario(anterior: EstadoEspecial, datos: FormData): Promise<EstadoEspecial> {
   return ejecutar(anterior, async () => {
     await registrarAjuste(repositorioDeFuentesExternas, await obtenerActorActual(), { ...comunes(datos), conceptoAjustado: texto(datos, "conceptoAjustado"), sentidoAjuste: texto(datos, "sentidoAjuste") as "suma" | "resta", motivo: texto(datos, "motivo") });
+  });
+}
+
+export async function registrarAbonoVacacionalDesdeFormulario(anterior: EstadoEspecial, datos: FormData): Promise<EstadoEspecial> {
+  return ejecutar(anterior, async () => {
+    await registrarAbonoVacacional(repositorioDeFuentesExternas, await obtenerActorActual(), {
+      dni: texto(datos, "dni"), fechaDelAbono: texto(datos, "fechaDelAbono"), mesDeAplicacion: texto(datos, "mesDeAplicacion"), monto: texto(datos, "monto"),
+    });
   });
 }

@@ -13,6 +13,7 @@ import type { Actor } from "@/autenticacion/permisos";
 import { registrarColaborador } from "@/colaboradores/registrar-colaborador";
 import { registrarCondicionLaboral } from "@/condiciones-laborales/gestionar-condiciones-laborales";
 import { RepositorioPostgresDeCondicionesLaborales } from "@/condiciones-laborales/repositorio-postgres";
+import { registrarAbonoVacacional } from "@/fuentes-externas/abonos-vacacionales";
 import { confirmarFuente, registrarImporte } from "@/fuentes-externas/gestionar-fuentes-externas";
 import { RepositorioPostgresDeFuentesExternas } from "@/fuentes-externas/repositorio-postgres";
 import { activarReglaLegal } from "@/reglas-legales/gestionar-reglas-legales";
@@ -143,6 +144,14 @@ const PERIODO_ANTERIOR = { inicio: iso(primerDiaDelMes(mesAnterior)), fin: iso(u
 const SEMANA_ACTUAL = primerLunesDelMes(hoy);
 const SEMANA_ANTERIOR = primerLunesDelMes(mesAnterior);
 
+// Franco Díaz sale de vacaciones los dos últimos días del mes anterior y los cuatro primeros del mes actual (#125). Se publican
+// como jornadas «vacaciones» en el calendario, como las aprobaría su gerente; el abono se entregó dos días antes de empezar.
+const DNI_DE_VACACIONES = "99900007";
+const INICIO_DEL_DESCANSO = desplazarFecha(PERIODO_ANTERIOR.fin, -1);
+const ABONO_VACACIONAL = { fecha: desplazarFecha(PERIODO_ANTERIOR.fin, -2), monto: "300" };
+const CAMBIO_DE_SUELDO_DE_FRANCO = desplazarFecha(PERIODO_ACTUAL.inicio, 2);
+const DIAS_DE_VACACIONES_EN_EL_MES_ACTUAL = 4;
+
 function urlDeArgumentos(): string {
   if (existsSync(".env")) process.loadEnvFile(".env");
   const indice = process.argv.indexOf("--url");
@@ -209,8 +218,11 @@ function fechasDelRango(inicio: string, fin: string): string[] {
 async function resolverAsistenciaDeTaller(db: Db, turnos: RepositorioPostgresDeTurnos, actor: Actor): Promise<void> {
   const fechas = fechasDelRango(PERIODO_ACTUAL.inicio, PERIODO_ACTUAL.fin);
   for (const dni of DNI_DE_TALLER) {
-    await turnos.publicarEnLote(fechas.map((fecha) => {
+    await turnos.publicarEnLote(fechas.map((fecha, indice) => {
       const finDeSemana = [0, 6].includes(new Date(`${fecha}T00:00:00Z`).getUTCDay());
+      if (dni === DNI_DE_VACACIONES && indice < DIAS_DE_VACACIONES_EN_EL_MES_ACTUAL) {
+        return { dni, fecha, sede: null, entradaProgramada: null, salidaProgramada: null, motivoNoAsistencia: "vacaciones" as const };
+      }
       return finDeSemana
         ? { dni, fecha, sede: null, entradaProgramada: null, salidaProgramada: null, motivoNoAsistencia: "descanso" as const }
         : { dni, fecha, sede: SEDES.taller, entradaProgramada: "07:00", salidaProgramada: "16:00", descanso: false };
@@ -284,6 +296,8 @@ async function registrarCondicionesLaborales(db: Db, actor: Actor): Promise<void
   await completar("99900002", { sueldo: "1650,50", afiliacion: "afp_integra", esquema: "mixta", elegible: "si" });
   await completar("99900003", { sueldo: "1300", afiliacion: "afp_prima", esquema: "flujo", regimen: "remype_pequena_empresa", elegible: "si" });
   await completar("99900007", { sueldo: "2200", afiliacion: "onp" });
+  // Franco sube de sueldo durante su descanso vacacional: la remuneración vacacional usa 2200 y el resto de los días deja un ajuste.
+  await registrar(relacionDe("99900007"), "sueldo", "2400", CAMBIO_DE_SUELDO_DE_FRANCO);
   await completar("99900009", { sueldo: "3500", afiliacion: "afp_habitat", esquema: "flujo" });
   // Incompletos: ven «Pendiente» y «Falta: …».
   await registrar(relacionDe("99900004"), "sueldo", "1400");
@@ -333,6 +347,7 @@ async function cargarFuentesExternas(db: Db, actor: Actor): Promise<void> {
   await cargar("comisiones_de_ventas", "99900001", "comision_de_ventas", PERIODO_ANTERIOR.fin, mesDevengado, "320,50");
   await cargar("comisiones_de_ventas", "99900002", "comision_de_ventas", PERIODO_ACTUAL.inicio, mesDePago, "150");
   await cargar("movilidad_supeditada_a_asistencia", "99900002", "movilidad_supeditada_a_asistencia", PERIODO_ACTUAL.inicio, mesDePago, "90");
+  await registrarAbonoVacacional(repositorio, actor, { dni: DNI_DE_VACACIONES, fechaDelAbono: ABONO_VACACIONAL.fecha, mesDeAplicacion: mesDePago, monto: ABONO_VACACIONAL.monto });
   await confirmarFuente(repositorio, actor, { tipoDeFuente: "comisiones_de_ventas", mes: mesDePago });
   await confirmarFuente(repositorio, actor, { tipoDeFuente: "adelantos", mes: mesDePago });
 }
@@ -483,7 +498,7 @@ async function verificarInvariantes(pool: Pool): Promise<void> {
             (SELECT count(*) FROM confirmaciones_de_fuente c WHERE mes_de_aplicacion = $1 AND NOT EXISTS (SELECT 1 FROM importes_externos i WHERE i.tipo_de_fuente = c.tipo_de_fuente AND i.mes_de_aplicacion = c.mes_de_aplicacion AND i.anulado_en IS NULL))::text AS "sinImportes"`,
     [PERIODO_ACTUAL.inicio.slice(0, 7)],
   );
-  if (Number(fuentes.importes) !== 3) fallos.push(`se esperaban 3 importes externos de demo, hay ${fuentes.importes}`);
+  if (Number(fuentes.importes) !== 4) fallos.push(`se esperaban 4 importes externos de demo (con el abono vacacional de Franco), hay ${fuentes.importes}`);
   if (Number(fuentes.confirmadas) !== 2) fallos.push(`se esperaban 2 fuentes confirmadas, hay ${fuentes.confirmadas}`);
   if (Number(fuentes.sinImportes) !== 1) fallos.push(`se esperaba 1 fuente confirmada sin importes, hay ${fuentes.sinImportes}`);
 
@@ -546,7 +561,13 @@ function resumen(): string {
     "  Comisiones de ventas -> Confirmada con importes (Ana con devengue del mes anterior, Beto del mes actual)",
     "  Adelantos            -> Confirmada sin importes (cero confirmado)",
     "  Movilidad            -> un importe de Beto, sin confirmar (Pendiente)",
+    "  Abonos anticipados de remuneración vacacional -> un abono de Franco Díaz entregado dos días antes del descanso, sin confirmar (Pendiente)",
     "  Préstamos, retención de quinta, gratificación y bonificación -> Pendiente",
+    "",
+    "Pagos · Vacaciones entre meses (#125; mes de pago actual, finanzas / finanzas; Franco Díaz, 99900007):",
+    `  Descanso aprobado en el calendario del ${INICIO_DEL_DESCANSO} al ${desplazarFecha(PERIODO_ACTUAL.inicio, DIAS_DE_VACACIONES_EN_EL_MES_ACTUAL - 1)}: días del mes anterior y ${DIAS_DE_VACACIONES_EN_EL_MES_ACTUAL} del mes actual`,
+    `  Abono de S/ ${ABONO_VACACIONAL.monto} del ${ABONO_VACACIONAL.fecha}, repartido por días entre ambos meses; sueldo de 2200 a 2400 desde ${CAMBIO_DE_SUELDO_DE_FRANCO} (ajuste trazable)`,
+    "  Detalle de Franco en Pagos -> «Vacaciones del mes»; Administración no tiene calendario y queda fuera de este desglose",
     "",
     "Calendario de asistencias de Beto Publicado (mes actual):",
     "  lun/mar -> Registrada ; mar -> 120 min extra al 25 % y 30 min al 35 % aprobados ; mié -> Registrada (Feriado)",
@@ -671,6 +692,11 @@ async function main(): Promise<void> {
       };
     });
     await turnos.guardarCeldas([...celdasAna, ...celdasCarla]);
+
+    // --- Vacaciones de Franco que empiezan en el mes anterior (antes de cerrarlo, para que su revisión las congele) ---
+    await turnos.publicarEnLote(fechasDelRango(INICIO_DEL_DESCANSO, PERIODO_ANTERIOR.fin).map((fecha) => (
+      { dni: DNI_DE_VACACIONES, fecha, sede: null, entradaProgramada: null, salidaProgramada: null, motivoNoAsistencia: "vacaciones" as const }
+    )), actorAdmin);
 
     // --- Mes anterior con período cerrado (Elena publicada + procesada, luego se cierra) ---
     await turnos.publicarEnLote(turnosDeSemana("99900005", SEDES.sanIsidro, SEMANA_ANTERIOR), actorGerenteDeTiendas);

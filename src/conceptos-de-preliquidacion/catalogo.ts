@@ -79,6 +79,9 @@ export const CONCEPTOS: readonly ConceptoDePreliquidacion[] = [
   // Ingresos remunerativos
   concepto("sueldo_basico", "Sueldo básico", "ingreso_remunerativo", "0121", "calculado", TODAS_SUMAN),
   concepto("remuneracion_vacacional", "Remuneración vacacional", "ingreso_remunerativo", "0118", "calculado", TODAS_SUMAN),
+  // Ajuste calculado cuando el sueldo vigente de un día de descanso difiere de la base vacacional fijada al inicio del
+  // descanso. Hereda el código de la remuneración vacacional; el contador valida cómo se declara.
+  concepto("ajuste_por_variacion_de_sueldo_en_vacaciones", "Ajuste por variación de sueldo en vacaciones", "ingreso_remunerativo", "0118", "calculado", TODAS_SUMAN),
   concepto("asignacion_familiar", "Asignación familiar", "ingreso_remunerativo", "0201", "calculado", TODAS_SUMAN),
   concepto("horas_extra_25", "Hora extra 25 %", "ingreso_remunerativo", "0105", "calculado", TODAS_SUMAN),
   concepto("horas_extra_35", "Hora extra 35 %", "ingreso_remunerativo", "0106", "calculado", TODAS_SUMAN),
@@ -101,6 +104,9 @@ export const CONCEPTOS: readonly ConceptoDePreliquidacion[] = [
   concepto("retencion_de_quinta", "Retención de quinta categoría (externa)", "deduccion_del_trabajador", "0605", "fuente_externa", NINGUNA),
   concepto("descuento_autorizado_por_incidencia", "Descuento autorizado por incidencia", "deduccion_del_trabajador", "0706", "fuente_externa", NINGUNA),
   concepto("adelanto", "Adelanto", "deduccion_del_trabajador", "0701", "fuente_externa", NINGUNA),
+  // Abono de la remuneración vacacional entregado antes del descanso: reduce el saldo del mes al que se asigna. El código
+  // 0701 es provisional (PLAME no lo trata como adelanto sin más): la app no decide el campo declarativo, lo valida el contador.
+  concepto("abono_anticipado_de_remuneracion_vacacional", "Abono anticipado de remuneración vacacional", "deduccion_del_trabajador", "0701", "fuente_externa", NINGUNA),
   concepto("cuota_de_prestamo", "Cuota de préstamo", "deduccion_del_trabajador", "0706", "fuente_externa", NINGUNA),
   // Ajuste: corrige otro concepto y toma su efecto en el neto y en las bases; lo registra el flujo de ajustes de preliquidación.
   {
