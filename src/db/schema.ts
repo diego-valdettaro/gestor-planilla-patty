@@ -4,6 +4,7 @@ import {
   boolean,
   check,
   date,
+  doublePrecision,
   integer,
   index,
   jsonb,
@@ -264,7 +265,7 @@ export const asistenciasEsperadas = pgTable(
     salidaPropuesta: text("salida_propuesta"),
     entradaReal: text("entrada_real"),
     salidaReal: text("salida_real"),
-    minutosTrabajados: integer("minutos_trabajados"),
+    minutosTrabajados: doublePrecision("minutos_trabajados"),
     instantaneaDeTurno: jsonb("instantanea_de_turno").$type<{
       sede: string;
       entradaProgramada: string | null;
@@ -356,8 +357,8 @@ export const horasExtra = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     asistenciaId: uuid("asistencia_id").notNull().unique().references(() => asistenciasEsperadas.id),
-    minutosAl25: integer("minutos_al_25").notNull(),
-    minutosAl35: integer("minutos_al_35").notNull(),
+    minutosAl25: doublePrecision("minutos_al_25").notNull(),
+    minutosAl35: doublePrecision("minutos_al_35").notNull(),
     trabajoNocturno: boolean("trabajo_nocturno").notNull().default(false),
     estado: text("estado", { enum: ["pendiente", "aprobada", "descartada"] }).notNull().default("pendiente"),
     causaDeDescarte: text("causa_de_descarte", { enum: ["marca_erronea", "permanencia_sin_trabajo"] }),

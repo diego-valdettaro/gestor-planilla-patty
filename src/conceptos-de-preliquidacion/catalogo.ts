@@ -11,7 +11,8 @@
 //  - el código 0312 de la bonificación extraordinaria: la Tabla 22 consultada lo acota a los ejercicios 2009-2014;
 //  - los códigos 0705 y 0706, que agrupan varios conceptos de este catálogo (falta, ausencia sin goce y descanso semanal;
 //    incidencias y cuotas de préstamo).
-// No se incluye la «remuneración ordinaria computable»: qué conceptos la integran lo decide el ticket que valora las horas extra.
+// Para valorar horas extra, la remuneración ordinaria computable usa sueldo básico más asignación familiar otorgada.
+// Las comisiones de ventas de esta app son complementarias variables y no entran en esa base (#122).
 
 export const TIPOS_DE_CONCEPTO = [
   "ingreso_remunerativo",

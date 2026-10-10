@@ -19,7 +19,7 @@ export const NOMBRE_DE_DATO: Record<DatoLaboral, string> = {
   regimen_laboral: "Régimen laboral",
   afiliacion_pensionaria: "Afiliación pensionaria",
   comision_afp: "Esquema de comisión AFP",
-  elegibilidad_familiar: "Elegibilidad familiar",
+  elegibilidad_familiar: "Asignación familiar otorgada",
   sede_de_adscripcion: "Sede de adscripción",
 };
 

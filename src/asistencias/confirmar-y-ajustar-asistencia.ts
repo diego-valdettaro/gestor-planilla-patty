@@ -179,7 +179,7 @@ export async function registrarEstadoManual(
 
 export function calcularMinutosTrabajados(entradaReal: string, salidaReal: string): number {
   const minutos = (new Date(salidaReal).getTime() - new Date(entradaReal).getTime()) / 60_000;
-  if (!Number.isInteger(minutos) || minutos < 0) {
+  if (!Number.isFinite(minutos) || minutos <= 0) {
     throw new Error("La salida real debe ser posterior a la entrada real.");
   }
   return minutos;

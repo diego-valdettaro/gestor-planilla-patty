@@ -54,7 +54,7 @@ export function interpretarValor(dato: DatoLaboral, texto: string): ValorLaboral
     case "comision_afp": return enCatalogo<EsquemaDeComision>(ESQUEMAS_DE_COMISION, texto, "Elija el esquema de comisión AFP: flujo o mixta.");
     case "elegibilidad_familiar": {
       const valor = texto.trim();
-      if (valor !== "si" && valor !== "no") throw new Error("Indique si la persona es elegible o no para la asignación familiar (elegibilidad familiar).");
+      if (valor !== "si" && valor !== "no") throw new Error("Indique si Patty otorgó la asignación familiar tras verificar el sustento fuera de la app.");
       return valor === "si";
     }
     case "sede_de_adscripcion": {
@@ -85,7 +85,7 @@ export function formatearValor(dato: DatoLaboral, valor: ValorLaboral): string {
     case "regimen_laboral": return NOMBRE_DE_REGIMEN[valor as Regimen];
     case "afiliacion_pensionaria": return NOMBRE_DE_AFILIACION[valor as Afiliacion];
     case "comision_afp": return NOMBRE_DE_ESQUEMA[valor as EsquemaDeComision];
-    case "elegibilidad_familiar": return valor ? "Elegible" : "No elegible";
+    case "elegibilidad_familiar": return valor ? "Otorgada" : "No otorgada";
     case "sede_de_adscripcion": return String(valor);
   }
 }

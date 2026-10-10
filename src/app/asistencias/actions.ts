@@ -117,7 +117,7 @@ export async function registrarAsistenciaManual(
 
     const entrada = obtenerTexto(formData, "entrada");
     const salida = obtenerTexto(formData, "salida");
-    if (!/^\d{2}:\d{2}$/.test(entrada) || !/^\d{2}:\d{2}$/.test(salida)) throw new Error("Las horas deben usar el formato HH:MM.");
+    if (!/^\d{2}:\d{2}(?::\d{2})?$/.test(entrada) || !/^\d{2}:\d{2}(?::\d{2})?$/.test(salida)) throw new Error("Las horas deben usar el formato HH:MM o HH:MM:SS.");
     const solicitud = { dni: obtenerTexto(formData, "dni"), fecha, entradaReal: `${fecha}T${entrada}`, salidaReal: `${fecha}T${salida}` };
     if (formData.get("estadoActual") === "confirmada") {
       await casosDeUso.ajustar({ ...solicitud, motivo: obtenerTexto(formData, "motivo") });

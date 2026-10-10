@@ -72,3 +72,70 @@ describe("borrador de sueldo", () => {
     expect(resultado.bloqueosDelMes).toContain("Falta cobertura del corte.");
   });
 });
+
+describe("sobretiempo del borrador", () => {
+  const hecho = (fecha: string, minutosAl25: number, minutosAl35: number, estado: "aprobada" | "pendiente" | "descartada" = "aprobada") => ({
+    dni: persona.dni, fecha, grupo: "Taller", sede: "Lima", horarioAplicado: { entradaProgramada: "09:00", salidaProgramada: "18:00" },
+    resultado: "trabajada" as const, minutosTrabajados: 540, tardanza: null,
+    horaExtra: { estado, minutosAl25, minutosAl35, trabajoNocturno: false, causaDeDescarte: estado === "descartada" ? "marca_erronea" as const : null },
+    diaEspecial: null, evidencia: { asistenciaId: `a-${fecha}`, turnoPublicadoId: `t-${fecha}` },
+  });
+
+  it("valora fracciones por línea con jornada pactada y base ordinaria computable", () => {
+    const fecha = "2026-10-02";
+    const resultado = calcularBorrador(entrada({
+      condiciones: [
+        { relacionId: "r1", dato: "sueldo", valor: 300000, vigenteDesde: "2026-01-01" },
+        { relacionId: "r1", dato: "jornada_ordinaria_diaria", valor: 360, vigenteDesde: "2026-01-01" },
+        { relacionId: "r1", dato: "regimen_laboral", valor: "remype_pequena_empresa", vigenteDesde: "2026-01-01" },
+        { relacionId: "r1", dato: "elegibilidad_familiar", valor: true, vigenteDesde: "2026-01-01" },
+      ],
+      reglas: [
+        { codigo: "rmv", valor: 100000, vigenteDesde: "2026-01-01" },
+        { codigo: "asignacion_familiar_porcentaje_de_rmv", valor: 1000, vigenteDesde: "2026-01-01" },
+        { codigo: "horas_extra_sobretasa_primeras_dos_horas", valor: 2500, vigenteDesde: "2026-01-01" },
+        { codigo: "horas_extra_sobretasa_horas_posteriores", valor: 3500, vigenteDesde: "2026-01-01" },
+      ],
+      hechosPorDni: { [persona.dni]: [hecho(fecha, 90.5, 30.25)] },
+      importes: [{ id: "com-1", nombre: "Ana", dni: persona.dni, concepto: "comision_de_ventas", tipoDeFuente: "comisiones_de_ventas",
+        fechaDelHecho: fecha, mesDeDevengue: "2026-10", mesDeAplicacion: "2026-10", monto: 50000,
+        procedencia: "carga_manual", registradoPorId: "f-1", registradoPor: "Finanzas", registradoEn: new Date("2026-10-03T00:00:00Z"),
+        anuladoEn: null, motivoDeAnulacion: null, importacionId: null, estadoDeIncidencia: null, sustento: null,
+        autorizadoPor: null, fechaDeAutorizacion: null, conceptoAjustado: null, sentidoAjuste: null, motivoDeAjuste: null }],
+    }));
+    expect(resultado.personas[0].lineas.filter((linea) => linea.concepto.startsWith("horas_extra"))).toMatchObject([
+      { concepto: "horas_extra_25", importeCentimos: 3247, minutos: 90.5, remuneracionOrdinariaComputableCentimos: 310000, jornadaOrdinariaDiariaMinutos: 360 },
+      { concepto: "horas_extra_35", importeCentimos: 1172, minutos: 30.25, remuneracionOrdinariaComputableCentimos: 310000, jornadaOrdinariaDiariaMinutos: 360 },
+    ]);
+  });
+
+  it("deja pendientes sin pagar, ignora descartadas y bloquea trabajo nocturno", () => {
+    const nocturno = hecho("2026-10-03", 30, 0);
+    nocturno.horaExtra.trabajoNocturno = true;
+    const marcaErronea = hecho("2026-10-02", 15, 0, "descartada");
+    marcaErronea.horaExtra.trabajoNocturno = true;
+    const resultado = calcularBorrador(entrada({ hechosPorDni: { [persona.dni]: [
+      hecho("2026-10-01", 15, 0, "pendiente"), marcaErronea, nocturno,
+    ] } }));
+    expect(resultado.personas[0].lineas.filter((linea) => linea.concepto.startsWith("horas_extra"))).toEqual([]);
+    expect(resultado.personas[0].bloqueos).toEqual(expect.arrayContaining([
+      expect.stringContaining("horas extra pendientes"), expect.stringContaining("22:00 y 06:00"),
+    ]));
+    expect(resultado.personas[0].bloqueos.some((bloqueo) => bloqueo.includes("2026-10-02"))).toBe(false);
+  });
+
+  it("no suma asignación familiar sin beneficio otorgado, cualquiera sea el régimen", () => {
+    const resultado = calcularBorrador(entrada({
+      condiciones: [
+        { relacionId: "r1", dato: "sueldo", valor: 300000, vigenteDesde: "2026-01-01" },
+        { relacionId: "r1", dato: "jornada_ordinaria_diaria", valor: 360, vigenteDesde: "2026-01-01" },
+        { relacionId: "r1", dato: "regimen_laboral", valor: "general", vigenteDesde: "2026-01-01" },
+        { relacionId: "r1", dato: "elegibilidad_familiar", valor: false, vigenteDesde: "2026-01-01" },
+      ],
+      reglas: [{ codigo: "horas_extra_sobretasa_primeras_dos_horas", valor: 2500, vigenteDesde: "2026-01-01" }],
+      hechosPorDni: { [persona.dni]: [hecho("2026-10-02", 60, 0)] },
+    }));
+    expect(resultado.personas[0].lineas.find((linea) => linea.concepto === "horas_extra_25"))
+      .toMatchObject({ importeCentimos: 2083, remuneracionOrdinariaComputableCentimos: 300000 });
+  });
+});

@@ -25,7 +25,7 @@ function CampoDeValor({ dato, sedes }: { dato: DatoLaboral; sedes: string[] }) {
     case "comision_afp":
       return <label>Esquema de comisión AFP<select defaultValue="" name="valor" required><option disabled value="">Elija un esquema…</option>{ESQUEMAS_DE_COMISION.map((esquema) => <option key={esquema} value={esquema}>{NOMBRE_DE_ESQUEMA[esquema]}</option>)}</select></label>;
     case "elegibilidad_familiar":
-      return <label>Elegibilidad familiar<select defaultValue="" name="valor" required><option disabled value="">Elija una opción…</option><option value="si">Elegible</option><option value="no">No elegible</option></select></label>;
+      return <label>Asignación familiar otorgada<select defaultValue="" name="valor" required><option disabled value="">Elija una opción…</option><option value="si">Otorgada</option><option value="no">No otorgada</option></select><small className="ayuda-campo">Registre «Otorgada» solo si Patty verificó el sustento fuera de la app y concedió el beneficio. Aplica también a REMYPE pequeña empresa cuando Patty lo otorga.</small></label>;
     case "sede_de_adscripcion":
       return <label>Sede de adscripción<select defaultValue="" name="valor" required><option disabled value="">Elija una sede…</option>{sedes.map((sede) => <option key={sede} value={sede}>{sede}</option>)}</select></label>;
   }

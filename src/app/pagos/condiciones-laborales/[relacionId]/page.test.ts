@@ -48,7 +48,7 @@ describe("página de detalle de Condiciones laborales (/pagos/condiciones-labora
     expect(html).toContain("Volver a condiciones laborales");
     expect(html.match(/<button>Registrar nuevo valor/g)).toHaveLength(1);
     expect(html).toContain("sedes:Tienda Benavides|Taller");
-    for (const titulo of ["Sueldo", "Jornada ordinaria diaria", "Régimen laboral", "Afiliación pensionaria", "Esquema de comisión AFP", "Elegibilidad familiar", "Sede de adscripción"]) {
+    for (const titulo of ["Sueldo", "Jornada ordinaria diaria", "Régimen laboral", "Afiliación pensionaria", "Esquema de comisión AFP", "Asignación familiar otorgada", "Sede de adscripción"]) {
       expect(html).toContain(`>${titulo}</h2>`);
     }
     expect(html.match(/Pendiente: todavía no hay ningún valor/g)).toHaveLength(7);

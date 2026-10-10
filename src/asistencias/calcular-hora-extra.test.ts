@@ -26,6 +26,8 @@ describe("calcularHoraExtra", () => {
   it("conserva el sobretiempo fraccionario sin redondear", () => {
     expect(calcularHoraExtra(jornada("2026-09-01", "09:00", "18:37"))).toMatchObject({ minutosAl25: 37, minutosAl35: 0 });
     expect(calcularHoraExtra(jornada("2026-09-01", "09:00", "18:01"))).toMatchObject({ minutosAl25: 1, minutosAl35: 0 });
+    const fraccion = calcularHoraExtra({ entradaProgramada: "09:00", salidaProgramada: "18:00", entradaReal: "2026-09-01T08:59:30", salidaReal: "2026-09-01T18:00:15" });
+    expect(fraccion?.minutosAl25).toBeCloseTo(0.75, 7);
   });
 
   it("no genera hora extra cuando se trabaja dentro del turno", () => {

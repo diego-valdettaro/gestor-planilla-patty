@@ -45,6 +45,20 @@ describe("desglose de una persona", () => {
     expect(simulacro.preparar).not.toHaveBeenCalled();
   });
 
+  it("enlaza la jornada que originó la hora extra", async () => {
+    const borrador = await simulacro.preparar.getMockImplementation()?.();
+    const persona = borrador.personas[0];
+    persona.lineas.push({ concepto: "horas_extra_25", importeCentimos: 1000, minutos: 30.5, fecha: "2026-10-02", grupo: "Taller",
+      mesDeDevengue: "2026-10", mesDePago: "2026-10", corte: borrador.corte, origen: "Asistencia",
+      remuneracionOrdinariaComputableCentimos: 300000, jornadaOrdinariaDiariaMinutos: 360, sobretasaEnCentesimasDePunto: 2500,
+      evidencia: { asistenciaId: "a-1", turnoPublicadoId: "t-1" } });
+    simulacro.preparar.mockResolvedValueOnce(borrador);
+    const html = await render();
+    expect(html).toContain("Hora extra 25 %");
+    expect(html).toContain("Ver jornada");
+    expect(html).toContain("/asistencias?vista=mensual&amp;grupo=Taller&amp;fecha=2026-10-02&amp;colaborador=12345678");
+  });
+
   it("no expone una persona fuera del mes", async () => {
     await expect(render("87654321")).rejects.toThrow("NOT FOUND");
   });

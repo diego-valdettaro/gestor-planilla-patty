@@ -32,10 +32,10 @@ describe("interpretar el valor escrito por Finanzas", () => {
     expect(() => interpretarValor("comision_afp", "otra")).toThrow("esquema");
   });
 
-  it("interpreta la elegibilidad familiar como sí o no", () => {
+  it("interpreta si Patty otorgó la asignación familiar", () => {
     expect(interpretarValor("elegibilidad_familiar", "si")).toBe(true);
     expect(interpretarValor("elegibilidad_familiar", "no")).toBe(false);
-    expect(() => interpretarValor("elegibilidad_familiar", "tal vez")).toThrow("elegibilidad");
+    expect(() => interpretarValor("elegibilidad_familiar", "tal vez")).toThrow("asignación familiar");
   });
 
   it("recorta la sede y la exige", () => {
@@ -62,8 +62,8 @@ describe("dar formato a los valores", () => {
     expect(formatearValor("regimen_laboral", "remype_pequena_empresa")).toBe("REMYPE pequeña empresa");
     expect(formatearValor("afiliacion_pensionaria", "afp_prima")).toBe("AFP Prima");
     expect(formatearValor("comision_afp", "flujo")).toBe("Flujo");
-    expect(formatearValor("elegibilidad_familiar", true)).toBe("Elegible");
-    expect(formatearValor("elegibilidad_familiar", false)).toBe("No elegible");
+    expect(formatearValor("elegibilidad_familiar", true)).toBe("Otorgada");
+    expect(formatearValor("elegibilidad_familiar", false)).toBe("No otorgada");
     expect(formatearValor("sede_de_adscripcion", "Taller")).toBe("Taller");
   });
 });

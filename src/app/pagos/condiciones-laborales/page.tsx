@@ -32,7 +32,7 @@ export default async function PaginaDeCondicionesLaborales({ searchParams }: { s
   const incompletas = filas.filter(({ faltantes }) => faltantes.length).length;
 
   return <main className="contenido pagina">
-    <header className="encabezado encabezado-pagina"><div><p className="eyebrow">{NOMBRE_DE_ROL[actor.rol]}</p><h1>Condiciones laborales</h1><p>Mantenga por relación laboral, y con fecha de vigencia, el sueldo, la jornada, el régimen, la afiliación pensionaria, la elegibilidad familiar y la sede de adscripción. Un valor nuevo no reescribe la historia.</p></div></header>
+    <header className="encabezado encabezado-pagina"><div><p className="eyebrow">{NOMBRE_DE_ROL[actor.rol]}</p><h1>Condiciones laborales</h1><p>Mantenga por relación laboral, y con fecha de vigencia, el sueldo, la jornada, el régimen, la afiliación pensionaria, la asignación familiar otorgada y la sede de adscripción. Un valor nuevo no reescribe la historia.</p></div></header>
     <NavegacionDePagos actual="condiciones-laborales" />
 
     {total ? <>
