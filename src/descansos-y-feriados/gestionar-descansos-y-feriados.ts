@@ -28,6 +28,15 @@ export interface DescansoSustitutorio {
   verificadoEn: Date | null;
 }
 
+/** Lo que Pagos necesita saber de un sustitutorio: su estado vigente y el día de Lima en que se verificó. */
+export interface SustitutorioParaPagos {
+  dni: string;
+  origenFecha: string;
+  estado: EstadoDeSustitutorio;
+  /** AAAA-MM-DD en Lima; null mientras siga «previsto». */
+  verificadoEnLima: string | null;
+}
+
 export interface RepositorioDeDescansosYFeriados {
   existeColaborador(dni: string): Promise<boolean>;
   listarDescansosSemanales(dni: string): Promise<DescansoSemanalAsignado[]>;
@@ -43,6 +52,11 @@ export interface RepositorioDeDescansosYFeriados {
   buscarSustitutorio(id: string): Promise<DescansoSustitutorio | undefined>;
   /** Sustitutorios de una persona cuyo día de origen cae en el rango. */
   listarSustitutorios(dni: string, desde: string, hasta: string): Promise<DescansoSustitutorio[]>;
+  /**
+   * Sustitutorios de todas las personas que afectan un corte: los de día de origen dentro de [desde, hasta] y los
+   * «no otorgados» de un origen anterior que se verificaron dentro del corte (se regularizan en su pago).
+   */
+  listarSustitutoriosParaPagos(desde: string, hasta: string): Promise<SustitutorioParaPagos[]>;
   /** undefined si el día de origen ya tiene un sustitutorio o el día previsto ya sustituye otro origen de la persona. */
   insertarSustitutorio(sustitutorio: Pick<DescansoSustitutorio, "dni" | "origenFecha" | "origenTipo" | "fechaPrevista"> & { responsableId: string }): Promise<DescansoSustitutorio | undefined>;
   /** false si el sustitutorio ya no estaba «previsto». */
