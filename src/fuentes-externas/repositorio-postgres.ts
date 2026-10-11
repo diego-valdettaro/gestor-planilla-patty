@@ -197,6 +197,12 @@ export class RepositorioPostgresDeFuentesExternas extends AlmacenPostgresDeFuent
     return filas.map(aImporte);
   }
 
+  async listarAbonosVacacionales(): Promise<ImporteExterno[]> {
+    const filas = await this.consultar().where(and(eq(importesExternos.tipoDeFuente, "abonos_vacacionales"), isNull(importesExternos.anuladoEn)))
+      .orderBy(asc(importesExternos.dni), asc(importesExternos.fechaDelHecho), asc(importesExternos.registradoEn));
+    return filas.map(aImporte);
+  }
+
   async listarConfirmacionesDelMes(mes: string): Promise<ConfirmacionDeFuente[]> {
     return this.confirmaciones().where(eq(confirmacionesDeFuente.mesDeAplicacion, mes));
   }

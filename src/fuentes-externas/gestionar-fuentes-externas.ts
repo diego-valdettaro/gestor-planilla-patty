@@ -121,6 +121,11 @@ export interface RepositorioDeFuentesExternas extends AlmacenDeFuentesExternas {
   /** Importes no anulados de todas las fuentes del mes. */
   listarImportesDelMes(mes: string): Promise<ImporteExterno[]>;
   listarConfirmacionesDelMes(mes: string): Promise<ConfirmacionDeFuente[]>;
+  /**
+   * Abonos vacacionales no anulados de cualquier mes de aplicación: un abono se entrega antes del descanso y su reparto
+   * toca meses distintos al que lo registró, así que el borrador necesita verlos todos.
+   */
+  listarAbonosVacacionales(): Promise<ImporteExterno[]>;
   /** Serializa las operaciones de una misma fuente para que dos cambios simultáneos no se pisen. */
   ejecutarSobreFuente<T>(tipo: CodigoDeTipoDeFuente, mes: string, operacion: (almacen: AlmacenDeFuentesExternas) => Promise<T>): Promise<T>;
 }

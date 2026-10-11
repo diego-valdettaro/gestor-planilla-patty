@@ -75,6 +75,7 @@ export function crearRepositorioEnMemoria(personas: Record<string, string> = {})
     ...almacen,
     buscarPersona: async (dni) => (dni in personas ? { nombre: personas[dni] } : undefined),
     listarImportesDelMes: async (mes) => importes.filter((importe) => importe.mesDeAplicacion === mes && importe.anuladoEn === null),
+    listarAbonosVacacionales: async () => importes.filter((importe) => importe.tipoDeFuente === "abonos_vacacionales" && importe.anuladoEn === null),
     listarConfirmacionesDelMes: async (mes) => confirmaciones.filter((c) => c.mesDeAplicacion === mes),
     // Como una transacción: si la operación falla, el estado vuelve al de antes.
     ejecutarSobreFuente: async (_tipo, _mes, operacion) => {

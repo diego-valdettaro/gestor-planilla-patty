@@ -2,7 +2,7 @@
 // Finanzas confirma cada tipo para el mes completo; solo entonces la ausencia de una fila equivale a cero.
 // Aquí viven los tipos genéricos de importe. Los demás tipos del diseño de interacción (4.4) los agrega el ticket que
 // construye su flujo propio, con una entrada nueva en este catálogo y sin migración: incidencias de tienda y ajustes de
-// preliquidación (#120), abonos anticipados de remuneración vacacional y descansos sustitutorios previstos (#125, #124)
+// preliquidación (#120) y abonos anticipados de remuneración vacacional (#125), descansos sustitutorios previstos (#124)
 // y la conciliación de la liquidación por cese (#128).
 
 export type CodigoDeTipoDeFuente =
@@ -13,7 +13,8 @@ export type CodigoDeTipoDeFuente =
   | "retencion_de_quinta"
   | "gratificacion_y_bonificacion"
   | "incidencias_de_tienda"
-  | "ajustes_de_preliquidacion";
+  | "ajustes_de_preliquidacion"
+  | "abonos_vacacionales";
 
 export interface TipoDeFuente {
   codigo: CodigoDeTipoDeFuente;
@@ -33,6 +34,7 @@ export const TIPOS_DE_FUENTE: readonly TipoDeFuente[] = [
   { codigo: "gratificacion_y_bonificacion", nombre: "Gratificación legal y bonificación extraordinaria", conceptos: ["gratificacion_legal", "bonificacion_extraordinaria"] },
   { codigo: "incidencias_de_tienda", nombre: "Incidencias de tienda", conceptos: ["descuento_autorizado_por_incidencia"], flujoPropio: true },
   { codigo: "ajustes_de_preliquidacion", nombre: "Ajustes de preliquidación", conceptos: ["ajuste_de_preliquidacion"], flujoPropio: true },
+  { codigo: "abonos_vacacionales", nombre: "Abonos anticipados de remuneración vacacional", conceptos: ["abono_anticipado_de_remuneracion_vacacional"], flujoPropio: true },
 ];
 
 export function buscarTipoDeFuente(codigo: string): TipoDeFuente | undefined {

@@ -13,11 +13,12 @@ vi.mock("@/fuentes-externas/servicio", () => ({
 vi.mock("../actions", () => ({
   registrarImporteDesdeFormulario: vi.fn(), anularImporteDesdeFormulario: vi.fn(), confirmarFuenteDesdeFormulario: vi.fn(), volverAPendienteDesdeFormulario: vi.fn(),
 }));
-vi.mock("../acciones-especiales", () => ({ registrarIncidenciaDesdeFormulario: vi.fn(), decidirIncidenciaDesdeFormulario: vi.fn(), registrarAjusteDesdeFormulario: vi.fn() }));
+vi.mock("../acciones-especiales", () => ({ registrarIncidenciaDesdeFormulario: vi.fn(), decidirIncidenciaDesdeFormulario: vi.fn(), registrarAjusteDesdeFormulario: vi.fn(), registrarAbonoVacacionalDesdeFormulario: vi.fn() }));
 
 import type { Actor } from "@/autenticacion/permisos";
 import { confirmarFuente, registrarImporte } from "@/fuentes-externas/gestionar-fuentes-externas";
 import { crearRepositorioEnMemoria } from "@/fuentes-externas/repositorio-en-memoria";
+import { registrarAbonoVacacional } from "@/fuentes-externas/abonos-vacacionales";
 import { decidirIncidencia, registrarAjuste, registrarIncidencia } from "@/fuentes-externas/incidencias-y-ajustes";
 
 const finanzas: Actor = { id: "fin-1", rol: "finanzas", nombreUsuario: "finanzas" };
@@ -97,6 +98,20 @@ describe("página de un tipo de fuente (/pagos/fuentes-externas/[tipo])", () => 
     expect(html).toContain("Motivo: Diferencia previa");
     expect(html).toContain("Registrar ajuste de preliquidación");
     expect(html).not.toContain("Importar XLSX");
+  });
+
+  it("muestra el abono vacacional con su formulario propio, que no pide días del descanso ni ofrece XLSX", async () => {
+    await registrarAbonoVacacional(contexto.repositorio, finanzas, { dni: ANA, fechaDelAbono: "2026-09-28", mesDeAplicacion: "2026-10", monto: "300" });
+    const html = await render("abonos_vacacionales", "2026-10");
+    expect(html).toContain("Abonos anticipados de remuneración vacacional · mes de pago 10/2026");
+    expect(html).toContain("Abono anticipado de remuneración vacacional");
+    expect(html).toContain("28/09/2026");
+    expect(html).toContain("S/ 300,00");
+    expect(html).toContain("Registrar abono vacacional");
+    expect(html).toContain("Fecha del abono");
+    expect(html).toContain("vacaciones que el gerente aprobó en Asistencia");
+    expect(html).not.toContain("Importar XLSX");
+    expect(html).not.toContain("Inicio del descanso");
   });
 
   it("sin filas muestra el estado vacío con su siguiente paso y «Confirmar sin importes»", async () => {

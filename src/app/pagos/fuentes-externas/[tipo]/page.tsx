@@ -18,7 +18,7 @@ import { SinPermisoDePagos } from "../../sin-permiso";
 import { InsigniaDeEstado } from "../insignia-de-estado";
 import { AnuncioDelResultado } from "../anuncio";
 import { AnulacionDeImporte, ConfirmacionDeListado, RegistroDeImporte, VolverAPendiente } from "../formularios";
-import { DecisionDeIncidencia, RegistroDeAjuste, RegistroDeIncidencia } from "../formularios-especiales";
+import { DecisionDeIncidencia, RegistroDeAbonoVacacional, RegistroDeAjuste, RegistroDeIncidencia } from "../formularios-especiales";
 import { mesDePagoDeLaConsulta } from "../mes-de-pago";
 
 export const dynamic = "force-dynamic";
@@ -78,7 +78,7 @@ export default async function PaginaDeUnaFuenteExterna({ params, searchParams }:
 
     <section aria-labelledby="titulo-registro" className="tarjeta panel">
       <header className="panel-cabecera"><div><h2 id="titulo-registro">Registrar un importe</h2><p>Carga manual. Un importe no se edita: si está mal, anúlelo con motivo y regístrelo de nuevo. Las líneas calculadas se corrigen en su fuente o con un ajuste de preliquidación.</p></div></header>
-      {tipo.codigo === "incidencias_de_tienda" ? <RegistroDeIncidencia mes={mes} /> : tipo.codigo === "ajustes_de_preliquidacion" ? <RegistroDeAjuste mes={mes} /> : <RegistroDeImporte conceptos={conceptos} mes={mes} tipoDeFuente={tipo.codigo} />}
+      {tipo.codigo === "incidencias_de_tienda" ? <RegistroDeIncidencia mes={mes} /> : tipo.codigo === "ajustes_de_preliquidacion" ? <RegistroDeAjuste mes={mes} /> : tipo.codigo === "abonos_vacacionales" ? <RegistroDeAbonoVacacional mes={mes} /> : <RegistroDeImporte conceptos={conceptos} mes={mes} tipoDeFuente={tipo.codigo} />}
     </section>
   </main>;
 }

@@ -262,6 +262,10 @@ _Evitar_: días del corte de incidencias, días pagados en el mes
 Importe entregado antes del descanso vacacional, asociado a los días de descanso que remunera aunque correspondan a meses distintos.
 _Evitar_: nueva remuneración vacacional, pago duplicado, adelanto sin origen
 
+**Ajuste por variación de sueldo en vacaciones**:
+Diferencia que Pagos calcula, con su fecha y su base, cuando el sueldo vigente en un día del descanso vacacional difiere del sueldo vigente al inicio del descanso, que es la base de la remuneración vacacional. Puede ser negativa y no la registra Finanzas.
+_Evitar_: ajuste de preliquidación (ese lo registra Finanzas a mano), bono por aumento de sueldo
+
 **Gratificación legal**:
 Beneficio exigible en julio o diciembre según el régimen laboral del colaborador; no es la provisión contable de gratificaciones.
 _Evitar_: provisión de gratificación, bono libre, sueldo básico
