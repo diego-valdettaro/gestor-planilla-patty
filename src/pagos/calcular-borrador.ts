@@ -3,6 +3,7 @@ import type { Corte, HechoDiarioDeAsistencia, RevisionDeAsistenciaParaPagos } fr
 import { DATOS_LABORALES, NOMBRE_DE_DATO, esAfp, type DatoLaboral, type ValorLaboral } from "@/condiciones-laborales/catalogo";
 import { buscarDefinicion, type CodigoDeReglaLegal } from "@/reglas-legales/catalogo";
 import type { ImporteExterno } from "@/fuentes-externas/gestionar-fuentes-externas";
+import type { SustitutorioParaPagos } from "@/descansos-y-feriados/gestionar-descansos-y-feriados";
 import { formatearSoles } from "@/condiciones-laborales/valores";
 import { formatearFechaDeRelacion } from "@/relaciones-laborales/vigencia";
 import { desplazarFecha } from "@/turnos/semana";
@@ -19,6 +20,14 @@ export interface EntradaDeBorrador {
   problemasDelCorte: string[];
   revisiones: RevisionDeAsistenciaParaPagos[];
   hechosPorDni: Record<string, HechoDiarioDeAsistencia[]>;
+  /**
+   * Estado vigente de los descansos sustitutorios que afectan el corte: los de origen dentro de él y los «no otorgados»
+   * de un origen anterior verificados dentro del corte. Se lee en vivo: una revisión cerrada congela el estado de ese
+   * momento, y pagar según ella duplicaría el adicional que se regulariza aquí.
+   */
+  sustitutorios: SustitutorioParaPagos[];
+  /** Jornadas de origen anteriores al corte que hay que regularizar; falta la jornada si no se pudo leer su revisión. */
+  hechosDeOrigenPorDni: Record<string, HechoDiarioDeAsistencia[]>;
   fuentesPendientes: string[];
   importes: ImporteExterno[];
   /**
@@ -62,6 +71,28 @@ export interface LineaDeHoraExtra {
   sobretasaEnCentesimasDePunto: number;
 }
 
+export interface LineaDeTrabajoEnDescansoOFeriado {
+  concepto: "trabajo_en_descanso_o_feriado";
+  dias?: never;
+  importeCentimos: number;
+  minutos: number;
+  fecha: string;
+  grupo: string;
+  clase: "descanso_semanal" | "feriado" | "primero_de_mayo";
+  /** El adicional de un descanso sustitutorio no otorgado que se verificó después del corte de su día de origen. */
+  regularizacion: boolean;
+  mesDePago: string;
+  corte: Corte;
+  mesDeDevengue: string;
+  origen: "Asistencia";
+  evidencia: HechoDiarioDeAsistencia["evidencia"];
+  remuneracionOrdinariaComputableCentimos: number;
+  jornadaOrdinariaDiariaMinutos: number;
+  sobretasaEnCentesimasDePunto: number;
+}
+
+export type LineaDeBorrador = LineaDeSueldo | LineaDeRemuneracionVacacional | LineaDeAjusteDeVacaciones | LineaDeHoraExtra | LineaDeTrabajoEnDescansoOFeriado;
+
 /** Reclasifica el sueldo básico de los días de descanso del mes; usa la base vigente al inicio del descanso. */
 export interface LineaDeRemuneracionVacacional {
   concepto: "remuneracion_vacacional";
@@ -97,7 +128,6 @@ export interface LineaDeAjusteDeVacaciones {
   origen: "Variación de sueldo durante el descanso";
 }
 
-export type LineaDeBorrador = LineaDeSueldo | LineaDeRemuneracionVacacional | LineaDeAjusteDeVacaciones | LineaDeHoraExtra;
 type LineaDeRemuneracionMensual = LineaDeSueldo | LineaDeRemuneracionVacacional | LineaDeAjusteDeVacaciones;
 
 /** Un mes calendario de un descanso: días, remuneración vacacional y el saldo tras los abonos asignados a ese mes. */
@@ -130,6 +160,10 @@ export interface DescansoVacacionalDelBorrador {
 
 export function totalDeHorasExtraCentimos(lineas: LineaDeBorrador[]): number {
   return lineas.reduce((total, linea) => total + (linea.concepto === "horas_extra_25" || linea.concepto === "horas_extra_35" ? linea.importeCentimos : 0), 0);
+}
+
+export function totalDeTrabajoEnDescansoOFeriadoCentimos(lineas: LineaDeBorrador[]): number {
+  return lineas.reduce((total, linea) => total + (linea.concepto === "trabajo_en_descanso_o_feriado" ? linea.importeCentimos : 0), 0);
 }
 
 export interface PersonaDeBorrador {
@@ -297,6 +331,28 @@ function reglaEn(entrada: EntradaDeBorrador, codigo: CodigoDeReglaLegal, fecha: 
     .sort((a, b) => a.vigenteDesde.localeCompare(b.vigenteDesde)).at(-1)?.valor;
 }
 
+interface BaseDeValoracion { remuneracionOrdinariaComputableCentimos: number; jornada: number; }
+
+/** Base común del valor hora y del valor día: sueldo más asignación familiar otorgada, y jornada pactada vigentes en la fecha. */
+function baseDeValoracion(entrada: EntradaDeBorrador, relacion: RelacionConPersona, fecha: string): BaseDeValoracion | { bloqueo: string } {
+  const sueldo = sueldoEn(entrada, relacion.id, fecha);
+  const jornada = Number(condicionEn(entrada, relacion.id, "jornada_ordinaria_diaria", fecha));
+  // El booleano registra el beneficio que Patty ya otorgó, también en REMYPE; el DNI del menor se verifica fuera.
+  const familiar = condicionEn(entrada, relacion.id, "elegibilidad_familiar", fecha);
+  const rmv = reglaEn(entrada, "rmv", fecha);
+  const porcentajeFamiliar = reglaEn(entrada, "asignacion_familiar_porcentaje_de_rmv", fecha);
+  if (!sueldo || !jornada || familiar === undefined) {
+    return { bloqueo: `Falta remuneración ordinaria computable o jornada ordinaria diaria vigente el ${fecha}. Revise Condiciones laborales y Reglas legales.` };
+  }
+  if (familiar === true && (rmv === undefined || porcentajeFamiliar === undefined)) {
+    return { bloqueo: `Falta la regla de asignación familiar vigente el ${fecha}. Revise Reglas legales.` };
+  }
+  // Las comisiones externas son complementarias variables: no forman parte del valor hora ni del valor día.
+  const asignacionFamiliarCentimos = familiar === true && rmv !== undefined && porcentajeFamiliar !== undefined
+    ? rmv * porcentajeFamiliar / 10_000 : 0;
+  return { remuneracionOrdinariaComputableCentimos: sueldo + asignacionFamiliarCentimos, jornada };
+}
+
 function horasExtraDelCorte(entrada: EntradaDeBorrador, relacion: RelacionConPersona, hechos: HechoDiarioDeAsistencia[]): {
   lineas: LineaDeHoraExtra[]; bloqueos: string[];
 } {
@@ -314,24 +370,12 @@ function horasExtraDelCorte(entrada: EntradaDeBorrador, relacion: RelacionConPer
       bloqueos.push(`Hay horas extra pendientes de decisión el ${hecho.fecha}. Revise la candidata en Períodos.`);
       continue;
     }
-    const sueldo = sueldoEn(entrada, relacion.id, hecho.fecha);
-    const jornada = Number(condicionEn(entrada, relacion.id, "jornada_ordinaria_diaria", hecho.fecha));
-    // El booleano registra el beneficio que Patty ya otorgó, también en REMYPE; el DNI del menor se verifica fuera.
-    const familiar = condicionEn(entrada, relacion.id, "elegibilidad_familiar", hecho.fecha);
-    const rmv = reglaEn(entrada, "rmv", hecho.fecha);
-    const porcentajeFamiliar = reglaEn(entrada, "asignacion_familiar_porcentaje_de_rmv", hecho.fecha);
-    if (!sueldo || !jornada || familiar === undefined) {
-      bloqueos.push(`Falta remuneración ordinaria computable o jornada ordinaria diaria vigente el ${hecho.fecha}. Revise Condiciones laborales y Reglas legales.`);
+    const base = baseDeValoracion(entrada, relacion, hecho.fecha);
+    if ("bloqueo" in base) {
+      bloqueos.push(base.bloqueo);
       continue;
     }
-    if (familiar === true && (rmv === undefined || porcentajeFamiliar === undefined)) {
-      bloqueos.push(`Falta la regla de asignación familiar vigente el ${hecho.fecha}. Revise Reglas legales.`);
-      continue;
-    }
-    // Las comisiones externas son complementarias variables: no forman parte del valor hora de sobretiempo.
-    const asignacionFamiliarCentimos = familiar === true && rmv !== undefined && porcentajeFamiliar !== undefined
-      ? rmv * porcentajeFamiliar / 10_000 : 0;
-    const remuneracionOrdinariaComputableCentimos = sueldo + asignacionFamiliarCentimos;
+    const { remuneracionOrdinariaComputableCentimos, jornada } = base;
     for (const [concepto, minutos, codigo] of [
       ["horas_extra_25", extra.minutosAl25, "horas_extra_sobretasa_primeras_dos_horas"],
       ["horas_extra_35", extra.minutosAl35, "horas_extra_sobretasa_horas_posteriores"],
@@ -353,7 +397,85 @@ function horasExtraDelCorte(entrada: EntradaDeBorrador, relacion: RelacionConPer
   return { lineas, bloqueos };
 }
 
-/** Calcula sueldo y sobretiempo del borrador; los demás conceptos entran en sus tickets propios. */
+const MARCA_DE_SOBRETASA = {
+  descanso_semanal: { codigo: "trabajo_en_descanso_o_feriado_sobretasa", etiqueta: "descanso o feriado" },
+  feriado: { codigo: "trabajo_en_descanso_o_feriado_sobretasa", etiqueta: "descanso o feriado" },
+  primero_de_mayo: { codigo: "trabajo_en_primero_de_mayo_sobretasa", etiqueta: "1 de mayo" },
+} as const satisfies Record<LineaDeTrabajoEnDescansoOFeriado["clase"], { codigo: CodigoDeReglaLegal; etiqueta: string }>;
+
+/** El feriado manda sobre el descanso semanal cuando coinciden, y el 1 de mayo es el más específico (como `origenDeSustitutorio`). */
+function claseDelDiaEspecial(diaEspecial: NonNullable<HechoDiarioDeAsistencia["diaEspecial"]>): LineaDeTrabajoEnDescansoOFeriado["clase"] {
+  return diaEspecial.feriado ?? "descanso_semanal";
+}
+
+/**
+ * Adicional por trabajar en el descanso semanal asignado o en un feriado sin descanso sustitutorio (ADR 0009).
+ * VALIDAR CON FINANZAS O EL CONTADOR (#96, #124): la fórmula y las sobretasas siguen pendientes de validación legal.
+ *
+ *   importe = remuneración ordinaria computable × minutos ÷ (30 × jornada ordinaria diaria) × (1 + sobretasa)
+ *
+ * - Solo una jornada trabajada en un día con `diaEspecial` genera la línea; un domingo sin descanso asignado no.
+ * - Sustitutorio «previsto» u «otorgado»: sin línea. «No otorgado»: se debe el adicional; va en el pago del día de
+ *   origen si se verificó hasta el fin de su corte y, si se verificó después, se regulariza en el pago cuyo corte
+ *   contiene la fecha de verificación, con el devengue original. Sin sustitutorio: línea provisional.
+ * - Los minutos de horas extra del mismo día se valoran en su propio concepto: aquí solo cuentan los minutos
+ *   ordinarios, para que ningún minuto se pague dos veces.
+ */
+function trabajoEnDescansoOFeriadoDelCorte(entrada: EntradaDeBorrador, relacion: RelacionConPersona, hechos: HechoDiarioDeAsistencia[]): {
+  lineas: LineaDeTrabajoEnDescansoOFeriado[]; bloqueos: string[];
+} {
+  const lineas: LineaDeTrabajoEnDescansoOFeriado[] = [];
+  const bloqueos: string[] = [];
+  const sustitutorioDe = (fecha: string) => entrada.sustitutorios.find((candidato) => candidato.dni === relacion.dni && candidato.origenFecha === fecha);
+
+  const valorar = (hecho: HechoDiarioDeAsistencia, regularizacion: boolean) => {
+    const diaEspecial = hecho.diaEspecial;
+    const minutos = hecho.minutosTrabajados - (hecho.horaExtra ? hecho.horaExtra.minutosAl25 + hecho.horaExtra.minutosAl35 : 0);
+    if (hecho.resultado !== "trabajada" || !diaEspecial || minutos <= 0) return;
+    const base = baseDeValoracion(entrada, relacion, hecho.fecha);
+    if ("bloqueo" in base) {
+      bloqueos.push(base.bloqueo);
+      return;
+    }
+    const clase = claseDelDiaEspecial(diaEspecial);
+    const { codigo, etiqueta } = MARCA_DE_SOBRETASA[clase];
+    const sobretasa = reglaEn(entrada, codigo, hecho.fecha);
+    if (sobretasa === undefined) {
+      bloqueos.push(`No hay ${buscarDefinicion(codigo)?.nombre ?? codigo} vigente el ${hecho.fecha} (${etiqueta}). Active el valor en Reglas legales.`);
+      return;
+    }
+    lineas.push({ concepto: "trabajo_en_descanso_o_feriado", minutos, fecha: hecho.fecha, grupo: hecho.grupo, clase, regularizacion,
+      mesDePago: entrada.mesDePago, corte: entrada.corte, mesDeDevengue: hecho.fecha.slice(0, 7), origen: "Asistencia", evidencia: hecho.evidencia,
+      remuneracionOrdinariaComputableCentimos: base.remuneracionOrdinariaComputableCentimos, jornadaOrdinariaDiariaMinutos: base.jornada,
+      sobretasaEnCentesimasDePunto: sobretasa,
+      importeCentimos: Math.floor(base.remuneracionOrdinariaComputableCentimos * minutos * (10_000 + sobretasa) / (30 * base.jornada * 10_000) + 0.5),
+    });
+  };
+
+  for (const hecho of hechos) {
+    const sustitutorio = sustitutorioDe(hecho.fecha);
+    if (sustitutorio?.estado === "previsto" || sustitutorio?.estado === "otorgado") continue;
+    // Verificado después del corte: lo paga el pago cuyo corte contiene la verificación.
+    if (sustitutorio?.estado === "no_otorgado" && sustitutorio.verificadoEnLima !== null && sustitutorio.verificadoEnLima > entrada.corte.fin) continue;
+    valorar(hecho, false);
+  }
+
+  const origenes = entrada.hechosDeOrigenPorDni[relacion.dni] ?? [];
+  for (const sustitutorio of entrada.sustitutorios) {
+    if (sustitutorio.dni !== relacion.dni || sustitutorio.estado !== "no_otorgado" || sustitutorio.origenFecha >= entrada.corte.inicio) continue;
+    if (sustitutorio.verificadoEnLima === null || sustitutorio.verificadoEnLima < entrada.corte.inicio || sustitutorio.verificadoEnLima > entrada.corte.fin) continue;
+    if (sustitutorio.origenFecha < relacion.ingreso || (relacion.ceseConfirmado && relacion.cese !== null && sustitutorio.origenFecha > relacion.cese)) continue;
+    const origen = origenes.find((hecho) => hecho.fecha === sustitutorio.origenFecha);
+    if (!origen) {
+      bloqueos.push(`No se pudo leer la jornada del ${sustitutorio.origenFecha} para regularizar su descanso sustitutorio no otorgado. Revise la revisión de asistencia en Períodos.`);
+      continue;
+    }
+    valorar(origen, true);
+  }
+  return { lineas, bloqueos };
+}
+
+/** Calcula sueldo, sobretiempo y trabajo en descanso o feriado del borrador; los demás conceptos entran en sus tickets propios. */
 export function calcularBorrador(entrada: EntradaDeBorrador): BorradorDePagos {
   const mes = entrada.mesDePago;
   const anterior = mesAnterior(mes);
@@ -386,8 +508,10 @@ export function calcularBorrador(entrada: EntradaDeBorrador): BorradorDePagos {
     if (hechos.some((hecho) => hecho.resultado === "pendiente")) bloqueos.push("Hay jornadas pendientes de revisión en el corte de incidencias.");
     const sobretiempo = horasExtraDelCorte(entrada, relacion, hechos);
     bloqueos.push(...sobretiempo.bloqueos);
+    const enDescanso = trabajoEnDescansoOFeriadoDelCorte(entrada, relacion, hechos);
+    bloqueos.push(...enDescanso.bloqueos);
     // El sueldo es visible aun cuando otro concepto o la cobertura impida un neto confiable.
-    const lineas: LineaDeBorrador[] = [...arrastre.lineas, ...actual.lineas, ...sobretiempo.lineas];
+    const lineas: LineaDeBorrador[] = [...arrastre.lineas, ...actual.lineas, ...sobretiempo.lineas, ...enDescanso.lineas];
     const desglose = vacacionesDeLaPersona(entrada, relacion, conArrastre ? [anterior, mes] : [mes], descansos, lineas);
     bloqueos.push(...desglose.bloqueos);
     return { relacion, vacaciones: desglose.vacaciones, sedeDeAdscripcion: String(condicionEn(entrada, relacion.id, "sede_de_adscripcion", fechaDeConsulta) ?? "") || null,

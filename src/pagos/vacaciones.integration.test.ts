@@ -9,6 +9,7 @@ import type { Actor } from "@/autenticacion/permisos";
 import { dniDePrueba } from "@/colaboradores/dni-de-prueba";
 import { RepositorioPostgresDeCondicionesLaborales } from "@/condiciones-laborales/repositorio-postgres";
 import * as schema from "@/db/schema";
+import { RepositorioPostgresDeDescansosYFeriados } from "@/descansos-y-feriados/repositorio-postgres";
 import { registrarAbonoVacacional } from "@/fuentes-externas/abonos-vacacionales";
 import { anularImporte } from "@/fuentes-externas/gestionar-fuentes-externas";
 import { RepositorioPostgresDeFuentesExternas } from "@/fuentes-externas/repositorio-postgres";
@@ -42,6 +43,7 @@ describe.skipIf(!databaseUrl)("vacaciones entre meses desde PostgreSQL", () => {
     reglas: new RepositorioPostgresDeReglasLegales(db),
     asistencia: new RepositorioPostgresDePeriodos(db),
     externas: new RepositorioPostgresDeFuentesExternas(db),
+    descansos: new RepositorioPostgresDeDescansosYFeriados(db),
   };
 
   beforeAll(async () => {

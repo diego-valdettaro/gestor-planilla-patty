@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 
+import { fechaDeHoyEnLima } from "@/condiciones-laborales/vigencia";
+
 import type { DescansoSustitutorio, RepositorioDeDescansosYFeriados } from "./gestionar-descansos-y-feriados";
 import type { AsistenciaDelDia, DescansoSemanalAsignado, Feriado } from "./reglas";
 
@@ -42,6 +44,11 @@ export function crearRepositorioEnMemoria() {
     existeSustitutorioDeFeriado: async (fecha) => sustitutorios.some((sustitutorio) => sustitutorio.origenFecha === fecha && sustitutorio.origenTipo !== "descanso_semanal"),
     buscarSustitutorio: async (id) => sustitutorios.find((sustitutorio) => sustitutorio.id === id),
     listarSustitutorios: async (dni, desde, hasta) => sustitutorios.filter((sustitutorio) => sustitutorio.dni === dni && sustitutorio.origenFecha >= desde && sustitutorio.origenFecha <= hasta),
+    listarSustitutoriosParaPagos: async (desde, hasta) => sustitutorios
+      .map((sustitutorio) => ({ dni: sustitutorio.dni, origenFecha: sustitutorio.origenFecha, estado: sustitutorio.estado,
+        verificadoEnLima: sustitutorio.verificadoEn ? fechaDeHoyEnLima(sustitutorio.verificadoEn) : null }))
+      .filter((fila) => (fila.origenFecha >= desde && fila.origenFecha <= hasta)
+        || (fila.estado === "no_otorgado" && fila.origenFecha < desde && fila.verificadoEnLima !== null && fila.verificadoEnLima >= desde && fila.verificadoEnLima <= hasta)),
     insertarSustitutorio: async ({ responsableId: _responsable, ...datos }) => {
       const choca = (existente: DescansoSustitutorio) => existente.dni === datos.dni && (existente.origenFecha === datos.origenFecha || (existente.fechaPrevista === datos.fechaPrevista && existente.estado !== "no_otorgado"));
       if (sustitutorios.some(choca)) return undefined;
