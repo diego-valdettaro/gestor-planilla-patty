@@ -180,7 +180,7 @@ describe("vacaciones entre meses", () => {
     expect(total(resultado)).toBe(sueldo);
   });
 
-  it("el abono se asigna a ambos meses por días calendario y reduce cada saldo una sola vez, también cuando se paga en otro mes", () => {
+  it("el abono se asigna a ambos meses según su remuneración y reduce cada saldo una sola vez, también cuando se paga en otro mes", () => {
     const resultado = calcularBorrador(entrada({ condiciones, diasDeVacaciones: { [persona.dni]: referencia }, abonosVacacionales: [abono()] }));
     const [descanso] = resultado.personas[0].vacaciones;
     expect(descanso).toMatchObject({ inicio: "2026-09-29", fin: "2026-10-04", dias: 6 });
@@ -199,6 +199,28 @@ describe("vacaciones entre meses", () => {
     ] }));
     const [descanso] = resultado.personas[0].vacaciones;
     expect(descanso.meses.map(({ abonosAsignadosCentimos }) => abonosAsignadosCentimos)).toEqual([3333 + 6666, 6668 + 13334]);
+  });
+
+  it("con día 31 el abono sigue la remuneración de cada mes y ningún saldo sale negativo", () => {
+    const resultado = calcularBorrador(entrada({ condiciones, diasDeVacaciones: { [persona.dni]: rango("2026-10-29", "2026-11-04") }, abonosVacacionales: [
+      abono({ fechaDelHecho: "2026-10-28", mesDeDevengue: "2026-10", mesDeAplicacion: "2026-10", monto: 60000 }),
+    ] }));
+    const [descanso] = resultado.personas[0].vacaciones;
+    expect(descanso).toMatchObject({ dias: 7 });
+    expect(descanso.meses).toEqual([
+      { mes: "2026-10", diasDeDescanso: 3, diasConvencionales: 2, remuneracionCentimos: 20000, abonosAsignadosCentimos: 20000, saldoCentimos: 0 },
+      { mes: "2026-11", diasDeDescanso: 4, diasConvencionales: 4, remuneracionCentimos: 40000, abonosAsignadosCentimos: 40000, saldoCentimos: 0 },
+    ]);
+  });
+
+  it("el reparto del abono sigue la base del inicio del descanso y no el sueldo vigente tras una variación", () => {
+    const resultado = calcularBorrador(entrada({ diasDeVacaciones: { [persona.dni]: rango("2026-10-29", "2026-11-04") }, condiciones: [
+      { relacionId: "r1", dato: "sueldo", valor: 300000, vigenteDesde: "2026-01-01" },
+      { relacionId: "r1", dato: "sueldo", valor: 330000, vigenteDesde: "2026-11-02" },
+    ], abonosVacacionales: [abono({ fechaDelHecho: "2026-10-28", mesDeDevengue: "2026-10", mesDeAplicacion: "2026-10", monto: 60000 })] }));
+    const [descanso] = resultado.personas[0].vacaciones;
+    expect(descanso.meses.map(({ mes, remuneracionCentimos, abonosAsignadosCentimos, saldoCentimos }) => [mes, remuneracionCentimos, abonosAsignadosCentimos, saldoCentimos]))
+      .toEqual([["2026-10", 20000, 20000, 0], ["2026-11", 40000, 40000, 0]]);
   });
 
   it("sin abono el saldo es toda la remuneración vacacional del mes", () => {

@@ -35,12 +35,27 @@ describe("abono anticipado", () => {
     expect(asociarAbono(descansos, "2026-11-12")).toBeUndefined();
   });
 
-  it("se reparte por días calendario y los céntimos sobrantes van al último mes", () => {
+  it("se reparte en proporción a la remuneración de cada mes y los céntimos sobrantes van al último mes", () => {
     const [descanso] = descansosDe(referencia);
     expect(repartirAbono(descanso, 100_000)).toEqual([{ mes: "2026-09", centimos: 33_333 }, { mes: "2026-10", centimos: 66_667 }]);
     const reparto = repartirAbono(descanso, 100_001);
     expect(reparto.reduce((suma, { centimos }) => suma + centimos, 0)).toBe(100_001);
     expect(reparto[0].centimos).toBe(33_333);
+  });
+
+  it("el día 31 no recibe abono: pesa lo que se paga, no los días calendario", () => {
+    const [descanso] = descansosDe(["2026-10-29", "2026-10-30", "2026-10-31", "2026-11-01", "2026-11-02", "2026-11-03", "2026-11-04"]);
+    expect(repartirAbono(descanso, 60_000)).toEqual([{ mes: "2026-10", centimos: 20_000 }, { mes: "2026-11", centimos: 40_000 }]);
+  });
+
+  it("febrero completa 30 días: pesa lo que se paga al llegar a su último día", () => {
+    const [descanso] = descansosDe(["2026-02-25", "2026-02-26", "2026-02-27", "2026-02-28", "2026-03-01", "2026-03-02", "2026-03-03", "2026-03-04"]);
+    expect(repartirAbono(descanso, 100_000)).toEqual([{ mes: "2026-02", centimos: 60_000 }, { mes: "2026-03", centimos: 40_000 }]);
+  });
+
+  it("si el descanso no tiene días que se paguen, cae a los días calendario", () => {
+    const [soloElTreintaYUno] = descansosDe(["2026-10-31"]);
+    expect(repartirAbono(soloElTreintaYUno, 5_000)).toEqual([{ mes: "2026-10", centimos: 5_000 }]);
   });
 
   it("un descanso de un solo mes asigna todo el abono a ese mes", () => {

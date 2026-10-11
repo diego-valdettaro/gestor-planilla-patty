@@ -71,7 +71,7 @@ export function RegistroDeAbonoVacacional({ mes }: { mes: string }) {
     <input name="mesDeAplicacion" type="hidden" value={mes} />
     <label>Importe (S/)<input name="monto" inputMode="decimal" placeholder="300,00" required /></label>
     <small className="linea-de-relacion">Mes de aplicación: {formatearMes(mes)}.</small>
-    <p>Los días del descanso salen de las vacaciones que el gerente aprobó en Asistencia. El abono se ata al descanso que empieza en o después de su fecha y se reparte por días calendario entre los meses del descanso: reduce el saldo de cada mes una sola vez y no cambia su mes de devengue.</p>
+    <p>Los días del descanso salen de las vacaciones que el gerente aprobó en Asistencia. El abono se ata al descanso que empieza en o después de su fecha y se reparte entre los meses del descanso en proporción a su remuneración vacacional: reduce el saldo de cada mes una sola vez y no cambia su mes de devengue.</p>
     <Resultado estado={estado} /><button className="boton-principal" disabled={pendiente} type="submit">Registrar abono vacacional</button>
   </form>;
 }

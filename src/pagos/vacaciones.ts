@@ -1,5 +1,5 @@
 // Descansos vacacionales para Pagos. Los días salen de las jornadas «vacaciones» que el gerente aprobó en Asistencia;
-// aquí solo se agrupan, se reparten por mes calendario y se asocian a los abonos anticipados que Finanzas registra.
+// aquí solo se agrupan, se reparten por mes calendario (el abono, según la remuneración de cada mes) y se asocian a los abonos anticipados que Finanzas registra.
 // Un descanso vacacional es una racha de días consecutivos de la misma persona (docs/diseno-software-pagos.md).
 
 import { desplazarFecha } from "@/turnos/semana";
@@ -67,13 +67,20 @@ export function asociarAbono(descansos: DescansoVacacional[], fechaDelAbono: str
   return descansos.filter((descanso) => descanso.inicio >= fechaDelAbono).sort((a, b) => a.inicio.localeCompare(b.inicio))[0];
 }
 
-/** Reparte el abono por días calendario de cada mes del descanso; los céntimos sobrantes van al último mes y la suma es el abono. */
+/**
+ * Reparte el abono entre los meses del descanso en proporción a su remuneración vacacional. Como la base del sueldo es la del inicio
+ * del descanso, esa remuneración es proporcional a los días convencionales de cada mes (el día 31 no pesa y febrero completa 30).
+ * Los céntimos sobrantes van al último mes y la suma es el abono. Sin días que se paguen, el peso son los días calendario.
+ */
 export function repartirAbono(descanso: DescansoVacacional, centimos: number): Array<{ mes: string; centimos: number }> {
   const meses = mesesDelDescanso(descanso);
-  const total = descanso.fechas.length;
+  const pesos = meses.map((mes) => diasConvencionalesDelMes(fechasEnMes(descanso, mes), mes));
+  const conPagos = pesos.some((peso) => peso > 0);
+  const pesoDe = (posicion: number) => (conPagos ? pesos[posicion] : fechasEnMes(descanso, meses[posicion]).length);
+  const total = meses.reduce((suma, _mes, posicion) => suma + pesoDe(posicion), 0);
   let asignado = 0;
   return meses.map((mes, posicion) => {
-    const parte = posicion === meses.length - 1 ? centimos - asignado : Math.floor(centimos * fechasEnMes(descanso, mes).length / total);
+    const parte = posicion === meses.length - 1 ? centimos - asignado : Math.floor(centimos * pesoDe(posicion) / total);
     asignado += parte;
     return { mes, centimos: parte };
   });
