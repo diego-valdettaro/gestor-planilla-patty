@@ -75,6 +75,8 @@ const GERENTES_POR_GRUPO = [
 // Los DNI de demo comparten este patrón (99900001…99900011) para poder limpiarlos al resembrar.
 const PATRON_DNI_DEMO = "999000__";
 
+const DNI_DE_REDUCCIONES = "99900015";
+
 const COLABORADORES = [
   { dni: "99900001", nombre: "Ana Borrador", sede: SEDES.benavides, grupo: GRUPOS.tiendas, activo: true },
   { dni: "99900002", nombre: "Beto Publicado", sede: SEDES.benavides, grupo: GRUPOS.tiendas, activo: true },
@@ -91,6 +93,8 @@ const COLABORADORES = [
   { dni: "99900012", nombre: "Julia Ingreso", sede: SEDES.benavides, grupo: GRUPOS.tiendas, activo: true },
   { dni: "99900013", nombre: "Karen Reingreso", sede: SEDES.benavides, grupo: GRUPOS.tiendas, activo: true },
   { dni: "99900014", nombre: "Luis Pendiente", sede: SEDES.benavides, grupo: GRUPOS.tiendas, activo: true },
+  // Reducciones de Pagos (#123): tardanza real, falta, permiso y suspensión sin clasificar.
+  { dni: DNI_DE_REDUCCIONES, nombre: "Gloria Reducciones", sede: SEDES.benavides, grupo: GRUPOS.tiendas, activo: true },
 ];
 
 // Relaciones laborales: todas las personas de demo tienen una relación confirmada desde esta fecha,
@@ -299,6 +303,8 @@ async function registrarCondicionesLaborales(db: Db, actor: Actor): Promise<void
   // Franco sube de sueldo durante su descanso vacacional: la remuneración vacacional usa 2200 y el resto de los días deja un ajuste.
   await registrar(relacionDe("99900007"), "sueldo", "2400", CAMBIO_DE_SUELDO_DE_FRANCO);
   await completar("99900009", { sueldo: "3500", afiliacion: "afp_habitat", esquema: "flujo" });
+  // Gloria: sueldo de S/ 1.800,00 y jornada de 8 h (480 min) para revisar las reducciones con los importes de referencia de #123.
+  await completar(DNI_DE_REDUCCIONES, { sueldo: "1800", afiliacion: "onp" });
   // Incompletos: ven «Pendiente» y «Falta: …».
   await registrar(relacionDe("99900004"), "sueldo", "1400");
   await registrar(relacionDe("99900005"), "sueldo", "1450");
@@ -473,7 +479,7 @@ async function verificarInvariantes(pool: Pool): Promise<void> {
        FROM condiciones_laborales c JOIN relaciones_laborales r ON r.id = c.relacion_laboral_id WHERE r.dni LIKE '${PATRON_DNI_DEMO}'`,
   );
   if (Number(condiciones.sueldosDeAna) !== 2) fallos.push(`Ana debería tener 2 vigencias de sueldo, tiene ${condiciones.sueldosDeAna}`);
-  if (Number(condiciones.completas) !== 5) fallos.push(`se esperaban 5 relaciones con condiciones completas, hay ${condiciones.completas}`);
+  if (Number(condiciones.completas) !== 6) fallos.push(`se esperaban 6 relaciones con condiciones completas, hay ${condiciones.completas}`);
 
   const { rows: [reglas] } = await pool.query<{ essalud: string; onp: string }>(
     `SELECT count(*) FILTER (WHERE codigo = 'essalud_tasa' AND reemplazada_en IS NULL)::text AS essalud,
@@ -568,6 +574,10 @@ function resumen(): string {
     `  Descanso aprobado en el calendario del ${INICIO_DEL_DESCANSO} al ${desplazarFecha(PERIODO_ACTUAL.inicio, DIAS_DE_VACACIONES_EN_EL_MES_ACTUAL - 1)}: días del mes anterior y ${DIAS_DE_VACACIONES_EN_EL_MES_ACTUAL} del mes actual`,
     `  Abono de S/ ${ABONO_VACACIONAL.monto} del ${ABONO_VACACIONAL.fecha}, repartido por días entre ambos meses; sueldo de 2200 a 2400 desde ${CAMBIO_DE_SUELDO_DE_FRANCO} (ajuste trazable)`,
     "  Detalle de Franco en Pagos -> «Vacaciones del mes»; Administración no tiene calendario y queda fuera de este desglose",
+    "",
+    "Pagos · Reducciones (#123; mes de pago actual, finanzas / finanzas; Gloria Reducciones, 99900015, sueldo S/ 1.800,00 y jornada de 480 min):",
+    "  lun -> tardanza real de 15 min con 60 min penalizados ; mar -> falta ; mié -> permiso ; jue -> suspensión ; vie/sáb -> Registrada",
+    "  El permiso y la suspensión están SIN clasificar: Finanzas los clasifica en el detalle de Gloria; mientras tanto queda bloqueada",
     "",
     "Calendario de asistencias de Beto Publicado (mes actual):",
     "  lun/mar -> Registrada ; mar -> 120 min extra al 25 % y 30 min al 35 % aprobados ; mié -> Registrada (Feriado)",
@@ -731,6 +741,16 @@ async function main(): Promise<void> {
     await marcarConfirmada(db, "99900003", lun, aperturaBenavides, { horaExtra: "pendiente", minutosExtra: 45 });
     await marcarManual(db, "99900002", mie, "feriado", finanzas.id);
     await marcarPendienteDeRevision(db, "99900002", diasActual[3], SEDES.benavides, finanzas.id);
+    // Gloria (#123): lunes con tardanza real de 15 min (60 min penalizados, que no restan dinero), martes falta, miércoles permiso,
+    // jueves suspensión (ambos SIN clasificar: Finanzas los clasifica en Pagos) y viernes y sábado confirmados.
+    await turnos.publicarEnLote(turnosDeSemana(DNI_DE_REDUCCIONES, SEDES.benavides, SEMANA_ACTUAL), actorGerenteDeTiendas);
+    await marcarConfirmada(db, DNI_DE_REDUCCIONES, lun, aperturaBenavides, { tardanzaMin: 15 });
+    await db.execute(sql`UPDATE tardanzas SET minutos_penalizados = 60 WHERE asistencia_id IN (SELECT id FROM asistencias_esperadas WHERE dni = ${DNI_DE_REDUCCIONES})`);
+    await marcarManual(db, DNI_DE_REDUCCIONES, mar, "falta", finanzas.id);
+    await marcarManual(db, DNI_DE_REDUCCIONES, mie, "permiso", finanzas.id);
+    await marcarManual(db, DNI_DE_REDUCCIONES, diasActual[3], "suspension", finanzas.id);
+    await marcarConfirmada(db, DNI_DE_REDUCCIONES, diasActual[4], aperturaBenavides, {});
+    await marcarConfirmada(db, DNI_DE_REDUCCIONES, diasActual[5], aperturaBenavides, {});
     // Beto: lun/mar Registrada, mié Registrada (feriado), jue Pendiente de revisión, vie/sáb Esperada.
     // Darío ya quedó todo confirmado (semana liquidada).
 

@@ -643,3 +643,17 @@ export const confirmacionesDeFuente = pgTable(
     check("confirmaciones_de_fuente_mes_valido", sql`${table.mesDeAplicacion} ~ '^\\d{4}-(0[1-9]|1[0-2])$'`),
   ],
 );
+
+// Clasificación de goce de un permiso o suspensión (issue #123): la decide Finanzas en Pagos y se vincula a la jornada por
+// DNI y fecha. No modifica el estado manual de Asistencia. Sin fila, la jornada está pendiente y bloquea a la persona.
+export const clasificacionesDeGoce = pgTable(
+  "clasificaciones_de_goce",
+  {
+    dni: text("dni").notNull().references(() => colaboradores.dni),
+    fecha: date("fecha", { mode: "string" }).notNull(),
+    conGoce: boolean("con_goce").notNull(),
+    clasificadoPorId: uuid("clasificado_por_id").notNull().references(() => cuentasLocales.id),
+    clasificadoEn: timestamp("clasificado_en", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.dni, table.fecha], name: "clasificaciones_de_goce_pk" })],
+);

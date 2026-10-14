@@ -10,6 +10,15 @@ import { desplazarFecha } from "@/turnos/semana";
 
 import { asociarAbono, descansosDe, diasConvencionalesDelMes, fechasEnMes, mesesDelDescanso, repartirAbono, ventanaDeVacaciones, type DescansoVacacional } from "./vacaciones";
 
+/** Decisión de Finanzas sobre una jornada de permiso o suspensión: con o sin goce de remuneración (#123). */
+export interface ClasificacionDeGoce {
+  dni: string;
+  fecha: string;
+  conGoce: boolean;
+  clasificadoPorId: string;
+  clasificadoEn: Date;
+}
+
 /** Entrada coherente y ya leída. El cálculo nunca consulta la base. */
 export interface EntradaDeBorrador {
   mesDePago: string;
@@ -39,6 +48,8 @@ export interface EntradaDeBorrador {
   abonosVacacionales: ImporteExterno[];
   /** Algún día de vacaciones viene de un período abierto, es decir, todavía puede cambiar. */
   vacacionesProvisionales: boolean;
+  /** Clasificaciones de goce de permisos y suspensiones del corte; sin clasificación la jornada queda pendiente y bloquea. */
+  clasificacionesDeGoce?: ClasificacionDeGoce[];
 }
 
 export interface LineaDeSueldo {
@@ -91,7 +102,41 @@ export interface LineaDeTrabajoEnDescansoOFeriado {
   sobretasaEnCentesimasDePunto: number;
 }
 
-export type LineaDeBorrador = LineaDeSueldo | LineaDeRemuneracionVacacional | LineaDeAjusteDeVacaciones | LineaDeHoraExtra | LineaDeTrabajoEnDescansoOFeriado;
+/** Reducción por los minutos reales de tardanza; los minutos penalizados disciplinarios nunca la afectan. */
+export interface LineaDeReduccionPorTardanza {
+  concepto: "reduccion_por_tardanza";
+  dias?: never;
+  importeCentimos: number;
+  minutos: number;
+  fecha: string;
+  grupo: string;
+  mesDePago: string;
+  corte: Corte;
+  mesDeDevengue: string;
+  origen: "Asistencia";
+  evidencia: HechoDiarioDeAsistencia["evidencia"];
+  remuneracionOrdinariaComputableCentimos: number;
+  jornadaOrdinariaDiariaMinutos: number;
+}
+
+/** Reducción de un día de falta (o ausencia sin goce) o la proporcional del descanso semanal: una línea por hecho diario y causa. */
+export interface LineaDeReduccionDeDia {
+  concepto: "reduccion_por_falta" | "reduccion_por_descanso_semanal" | "reduccion_por_ausencia_sin_goce";
+  dias: 1;
+  importeCentimos: number;
+  fecha: string;
+  grupo: string;
+  mesDePago: string;
+  corte: Corte;
+  mesDeDevengue: string;
+  origen: "Asistencia";
+  evidencia: HechoDiarioDeAsistencia["evidencia"];
+  remuneracionOrdinariaComputableCentimos: number;
+  /** Decisión de goce de Finanzas que originó la reducción; solo en permisos y suspensiones. */
+  decision?: Pick<ClasificacionDeGoce, "conGoce" | "clasificadoPorId" | "clasificadoEn">;
+}
+
+export type LineaDeBorrador = LineaDeReduccionDeDia | LineaDeReduccionPorTardanza | LineaDeSueldo | LineaDeRemuneracionVacacional | LineaDeAjusteDeVacaciones | LineaDeHoraExtra | LineaDeTrabajoEnDescansoOFeriado;
 
 /** Reclasifica el sueldo básico de los días de descanso del mes; usa la base vigente al inicio del descanso. */
 export interface LineaDeRemuneracionVacacional {
@@ -475,6 +520,49 @@ function trabajoEnDescansoOFeriadoDelCorte(entrada: EntradaDeBorrador, relacion:
   return { lineas, bloqueos };
 }
 
+/** Reducciones del corte por incidencias de asistencia (#123): tardanza real, falta, descanso semanal y ausencia sin goce. */
+function reduccionesDelCorte(entrada: EntradaDeBorrador, relacion: RelacionConPersona, hechos: HechoDiarioDeAsistencia[]): {
+  lineas: Array<LineaDeReduccionPorTardanza | LineaDeReduccionDeDia>; bloqueos: string[];
+} {
+  const lineas: Array<LineaDeReduccionPorTardanza | LineaDeReduccionDeDia> = [];
+  const bloqueos: string[] = [];
+  for (const hecho of hechos) {
+    const esAusencia = hecho.resultado === "permiso" || hecho.resultado === "suspension";
+    if (hecho.resultado === "falta" || esAusencia) {
+      const clasificacion = esAusencia ? entrada.clasificacionesDeGoce?.find((candidata) => candidata.dni === relacion.dni && candidata.fecha === hecho.fecha) : undefined;
+      if (esAusencia && !clasificacion) {
+        bloqueos.push(`${hecho.resultado === "permiso" ? "El permiso" : "La suspensión"} del ${hecho.fecha} no tiene clasificación de goce. Finanzas debe clasificarla con o sin goce en Pagos; no se asume sin goce.`);
+        continue;
+      }
+      if (clasificacion?.conGoce) continue;
+      const base = baseDeValoracion(entrada, relacion, hecho.fecha);
+      if ("bloqueo" in base) {
+        bloqueos.push(base.bloqueo);
+        continue;
+      }
+      const comunes = { dias: 1 as const, fecha: hecho.fecha, grupo: hecho.grupo, mesDePago: entrada.mesDePago, corte: entrada.corte,
+        mesDeDevengue: hecho.fecha.slice(0, 7), origen: "Asistencia" as const, evidencia: hecho.evidencia,
+        remuneracionOrdinariaComputableCentimos: base.remuneracionOrdinariaComputableCentimos,
+        ...(clasificacion ? { decision: { conGoce: clasificacion.conGoce, clasificadoPorId: clasificacion.clasificadoPorId, clasificadoEn: clasificacion.clasificadoEn } } : {}) };
+      // El valor día es la remuneración ordinaria ÷ 30; el descanso semanal proporcional es un treintavo de ese valor día.
+      lineas.push({ concepto: esAusencia ? "reduccion_por_ausencia_sin_goce" : "reduccion_por_falta", importeCentimos: Math.floor(base.remuneracionOrdinariaComputableCentimos / 30 + 0.5), ...comunes });
+      lineas.push({ concepto: "reduccion_por_descanso_semanal", importeCentimos: Math.floor(base.remuneracionOrdinariaComputableCentimos / 900 + 0.5), ...comunes });
+      continue;
+    }
+    if (hecho.resultado !== "trabajada" || !hecho.tardanza || hecho.tardanza.minutos <= 0) continue;
+    const base = baseDeValoracion(entrada, relacion, hecho.fecha);
+    if ("bloqueo" in base) {
+      bloqueos.push(base.bloqueo);
+      continue;
+    }
+    lineas.push({ concepto: "reduccion_por_tardanza", minutos: hecho.tardanza.minutos, fecha: hecho.fecha, grupo: hecho.grupo,
+      mesDePago: entrada.mesDePago, corte: entrada.corte, mesDeDevengue: hecho.fecha.slice(0, 7), origen: "Asistencia", evidencia: hecho.evidencia,
+      remuneracionOrdinariaComputableCentimos: base.remuneracionOrdinariaComputableCentimos, jornadaOrdinariaDiariaMinutos: base.jornada,
+      importeCentimos: Math.floor(base.remuneracionOrdinariaComputableCentimos * hecho.tardanza.minutos / (30 * base.jornada) + 0.5) });
+  }
+  return { lineas, bloqueos };
+}
+
 /** Calcula sueldo, sobretiempo y trabajo en descanso o feriado del borrador; los demás conceptos entran en sus tickets propios. */
 export function calcularBorrador(entrada: EntradaDeBorrador): BorradorDePagos {
   const mes = entrada.mesDePago;
@@ -510,8 +598,10 @@ export function calcularBorrador(entrada: EntradaDeBorrador): BorradorDePagos {
     bloqueos.push(...sobretiempo.bloqueos);
     const enDescanso = trabajoEnDescansoOFeriadoDelCorte(entrada, relacion, hechos);
     bloqueos.push(...enDescanso.bloqueos);
+    const reduccionesDeAsistencia = reduccionesDelCorte(entrada, relacion, hechos);
+    bloqueos.push(...reduccionesDeAsistencia.bloqueos);
     // El sueldo es visible aun cuando otro concepto o la cobertura impida un neto confiable.
-    const lineas: LineaDeBorrador[] = [...arrastre.lineas, ...actual.lineas, ...sobretiempo.lineas, ...enDescanso.lineas];
+    const lineas: LineaDeBorrador[] = [...arrastre.lineas, ...actual.lineas, ...sobretiempo.lineas, ...enDescanso.lineas, ...reduccionesDeAsistencia.lineas];
     const desglose = vacacionesDeLaPersona(entrada, relacion, conArrastre ? [anterior, mes] : [mes], descansos, lineas);
     bloqueos.push(...desglose.bloqueos);
     return { relacion, vacaciones: desglose.vacaciones, sedeDeAdscripcion: String(condicionEn(entrada, relacion.id, "sede_de_adscripcion", fechaDeConsulta) ?? "") || null,
