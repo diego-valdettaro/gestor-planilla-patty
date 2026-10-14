@@ -1,9 +1,12 @@
 import Link from "next/link";
 
-export function BloqueoDePagos({ mensaje, mes, relacionId }: { mensaje: string; mes: string; relacionId?: string }) {
+export function BloqueoDePagos({ mensaje, mes, relacionId, dni }: { mensaje: string; mes: string; relacionId?: string; dni?: string }) {
   let destino = "/periodos";
   let siguiente = "Revise el período de planilla y su aprobación.";
-  if (mensaje.startsWith("Sin ")) {
+  if (mensaje.includes("clasificación de goce") && dni) {
+    destino = `/pagos/${mes}/${dni}#permisos-y-suspensiones`;
+    siguiente = "Clasifique la jornada con o sin goce en el panel Permisos y suspensiones.";
+  } else if (mensaje.startsWith("Sin ")) {
     destino = `/pagos/condiciones-laborales/${relacionId}`;
     siguiente = "Registre el valor vigente en Condiciones laborales.";
   } else if (mensaje.startsWith("No hay ")) {

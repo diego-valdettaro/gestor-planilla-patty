@@ -2,6 +2,7 @@ import type { RepositorioDeDescansosYFeriados } from "@/descansos-y-feriados/ges
 import type { RepositorioDeRelacionesLaborales } from "@/relaciones-laborales/gestionar-relaciones-laborales";
 import type { RepositorioDeCondicionesLaborales } from "@/condiciones-laborales/gestionar-condiciones-laborales";
 import type { RepositorioDeReglasLegales } from "@/reglas-legales/gestionar-reglas-legales";
+import type { RepositorioDeClasificacionesDeGoce } from "@/clasificaciones-de-goce/gestionar-clasificaciones";
 import type { RepositorioDeFuentesExternas } from "@/fuentes-externas/gestionar-fuentes-externas";
 import { TIPOS_DE_FUENTE } from "@/fuentes-externas/tipos-de-fuente";
 import { corteDeIncidencias, obtenerDiasDeVacaciones, obtenerHechosDeJornadas, obtenerHechosDelCorte, type LectorDeHechosDeAsistencia } from "@/periodos/hechos-para-pagos";
@@ -16,16 +17,19 @@ export interface FuentesDelBorrador {
   asistencia: LectorDeHechosDeAsistencia;
   externas: Pick<RepositorioDeFuentesExternas, "listarImportesDelMes" | "listarConfirmacionesDelMes" | "listarAbonosVacacionales">;
   descansos: Pick<RepositorioDeDescansosYFeriados, "listarSustitutoriosParaPagos">;
+  /** Clasificaciones de goce de permisos y suspensiones; sin esta fuente toda jornada de ese tipo queda pendiente. */
+  clasificaciones?: Pick<RepositorioDeClasificacionesDeGoce, "listarEntre">;
 }
 
 /** Reúne todas las fuentes antes de entrar al cálculo puro. */
 export async function prepararBorrador(fuentes: FuentesDelBorrador, mesDePago: string) {
   const corte = corteDeIncidencias(mesDePago);
-  const [relaciones, condiciones, reglas, hechos, importes, confirmaciones, abonosVacacionales, sustitutorios] = await Promise.all([
+  const [relaciones, condiciones, reglas, hechos, importes, confirmaciones, abonosVacacionales, sustitutorios, clasificacionesDeGoce] = await Promise.all([
     fuentes.relaciones.listarConPersona(), fuentes.condiciones.listarTodas(), fuentes.reglas.listarTodas(),
     obtenerHechosDelCorte(fuentes.asistencia, corte), fuentes.externas.listarImportesDelMes(mesDePago),
     fuentes.externas.listarConfirmacionesDelMes(mesDePago), fuentes.externas.listarAbonosVacacionales(),
     fuentes.descansos.listarSustitutoriosParaPagos(corte.inicio, corte.fin),
+    fuentes.clasificaciones?.listarEntre(corte.inicio, corte.fin) ?? Promise.resolve([]),
   ]);
   // Los días de vacaciones posteriores al día 25 viven fuera del corte; no cambian su cobertura ni lo que exige finalizar.
   const vacaciones = await obtenerDiasDeVacaciones(fuentes.asistencia, ventanaDeVacaciones(mesDePago), hechos.revisiones);
@@ -39,7 +43,7 @@ export async function prepararBorrador(fuentes: FuentesDelBorrador, mesDePago: s
     reglas: reglas.filter((regla) => regla.reemplazadaEn === null),
     problemasDelCorte: hechos.problemas.map(({ mensaje }) => mensaje), revisiones: hechos.revisiones,
     hechosPorDni: hechos.hechosPorDni, sustitutorios, hechosDeOrigenPorDni, importes, diasDeVacaciones: vacaciones.fechasPorDni, abonosVacacionales,
-    vacacionesProvisionales: vacaciones.provisional,
+    vacacionesProvisionales: vacaciones.provisional, clasificacionesDeGoce,
     fuentesPendientes: TIPOS_DE_FUENTE.filter((tipo) => !confirmados.has(tipo.codigo)).map((tipo) => tipo.nombre),
   });
   return { ...borrador, fuentes: TIPOS_DE_FUENTE.map((tipo) => ({
