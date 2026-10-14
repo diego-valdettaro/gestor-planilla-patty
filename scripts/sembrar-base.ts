@@ -198,6 +198,7 @@ async function limpiar(pool: Pool): Promise<void> {
     DELETE FROM confirmaciones_de_fuente WHERE confirmada_por_id IN (SELECT id FROM cuentas_locales WHERE nombre_usuario IN (${usuarios}));
     DELETE FROM condiciones_laborales WHERE relacion_laboral_id IN (SELECT id FROM relaciones_laborales WHERE dni LIKE '${PATRON_DNI_DEMO}');
     DELETE FROM relaciones_laborales WHERE dni LIKE '${PATRON_DNI_DEMO}';
+    DELETE FROM clasificaciones_de_goce WHERE dni LIKE '${PATRON_DNI_DEMO}' OR clasificado_por_id IN (SELECT id FROM cuentas_locales WHERE nombre_usuario IN (${usuarios}));
     DELETE FROM colaboradores WHERE dni LIKE '${PATRON_DNI_DEMO}';
     DELETE FROM sedes WHERE nombre IN (${sedes});
     DELETE FROM reglas_legales WHERE activada_por_id IN (SELECT id FROM cuentas_locales WHERE nombre_usuario IN (${usuarios}));
