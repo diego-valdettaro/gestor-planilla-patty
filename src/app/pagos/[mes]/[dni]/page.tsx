@@ -6,6 +6,7 @@ import { repositorioDeCuentas } from "@/autenticacion/servicio";
 import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
 import { buscarConcepto } from "@/conceptos-de-preliquidacion/catalogo";
 import { formatearSoles } from "@/condiciones-laborales/valores";
+import { formatearPorcentaje } from "@/reglas-legales/valores";
 import { formatearMes } from "@/fuentes-externas/valores";
 import { totalDeHorasExtraCentimos, totalDeTrabajoEnDescansoOFeriadoCentimos, type DescansoVacacionalDelBorrador, type LineaDeBorrador } from "@/pagos/calcular-borrador";
 import { prepararBorrador } from "@/pagos/preparar-borrador";
@@ -34,13 +35,13 @@ function baseDeLinea(linea: LineaDeBorrador, dni: string, responsables: Map<stri
     case "reduccion_por_descanso_semanal":
       return <p>Un treintavo del valor día (remuneración ordinaria computable {formatearSoles(linea.remuneracionOrdinariaComputableCentimos)} ÷ 30 ÷ 30) por la {linea.decision ? `ausencia sin goce, clasificada «Sin goce»` : "falta"} del {linea.fecha}, aparte de la reducción del propio día. Redondeo a céntimos por línea.{verJornada(linea.fecha, linea.grupo)}</p>;
     case "asignacion_familiar":
-      return <p>{linea.tasaEnCentesimasDePunto / 100} % de la remuneración mínima vital vigente ({formatearSoles(linea.baseCentimos)}), porque Finanzas la registró como otorgada. No se guardan datos del menor. Redondeo a céntimos por línea.</p>;
+      return <p>{formatearPorcentaje(linea.tasaEnCentesimasDePunto)} de la remuneración mínima vital vigente ({formatearSoles(linea.baseCentimos)}), porque Finanzas la registró como otorgada. No se guardan datos del menor. Redondeo a céntimos por línea.</p>;
     case "aporte_onp":
     case "aporte_obligatorio_afp":
     case "prima_de_seguro_afp":
     case "comision_afp":
     case "essalud_patronal":
-      return <p>{linea.tasaEnCentesimasDePunto / 100} % sobre la base de devengue de {formatearMes(linea.mesDeDevengue)} ({formatearSoles(linea.baseCentimos)})
+      return <p>{formatearPorcentaje(linea.tasaEnCentesimasDePunto)} sobre la base de devengue de {formatearMes(linea.mesDeDevengue)} ({formatearSoles(linea.baseCentimos)})
         {linea.topeCentimos !== undefined && <>, con tope de {formatearSoles(linea.topeCentimos)}</>}
         {linea.minimoCentimos !== undefined && <>, con base mínima de {formatearSoles(linea.minimoCentimos)}</>}.
         {linea.tipo === "aporte_patronal" ? " Lo paga el empleador: no resta del neto de la persona." : " Se descuenta a la persona."} Redondeo a céntimos por línea.</p>;

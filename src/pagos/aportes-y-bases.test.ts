@@ -329,6 +329,21 @@ describe("aportes y bases por devengue", () => {
     expect(calcularBorrador(e).personas[0]).toMatchObject({ basesPorDevengue: [{ pensionariaCentimos: 289667, essaludRemunerativaCentimos: 289667, quintaCentimos: 309667 }] });
   });
 
+  it("T10 un importe de un devengue anterior no recibe el mínimo completo de EsSalud: sus bases quedan Pendiente", () => {
+    const e = entrada();
+    e.importes = [{ ...importe("movilidad_supeditada_a_asistencia", 3000), mesDeDevengue: "2026-09", fechaDelHecho: "2026-09-20" }];
+    const p = calcularBorrador(e).personas[0];
+    expect(p.basesPorDevengue.find(b => b.mesDeDevengue === "2026-09")).toMatchObject({ pensionariaCentimos: null, essaludRemunerativaCentimos: null, essaludAplicableCentimos: null, quintaCentimos: null });
+    expect(p.lineas.filter(l => l.mesDeDevengue === "2026-09" && (l.concepto === "essalud_patronal" || l.concepto === "aporte_onp"))).toEqual([]);
+    expect(p.basesPorDevengue.find(b => b.mesDeDevengue === "2026-10")).toMatchObject({ pensionariaCentimos: 310000, essaludAplicableCentimos: 310000 });
+  });
+
+  it("T11 la sede de adscripción se consulta el día 25 del mes de pago, como antes de este cambio", () => {
+    const e = entrada();
+    e.condiciones.push({ relacionId: "r1", dato: "sede_de_adscripcion", valor: "Lima", vigenteDesde: "2026-10-10" });
+    expect(calcularBorrador(e).personas[0].sedeDeAdscripcion).toBe("Lima");
+  });
+
   it("T01 asignación otorgada completa en General y REMYPE, con historia mensual y falta distinta de false", () => {
     for (const regimen of ["general", "remype_pequena_empresa"]) {
       const e = entrada();

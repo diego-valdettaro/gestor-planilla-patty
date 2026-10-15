@@ -100,7 +100,9 @@ export function basesPorDevengue(entrada: EntradaDeBorrador, relacion: RelacionC
   ];
   const meses = [...new Set([entrada.mesDePago, ...componentes.map(c => c.mes)])].sort();
   return meses.map(mesDeDevengue => {
-    if (mesesPendientes.has(mesDeDevengue)) return { mesDeDevengue, pensionariaCentimos: null, essaludRemunerativaCentimos: null, essaludAplicableCentimos: null, quintaCentimos: null };
+    // Un devengue anterior al mes de pago solo trae importes sueltos (ajustes, regularizaciones, arrastre): su remuneración completa no está en este borrador,
+    // así que no se le aplica el mínimo ni el tope hasta que Finanzas defina la regla.
+    if (mesesPendientes.has(mesDeDevengue) || mesDeDevengue !== entrada.mesDePago) return { mesDeDevengue, pensionariaCentimos: null, essaludRemunerativaCentimos: null, essaludAplicableCentimos: null, quintaCentimos: null };
     const sumar = (base: "pensionaria" | "essalud" | "quinta") => {
       const desconocida = TIPOS_DE_FUENTE.filter(tipo => entrada.fuentesPendientes.includes(tipo.nombre))
         .some(tipo => tipo.conceptos.some(codigo => {

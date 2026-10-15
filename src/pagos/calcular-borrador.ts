@@ -637,6 +637,8 @@ export function calcularBorrador(entrada: EntradaDeBorrador): BorradorDePagos {
       hecho.fecha >= relacion.ingreso && (!relacion.ceseConfirmado || relacion.cese === null || hecho.fecha <= relacion.cese));
     const bloqueos = [...actual.bloqueos, ...arrastre.bloqueos];
     const fechaDeConsulta = relacion.ingreso > `${mes}-01` ? relacion.ingreso : `${mes}-01`;
+    // La sede de adscripción agrupa los totales: se consulta como siempre, el día 25 (o el ingreso, si es posterior).
+    const fechaDeSede = relacion.ingreso > `${mes}-25` ? relacion.ingreso : `${mes}-25`;
     const afiliacion = condicionEn(entrada, relacion.id, "afiliacion_pensionaria", fechaDeConsulta);
     for (const dato of DATOS_LABORALES) {
       if (dato === "sueldo" || (dato === "comision_afp" && !esAfp(afiliacion))) continue;
@@ -669,7 +671,7 @@ export function calcularBorrador(entrada: EntradaDeBorrador): BorradorDePagos {
     }
     const bases = basesPorDevengue(entrada, relacion, lineas, mesesPendientes);
     lineas.push(...aportesDelDevengue(entrada, relacion, bases, bloqueos));
-    return { relacion, vacaciones: desglose.vacaciones, sedeDeAdscripcion: String(condicionEn(entrada, relacion.id, "sede_de_adscripcion", fechaDeConsulta) ?? "") || null,
+    return { relacion, vacaciones: desglose.vacaciones, sedeDeAdscripcion: String(condicionEn(entrada, relacion.id, "sede_de_adscripcion", fechaDeSede) ?? "") || null,
       lineas, basesPorDevengue: bases, bloqueos,
       sueldoCalculadoCentimos: [...arrastre.lineas, ...actual.lineas].reduce((suma, linea) => suma + linea.importeCentimos, 0), netoCentimos: null };
   }).sort((a, b) => a.relacion.nombre.localeCompare(b.relacion.nombre) || a.relacion.dni.localeCompare(b.relacion.dni));

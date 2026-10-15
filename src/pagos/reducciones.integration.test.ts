@@ -13,6 +13,7 @@ import { RepositorioPostgresDeCondicionesLaborales } from "@/condiciones-laboral
 import * as schema from "@/db/schema";
 import { RepositorioPostgresDeDescansosYFeriados } from "@/descansos-y-feriados/repositorio-postgres";
 import { RepositorioPostgresDeFuentesExternas } from "@/fuentes-externas/repositorio-postgres";
+import { TIPOS_DE_FUENTE } from "@/fuentes-externas/tipos-de-fuente";
 import { RepositorioPostgresDePeriodos } from "@/periodos/repositorio-postgres";
 import { RepositorioPostgresDeReglasLegales } from "@/reglas-legales/repositorio-postgres";
 import { RepositorioPostgresDeRelacionesLaborales } from "@/relaciones-laborales/repositorio-postgres";
@@ -85,6 +86,7 @@ describe.skipIf(!databaseUrl)("reducciones del borrador con permisos y suspensio
 
   afterAll(async () => {
     await db.delete(schema.clasificacionesDeGoce).where(eq(schema.clasificacionesDeGoce.dni, dni));
+    await db.delete(schema.confirmacionesDeFuente).where(eq(schema.confirmacionesDeFuente.confirmadaPorId, cuentaId));
     await db.delete(schema.reglasLegales).where(eq(schema.reglasLegales.activadaPorId, cuentaId));
     await db.delete(schema.estadosManuales).where(eq(schema.estadosManuales.asistenciaId, asistenciaId));
     await db.delete(schema.asistenciasEsperadas).where(eq(schema.asistenciasEsperadas.dni, dni));
@@ -123,6 +125,23 @@ describe.skipIf(!databaseUrl)("reducciones del borrador con permisos y suspensio
     const ana = await persona();
     expect(reducciones(ana.lineas)).toEqual([]);
     expect(ana.bloqueos).toEqual([]);
+  });
+
+  it("CU-11 el borrador real deja las bases Pendiente sin fuentes confirmadas y calcula bases y aportes al confirmarlas", async () => {
+    await clasificarGoce(clasificaciones, finanzas, { dni, fecha, conGoce: true });
+    const pendientes = await persona();
+    expect(pendientes.basesPorDevengue).toMatchObject([{ mesDeDevengue: "2093-10", pensionariaCentimos: null, essaludRemunerativaCentimos: null, essaludAplicableCentimos: null, quintaCentimos: null }]);
+    expect(pendientes.lineas.filter(({ concepto }) => concepto === "aporte_onp" || concepto === "essalud_patronal")).toEqual([]);
+    await db.insert(schema.confirmacionesDeFuente).values(TIPOS_DE_FUENTE.map(({ codigo }) => ({ tipoDeFuente: codigo, mesDeAplicacion: "2093-10", confirmadaPorId: cuentaId })));
+    try {
+      const ana = await persona();
+      // Esperados a mano, no del código: sueldo S/ 1.800,00; ONP 13 % = S/ 234,00; EsSalud 9 % sobre el mayor entre S/ 1.800,00 y el mínimo de S/ 1.000,00 = S/ 162,00.
+      expect(ana.basesPorDevengue).toEqual([{ mesDeDevengue: "2093-10", pensionariaCentimos: 180000, essaludRemunerativaCentimos: 180000, essaludAplicableCentimos: 180000, quintaCentimos: 180000 }]);
+      expect(ana.lineas.filter(({ concepto }) => concepto === "aporte_onp")).toMatchObject([{ importeCentimos: 23400, baseCentimos: 180000, tipo: "deduccion_del_trabajador", efectoEnNeto: "resta" }]);
+      expect(ana.lineas.filter(({ concepto }) => concepto === "essalud_patronal")).toMatchObject([{ importeCentimos: 16200, baseCentimos: 180000, tipo: "aporte_patronal", efectoEnNeto: "ninguno" }]);
+    } finally {
+      await db.delete(schema.confirmacionesDeFuente).where(eq(schema.confirmacionesDeFuente.confirmadaPorId, cuentaId));
+    }
   });
 
   it("CU-10 cada reducción se rastrea a la jornada real de Asistencia y a la decisión de goce", async () => {
