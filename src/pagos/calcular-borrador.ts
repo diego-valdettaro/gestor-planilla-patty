@@ -9,6 +9,7 @@ import { formatearFechaDeRelacion } from "@/relaciones-laborales/vigencia";
 import { desplazarFecha } from "@/turnos/semana";
 
 import { asociarAbono, descansosDe, diasConvencionalesDelMes, fechasEnMes, mesesDelDescanso, repartirAbono, ventanaDeVacaciones, type DescansoVacacional } from "./vacaciones";
+import { aportesDelDevengue, basesPorDevengue, bloqueoPorCambio, hayCambioIntramensual, type BasesPorDevengue, type LineaDeAporte } from "./aportes-y-bases";
 
 /** Decisión de Finanzas sobre una jornada de permiso o suspensión: con o sin goce de remuneración (#123). */
 export interface ClasificacionDeGoce {
@@ -136,7 +137,19 @@ export interface LineaDeReduccionDeDia {
   decision?: Pick<ClasificacionDeGoce, "conGoce" | "clasificadoPorId" | "clasificadoEn">;
 }
 
-export type LineaDeBorrador = LineaDeReduccionDeDia | LineaDeReduccionPorTardanza | LineaDeSueldo | LineaDeRemuneracionVacacional | LineaDeAjusteDeVacaciones | LineaDeHoraExtra | LineaDeTrabajoEnDescansoOFeriado;
+export interface LineaDeAsignacionFamiliar {
+  concepto: "asignacion_familiar";
+  dias?: never;
+  importeCentimos: number;
+  baseCentimos: number;
+  tasaEnCentesimasDePunto: number;
+  mesDePago: string;
+  mesDeDevengue: string;
+  corte: Corte;
+  origen: "Reglas legales y condiciones laborales";
+}
+
+export type LineaDeBorrador = LineaDeAporte | LineaDeAsignacionFamiliar | LineaDeReduccionDeDia | LineaDeReduccionPorTardanza | LineaDeSueldo | LineaDeRemuneracionVacacional | LineaDeAjusteDeVacaciones | LineaDeHoraExtra | LineaDeTrabajoEnDescansoOFeriado;
 
 /** Reclasifica el sueldo básico de los días de descanso del mes; usa la base vigente al inicio del descanso. */
 export interface LineaDeRemuneracionVacacional {
@@ -213,6 +226,7 @@ export function totalDeTrabajoEnDescansoOFeriadoCentimos(lineas: LineaDeBorrador
 
 export interface PersonaDeBorrador {
   relacion: RelacionConPersona;
+  basesPorDevengue: BasesPorDevengue[];
   sedeDeAdscripcion: string | null;
   lineas: LineaDeBorrador[];
   bloqueos: string[];
@@ -563,7 +577,44 @@ function reduccionesDelCorte(entrada: EntradaDeBorrador, relacion: RelacionConPe
   return { lineas, bloqueos };
 }
 
-/** Calcula sueldo, sobretiempo y trabajo en descanso o feriado del borrador; los demás conceptos entran en sus tickets propios. */
+function asignacionFamiliarDelMes(entrada: EntradaDeBorrador, relacion: RelacionConPersona, mes: string, bloqueos: string[]): { lineas: LineaDeAsignacionFamiliar[]; pendiente: boolean } {
+  const fecha = relacion.ingreso > `${mes}-01` ? relacion.ingreso : `${mes}-01`;
+  const otorgada = condicionEn(entrada, relacion.id, "elegibilidad_familiar", fecha);
+  const regimen = condicionEn(entrada, relacion.id, "regimen_laboral", fecha);
+  const rmv = reglaEn(entrada, "rmv", fecha);
+  const tasa = reglaEn(entrada, "asignacion_familiar_porcentaje_de_rmv", fecha);
+  let cambio = false;
+  for (const dato of ["regimen_laboral", "elegibilidad_familiar"] as const) {
+    if (hayCambioIntramensual(entrada.condiciones.filter(c => c.relacionId === relacion.id && c.dato === dato), relacion, mes)) {
+      bloqueos.push(bloqueoPorCambio(mes, NOMBRE_DE_DATO[dato]));
+      cambio = true;
+    }
+  }
+  if (otorgada === true) {
+    for (const codigo of ["rmv", "asignacion_familiar_porcentaje_de_rmv"] as const) {
+      if (hayCambioIntramensual(entrada.reglas.filter(r => r.codigo === codigo), relacion, mes)) {
+        bloqueos.push(bloqueoPorCambio(mes, buscarDefinicion(codigo)?.nombre ?? codigo));
+        cambio = true;
+      }
+    }
+  }
+  if (cambio) return { lineas: [], pendiente: true };
+  // Beneficio ya otorgado por Patty, también en REMYPE: no se infiere el derecho.
+  if (otorgada === undefined || regimen === undefined) {
+    bloqueos.push(`Pendiente: asignación familiar de ${mes}; falta régimen laboral o asignación familiar otorgada en Condiciones laborales.`);
+    return { lineas: [], pendiente: true };
+  }
+  if (otorgada === false) return { lineas: [], pendiente: false };
+  if (rmv === undefined || tasa === undefined) {
+    bloqueos.push(`Pendiente: asignación familiar de ${mes}; falta RMV o porcentaje vigente en Reglas legales.`);
+    return { lineas: [], pendiente: true };
+  }
+  return { pendiente: false, lineas: [{ concepto: "asignacion_familiar", importeCentimos: mitadArriba(rmv * tasa, 10_000), baseCentimos: rmv,
+    tasaEnCentesimasDePunto: tasa, mesDePago: entrada.mesDePago, mesDeDevengue: mes, corte: entrada.corte,
+    origen: "Reglas legales y condiciones laborales" }] };
+}
+
+/** Calcula las líneas del borrador sin producir todavía un neto definitivo. */
 export function calcularBorrador(entrada: EntradaDeBorrador): BorradorDePagos {
   const mes = entrada.mesDePago;
   const anterior = mesAnterior(mes);
@@ -585,10 +636,11 @@ export function calcularBorrador(entrada: EntradaDeBorrador): BorradorDePagos {
     const hechos = (entrada.hechosPorDni[relacion.dni] ?? []).filter((hecho) =>
       hecho.fecha >= relacion.ingreso && (!relacion.ceseConfirmado || relacion.cese === null || hecho.fecha <= relacion.cese));
     const bloqueos = [...actual.bloqueos, ...arrastre.bloqueos];
-    const fechaDeConsulta = relacion.ingreso > `${mes}-25` ? relacion.ingreso : `${mes}-25`;
+    const fechaDeConsulta = relacion.ingreso > `${mes}-01` ? relacion.ingreso : `${mes}-01`;
     const afiliacion = condicionEn(entrada, relacion.id, "afiliacion_pensionaria", fechaDeConsulta);
     for (const dato of DATOS_LABORALES) {
       if (dato === "sueldo" || (dato === "comision_afp" && !esAfp(afiliacion))) continue;
+      if (hayCambioIntramensual(entrada.condiciones.filter(c => c.relacionId === relacion.id && c.dato === dato), relacion, mes)) continue;
       if (condicionEn(entrada, relacion.id, dato, fechaDeConsulta) === undefined) {
         bloqueos.push(`Sin ${NOMBRE_DE_DATO[dato].toLocaleLowerCase("es")} vigente el ${fechaDeConsulta}. Registre el valor en Condiciones laborales.`);
       }
@@ -601,35 +653,28 @@ export function calcularBorrador(entrada: EntradaDeBorrador): BorradorDePagos {
     const reduccionesDeAsistencia = reduccionesDelCorte(entrada, relacion, hechos);
     bloqueos.push(...reduccionesDeAsistencia.bloqueos);
     // El sueldo es visible aun cuando otro concepto o la cobertura impida un neto confiable.
-    const lineas: LineaDeBorrador[] = [...arrastre.lineas, ...actual.lineas, ...sobretiempo.lineas, ...enDescanso.lineas, ...reduccionesDeAsistencia.lineas];
+    const familiar = asignacionFamiliarDelMes(entrada, relacion, mes, bloqueos);
+    const lineas: LineaDeBorrador[] = [...arrastre.lineas, ...actual.lineas, ...sobretiempo.lineas, ...enDescanso.lineas, ...reduccionesDeAsistencia.lineas, ...familiar.lineas];
     const desglose = vacacionesDeLaPersona(entrada, relacion, conArrastre ? [anterior, mes] : [mes], descansos, lineas);
     bloqueos.push(...desglose.bloqueos);
+    const mesesPendientes = new Set(familiar.pendiente ? [mes] : []);
+    if (actual.bloqueos.length) mesesPendientes.add(mes);
+    // Una incidencia sin resolver puede cambiar el sueldo del corte: sus bases no se muestran como si fueran definitivas.
+    const hayIncidenciaPendiente = hechos.some((hecho) => hecho.resultado === "pendiente")
+      || sobretiempo.bloqueos.length > 0 || enDescanso.bloqueos.length > 0 || reduccionesDeAsistencia.bloqueos.length > 0;
+    if (hayIncidenciaPendiente) mesesPendientes.add(mes);
+    if (conArrastre) {
+      mesesPendientes.add(anterior);
+      bloqueos.push(`Pendiente: devengue ${anterior}, arrastre parcial; falta definir con Finanzas la asignación familiar, el mínimo y el tope aplicables. Se conserva el sueldo de origen.`);
+    }
+    const bases = basesPorDevengue(entrada, relacion, lineas, mesesPendientes);
+    lineas.push(...aportesDelDevengue(entrada, relacion, bases, bloqueos));
     return { relacion, vacaciones: desglose.vacaciones, sedeDeAdscripcion: String(condicionEn(entrada, relacion.id, "sede_de_adscripcion", fechaDeConsulta) ?? "") || null,
-      lineas, bloqueos, sueldoCalculadoCentimos: [...arrastre.lineas, ...actual.lineas].reduce((suma, linea) => suma + linea.importeCentimos, 0), netoCentimos: null };
+      lineas, basesPorDevengue: bases, bloqueos,
+      sueldoCalculadoCentimos: [...arrastre.lineas, ...actual.lineas].reduce((suma, linea) => suma + linea.importeCentimos, 0), netoCentimos: null };
   }).sort((a, b) => a.relacion.nombre.localeCompare(b.relacion.nombre) || a.relacion.dni.localeCompare(b.relacion.dni));
-  if (personas.length) {
-    const necesarias = new Set<CodigoDeReglaLegal>(["essalud_tasa", "essalud_base_minima"]);
-    for (const persona of personas) {
-      const afiliacion = condicionEn(entrada, persona.relacion.id, "afiliacion_pensionaria", `${mes}-25`);
-      if (afiliacion === "onp") necesarias.add("onp_tasa");
-      if (esAfp(afiliacion)) {
-        necesarias.add("afp_aporte_obligatorio");
-        necesarias.add("afp_prima_seguro");
-        necesarias.add("afp_remuneracion_maxima_asegurable");
-        const comision = condicionEn(entrada, persona.relacion.id, "comision_afp", `${mes}-25`);
-        if (comision === "flujo" || comision === "mixta") necesarias.add(`${afiliacion}_comision_${comision}` as CodigoDeReglaLegal);
-      }
-      if (condicionEn(entrada, persona.relacion.id, "elegibilidad_familiar", `${mes}-25`) === true) {
-        necesarias.add("rmv");
-        necesarias.add("asignacion_familiar_porcentaje_de_rmv");
-      }
-    }
-    for (const codigo of necesarias) {
-      if (!entrada.reglas.some((regla) => regla.codigo === codigo && regla.vigenteDesde <= `${mes}-25`)) {
-        bloqueosDelMes.push(`No hay ${buscarDefinicion(codigo)?.nombre ?? codigo} vigente para ${mes}. Active el valor en Reglas legales.`);
-      }
-    }
-  }
+  // El resumen usa las faltas efectivas por devengue, no selecciona otra afiliación al día 25.
+  bloqueosDelMes.push(...new Set(personas.flatMap(persona => persona.bloqueos.filter(bloqueo => bloqueo.startsWith("No hay ")))));
   return { mesDePago: mes, corte: entrada.corte, revisiones: entrada.revisiones, personas, bloqueosDelMes,
     vacacionesProvisionales: entrada.vacacionesProvisionales,
     sueldoCalculadoCentimos: personas.reduce((suma, persona) => suma + persona.sueldoCalculadoCentimos, 0) };

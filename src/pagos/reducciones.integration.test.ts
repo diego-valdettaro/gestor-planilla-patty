@@ -64,6 +64,13 @@ describe.skipIf(!databaseUrl)("reducciones del borrador con permisos y suspensio
       { ...condicion, dato: "afiliacion_pensionaria", afiliacionPensionaria: "onp" },
       { ...condicion, dato: "sede_de_adscripcion", sedeDeAdscripcion: sede },
     ]);
+    // Valores sintéticos: esta prueba trata de reducciones, pero el borrador ahora exige las reglas de aportes vigentes.
+    const regla = { vigenteDesde: "2093-01-01", fuenteOficial: "Valor sintético de prueba", activadaPorId: cuentaId };
+    await db.insert(schema.reglasLegales).values([
+      { ...regla, codigo: "onp_tasa", tasaCentesimasDePunto: 1300 },
+      { ...regla, codigo: "essalud_tasa", tasaCentesimasDePunto: 900 },
+      { ...regla, codigo: "essalud_base_minima", importeCentimos: 100000 },
+    ]);
     const [periodo] = await db.insert(schema.periodosPlanilla).values({ inicio: "2093-09-26", fin: "2093-10-25", estado: "abierto" }).returning({ id: schema.periodosPlanilla.id });
     periodoId = periodo.id;
     await db.insert(schema.turnosPublicados).values({ dni, fecha, grupo, sede, entradaProgramada: "09:00", salidaProgramada: "17:00", descanso: false });
@@ -78,6 +85,7 @@ describe.skipIf(!databaseUrl)("reducciones del borrador con permisos y suspensio
 
   afterAll(async () => {
     await db.delete(schema.clasificacionesDeGoce).where(eq(schema.clasificacionesDeGoce.dni, dni));
+    await db.delete(schema.reglasLegales).where(eq(schema.reglasLegales.activadaPorId, cuentaId));
     await db.delete(schema.estadosManuales).where(eq(schema.estadosManuales.asistenciaId, asistenciaId));
     await db.delete(schema.asistenciasEsperadas).where(eq(schema.asistenciasEsperadas.dni, dni));
     await db.delete(schema.turnosPublicados).where(eq(schema.turnosPublicados.dni, dni));

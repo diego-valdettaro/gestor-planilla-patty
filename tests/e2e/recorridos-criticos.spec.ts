@@ -43,30 +43,25 @@ test("una contraseña incorrecta muestra un error recuperable", async ({ page })
   expect(errores).toEqual([]);
 });
 
-test("el Administrador del sistema abre los recorridos críticos sin errores de navegador", async ({ page }) => {
-  const errores = observarErroresDelNavegador(page);
+// Cada ruta conserva su presupuesto: el login y cinco compilaciones en desarrollo
+// agotaban juntos los 30 segundos de una sola prueba.
+for (const recorrido of [
+  { ruta: "/configuracion", titulo: "Configuración" },
+  { ruta: "/cuentas", titulo: "Cuentas" },
+  { ruta: "/turnos", titulo: "Planificación de horarios" },
+  { ruta: "/asistencias", titulo: "Asistencias" },
+  { ruta: "/periodos", titulo: "Períodos de planilla" },
+]) {
+  test(`el Administrador del sistema abre ${recorrido.ruta} sin errores de navegador`, async ({ page }) => {
+    const errores = observarErroresDelNavegador(page);
+    await iniciarSesionComoAdministracion(page);
 
-  await page.goto("/iniciar-sesion");
-  await page.getByLabel("Usuario").fill("admin");
-  await page.getByLabel("Contraseña").fill("admin");
-  await page.getByRole("button", { name: "Entrar" }).click();
-  await expect(page).toHaveURL(/\/turnos$/);
-
-  const recorridos = [
-    { ruta: "/configuracion", titulo: "Configuración" },
-    { ruta: "/cuentas", titulo: "Cuentas" },
-    { ruta: "/turnos", titulo: "Planificación de horarios" },
-    { ruta: "/asistencias", titulo: "Asistencias" },
-    { ruta: "/periodos", titulo: "Períodos de planilla" },
-  ];
-
-  for (const recorrido of recorridos) {
     const respuesta = await page.goto(recorrido.ruta);
     expect(respuesta?.ok(), `${recorrido.ruta} debe responder sin error`).toBe(true);
     await expect(page.getByRole("heading", { name: recorrido.titulo, level: 1 })).toBeVisible();
     expect(errores, `${recorrido.ruta} no debe registrar errores de navegador`).toEqual([]);
-  }
-});
+  });
+}
 
 test("un horario personalizado conserva sede y horas al reabrirlo", async ({ page }) => {
   test.setTimeout(60_000);
@@ -664,6 +659,9 @@ async function iniciarSesionComoAdministracion(page: Page): Promise<void> {
   await page.getByLabel("Usuario").fill("admin");
   await page.getByLabel("Contraseña").fill("admin");
   await page.getByRole("button", { name: "Entrar" }).click();
+  // La redirección puede incluir compilación; se acota por el tiempo de la prueba,
+  // no por los cinco segundos predeterminados de una aserción.
+  await page.waitForURL(/\/turnos$/);
   await expect(page).toHaveURL(/\/turnos$/);
 }
 
@@ -747,7 +745,25 @@ test("las tablas de /periodos se desplazan dentro de su región a 375 px sin tru
   await page.setViewportSize({ width: 375, height: 812 });
   await iniciarSesionComoAdministracion(page);
   await page.goto("/periodos");
-  await page.locator("details > summary").evaluateAll((resumenes) => resumenes.forEach((resumen) => resumen.parentElement?.setAttribute("open", "")));
+  await expect(page.getByRole("heading", { name: "Períodos de planilla", level: 1 })).toBeVisible();
+
+  // Abrir un details nativo antes de hidratar React alteraba el HTML esperado.
+  // El menú confirma mediante interacción que React ya atiende los eventos.
+  const navegacion = page.getByRole("navigation", { name: "Navegación principal" });
+  const menu = navegacion.getByRole("button", { name: "Menú", exact: true });
+  await expect(menu).toHaveAttribute("aria-expanded", "false");
+  await menu.click();
+  await expect(navegacion.getByRole("button", { name: "Cerrar menú" })).toHaveAttribute("aria-expanded", "true");
+  await page.keyboard.press("Escape");
+  await expect(menu).toHaveAttribute("aria-expanded", "false");
+
+  const detalles = page.locator("details");
+  for (let indice = 0; indice < await detalles.count(); indice++) {
+    const detalle = detalles.nth(indice);
+    await expect(detalle).not.toHaveAttribute("open");
+    await detalle.locator(":scope > summary").click();
+    await expect(detalle).toHaveAttribute("open", "");
+  }
 
   const regiones = page.locator(".panel-tabla");
   const cantidad = await regiones.count();
