@@ -25,12 +25,19 @@ const adelanto = (monto = 30000, parcial: Partial<ImporteExterno> = {}) => impor
 const prestamo = (monto = 20000) => importe("cuota_de_prestamo", "prestamos", monto);
 const e1 = () => [comision(), movilidad(), adelanto(), prestamo()];
 
+const reglasDemo: EntradaDeBorrador["reglas"] = [
+  { codigo: "onp_tasa", valor: 1300, vigenteDesde: "2026-01-01" },
+  { codigo: "essalud_tasa", valor: 900, vigenteDesde: "2026-01-01" },
+  { codigo: "essalud_base_minima", valor: 100000, vigenteDesde: "2026-01-01" },
+];
+
 function entrada(parcial: Partial<EntradaDeBorrador> = {}): EntradaDeBorrador {
-  return { mesDePago: mes, corte, relaciones: [ana], condiciones: condiciones("r1", 200000), reglas: [], problemasDelCorte: [], revisiones: [], hechosPorDni: {}, sustitutorios: [],
+  return { mesDePago: mes, corte, relaciones: [ana], condiciones: condiciones("r1", 200000), // Reglas DEMO para el contrato integrado #126; no representan normativa vigente.
+    reglas: reglasDemo, problemasDelCorte: [], revisiones: [], hechosPorDni: {}, sustitutorios: [],
     hechosDeOrigenPorDni: {}, fuentesPendientes: [], importes: [], diasDeVacaciones: {}, abonosVacacionales: [], vacacionesProvisionales: false, ...parcial };
 }
 const primera = (parcial: Partial<EntradaDeBorrador>) => calcularBorrador(entrada(parcial)).personas[0];
-const externas = (lineas: Array<{ concepto: string }>) => lineas.filter(({ concepto }) => concepto !== "sueldo_basico");
+const externas = (lineas: Array<{ concepto: string; origen: string }>) => lineas.filter(({ origen }) => origen === "Fuente externa");
 
 describe("neto con fuentes externas", () => {
   it("C01 cada línea externa lleva el efecto en las bases del catálogo", () => {
@@ -189,7 +196,7 @@ describe("neto con fuentes externas", () => {
   const reglasDeSobretiempo = [{ codigo: "horas_extra_sobretasa_primeras_dos_horas" as const, valor: 2500, vigenteDesde: "2026-01-01" }, { codigo: "horas_extra_sobretasa_horas_posteriores" as const, valor: 3500, vigenteDesde: "2026-01-01" }];
   const hecho = (fecha: string, parcial: Record<string, unknown>) => ({ dni: ana.dni, fecha, grupo: "Taller", sede: "Lima", horarioAplicado: { entradaProgramada: "09:00", salidaProgramada: "18:00" },
     resultado: "trabajada" as const, minutosTrabajados: 480, tardanza: null, horaExtra: null, diaEspecial: null, evidencia: { asistenciaId: `a-${fecha}`, turnoPublicadoId: `t-${fecha}` }, ...parcial });
-  const conHechos = (hechos: unknown[]) => primera({ condiciones: condiciones("r1", 180000), reglas: reglasDeSobretiempo, importes: e1(), hechosPorDni: { [ana.dni]: hechos as never } });
+  const conHechos = (hechos: unknown[]) => primera({ condiciones: condiciones("r1", 180000), reglas: [...reglasDemo, ...reglasDeSobretiempo], importes: e1(), hechosPorDni: { [ana.dni]: hechos as never } });
 
   it("C23 una hora extra aprobada suma al neto", () => {
     const resultado = conHechos([hecho("2026-10-02", { horaExtra: { estado: "aprobada", minutosAl25: 120, minutosAl35: 0, trabajoNocturno: false, causaDeDescarte: null } })]);
@@ -251,4 +258,19 @@ describe("neto con fuentes externas", () => {
     expect(resultado.netoCentimos).toBe(179500);
     expect(resultado.lineas).toContainEqual(expect.objectContaining({ concepto: "ajuste_de_preliquidacion", importeCentimos: 2500, efectoEnNeto: "suma" }));
   });
+  it.each(["concepto_inexistente", "ajuste_de_preliquidacion"])("RC2 ajuste inválido %s bloquea solo su persona, incluidas bases", (conceptoAjustado) => {
+    const resultado = calcularBorrador(entrada({ relaciones: [ana, beto],
+      condiciones: [...condiciones("r1", 200000), ...condiciones("r2", 150000)],
+      importes: [...e1(), ajusteSobre(conceptoAjustado, 2500, "resta")] }));
+    const [a, b] = resultado.personas;
+    expect(a.netoCentimos).toBeNull();
+    expect(a.bloqueos).toContain("Ajuste de preliquidación inválido del 2026-10-05: concepto corregido o sentido inválido. Corrija la fuente de Ajustes de preliquidación.");
+    expect(a.basesPorDevengue).toMatchObject([{ pensionariaCentimos: null, essaludAplicableCentimos: null, quintaCentimos: null }]);
+    expect(a.lineas.some(l => l.concepto === "aporte_onp")).toBe(false);
+    expect(b.bloqueos).toEqual([]);
+    expect(b.netoCentimos).toBe(150000);
+    expect(resultado.personasBloqueadas).toBe(1);
+    expect(resultado.netoCalculadoCentimos).toBe(150000);
+  });
+
 });

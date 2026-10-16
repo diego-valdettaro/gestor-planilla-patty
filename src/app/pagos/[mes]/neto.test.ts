@@ -71,6 +71,17 @@ describe("neto en el mes de pago", () => {
     expect(html).toContain("1 persona con bloqueo");
   });
 
+  it("RP2 distingue el desglose pendiente de los conceptos incluidos en el subtotal", async () => {
+    const html = await render();
+    expect(html).toContain("Incluye el sueldo calculado");
+    expect(html).toContain("ingresos, reducciones y deducciones calculables");
+    expect(html).toContain("Excluye ONP, aporte obligatorio AFP, prima de seguro AFP, comisión AFP y los ajustes sobre esos aportes");
+    expect(html).toContain("El desglose agregado por columnas está pendiente");
+    expect(html).not.toContain("Otros pendientes");
+    expect(html).not.toContain("los demás conceptos y el neto siguen pendientes");
+    expect(seccion(html, "Totales del mes completo")).toContain("S/ 2.770,00");
+  });
+
   it("P05 con una fuente pendiente ninguna persona muestra neto y el mes nombra la fuente", async () => {
     simulacro.preparar.mockResolvedValue(borrador({ bloqueosDelMes: ["Fuente externa pendiente: Préstamos (cuotas)."], personas: [{ ...calculada, netoCentimos: null }],
       totalesPorSede: [{ sede: "Taller", personas: 1, calculadas: 0, netoCentimos: 0 }], netoCalculadoCentimos: 0, personasBloqueadas: 0 }));
@@ -90,7 +101,7 @@ describe("neto en el mes de pago", () => {
   it("P11 sin ninguna persona calculada el neto de los totales dice Incompleto y no S/ 0,00", async () => {
     simulacro.preparar.mockResolvedValue(borrador({ bloqueosDelMes: ["Fuente externa pendiente: Préstamos (cuotas)."], personas: [{ ...calculada, netoCentimos: null }],
       totalesPorSede: [{ sede: "Taller", personas: 1, calculadas: 0, netoCentimos: 0 }], netoCalculadoCentimos: 0, personasBloqueadas: 0 }));
-    const celda = /Pendiente<\/td><td>Pendiente<\/td><td[^>]*>([^<]*)/.exec(seccion(await render(), "Totales del mes completo"))?.[1];
+    const celda = /Desglose pendiente<\/td><td>Desglose pendiente<\/td><td[^>]*>([^<]*)/.exec(seccion(await render(), "Totales del mes completo"))?.[1];
     expect(celda).toBe("Incompleto");
   });
 });

@@ -26,7 +26,12 @@ function fuentesCon(repositorio: FuentesDelBorrador["externas"]): FuentesDelBorr
     relaciones: { listarConPersona: async () => [{ id: "r1", dni: DNI, nombre: "Ana", grupo: "Taller", ingreso: "2026-01-01", cese: null, ingresoConfirmado: true, ceseConfirmado: false }] },
     condiciones: { listarTodas: async () => [condicion("sueldo", 200000), condicion("jornada_ordinaria_diaria", 480), condicion("regimen_laboral", "general"),
       condicion("afiliacion_pensionaria", "onp"), condicion("elegibilidad_familiar", false), condicion("sede_de_adscripcion", "Taller")] },
-    reglas: { listarTodas: async () => [] },
+    // Reglas DEMO sintéticas requeridas por #126; no son tasas legales actuales.
+    reglas: { listarTodas: async () => ([
+      ["onp_tasa", 1300], ["essalud_tasa", 900], ["essalud_base_minima", 100000],
+    ] as const).map(([codigo, valor]) => ({ id: `demo-${codigo}`, codigo, valor, vigenteDesde: "2026-01-01",
+      fuenteOficial: "DEMO sintética; no usar en producción", activadaPorId: finanzas.id, activadaPor: "finanzas",
+      activadaEn: new Date("2026-01-01T00:00:00Z"), reemplazadaEn: null, motivoDeReemplazo: null })) },
     asistencia: {
       listar: async () => [{ id: "p1", inicio: "2026-09-26", fin: "2026-10-25", estado: "cerrado" as const }],
       leerHechosDelPeriodo: async () => ({ periodoId: "p1", revisionId: "rev-1", numero: 1, inicio: "2026-09-26", fin: "2026-10-25", provisional: false, hechos: [] }),
@@ -62,7 +67,7 @@ describe("neto del borrador con fuentes externas", () => {
     await confirmarTodas();
     const persona = await ana();
     expect(persona.netoCentimos).toBe(177000);
-    expect(persona.lineas.filter(({ concepto }) => concepto !== "sueldo_basico").map(({ concepto, importeCentimos }) => ({ concepto, importeCentimos }))
+    expect(persona.lineas.filter((linea) => linea.origen === "Fuente externa").map(({ concepto, importeCentimos }) => ({ concepto, importeCentimos }))
       .sort((a, b) => a.concepto.localeCompare(b.concepto))).toEqual([
       { concepto: "adelanto", importeCentimos: 30000 }, { concepto: "comision_de_ventas", importeCentimos: 15000 },
       { concepto: "cuota_de_prestamo", importeCentimos: 20000 }, { concepto: "movilidad_supeditada_a_asistencia", importeCentimos: 12000 },
@@ -120,4 +125,25 @@ describe("neto del borrador con fuentes externas", () => {
     expect(persona.netoCentimos).toBe(172000);
     expect(persona.lineas).toContainEqual(expect.objectContaining({ concepto: "ajuste_de_preliquidacion", importeCentimos: 5000, efectoEnNeto: "resta" }));
   });
+  // RC1: E1 conserva su subtotal antes de aportes aunque se registren correcciones pensionarias.
+  it.each(["aporte_onp", "aporte_obligatorio_afp", "prima_de_seguro_afp", "comision_afp"].flatMap(
+    concepto => (["suma", "resta"] as const).map(sentido => [concepto, sentido] as const),
+  ))("RC1 ajuste %s %s no altera E1", async (conceptoAjustado, sentidoAjuste) => {
+    await registrarE1();
+    await registrarAjuste(contexto.repositorio, finanzas, { dni: DNI, fechaDelHecho: "2026-10-07", mesDeDevengue: MES,
+      mesDeAplicacion: MES, monto: "10", conceptoAjustado, sentidoAjuste, motivo: "Corrección pensionaria sintética" });
+    await confirmarTodas();
+    const persona = await ana();
+    expect(persona.bloqueos).toEqual([]);
+    expect(persona.lineas.some(linea => linea.concepto === "aporte_onp")).toBe(true);
+    // 200000 + 15000 + 12000 - 30000 - 20000. Aportes y sus ajustes no forman este subtotal.
+    expect(persona.netoCentimos).toBe(177000);
+  });
+
+  it.each(["concepto_inexistente", "ajuste_de_preliquidacion"])("RC2 registrarAjuste sigue rechazando %s", async (conceptoAjustado) => {
+    await expect(registrarAjuste(contexto.repositorio, finanzas, { dni: DNI, fechaDelHecho: "2026-10-07", mesDeDevengue: MES,
+      mesDeAplicacion: MES, monto: "10", conceptoAjustado, sentidoAjuste: "resta", motivo: "Dato inválido" })).rejects.toThrow(/concepto del catálogo/);
+    expect(await contexto.repositorio.listarImportesDelMes(MES)).toEqual([]);
+  });
+
 });

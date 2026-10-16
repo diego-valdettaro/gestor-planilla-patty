@@ -16,16 +16,21 @@ import { RepositorioPostgresDePeriodos } from "@/periodos/repositorio-postgres";
 import { RepositorioPostgresDeReglasLegales } from "@/reglas-legales/repositorio-postgres";
 import { RepositorioPostgresDeRelacionesLaborales } from "@/relaciones-laborales/repositorio-postgres";
 
-// Escenario de revisión del issue #127 (`pnpm revisar` lo corre después del seed). Datos SINTÉTICOS sobre las personas
-// del seed, en el mes de pago actual, para recorrer Q1–Q4 del contrato: neto con fuentes externas, bloqueo por neto negativo,
-// totales por sede de adscripción, fuente de adelantos pendiente frente a confirmada sin importes, e incidencia en investigación.
-//   - Beto (Tiendas Benavides): comisión 150,00 y movilidad 90,00 del seed + cuota de préstamo 200,00  -> neto con fuentes (como E1).
-//   - Carla (Tiendas Benavides): cuota de préstamo 2.000,00 sobre un sueldo de 1.300,00 -> neto negativo (como E2).
-//   - Hugo (Administración) y Franco (Taller): sin importes, para ver los totales por otra sede de adscripción (como E8).
-//   - Incidencia de 80,00 de Beto en investigación (fuera del neto); Finanzas puede pasarla a «descuento autorizado» (Q3).
-//   - Adelantos queda confirmada sin importes (cero confirmado, del seed): «Volver a pendiente» deja el neto sin calcular y
-//     confirmarla vacía lo calcula de nuevo (Q2).
-// Las demás personas del seed pueden seguir bloqueadas por sus propios datos; el resumen final lo muestra.
+// Escenario de revisión del issue #127 (`pnpm revisar` lo corre después del seed). Datos SINTÉTICOS
+// del mes de pago actual. Añade préstamos de 200,00 a Beto y 2.000,00 a Carla, más una incidencia
+// de 80,00 de Beto marcada «En investigación (fuera del neto)», e intenta confirmar los tipos de fuente.
+// No resuelve asistencia: Beto puede seguir bloqueado por jornadas pendientes y Carla por horas extra pendientes.
+// Por tanto no promete netos E1/E2 calculados ni que Carla llegue al bloqueo por neto negativo.
+// La salida conserva los importes o la primera causa de bloqueo real de cada persona; no equivale a QA aprobada.
+//
+// QA posterior a cargo de maestro, con Ana Borrador (99900001, Tiendas Benavides) y Franco Díaz
+// (99900007, Taller): comprobar primero sus bloqueos, condiciones, reglas y subtotal real, incluidas
+// las vacaciones de Franco. Maestro preparará por UI las operaciones y los esperados independientes:
+// registrar fuentes sobre personas calculables para neto y negativo individual, revisar totales por sede,
+// volver Adelantos a pendiente y confirmarla vacía, registrar en Ana una incidencia en investigación y
+// luego autorizarla y reconfirmar su fuente. Recargar y contrastar líneas, bases y estados en cada paso.
+// Esas operaciones UI no las ejecuta este escenario; los préstamos y la incidencia de Beto se conservan
+// para inspección aunque su asistencia impida observar el neto. No se cambian semillas para fabricar éxito.
 
 const RECHAZO_DE_BASE = "Rechazo correr el escenario contra una base que no sea de revisión (`planilla_rev_<n>`).";
 

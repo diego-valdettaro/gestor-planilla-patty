@@ -10,7 +10,7 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   workers: process.env.CI ? 1 : undefined,
   reporter: "list",
-  outputDir: "test-results",
+  outputDir: process.env.PLANILLA_PLAYWRIGHT_OUTPUT_DIR ?? "test-results",
   use: {
     baseURL,
     screenshot: "only-on-failure",
