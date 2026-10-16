@@ -7,7 +7,9 @@ import type { SustitutorioParaPagos } from "@/descansos-y-feriados/gestionar-des
 import { formatearSoles } from "@/condiciones-laborales/valores";
 import { formatearFechaDeRelacion } from "@/relaciones-laborales/vigencia";
 import { desplazarFecha } from "@/turnos/semana";
+import { buscarConcepto, tieneTipoPropio } from "@/conceptos-de-preliquidacion/catalogo";
 
+import { bloqueoPorNetoNegativo, lineasDeFuentesExternas, netoDe, totalesPorSede, type TotalDeSede, type LineaDeFuenteExterna } from "./fuentes-en-el-neto";
 import { asociarAbono, descansosDe, diasConvencionalesDelMes, fechasEnMes, mesesDelDescanso, repartirAbono, ventanaDeVacaciones, type DescansoVacacional } from "./vacaciones";
 import { aportesDelDevengue, basesPorDevengue, bloqueoPorCambio, hayCambioIntramensual, type BasesPorDevengue, type LineaDeAporte } from "./aportes-y-bases";
 
@@ -149,7 +151,7 @@ export interface LineaDeAsignacionFamiliar {
   origen: "Reglas legales y condiciones laborales";
 }
 
-export type LineaDeBorrador = LineaDeAporte | LineaDeAsignacionFamiliar | LineaDeReduccionDeDia | LineaDeReduccionPorTardanza | LineaDeSueldo | LineaDeRemuneracionVacacional | LineaDeAjusteDeVacaciones | LineaDeHoraExtra | LineaDeTrabajoEnDescansoOFeriado;
+export type LineaDeBorrador = LineaDeFuenteExterna | LineaDeAporte | LineaDeAsignacionFamiliar | LineaDeReduccionDeDia | LineaDeReduccionPorTardanza | LineaDeSueldo | LineaDeRemuneracionVacacional | LineaDeAjusteDeVacaciones | LineaDeHoraExtra | LineaDeTrabajoEnDescansoOFeriado;
 
 /** Reclasifica el sueldo básico de los días de descanso del mes; usa la base vigente al inicio del descanso. */
 export interface LineaDeRemuneracionVacacional {
@@ -244,6 +246,11 @@ export interface BorradorDePagos {
   bloqueosDelMes: string[];
   sueldoCalculadoCentimos: number;
   vacacionesProvisionales: boolean;
+  totalesPorSede: TotalDeSede[];
+  /** Suma de los netos de las personas calculadas. */
+  netoCalculadoCentimos: number;
+  /** Personas sin neto por un bloqueo propio. */
+  personasBloqueadas: number;
 }
 
 function finDeMes(mes: string): string {
@@ -655,11 +662,24 @@ export function calcularBorrador(entrada: EntradaDeBorrador): BorradorDePagos {
     const reduccionesDeAsistencia = reduccionesDelCorte(entrada, relacion, hechos);
     bloqueos.push(...reduccionesDeAsistencia.bloqueos);
     // El sueldo es visible aun cuando otro concepto o la cobertura impida un neto confiable.
+    // Validar datos de dominio antes de ambas rutas de efectosDeAjuste (líneas y bases).
+    // Los errores de lectores/infraestructura siguen propagándose; no se capturan aquí.
+    const ajustesInvalidos = entrada.importes.filter(importe => {
+      if (importe.dni !== relacion.dni || importe.anuladoEn !== null || importe.mesDeAplicacion !== mes || importe.concepto !== "ajuste_de_preliquidacion") return false;
+      const corregido = buscarConcepto(importe.conceptoAjustado ?? "");
+      return !corregido || !tieneTipoPropio(corregido) || (importe.sentidoAjuste !== "suma" && importe.sentidoAjuste !== "resta");
+    });
+    for (const importe of ajustesInvalidos) {
+      bloqueos.push(`Ajuste de preliquidación inválido del ${importe.fechaDelHecho}: concepto corregido o sentido inválido. Corrija la fuente de Ajustes de preliquidación.`);
+    }
+    const entradaValida = { ...entrada, importes: entrada.importes.filter(importe => !ajustesInvalidos.includes(importe)) };
+    const externas = lineasDeFuentesExternas(entradaValida.importes, relacion.dni, mes, entrada.corte);
     const familiar = asignacionFamiliarDelMes(entrada, relacion, mes, bloqueos);
-    const lineas: LineaDeBorrador[] = [...arrastre.lineas, ...actual.lineas, ...sobretiempo.lineas, ...enDescanso.lineas, ...reduccionesDeAsistencia.lineas, ...familiar.lineas];
+    const lineas: LineaDeBorrador[] = [...arrastre.lineas, ...actual.lineas, ...sobretiempo.lineas, ...enDescanso.lineas, ...reduccionesDeAsistencia.lineas, ...familiar.lineas, ...externas];
     const desglose = vacacionesDeLaPersona(entrada, relacion, conArrastre ? [anterior, mes] : [mes], descansos, lineas);
     bloqueos.push(...desglose.bloqueos);
     const mesesPendientes = new Set(familiar.pendiente ? [mes] : []);
+    for (const importe of ajustesInvalidos) mesesPendientes.add(importe.mesDeDevengue);
     if (actual.bloqueos.length) mesesPendientes.add(mes);
     // Una incidencia sin resolver puede cambiar el sueldo del corte: sus bases no se muestran como si fueran definitivas.
     const hayIncidenciaPendiente = hechos.some((hecho) => hecho.resultado === "pendiente")
@@ -669,15 +689,20 @@ export function calcularBorrador(entrada: EntradaDeBorrador): BorradorDePagos {
       mesesPendientes.add(anterior);
       bloqueos.push(`Pendiente: devengue ${anterior}, arrastre parcial; falta definir con Finanzas la asignación familiar, el mínimo y el tope aplicables. Se conserva el sueldo de origen.`);
     }
-    const bases = basesPorDevengue(entrada, relacion, lineas, mesesPendientes);
+    const bases = basesPorDevengue(entradaValida, relacion, lineas, mesesPendientes);
     lineas.push(...aportesDelDevengue(entrada, relacion, bases, bloqueos));
+    const sueldoCalculadoCentimos = [...arrastre.lineas, ...actual.lineas].reduce((suma, linea) => suma + linea.importeCentimos, 0);
+    const neto = entrada.fuentesPendientes.length || bloqueos.length ? null : netoDe(lineas, sueldoCalculadoCentimos);
+    if (neto !== null && neto < 0) bloqueos.push(bloqueoPorNetoNegativo(neto));
     return { relacion, vacaciones: desglose.vacaciones, sedeDeAdscripcion: String(condicionEn(entrada, relacion.id, "sede_de_adscripcion", fechaDeSede) ?? "") || null,
       lineas, basesPorDevengue: bases, bloqueos,
-      sueldoCalculadoCentimos: [...arrastre.lineas, ...actual.lineas].reduce((suma, linea) => suma + linea.importeCentimos, 0), netoCentimos: null };
+      sueldoCalculadoCentimos, netoCentimos: neto === null || neto < 0 ? null : neto };
   }).sort((a, b) => a.relacion.nombre.localeCompare(b.relacion.nombre) || a.relacion.dni.localeCompare(b.relacion.dni));
   // El resumen usa las faltas efectivas por devengue, no selecciona otra afiliación al día 25.
   bloqueosDelMes.push(...new Set(personas.flatMap(persona => persona.bloqueos.filter(bloqueo => bloqueo.startsWith("No hay ")))));
   return { mesDePago: mes, corte: entrada.corte, revisiones: entrada.revisiones, personas, bloqueosDelMes,
     vacacionesProvisionales: entrada.vacacionesProvisionales,
-    sueldoCalculadoCentimos: personas.reduce((suma, persona) => suma + persona.sueldoCalculadoCentimos, 0) };
+    sueldoCalculadoCentimos: personas.reduce((suma, persona) => suma + persona.sueldoCalculadoCentimos, 0),
+    totalesPorSede: totalesPorSede(personas), netoCalculadoCentimos: personas.reduce((suma, persona) => suma + (persona.netoCentimos ?? 0), 0),
+    personasBloqueadas: personas.filter(({ bloqueos }) => bloqueos.length > 0).length };
 }

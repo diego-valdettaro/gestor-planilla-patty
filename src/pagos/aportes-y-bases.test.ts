@@ -264,7 +264,8 @@ describe("aportes y bases por devengue", () => {
     cambiar(e, "sueldo", 60000);
     cambiar(e, "elegibilidad_familiar", false);
     const p = calcularBorrador(e).personas[0];
-    expect(p).toMatchObject({ netoCentimos: null, sueldoCalculadoCentimos: 60000, basesPorDevengue: [{ pensionariaCentimos: 60000, essaludRemunerativaCentimos: 60000, essaludAplicableCentimos: 100000, quintaCentimos: 60000 }] });
+    // #127 incorpora subtotal: 60000 sueldo, sin AF ni externas; ONP/EsSalud no se descuentan.
+    expect(p).toMatchObject({ netoCentimos: 60000, sueldoCalculadoCentimos: 60000, basesPorDevengue: [{ pensionariaCentimos: 60000, essaludRemunerativaCentimos: 60000, essaludAplicableCentimos: 100000, quintaCentimos: 60000 }] });
     expect(p.lineas).toEqual(expect.arrayContaining([expect.objectContaining({ concepto: "essalud_patronal", importeCentimos: 9000, baseCentimos: 100000, minimoCentimos: 100000, tipo: "aporte_patronal", efectoEnNeto: "ninguno" })]));
     expect(calcularBorrador(entrada()).personas[0].lineas).toEqual(expect.arrayContaining([expect.objectContaining({ concepto: "essalud_patronal", importeCentimos: 27900 })]));
     expect(calcularBorrador(entradaAfp()).personas[0].lineas).toEqual(expect.arrayContaining([expect.objectContaining({ concepto: "essalud_patronal", importeCentimos: 180000 })]));
@@ -359,4 +360,51 @@ describe("aportes y bases por devengue", () => {
       expect(calcularBorrador(e).personas[0].bloqueos.join(" ")).toMatch(/asignación familiar otorgada/i);
     }
   });
+  it("RC3 el subtotal suma AF y conserva ONP/AFP y EsSalud sin descontarlos", () => {
+    const onp = calcularBorrador(entrada()).personas[0];
+    expect(onp.netoCentimos).toBe(310000); // 300000 sueldo + 100000 × 10 % AF.
+    expect(onp.lineas).toEqual(expect.arrayContaining([
+      expect.objectContaining({ concepto: "asignacion_familiar", importeCentimos: 10000 }),
+      expect.objectContaining({ concepto: "aporte_onp", importeCentimos: 40300 }),
+      expect.objectContaining({ concepto: "essalud_patronal", importeCentimos: 27900 }),
+    ]));
+    const afp = calcularBorrador(entradaAfp()).personas[0];
+    expect(afp.netoCentimos).toBe(2000000); // sueldo completo, AF no otorgada.
+    expect(afp.lineas).toEqual(expect.arrayContaining([
+      expect.objectContaining({ concepto: "aporte_obligatorio_afp", importeCentimos: 200000 }),
+      expect.objectContaining({ concepto: "prima_de_seguro_afp", importeCentimos: 10000 }),
+      expect.objectContaining({ concepto: "comision_afp", importeCentimos: 30000 }),
+      expect.objectContaining({ concepto: "essalud_patronal", importeCentimos: 180000 }),
+    ]));
+  });
+
+  it("RC4 integración: cada externa válida cuenta una vez con ajustes reales en cada base", () => {
+    const e = entrada();
+    const comision = importe("comision_de_ventas", 15000, "comisiones_de_ventas");
+    const movilidad = importe("movilidad_supeditada_a_asistencia", 12000);
+    const ajuste = (conceptoAjustado: string, monto: number, sentidoAjuste: "suma" | "resta") => ({
+      ...importe("ajuste_de_preliquidacion", monto, "ajustes_de_preliquidacion"), conceptoAjustado, sentidoAjuste,
+    });
+    e.importes = [comision, movilidad,
+      { ...comision, id: "duplicado" }, { ...movilidad, id: "duplicado-movilidad" },
+      { ...comision, id: "anulado", monto: 99999, anuladoEn: new Date("2026-10-03T00:00:00Z") },
+      { ...comision, monto: 99999, mesDeAplicacion: "2026-11" }, { ...comision, monto: 99999, dni: "87654321" },
+      ajuste("comision_de_ventas", 5000, "resta"), ajuste("movilidad_supeditada_a_asistencia", 2000, "resta"),
+      ajuste("reduccion_por_falta", 3000, "suma"), ajuste("reduccion_por_falta", 1000, "resta"),
+      // B1 excluye del subtotal; gratificación y su ajuste sí afectan solo la base quinta upstream.
+      importe("gratificacion_legal", 10000, "gratificacion_y_bonificacion"), ajuste("gratificacion_legal", 4000, "resta"),
+      { ...importe("descuento_autorizado_por_incidencia", 8000, "incidencias_de_tienda"), estadoDeIncidencia: "en_investigacion" },
+    ];
+    const p = calcularBorrador(e).personas[0];
+    // Pensión/EsSalud = 300000 + AF10000 + comisión15000 -5000 -3000 +1000 =318000.
+    // Quinta =318000 + movilidad12000 -2000 + gratificación10000 -4000 =334000.
+    expect(p.basesPorDevengue).toEqual([{ mesDeDevengue: "2026-10", pensionariaCentimos: 318000,
+      essaludRemunerativaCentimos: 318000, essaludAplicableCentimos: 318000, quintaCentimos: 334000 }]);
+    expect(p.netoCentimos).toBe(328000); //318000 + movilidad efectiva10000; B1 e investigación fuera.
+    expect(p.lineas).toEqual(expect.arrayContaining([
+      expect.objectContaining({ concepto: "aporte_onp", importeCentimos: 41340, baseCentimos: 318000 }),
+      expect.objectContaining({ concepto: "essalud_patronal", importeCentimos: 28620, baseCentimos: 318000 }),
+    ]));
+  });
+
 });

@@ -3,6 +3,7 @@ import type { EntradaDeBorrador, LineaDeBorrador } from "./calcular-borrador";
 import type { RelacionConPersona } from "@/relaciones-laborales/gestionar-relaciones-laborales";
 import { esAfp, type ValorLaboral } from "@/condiciones-laborales/catalogo";
 import { buscarDefinicion } from "@/reglas-legales/catalogo";
+import { importesVigentesDePersona } from "./fuentes-en-el-neto";
 import { TIPOS_DE_FUENTE } from "@/fuentes-externas/tipos-de-fuente";
 
 /** Solo importa el intervalo de esta relación en el devengue, no otra persona ni el corte del pago. */
@@ -91,9 +92,10 @@ export interface BasesPorDevengue {
 
 /** Cada devengue conserva su base; una deducción o un abono no rebaja remuneración. */
 export function basesPorDevengue(entrada: EntradaDeBorrador, relacion: RelacionConPersona, lineas: LineaDeBorrador[], mesesPendientes: Set<string>): BasesPorDevengue[] {
-  const externos = entrada.importes.filter(i => i.dni === relacion.dni && i.anuladoEn === null && i.mesDeAplicacion === entrada.mesDePago);
+  const externos = importesVigentesDePersona(entrada.importes, relacion.dni, entrada.mesDePago);
   const componentes = [
-    ...lineas.map(l => ({ mes: l.mesDeDevengue, monto: l.importeCentimos, efectos: buscarConcepto(l.concepto)?.bases })),
+    // Las externas materializadas para el subtotal se leen abajo desde su fuente, una sola vez.
+    ...lineas.filter(l => l.origen !== "Fuente externa").map(l => ({ mes: l.mesDeDevengue, monto: l.importeCentimos, efectos: buscarConcepto(l.concepto)?.bases })),
     ...externos.map(i => ({ mes: i.mesDeDevengue, monto: i.monto,
       efectos: i.concepto === "ajuste_de_preliquidacion" && i.conceptoAjustado && i.sentidoAjuste
         ? efectosDeAjuste(i.conceptoAjustado, i.sentidoAjuste).bases : buscarConcepto(i.concepto)?.bases })),

@@ -15,6 +15,9 @@ export function BloqueoDePagos({ mensaje, mes, relacionId, dni }: { mensaje: str
   } else if (mensaje.startsWith("Fuente externa")) {
     destino = `/pagos/fuentes-externas?mes=${mes}`;
     siguiente = "Confirme el listado de esta fuente.";
+  } else if (mensaje.startsWith("Neto negativo")) {
+    destino = `/pagos/fuentes-externas?mes=${mes}`;
+    siguiente = "Revise la fuente de adelantos o registre un ajuste de preliquidación.";
   } else if (mensaje.includes("22:00")) {
     return <p className="mensaje-operacion advertencia" role="status">{mensaje} Afecta a esta persona y bloquea el mes. Este caso todavía no tiene regla de cálculo; Finanzas debe definirla antes de finalizar.</p>;
   }
