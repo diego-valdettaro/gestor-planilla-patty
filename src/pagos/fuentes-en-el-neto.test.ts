@@ -183,4 +183,37 @@ describe("neto con fuentes externas", () => {
     expect(resultado.netoCentimos).toBeNull();
     expect(resultado.bloqueos.some((bloqueo) => bloqueo.includes("Neto negativo: S/ −200,50"))).toBe(true);
   });
+
+  // Ronda 1, O1 (E13'): el neto suma las líneas calculadas con el efecto del catálogo. Con el sueldo de #123 (180000, jornada de 480 min)
+  // E1 da 157000; 120 min al 25 % valen 180000 × 120 × 1,25 ÷ (30 × 480) = 1875 y una falta reduce 6000 más 200 del descanso semanal.
+  const reglasDeSobretiempo = [{ codigo: "horas_extra_sobretasa_primeras_dos_horas" as const, valor: 2500, vigenteDesde: "2026-01-01" }, { codigo: "horas_extra_sobretasa_horas_posteriores" as const, valor: 3500, vigenteDesde: "2026-01-01" }];
+  const hecho = (fecha: string, parcial: Record<string, unknown>) => ({ dni: ana.dni, fecha, grupo: "Taller", sede: "Lima", horarioAplicado: { entradaProgramada: "09:00", salidaProgramada: "18:00" },
+    resultado: "trabajada" as const, minutosTrabajados: 480, tardanza: null, horaExtra: null, diaEspecial: null, evidencia: { asistenciaId: `a-${fecha}`, turnoPublicadoId: `t-${fecha}` }, ...parcial });
+  const conHechos = (hechos: unknown[]) => primera({ condiciones: condiciones("r1", 180000), reglas: reglasDeSobretiempo, importes: e1(), hechosPorDni: { [ana.dni]: hechos as never } });
+
+  it("C23 una hora extra aprobada suma al neto", () => {
+    const resultado = conHechos([hecho("2026-10-02", { horaExtra: { estado: "aprobada", minutosAl25: 120, minutosAl35: 0, trabajoNocturno: false, causaDeDescarte: null } })]);
+    expect(resultado.lineas).toContainEqual(expect.objectContaining({ concepto: "horas_extra_25", importeCentimos: 1875 }));
+    expect(resultado.netoCentimos).toBe(158875);
+  });
+
+  it("C24 una falta resta al neto la reducción del día y la del descanso semanal", () => {
+    const resultado = conHechos([hecho("2026-10-06", { resultado: "falta", minutosTrabajados: 0 })]);
+    expect(resultado.lineas.filter(({ concepto }) => concepto.startsWith("reduccion_por_")).map(({ concepto, importeCentimos }) => [concepto, importeCentimos]))
+      .toEqual([["reduccion_por_falta", 6000], ["reduccion_por_descanso_semanal", 200]]);
+    expect(resultado.netoCentimos).toBe(150800);
+  });
+
+  it("C25 la remuneración vacacional no se cuenta dos veces junto al sueldo", () => {
+    const resultado = primera({ condiciones: condiciones("r1", 300000), diasDeVacaciones: { [ana.dni]: ["2026-10-12"] } });
+    expect(resultado.lineas.some(({ concepto }) => concepto === "remuneracion_vacacional")).toBe(true);
+    expect(resultado.netoCentimos).toBe(300000);
+  });
+
+  it("C26 un ajuste sobre una fuente fuera del neto tampoco entra", () => {
+    const ajuste = (conceptoAjustado: string, monto: number) => importe("ajuste_de_preliquidacion", "ajustes_de_preliquidacion", monto, { conceptoAjustado, sentidoAjuste: "resta", motivoDeAjuste: "Corrección" });
+    const resultado = primera({ importes: [...e1(), ajuste("retencion_de_quinta", 9000), ajuste("gratificacion_legal", 4000)] });
+    expect(resultado.netoCentimos).toBe(177000);
+    expect(resultado.lineas.some(({ concepto }) => concepto === "ajuste_de_preliquidacion")).toBe(false);
+  });
 });

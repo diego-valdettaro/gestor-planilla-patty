@@ -612,7 +612,7 @@ export function calcularBorrador(entrada: EntradaDeBorrador): BorradorDePagos {
     const desglose = vacacionesDeLaPersona(entrada, relacion, conArrastre ? [anterior, mes] : [mes], descansos, lineas);
     bloqueos.push(...desglose.bloqueos);
     const sueldoCalculadoCentimos = [...arrastre.lineas, ...actual.lineas].reduce((suma, linea) => suma + linea.importeCentimos, 0);
-    const neto = entrada.fuentesPendientes.length || bloqueos.length ? null : netoDe(externas, sueldoCalculadoCentimos);
+    const neto = entrada.fuentesPendientes.length || bloqueos.length ? null : netoDe(lineas, sueldoCalculadoCentimos);
     if (neto !== null && neto < 0) bloqueos.push(bloqueoPorNetoNegativo(neto));
     return { relacion, vacaciones: desglose.vacaciones, sedeDeAdscripcion: String(condicionEn(entrada, relacion.id, "sede_de_adscripcion", fechaDeConsulta) ?? "") || null,
       lineas, bloqueos, sueldoCalculadoCentimos, netoCentimos: neto === null || neto < 0 ? null : neto };

@@ -86,4 +86,11 @@ describe("neto en el mes de pago", () => {
     const html = await render();
     for (const region of ["Totales del mes completo", "Sueldo por sede de adscripción", "Personas del mes"]) expect(seccion(html, region)).toContain(ROTULO);
   });
+
+  it("P11 sin ninguna persona calculada el neto de los totales dice Incompleto y no S/ 0,00", async () => {
+    simulacro.preparar.mockResolvedValue(borrador({ bloqueosDelMes: ["Fuente externa pendiente: Préstamos (cuotas)."], personas: [{ ...calculada, netoCentimos: null }],
+      totalesPorSede: [{ sede: "Taller", personas: 1, calculadas: 0, netoCentimos: 0 }], netoCalculadoCentimos: 0, personasBloqueadas: 0 }));
+    const celda = /Pendiente<\/td><td>Pendiente<\/td><td[^>]*>([^<]*)/.exec(seccion(await render(), "Totales del mes completo"))?.[1];
+    expect(celda).toBe("Incompleto");
+  });
 });

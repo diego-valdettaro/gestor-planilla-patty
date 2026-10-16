@@ -41,6 +41,8 @@ export function lineasDeFuentesExternas(importes: ImporteExterno[], dni: string,
     if (importe.tipoDeFuente === "incidencias_de_tienda" && importe.estadoDeIncidencia !== "descuento_autorizado") return [];
     const concepto = buscarConcepto(importe.concepto);
     if (!concepto || !esDelNeto(concepto.codigo)) return [];
+    // Un ajuste que corrige una fuente fuera del neto tampoco entra.
+    if (importe.conceptoAjustado && !esDelNeto(importe.conceptoAjustado)) return [];
     // Un ajuste toma el efecto del concepto que corrige (invertido si resta).
     const efectos = importe.conceptoAjustado && importe.sentidoAjuste
       ? efectosDeAjuste(importe.conceptoAjustado, importe.sentidoAjuste)
@@ -51,8 +53,19 @@ export function lineasDeFuentesExternas(importes: ImporteExterno[], dni: string,
   });
 }
 
-export function netoDe(lineas: Array<{ importeCentimos: number; efectoEnNeto?: string }>, sueldo: number): number {
-  return lineas.reduce((neto, linea) => neto + (linea.efectoEnNeto === "suma" ? linea.importeCentimos : linea.efectoEnNeto === "resta" ? -linea.importeCentimos : 0), sueldo);
+/** Sueldo, remuneración vacacional y su ajuste ya cuentan en el sueldo calculado: no se suman otra vez. */
+const YA_EN_EL_SUELDO = new Set(["sueldo_basico", "remuneracion_vacacional", "ajuste_por_variacion_de_sueldo_en_vacaciones"]);
+
+/**
+ * Neto = sueldo calculado + todas las demás líneas con el efecto que fija el catálogo (suma o resta). Los aportes del
+ * trabajador no existen todavía como líneas (#126), así que el neto es «antes de aportes».
+ */
+export function netoDe(lineas: Array<{ concepto: string; importeCentimos: number; efectoEnNeto?: string }>, sueldo: number): number {
+  return lineas.reduce((neto, linea) => {
+    if (YA_EN_EL_SUELDO.has(linea.concepto)) return neto;
+    const efecto = linea.efectoEnNeto ?? buscarConcepto(linea.concepto)?.efectoEnNeto;
+    return efecto === "suma" ? neto + linea.importeCentimos : efecto === "resta" ? neto - linea.importeCentimos : neto;
+  }, sueldo);
 }
 
 /** Soles con signo (U+2212) y céntimos exactos; `formatearSoles` no sirve con negativos con céntimos. */
