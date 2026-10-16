@@ -27,7 +27,13 @@ function hecho(parcial: Record<string, unknown> = {}) {
 
 function calcular(hechos: unknown[], parcial: Record<string, unknown> = {}) {
   return calcularBorrador({
-    mesDePago: mes, corte: { inicio: "2026-09-26", fin: "2026-10-25" }, relaciones: [ana], condiciones, reglas: [], problemasDelCorte: [],
+    mesDePago: mes, corte: { inicio: "2026-09-26", fin: "2026-10-25" }, relaciones: [ana], condiciones,
+    // Reglas sintéticas completas: estas pruebas aíslan goce/reducciones, no faltantes de aportes (#126).
+    reglas: [
+      { codigo: "onp_tasa", valor: 1300, vigenteDesde: "2026-01-01" },
+      { codigo: "essalud_tasa", valor: 900, vigenteDesde: "2026-01-01" },
+      { codigo: "essalud_base_minima", valor: 100000, vigenteDesde: "2026-01-01" },
+    ], problemasDelCorte: [],
     revisiones: [], hechosPorDni: { [ana.dni]: hechos }, sustitutorios: [], hechosDeOrigenPorDni: {}, fuentesPendientes: [], importes: [],
     diasDeVacaciones: {}, abonosVacacionales: [], vacacionesProvisionales: false, ...parcial,
   } as EntradaDeBorrador);

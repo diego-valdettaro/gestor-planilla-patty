@@ -21,11 +21,37 @@ describe("desglose de una persona", () => {
     simulacro.preparar.mockClear();
     simulacro.preparar.mockResolvedValue({ corte: { inicio: "2026-09-26", fin: "2026-10-25" }, vacacionesProvisionales: false, personas: [
       { vacaciones: [], relacion: { id: "r1", dni: "12345678", nombre: "Ana", grupo: "Taller", ingreso: "2026-10-01", cese: null, ceseConfirmado: false },
-        sueldoCalculadoCentimos: 100000, netoCentimos: null, bloqueos: ["Sin jornada ordinaria diaria vigente el 2026-10-25."],
+        sueldoCalculadoCentimos: 100000, netoCentimos: null, basesPorDevengue: [], bloqueos: ["Sin jornada ordinaria diaria vigente el 2026-10-25."],
         lineas: [{ concepto: "sueldo_basico", importeCentimos: 100000, dias: 30, sueldoMensualCentimos: 100000,
           desde: "2026-10-01", hasta: "2026-10-31", mesDeDevengue: "2026-10", mesDePago: "2026-10",
           corte: { inicio: "2026-09-26", fin: "2026-10-25" }, origen: "Condición laboral" }] },
     ] });
+  });
+
+  it("muestra las bases por mes de devengue, con «Pendiente» donde falta una decisión, y explica un aporte", async () => {
+    const corte = { inicio: "2026-09-26", fin: "2026-10-25" };
+    const resultado = await simulacro.preparar();
+    const persona = resultado.personas[0];
+    persona.basesPorDevengue = [
+      { mesDeDevengue: "2026-09", pensionariaCentimos: null, essaludRemunerativaCentimos: null, essaludAplicableCentimos: null, quintaCentimos: null },
+      { mesDeDevengue: "2026-10", pensionariaCentimos: 310000, essaludRemunerativaCentimos: 310000, essaludAplicableCentimos: 310000, quintaCentimos: 330000 },
+    ];
+    persona.lineas.push({ concepto: "aporte_onp", importeCentimos: 40300, baseCentimos: 310000, tasaEnCentesimasDePunto: 1300, tipo: "deduccion_del_trabajador",
+      efectoEnNeto: "resta", mesDeDevengue: "2026-10", mesDePago: "2026-10", corte, origen: "Reglas legales y condiciones laborales" });
+    persona.lineas.push({ concepto: "essalud_patronal", importeCentimos: 27900, baseCentimos: 310000, minimoCentimos: 100000, tasaEnCentesimasDePunto: 900, tipo: "aporte_patronal",
+      efectoEnNeto: "ninguno", mesDeDevengue: "2026-10", mesDePago: "2026-10", corte, origen: "Reglas legales y condiciones laborales" });
+    simulacro.preparar.mockResolvedValue(resultado);
+    const html = await render();
+    expect(html).toContain("Base pensionaria");
+    expect(html).toContain("Base de quinta categoría");
+    expect(html).toMatch(/<td[^>]*>Pendiente<\/td>/);
+    expect(html).toMatch(/<td[^>]*>S\/\s*3\.100,00<\/td>/);
+    expect(html).toContain("13,00 % sobre la base de devengue");
+    expect(html).toContain("Se descuenta a la persona");
+    expect(html).toContain("9,00 % sobre la base de devengue");
+    expect(html).toContain("con base mínima de");
+    expect(html).toContain("no resta del neto");
+    expect(html).not.toContain("undefined");
   });
 
   it("muestra los tres tiempos y la base de la línea, con bloqueo enlazado", async () => {
