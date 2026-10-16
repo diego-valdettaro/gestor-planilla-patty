@@ -8,6 +8,7 @@ import { formatearSoles } from "@/condiciones-laborales/valores";
 import { formatearFechaDeRelacion } from "@/relaciones-laborales/vigencia";
 import { desplazarFecha } from "@/turnos/semana";
 
+import { bloqueoPorNetoNegativo, lineasDeFuentesExternas, netoDe, totalesPorSede, type TotalDeSede, type LineaDeFuenteExterna } from "./fuentes-en-el-neto";
 import { asociarAbono, descansosDe, diasConvencionalesDelMes, fechasEnMes, mesesDelDescanso, repartirAbono, ventanaDeVacaciones, type DescansoVacacional } from "./vacaciones";
 
 /** Decisión de Finanzas sobre una jornada de permiso o suspensión: con o sin goce de remuneración (#123). */
@@ -136,7 +137,7 @@ export interface LineaDeReduccionDeDia {
   decision?: Pick<ClasificacionDeGoce, "conGoce" | "clasificadoPorId" | "clasificadoEn">;
 }
 
-export type LineaDeBorrador = LineaDeReduccionDeDia | LineaDeReduccionPorTardanza | LineaDeSueldo | LineaDeRemuneracionVacacional | LineaDeAjusteDeVacaciones | LineaDeHoraExtra | LineaDeTrabajoEnDescansoOFeriado;
+export type LineaDeBorrador = LineaDeFuenteExterna | LineaDeReduccionDeDia | LineaDeReduccionPorTardanza | LineaDeSueldo | LineaDeRemuneracionVacacional | LineaDeAjusteDeVacaciones | LineaDeHoraExtra | LineaDeTrabajoEnDescansoOFeriado;
 
 /** Reclasifica el sueldo básico de los días de descanso del mes; usa la base vigente al inicio del descanso. */
 export interface LineaDeRemuneracionVacacional {
@@ -230,6 +231,11 @@ export interface BorradorDePagos {
   bloqueosDelMes: string[];
   sueldoCalculadoCentimos: number;
   vacacionesProvisionales: boolean;
+  totalesPorSede: TotalDeSede[];
+  /** Suma de los netos de las personas calculadas. */
+  netoCalculadoCentimos: number;
+  /** Personas sin neto por un bloqueo propio. */
+  personasBloqueadas: number;
 }
 
 function finDeMes(mes: string): string {
@@ -601,11 +607,15 @@ export function calcularBorrador(entrada: EntradaDeBorrador): BorradorDePagos {
     const reduccionesDeAsistencia = reduccionesDelCorte(entrada, relacion, hechos);
     bloqueos.push(...reduccionesDeAsistencia.bloqueos);
     // El sueldo es visible aun cuando otro concepto o la cobertura impida un neto confiable.
-    const lineas: LineaDeBorrador[] = [...arrastre.lineas, ...actual.lineas, ...sobretiempo.lineas, ...enDescanso.lineas, ...reduccionesDeAsistencia.lineas];
+    const externas = lineasDeFuentesExternas(entrada.importes, relacion.dni, mes, entrada.corte);
+    const lineas: LineaDeBorrador[] = [...arrastre.lineas, ...actual.lineas, ...sobretiempo.lineas, ...enDescanso.lineas, ...reduccionesDeAsistencia.lineas, ...externas];
     const desglose = vacacionesDeLaPersona(entrada, relacion, conArrastre ? [anterior, mes] : [mes], descansos, lineas);
     bloqueos.push(...desglose.bloqueos);
+    const sueldoCalculadoCentimos = [...arrastre.lineas, ...actual.lineas].reduce((suma, linea) => suma + linea.importeCentimos, 0);
+    const neto = entrada.fuentesPendientes.length || bloqueos.length ? null : netoDe(externas, sueldoCalculadoCentimos);
+    if (neto !== null && neto < 0) bloqueos.push(bloqueoPorNetoNegativo(neto));
     return { relacion, vacaciones: desglose.vacaciones, sedeDeAdscripcion: String(condicionEn(entrada, relacion.id, "sede_de_adscripcion", fechaDeConsulta) ?? "") || null,
-      lineas, bloqueos, sueldoCalculadoCentimos: [...arrastre.lineas, ...actual.lineas].reduce((suma, linea) => suma + linea.importeCentimos, 0), netoCentimos: null };
+      lineas, bloqueos, sueldoCalculadoCentimos, netoCentimos: neto === null || neto < 0 ? null : neto };
   }).sort((a, b) => a.relacion.nombre.localeCompare(b.relacion.nombre) || a.relacion.dni.localeCompare(b.relacion.dni));
   if (personas.length) {
     const necesarias = new Set<CodigoDeReglaLegal>(["essalud_tasa", "essalud_base_minima"]);
@@ -632,5 +642,7 @@ export function calcularBorrador(entrada: EntradaDeBorrador): BorradorDePagos {
   }
   return { mesDePago: mes, corte: entrada.corte, revisiones: entrada.revisiones, personas, bloqueosDelMes,
     vacacionesProvisionales: entrada.vacacionesProvisionales,
-    sueldoCalculadoCentimos: personas.reduce((suma, persona) => suma + persona.sueldoCalculadoCentimos, 0) };
+    sueldoCalculadoCentimos: personas.reduce((suma, persona) => suma + persona.sueldoCalculadoCentimos, 0),
+    totalesPorSede: totalesPorSede(personas), netoCalculadoCentimos: personas.reduce((suma, persona) => suma + (persona.netoCentimos ?? 0), 0),
+    personasBloqueadas: personas.filter(({ bloqueos }) => bloqueos.length > 0).length };
 }

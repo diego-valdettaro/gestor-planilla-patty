@@ -6,7 +6,8 @@ import { repositorioDeCuentas } from "@/autenticacion/servicio";
 import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
 import { buscarConcepto } from "@/conceptos-de-preliquidacion/catalogo";
 import { formatearSoles } from "@/condiciones-laborales/valores";
-import { formatearMes } from "@/fuentes-externas/valores";
+import { formatearMes, textoDeProcedencia } from "@/fuentes-externas/valores";
+import { ROTULO_DEL_NETO, estadoDeLaPersona, type LineaDeFuenteExterna } from "@/pagos/fuentes-en-el-neto";
 import { totalDeHorasExtraCentimos, totalDeTrabajoEnDescansoOFeriadoCentimos, type DescansoVacacionalDelBorrador, type LineaDeBorrador } from "@/pagos/calcular-borrador";
 import { prepararBorrador } from "@/pagos/preparar-borrador";
 import { fuentesDelBorrador } from "@/pagos/servicio";
@@ -21,10 +22,25 @@ export const dynamic = "force-dynamic";
 
 const CLASE_DE_DIA_ESPECIAL = { descanso_semanal: "descanso semanal asignado", feriado: "feriado", primero_de_mayo: "1 de mayo" } as const;
 
+const NOMBRE_DE_EFECTO = { suma: "suma", resta: "resta", no_afecta: "no afecta", ninguno: "no afecta", del_concepto_ajustado: "del concepto ajustado" } as const;
+
+/** Línea de fuente externa: de dónde sale el importe y cómo afecta al neto y a cada base. */
+function baseDeFuenteExterna(linea: LineaDeFuenteExterna) {
+  const { pensionaria, essalud, quinta } = linea.efectosEnBases;
+  return <p>Importe cargado en una fuente externa confirmada ({textoDeProcedencia(linea.procedencia)}), hecho del {linea.fechaDelHecho}. En el neto {NOMBRE_DE_EFECTO[linea.efectoEnNeto]}. Bases: pensionaria {NOMBRE_DE_EFECTO[pensionaria]}, EsSalud {NOMBRE_DE_EFECTO[essalud]}, quinta categoría {NOMBRE_DE_EFECTO[quinta]}.</p>;
+}
+
 /** El cálculo de cada línea, a la vista: valor diario o por hora, fechas o minutos y la regla aplicada. */
 function baseDeLinea(linea: LineaDeBorrador, dni: string, responsables: Map<string, string>) {
   const verJornada = (fecha: string, grupo: string) => <> <Link href={`/asistencias?vista=mensual&grupo=${encodeURIComponent(grupo)}&fecha=${fecha}&colaborador=${dni}`}>Ver jornada</Link>.</>;
   switch (linea.concepto) {
+    case "comision_de_ventas":
+    case "movilidad_supeditada_a_asistencia":
+    case "adelanto":
+    case "cuota_de_prestamo":
+    case "descuento_autorizado_por_incidencia":
+    case "ajuste_de_preliquidacion":
+      return baseDeFuenteExterna(linea);
     case "reduccion_por_tardanza":
       return <p>{linea.minutos} minutos reales de tardanza el {linea.fecha}, remuneración ordinaria computable {formatearSoles(linea.remuneracionOrdinariaComputableCentimos)}, divisor 30 y jornada pactada de {linea.jornadaOrdinariaDiariaMinutos} minutos. Los minutos penalizados disciplinarios no restan dinero. Redondeo a céntimos por línea.{verJornada(linea.fecha, linea.grupo)}</p>;
     case "reduccion_por_falta":
@@ -72,6 +88,7 @@ export default async function PaginaDePersona({ params }: { params: Promise<{ me
   const persona = borrador.personas.find(({ relacion }) => relacion.dni === dni);
   if (!persona) notFound();
   const { relacion, lineas, bloqueos, vacaciones } = persona;
+  const fuentesPendientes = (borrador.fuentes ?? []).filter(({ estado }) => estado === "Pendiente").map(({ nombre }) => nombre);
   const jornadasDeGoce = [...new Map((borrador.revisiones ?? []).flatMap(({ hechos }) => hechos)
     .filter((hecho) => hecho.dni === dni && (hecho.resultado === "permiso" || hecho.resultado === "suspension"))
     .map((hecho) => [hecho.fecha, hecho])).values()].sort((a, b) => a.fecha.localeCompare(b.fecha));
@@ -87,14 +104,15 @@ export default async function PaginaDePersona({ params }: { params: Promise<{ me
     if (cuenta) responsables.set(id, cuenta.nombreUsuario);
   }
   return <main className="contenido pagina">
-    <header className="encabezado encabezado-pagina"><div><p className="eyebrow">{NOMBRE_DE_ROL[actor.rol]}</p><h1>{relacion.nombre}</h1><p>DNI {relacion.dni} · {relacion.grupo} · Relación laboral desde {relacion.ingreso}{relacion.ceseConfirmado ? ` hasta ${relacion.cese}` : ""}</p><span className="insignia advertencia">{bloqueos.length ? "Bloqueada" : "Pendiente"}</span><p><Link href={`/pagos/${mes}`}>Volver al mes de pago</Link></p></div></header>
+    <header className="encabezado encabezado-pagina"><div><p className="eyebrow">{NOMBRE_DE_ROL[actor.rol]}</p><h1>{relacion.nombre}</h1><p>DNI {relacion.dni} · {relacion.grupo} · Relación laboral desde {relacion.ingreso}{relacion.ceseConfirmado ? ` hasta ${relacion.cese}` : ""}</p><span className={`insignia ${persona.netoCentimos == null ? "advertencia" : "ok"}`}>{estadoDeLaPersona({ netoCentimos: persona.netoCentimos ?? null, bloqueos })}</span><p><Link href={`/pagos/${mes}`}>Volver al mes de pago</Link></p></div></header>
     <NavegacionDePagos actual="meses" />
     {bloqueos.length > 0 && <section className="tarjeta panel"><h2>Bloqueos de la persona</h2>{bloqueos.map((bloqueo, i) => <BloqueoDePagos key={i} mensaje={bloqueo} mes={mes} relacionId={relacion.id} dni={relacion.dni} />)}</section>}
     {jornadasDeGoce.length > 0 && <section className="tarjeta panel" id="permisos-y-suspensiones" aria-labelledby="titulo-permisos"><header className="panel-cabecera"><div><h2 id="titulo-permisos">Permisos y suspensiones</h2><p>El gerente los registra en Asistencia; Finanzas decide aquí si son con o sin goce. Sin clasificar no se paga a la persona ni se asume sin goce.</p></div></header>
       <ul>{jornadasDeGoce.map((jornada) => <ClasificacionDeGoce key={jornada.fecha} dni={dni} fecha={jornada.fecha} etiqueta={jornada.resultado === "permiso" ? "Permiso" : "Suspensión"} estado={estadoDe(jornada.fecha)} />)}</ul>
     </section>}
-    <section className="tarjeta panel"><h2>Resumen</h2><p>Mes de pago {formatearMes(mes)}. Corte de incidencias {borrador.corte.inicio} al {borrador.corte.fin}.</p><p>Sueldo calculado (sueldo básico más remuneración vacacional): {formatearSoles(persona.sueldoCalculadoCentimos)}. Neto: Incompleto. Los demás conceptos, bases y aportes están pendientes de valoración.</p><p>Horas extra calculadas: {formatearSoles(totalDeHorasExtraCentimos(lineas))}.</p><p>Trabajo en descanso o feriado calculado: {formatearSoles(totalDeTrabajoEnDescansoOFeriadoCentimos(lineas))}.</p></section>
-    <section className="tarjeta panel"><header className="panel-cabecera"><h2>Conceptos</h2></header>{lineas.length ? <><p className="aviso-desplazamiento">Desplácese horizontalmente para ver todas las columnas.</p><div className="panel-tabla primera-columna-fija" role="region" aria-label="Conceptos de la persona" tabIndex={0}><table><thead><tr><th>Concepto</th><th>Cantidad</th><th>Mes de devengue</th><th>Mes de pago</th><th>Corte de incidencias</th><th>Origen</th><th className="numerico">Importe</th></tr></thead><tbody>{lineas.map((linea, i) => <tr key={i}><th scope="row">{buscarConcepto(linea.concepto)?.nombre ?? linea.concepto}{linea.concepto === "trabajo_en_descanso_o_feriado" && linea.regularizacion && <small className="linea-de-relacion">Regularización de descanso sustitutorio no otorgado</small>}<details><summary>Ver base</summary>{baseDeLinea(linea, relacion.dni, responsables)}</details></th><td>{linea.concepto === "horas_extra_25" || linea.concepto === "horas_extra_35" || linea.concepto === "trabajo_en_descanso_o_feriado" ? `${linea.minutos} min` : linea.concepto === "reduccion_por_tardanza" ? `${linea.minutos} min` : `${linea.dias} ${linea.dias === 1 ? "día" : "días"}`}</td><td>{formatearMes(linea.mesDeDevengue)}{linea.mesDeDevengue !== mes && <small className="linea-de-relacion">Devengue anterior</small>}</td><td>{formatearMes(linea.mesDePago)}</td><td>{linea.corte.inicio} al {linea.corte.fin}</td><td>{linea.origen}</td><td className="numerico">{formatearSoles(linea.importeCentimos)}</td></tr>)}</tbody></table></div></> : <section className="estado-vacio"><h3>Sin conceptos calculables en este mes de pago</h3><p>Revise la relación laboral y sus condiciones vigentes.</p></section>}</section>
+    <section className="tarjeta panel"><h2>Resumen</h2><p>Mes de pago {formatearMes(mes)}. Corte de incidencias {borrador.corte.inicio} al {borrador.corte.fin}.</p><p>Sueldo calculado (sueldo básico más remuneración vacacional): {formatearSoles(persona.sueldoCalculadoCentimos)}. {ROTULO_DEL_NETO}: {persona.netoCentimos == null ? "Incompleto" : formatearSoles(persona.netoCentimos)}. Los demás conceptos, bases y aportes están pendientes de valoración.</p>{fuentesPendientes.map((nombre) => <p key={nombre}>Fuente pendiente: {nombre}. El neto no se calcula hasta confirmarla.</p>)}<p>Horas extra calculadas: {formatearSoles(totalDeHorasExtraCentimos(lineas))}.</p><p>Trabajo en descanso o feriado calculado: {formatearSoles(totalDeTrabajoEnDescansoOFeriadoCentimos(lineas))}.</p></section>
+    <section className="tarjeta panel"><header className="panel-cabecera"><h2>Conceptos</h2></header>{lineas.length ? <><p className="aviso-desplazamiento">Desplácese horizontalmente para ver todas las columnas.</p><div className="panel-tabla primera-columna-fija" role="region" aria-label="Conceptos de la persona" tabIndex={0}><table><thead><tr><th>Concepto</th><th>Cantidad</th><th>Mes de devengue</th><th>Mes de pago</th><th>Corte de incidencias</th><th>Origen</th><th className="numerico">Importe</th></tr></thead><tbody>{lineas.map((linea, i) => <tr key={i}><th scope="row">{buscarConcepto(linea.concepto)?.nombre ?? linea.concepto}{linea.concepto === "trabajo_en_descanso_o_feriado" && linea.regularizacion && <small className="linea-de-relacion">Regularización de descanso sustitutorio no otorgado</small>}<details><summary>Ver base</summary>{baseDeLinea(linea, relacion.dni, responsables)}</details></th><td>{linea.concepto === "horas_extra_25" || linea.concepto === "horas_extra_35" || linea.concepto === "trabajo_en_descanso_o_feriado" ? `${linea.minutos} min` : linea.concepto === "reduccion_por_tardanza" ? `${linea.minutos} min` : linea.dias === undefined ? "" : `${linea.dias} ${linea.dias === 1 ? "día" : "días"}`}</td><td>{formatearMes(linea.mesDeDevengue)}{linea.mesDeDevengue !== mes && <small className="linea-de-relacion">Devengue anterior</small>}</td><td>{formatearMes(linea.mesDePago)}</td><td>{linea.corte.inicio} al {linea.corte.fin}</td><td>{linea.origen}</td><td className="numerico">{"efectoEnNeto" in linea && linea.efectoEnNeto === "resta" ? "−" : ""}{formatearSoles(linea.importeCentimos)}</td></tr>)}</tbody></table></div></> : <section className="estado-vacio"><h3>Sin conceptos calculables en este mes de pago</h3><p>Revise la relación laboral y sus condiciones vigentes.</p></section>}</section>
+    <p>{persona.sedeDeAdscripcion ? `Imputado a la sede de adscripción ${persona.sedeDeAdscripcion}` : "Sede de adscripción pendiente"}</p>
     <section className="tarjeta panel"><h2>Bases y aportes</h2><p>Pendiente. La valoración de incidencias, bases pensionaria, de EsSalud y de quinta categoría, y los aportes aún no produce un neto definitivo.</p></section>
     {vacaciones.length > 0 && <VacacionesDelMes descansos={vacaciones} mes={mes} provisionales={borrador.vacacionesProvisionales} />}
   </main>;
