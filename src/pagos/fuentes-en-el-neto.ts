@@ -7,6 +7,8 @@ import type { Corte } from "@/periodos/hechos-para-pagos";
 export const CONCEPTOS_EN_EL_NETO = ["comision_de_ventas", "movilidad_supeditada_a_asistencia", "adelanto", "cuota_de_prestamo", "descuento_autorizado_por_incidencia", "ajuste_de_preliquidacion"] as const;
 export type ConceptoExterno = (typeof CONCEPTOS_EN_EL_NETO)[number];
 
+const FUENTES_FUERA_DEL_NETO: readonly string[] = ["retencion_de_quinta", "gratificacion_legal", "bonificacion_extraordinaria", "abono_anticipado_de_remuneracion_vacacional"];
+
 const esDelNeto = (codigo: string): codigo is ConceptoExterno => (CONCEPTOS_EN_EL_NETO as readonly string[]).includes(codigo);
 
 /** Línea que nace de un importe de fuente externa confirmada (#127). El importe es positivo; el efecto en el neto lo da el catálogo. */
@@ -41,8 +43,8 @@ export function lineasDeFuentesExternas(importes: ImporteExterno[], dni: string,
     if (importe.tipoDeFuente === "incidencias_de_tienda" && importe.estadoDeIncidencia !== "descuento_autorizado") return [];
     const concepto = buscarConcepto(importe.concepto);
     if (!concepto || !esDelNeto(concepto.codigo)) return [];
-    // Un ajuste que corrige una fuente fuera del neto tampoco entra.
-    if (importe.conceptoAjustado && !esDelNeto(importe.conceptoAjustado)) return [];
+    // Un ajuste sobre una de las cuatro fuentes fuera del neto (B1) tampoco entra; sobre un concepto calculado sí.
+    if (importe.conceptoAjustado && FUENTES_FUERA_DEL_NETO.includes(importe.conceptoAjustado)) return [];
     // Un ajuste toma el efecto del concepto que corrige (invertido si resta).
     const efectos = importe.conceptoAjustado && importe.sentidoAjuste
       ? efectosDeAjuste(importe.conceptoAjustado, importe.sentidoAjuste)

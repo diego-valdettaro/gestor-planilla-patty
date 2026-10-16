@@ -216,4 +216,39 @@ describe("neto con fuentes externas", () => {
     expect(resultado.netoCentimos).toBe(177000);
     expect(resultado.lineas.some(({ concepto }) => concepto === "ajuste_de_preliquidacion")).toBe(false);
   });
+
+  // Ronda 2, E14': solo se excluyen los ajustes sobre las cuatro fuentes fuera del neto; un ajuste sobre un concepto calculado entra.
+  const ajusteSobre = (conceptoAjustado: string, monto: number, sentidoAjuste: "suma" | "resta") =>
+    importe("ajuste_de_preliquidacion", "ajustes_de_preliquidacion", monto, { conceptoAjustado, sentidoAjuste, motivoDeAjuste: "Corrección" });
+
+  it("C27 un ajuste que resta sobre el sueldo básico entra al neto", () => {
+    const resultado = primera({ importes: [...e1(), ajusteSobre("sueldo_basico", 2500, "resta")] });
+    expect(resultado.netoCentimos).toBe(174500);
+    expect(resultado.lineas).toContainEqual(expect.objectContaining({ concepto: "ajuste_de_preliquidacion", importeCentimos: 2500, efectoEnNeto: "resta" }));
+  });
+
+  it("C28 el ajuste por variación de sueldo en vacaciones no se cuenta dos veces", () => {
+    const resultado = primera({ diasDeVacaciones: { [ana.dni]: ["2026-09-29", "2026-09-30", "2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04"] },
+      condiciones: [...condiciones("r1", 300000), { relacionId: "r1", dato: "sueldo", valor: 330000, vigenteDesde: "2026-10-03" }] });
+    expect(resultado.lineas.some(({ concepto }) => concepto === "ajuste_por_variacion_de_sueldo_en_vacaciones")).toBe(true);
+    expect(resultado.netoCentimos).toBe(20000 + 308000);
+  });
+
+  it("C29 un ajuste sobre bonificación extraordinaria o abono vacacional tampoco entra", () => {
+    const resultado = primera({ importes: [...e1(), ajusteSobre("bonificacion_extraordinaria", 3000, "resta"), ajusteSobre("abono_anticipado_de_remuneracion_vacacional", 7000, "suma")] });
+    expect(resultado.netoCentimos).toBe(177000);
+    expect(resultado.lineas.some(({ concepto }) => concepto === "ajuste_de_preliquidacion")).toBe(false);
+  });
+
+  it("C30 un ajuste que suma sobre una reducción aumenta la reducción y baja el neto", () => {
+    const resultado = primera({ importes: [...e1(), ajusteSobre("reduccion_por_falta", 2500, "suma")] });
+    expect(resultado.netoCentimos).toBe(174500);
+    expect(resultado.lineas).toContainEqual(expect.objectContaining({ concepto: "ajuste_de_preliquidacion", importeCentimos: 2500, efectoEnNeto: "resta" }));
+  });
+
+  it("C31 un ajuste que resta sobre una reducción la disminuye y sube el neto", () => {
+    const resultado = primera({ importes: [...e1(), ajusteSobre("reduccion_por_falta", 2500, "resta")] });
+    expect(resultado.netoCentimos).toBe(179500);
+    expect(resultado.lineas).toContainEqual(expect.objectContaining({ concepto: "ajuste_de_preliquidacion", importeCentimos: 2500, efectoEnNeto: "suma" }));
+  });
 });
