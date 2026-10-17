@@ -8,6 +8,7 @@ import { TIPOS_DE_FUENTE } from "@/fuentes-externas/tipos-de-fuente";
 import { corteDeIncidencias, obtenerDiasDeVacaciones, obtenerHechosDeJornadas, obtenerHechosDelCorte, type LectorDeHechosDeAsistencia } from "@/periodos/hechos-para-pagos";
 
 import { calcularBorrador } from "./calcular-borrador";
+import { TIPO_DE_CONCILIACION } from "./conciliacion-de-cese";
 import { ventanaDeVacaciones } from "./vacaciones";
 
 export interface FuentesDelBorrador {
@@ -20,8 +21,6 @@ export interface FuentesDelBorrador {
   /** Clasificaciones de goce de permisos y suspensiones; sin esta fuente toda jornada de ese tipo queda pendiente. */
   clasificaciones?: Pick<RepositorioDeClasificacionesDeGoce, "listarEntre">;
 }
-
-const TIPO_DE_CONCILIACION = "conciliacion_de_liquidacion_por_cese";
 
 /** Reúne todas las fuentes antes de entrar al cálculo puro. */
 export async function prepararBorrador(fuentes: FuentesDelBorrador, mesDePago: string) {

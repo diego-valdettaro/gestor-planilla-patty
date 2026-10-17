@@ -7,7 +7,7 @@ import type { LineaDeBorrador } from "./calcular-borrador";
 // Reglas puras de la conciliación de la liquidación por cese (#128, ADR 0009). Los importes los carga Finanzas y no se calculan aquí:
 // no entran al neto ni a las bases; estas reglas solo detectan el cese sin conciliar y la duplicación con lo que el pago mensual ya incluye.
 
-const TIPO_DE_CONCILIACION = "conciliacion_de_liquidacion_por_cese";
+export const TIPO_DE_CONCILIACION = "conciliacion_de_liquidacion_por_cese";
 const CONCEPTO_DE_ABONO = "abono_de_liquidacion";
 
 /** Totales aparte de la conciliación: los conceptos de la liquidación y los abonos ya pagados fuera, sin netearlos entre sí. */

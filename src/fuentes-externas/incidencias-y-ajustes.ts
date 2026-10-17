@@ -1,5 +1,6 @@
 import type { Actor } from "@/autenticacion/permisos";
 import { efectosDeAjuste } from "@/conceptos-de-preliquidacion/catalogo";
+import { esConceptoDeConciliacion } from "@/pagos/conciliacion-de-cese";
 import { validarFechaDeRelacion } from "@/relaciones-laborales/gestionar-relaciones-laborales";
 
 import { exigirMesAbierto, exigirPermiso, validarDatosDeImporte, type ImporteExterno, type RepositorioDeFuentesExternas } from "./gestionar-fuentes-externas";
@@ -44,6 +45,8 @@ export async function registrarAjuste(repositorio: RepositorioDeFuentesExternas,
   exigirPermiso(actor);
   const { monto } = await validarDatosDeImporte(repositorio, datos);
   if (datos.sentidoAjuste !== "suma" && datos.sentidoAjuste !== "resta") throw new Error("Elija si aumenta o reduce el concepto corregido.");
+  // Los conceptos de la conciliación no entran al neto ni a las bases (C3): un ajuste sobre ellos no haría nada.
+  if (esConceptoDeConciliacion(datos.conceptoAjustado)) throw new Error("Los conceptos de la conciliación de liquidación por cese no admiten ajustes de preliquidación: no entran al neto ni a las bases. Corríjalos en la fuente de conciliación.");
   efectosDeAjuste(datos.conceptoAjustado, datos.sentidoAjuste);
   const motivo = datos.motivo.trim();
   if (!motivo || motivo.length > 250) throw new Error("Escriba un motivo de hasta 250 caracteres.");

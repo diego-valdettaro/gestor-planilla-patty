@@ -58,4 +58,13 @@ describe("incidencias de tienda y ajustes", () => {
     await registrarAjuste(repositorio, finanzas, { ...datos, conceptoAjustado: "sueldo_basico", sentidoAjuste: "suma", motivo: "Corrección" });
     expect((await repositorio.buscarConfirmacion("ajustes_de_preliquidacion", datos.mesDeAplicacion))).toBeUndefined();
   });
+
+  // R1-P03 (revisión 1): C3, los conceptos de la conciliación no entran al neto ni a las bases; un ajuste sobre ellos no hace nada y se rechaza.
+  it("R1-P03 rechaza un ajuste sobre un concepto de la conciliación y no guarda ninguna fila", async () => {
+    const { repositorio } = crearRepositorioEnMemoria({ [datos.dni]: "Ana" });
+    for (const conceptoAjustado of ["vacaciones_truncas", "cts_trunca", "gratificacion_trunca", "remuneracion_pendiente_del_mes", "abono_de_liquidacion"]) {
+      await expect(registrarAjuste(repositorio, finanzas, { ...datos, conceptoAjustado, sentidoAjuste: "suma", motivo: "Corrección" })).rejects.toThrow(/conciliaci/i);
+    }
+    expect(await repositorio.listarImportesDelMes(datos.mesDeAplicacion)).toEqual([]);
+  });
 });

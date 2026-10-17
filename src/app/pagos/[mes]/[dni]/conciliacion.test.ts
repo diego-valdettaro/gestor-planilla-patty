@@ -47,9 +47,9 @@ function escenario() {
   return { repositorio, fuentes };
 }
 
-async function render() {
+async function render(dni = ANA) {
   const { default: Pagina } = await import("./page");
-  return renderToStaticMarkup(await Pagina({ params: Promise.resolve({ mes: MES, dni: ANA }) }));
+  return renderToStaticMarkup(await Pagina({ params: Promise.resolve({ mes: MES, dni }) }));
 }
 const region = (html: string, etiqueta: string) => html.split(`aria-label="${etiqueta}"`)[1]?.split("</table>")[0] ?? "";
 const panel = (html: string) => html.split('aria-labelledby="titulo-conciliacion"')[1]?.split("</section>")[0] ?? "";
@@ -88,5 +88,34 @@ describe("detalle de la persona con la conciliación de la liquidación por cese
     expect(conceptos).not.toContain("Vacaciones truncas");
     expect(conceptos).not.toContain("CTS trunca");
     expect(conceptos).not.toContain("Abono de liquidación");
+  });
+});
+
+// R1-P01 (revisión 1): con el tipo de conciliación sin confirmar, el detalle no dice que el neto no se calcula por esa fuente (DP2, C2/C-E1).
+describe("detalle de la persona con la conciliación sin confirmar", () => {
+  beforeEach(async () => {
+    vi.stubGlobal("React", React);
+    simulacro.actor.mockResolvedValue({ id: "f", rol: "finanzas" });
+    const contexto = escenario();
+    const { prepararBorrador } = await vi.importActual<typeof import("@/pagos/preparar-borrador")>("@/pagos/preparar-borrador");
+    simulacro.preparar.mockReset();
+    simulacro.preparar.mockImplementation((_fuentes: unknown, mes: string) => prepararBorrador(contexto.fuentes, mes));
+    for (const tipo of TIPOS_DE_FUENTE.filter(({ codigo }) => codigo !== TIPO)) await confirmarFuente(contexto.repositorio, finanzas, { tipoDeFuente: tipo.codigo, mes: MES });
+  });
+
+  it("R1-P01 Carla, sin cese, conserva su neto y no ve «Fuente pendiente: Conciliación»", async () => {
+    const html = await render(CARLA);
+
+    expect(html).toContain("Neto antes de aportes del trabajador: S/ 2.000,00");
+    expect(html).not.toContain("Fuente pendiente: Conciliación");
+    expect(html).not.toContain("El neto no se calcula hasta confirmarla");
+  });
+
+  it("R1-P01 Ana, con cese del mes sin conciliar, muestra su bloqueo de cese y no el mensaje de fuente pendiente", async () => {
+    const html = await render(ANA);
+
+    expect(html).toContain("El cese de Ana no tiene su liquidación conciliada.");
+    expect(html).toContain("Incompleto");
+    expect(html).not.toContain("Fuente pendiente: Conciliación");
   });
 });

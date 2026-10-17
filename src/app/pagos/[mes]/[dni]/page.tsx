@@ -10,6 +10,7 @@ import { formatearMes, textoDeProcedencia } from "@/fuentes-externas/valores";
 import { ROTULO_DEL_NETO, estadoDeLaPersona, type LineaDeFuenteExterna } from "@/pagos/fuentes-en-el-neto";
 import { formatearPorcentaje } from "@/reglas-legales/valores";
 import { totalDeHorasExtraCentimos, totalDeTrabajoEnDescansoOFeriadoCentimos, type DescansoVacacionalDelBorrador, type LineaDeBorrador } from "@/pagos/calcular-borrador";
+import { TIPO_DE_CONCILIACION } from "@/pagos/conciliacion-de-cese";
 import { prepararBorrador } from "@/pagos/preparar-borrador";
 import { fuentesDelBorrador } from "@/pagos/servicio";
 import { formatearFechaDeRelacion } from "@/relaciones-laborales/vigencia";
@@ -114,7 +115,8 @@ export default async function PaginaDePersona({ params }: { params: Promise<{ me
   const { relacion, lineas, bloqueos, vacaciones } = persona;
   // Los borradores sin conciliación (p. ej. simulados) no traen el campo: el panel solo aparece si hay importes cargados.
   const hayConciliacion = Boolean(persona.conciliacion?.conceptosCentimos || persona.conciliacion?.abonosCentimos);
-  const fuentesPendientes = (borrador.fuentes ?? []).filter(({ estado }) => estado === "Pendiente").map(({ nombre }) => nombre);
+  // Como en prepararBorrador (DP2): la conciliación pendiente no deja sin neto a la persona; su bloqueo es el del cese.
+  const fuentesPendientes = (borrador.fuentes ?? []).filter(({ codigo, estado }) => estado === "Pendiente" && codigo !== TIPO_DE_CONCILIACION).map(({ nombre }) => nombre);
   const jornadasDeGoce = [...new Map((borrador.revisiones ?? []).flatMap(({ hechos }) => hechos)
     .filter((hecho) => hecho.dni === dni && (hecho.resultado === "permiso" || hecho.resultado === "suspension"))
     .map((hecho) => [hecho.fecha, hecho])).values()].sort((a, b) => a.fecha.localeCompare(b.fecha));

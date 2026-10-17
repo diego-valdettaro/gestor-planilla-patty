@@ -101,6 +101,13 @@ describe("página de un tipo de fuente (/pagos/fuentes-externas/[tipo])", () => 
     expect(html).not.toContain("Importar XLSX");
   });
 
+  it("R1-P03 el formulario de ajuste no ofrece los conceptos de la conciliación y sí los del neto", async () => {
+    const html = await render("ajustes_de_preliquidacion", "2026-10");
+    const opciones = html.split('name="conceptoAjustado"')[1]?.split("</select>")[0] ?? "";
+    expect(opciones).toContain("Sueldo básico");
+    for (const nombre of ["Vacaciones truncas", "CTS trunca", "Gratificación trunca", "Remuneración pendiente del mes", "Abono de liquidación"]) expect(opciones).not.toContain(nombre);
+  });
+
   it("muestra el abono vacacional con su formulario propio, que no pide días del descanso ni ofrece XLSX", async () => {
     await registrarAbonoVacacional(contexto.repositorio, finanzas, { dni: ANA, fechaDelAbono: "2026-09-28", mesDeAplicacion: "2026-10", monto: "300" });
     const html = await render("abonos_vacacionales", "2026-10");

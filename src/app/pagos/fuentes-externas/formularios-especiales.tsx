@@ -4,6 +4,7 @@ import { useActionState } from "react";
 
 import { CONCEPTOS } from "@/conceptos-de-preliquidacion/catalogo";
 import { formatearMes } from "@/fuentes-externas/valores";
+import { esConceptoDeConciliacion } from "@/pagos/conciliacion-de-cese";
 
 import { decidirIncidenciaDesdeFormulario, registrarAbonoVacacionalDesdeFormulario, registrarAjusteDesdeFormulario, registrarConciliacionDeCeseDesdeFormulario, registrarIncidenciaDesdeFormulario, type EstadoEspecial } from "./acciones-especiales";
 
@@ -55,7 +56,7 @@ export function DecisionDeIncidencia({ id, estadoActual }: { id: string; estadoA
 export function RegistroDeAjuste({ mes }: { mes: string }) {
   const [estado, accion, pendiente] = useActionState(registrarAjusteDesdeFormulario, inicial);
   return <form action={accion} className="formulario-dialogo formulario-de-importe"><CamposComunes mes={mes} />
-    <label>Concepto que se corrige<select name="conceptoAjustado" required>{CONCEPTOS.filter((concepto) => concepto.codigo !== "ajuste_de_preliquidacion").map((concepto) => <option key={concepto.codigo} value={concepto.codigo}>{concepto.nombre}</option>)}</select></label>
+    <label>Concepto que se corrige<select name="conceptoAjustado" required>{CONCEPTOS.filter((concepto) => concepto.codigo !== "ajuste_de_preliquidacion" && !esConceptoDeConciliacion(concepto.codigo)).map((concepto) => <option key={concepto.codigo} value={concepto.codigo}>{concepto.nombre}</option>)}</select></label>
     <label>Sentido del ajuste<select name="sentidoAjuste"><option value="suma">Aumentar el concepto</option><option value="resta">Reducir el concepto</option></select></label>
     <label>Motivo<textarea maxLength={250} name="motivo" required rows={2} /></label>
     <p>El ajuste toma el efecto sobre el neto y las bases del concepto corregido. La versión finalizada anterior queda intacta.</p>
