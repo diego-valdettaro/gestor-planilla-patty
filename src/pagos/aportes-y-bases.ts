@@ -3,6 +3,7 @@ import type { EntradaDeBorrador, LineaDeBorrador } from "./calcular-borrador";
 import type { RelacionConPersona } from "@/relaciones-laborales/gestionar-relaciones-laborales";
 import { esAfp, type ValorLaboral } from "@/condiciones-laborales/catalogo";
 import { buscarDefinicion } from "@/reglas-legales/catalogo";
+import { esConceptoDeConciliacion } from "./conciliacion-de-cese";
 import { importesVigentesDePersona } from "./fuentes-en-el-neto";
 import { TIPOS_DE_FUENTE } from "@/fuentes-externas/tipos-de-fuente";
 
@@ -92,7 +93,8 @@ export interface BasesPorDevengue {
 
 /** Cada devengue conserva su base; una deducción o un abono no rebaja remuneración. */
 export function basesPorDevengue(entrada: EntradaDeBorrador, relacion: RelacionConPersona, lineas: LineaDeBorrador[], mesesPendientes: Set<string>): BasesPorDevengue[] {
-  const externos = importesVigentesDePersona(entrada.importes, relacion.dni, entrada.mesDePago);
+  // Los importes de la conciliación de la liquidación por cese no entran a las bases ni agregan un devengue (#128).
+  const externos = importesVigentesDePersona(entrada.importes, relacion.dni, entrada.mesDePago).filter(i => !esConceptoDeConciliacion(i.concepto));
   const componentes = [
     // Las externas materializadas para el subtotal se leen abajo desde su fuente, una sola vez.
     ...lineas.filter(l => l.origen !== "Fuente externa").map(l => ({ mes: l.mesDeDevengue, monto: l.importeCentimos, efectos: buscarConcepto(l.concepto)?.bases })),

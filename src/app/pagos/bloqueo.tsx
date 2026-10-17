@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { esBloqueoPorCeseSinConciliar } from "@/pagos/conciliacion-de-cese";
+
 export function BloqueoDePagos({ mensaje, mes, relacionId, dni }: { mensaje: string; mes: string; relacionId?: string; dni?: string }) {
   let destino = "/periodos";
   let siguiente = "Revise el período de planilla y su aprobación.";
@@ -15,6 +17,12 @@ export function BloqueoDePagos({ mensaje, mes, relacionId, dni }: { mensaje: str
   } else if (mensaje.startsWith("Fuente externa")) {
     destino = `/pagos/fuentes-externas?mes=${mes}`;
     siguiente = "Confirme el listado de esta fuente.";
+  } else if (esBloqueoPorCeseSinConciliar(mensaje)) {
+    destino = `/pagos/fuentes-externas/conciliacion_de_liquidacion_por_cese?mes=${mes}`;
+    siguiente = "Cargar la conciliación en la fuente correspondiente.";
+  } else if (mensaje.startsWith("Duplicación:")) {
+    destino = `/pagos/fuentes-externas/conciliacion_de_liquidacion_por_cese?mes=${mes}`;
+    siguiente = "Corregir la fuente.";
   } else if (mensaje.startsWith("Neto negativo")) {
     destino = `/pagos/fuentes-externas?mes=${mes}`;
     siguiente = "Revise la fuente de adelantos o registre un ajuste de preliquidación.";

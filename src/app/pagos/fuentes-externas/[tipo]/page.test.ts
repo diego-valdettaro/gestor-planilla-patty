@@ -13,12 +13,13 @@ vi.mock("@/fuentes-externas/servicio", () => ({
 vi.mock("../actions", () => ({
   registrarImporteDesdeFormulario: vi.fn(), anularImporteDesdeFormulario: vi.fn(), confirmarFuenteDesdeFormulario: vi.fn(), volverAPendienteDesdeFormulario: vi.fn(),
 }));
-vi.mock("../acciones-especiales", () => ({ registrarIncidenciaDesdeFormulario: vi.fn(), decidirIncidenciaDesdeFormulario: vi.fn(), registrarAjusteDesdeFormulario: vi.fn(), registrarAbonoVacacionalDesdeFormulario: vi.fn() }));
+vi.mock("../acciones-especiales", () => ({ registrarIncidenciaDesdeFormulario: vi.fn(), decidirIncidenciaDesdeFormulario: vi.fn(), registrarAjusteDesdeFormulario: vi.fn(), registrarAbonoVacacionalDesdeFormulario: vi.fn(), registrarConciliacionDeCeseDesdeFormulario: vi.fn() }));
 
 import type { Actor } from "@/autenticacion/permisos";
 import { confirmarFuente, registrarImporte } from "@/fuentes-externas/gestionar-fuentes-externas";
 import { crearRepositorioEnMemoria } from "@/fuentes-externas/repositorio-en-memoria";
 import { registrarAbonoVacacional } from "@/fuentes-externas/abonos-vacacionales";
+import { registrarConciliacionDeCese } from "@/fuentes-externas/conciliacion-de-cese";
 import { decidirIncidencia, registrarAjuste, registrarIncidencia } from "@/fuentes-externas/incidencias-y-ajustes";
 
 const finanzas: Actor = { id: "fin-1", rol: "finanzas", nombreUsuario: "finanzas" };
@@ -112,6 +113,61 @@ describe("página de un tipo de fuente (/pagos/fuentes-externas/[tipo])", () => 
     expect(html).toContain("vacaciones que el gerente aprobó en Asistencia");
     expect(html).not.toContain("Importar XLSX");
     expect(html).not.toContain("Inicio del descanso");
+  });
+
+  const conciliar = (cambios: Record<string, string> = {}) => registrarConciliacionDeCese(contexto.repositorio, finanzas, {
+    dni: ANA, concepto: "vacaciones_truncas", fechaDelHecho: "2026-10-12", mesDeDevengue: "2026-10", mesDeAplicacion: "2026-10", monto: "400", ...cambios,
+  });
+
+  it("PA-02 la conciliación de liquidación por cese tiene su formulario propio y lista las filas sin sumar al neto, con el total", async () => {
+    await conciliar();
+    await conciliar({ concepto: "cts_trunca", monto: "900" });
+
+    const html = await render("conciliacion_de_liquidacion_por_cese", "2026-10");
+
+    expect(html).toContain("<h1>Conciliación de liquidación por cese · mes de pago 10/2026</h1>");
+    for (const [codigo, nombre] of [["vacaciones_truncas", "Vacaciones truncas"], ["cts_trunca", "CTS trunca"], ["gratificacion_trunca", "Gratificación trunca"], ["remuneracion_pendiente_del_mes", "Remuneración pendiente del mes"], ["abono_de_liquidacion", "Abono de liquidación"]]) {
+      expect(html).toMatch(new RegExp(`<option value="${codigo}"[^>]*>${nombre}</option>`));
+    }
+    expect(html).toContain("DNI de la persona");
+    expect(html).toContain("Fecha del hecho");
+    expect(html).toContain("Mes de devengue");
+    expect(html).toContain("Importe (S/)");
+    expect(html).toContain("Registrar conciliación");
+    expect(html).not.toContain("Registrar importe");
+    expect(html).toContain("S/ 400,00");
+    expect(html).toContain("S/ 900,00");
+    expect(html).toContain("12/10/2026");
+    expect(html).toContain("Carga manual");
+    expect(html.match(/No cambia el neto/g)).toHaveLength(2);
+    expect(html).toContain("S/ 1.300,00 en total");
+    expect(html).not.toContain("Importar XLSX");
+  });
+
+  it("PA-03 el abono de liquidación se lista con su fecha del hecho", async () => {
+    await conciliar({ concepto: "abono_de_liquidacion", fechaDelHecho: "2026-10-13", monto: "700" });
+
+    const html = await render("conciliacion_de_liquidacion_por_cese", "2026-10");
+
+    const fila = html.split("<tr>").find((candidata) => candidata.includes("Ana Sintética")) ?? "";
+    expect(fila).toContain("Abono de liquidación");
+    expect(fila).toContain("13/10/2026");
+    expect(fila).toContain("S/ 700,00");
+    expect(fila).toContain("No cambia el neto");
+  });
+
+  it.each([
+    ["el Administrador del sistema", { id: "a", rol: "administrador" }],
+    ["un gerente de área", { id: "g", rol: "gerente_de_area", grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] }],
+  ])("RG-02 niega la conciliación por cese a %s y no muestra importes ni conceptos", async (_nombre, actor) => {
+    await conciliar();
+    simulacro.actor.mockResolvedValue(actor);
+
+    const html = await render("conciliacion_de_liquidacion_por_cese", "2026-10");
+
+    expect(html).toContain("Sin permiso");
+    expect(html).not.toContain("S/ 400,00");
+    expect(html).not.toContain("Vacaciones truncas");
   });
 
   it("sin filas muestra el estado vacío con su siguiente paso y «Confirmar sin importes»", async () => {

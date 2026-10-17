@@ -5,7 +5,7 @@ import { useActionState } from "react";
 import { CONCEPTOS } from "@/conceptos-de-preliquidacion/catalogo";
 import { formatearMes } from "@/fuentes-externas/valores";
 
-import { decidirIncidenciaDesdeFormulario, registrarAbonoVacacionalDesdeFormulario, registrarAjusteDesdeFormulario, registrarIncidenciaDesdeFormulario, type EstadoEspecial } from "./acciones-especiales";
+import { decidirIncidenciaDesdeFormulario, registrarAbonoVacacionalDesdeFormulario, registrarAjusteDesdeFormulario, registrarConciliacionDeCeseDesdeFormulario, registrarIncidenciaDesdeFormulario, type EstadoEspecial } from "./acciones-especiales";
 
 const inicial: EstadoEspecial = {};
 
@@ -73,5 +73,15 @@ export function RegistroDeAbonoVacacional({ mes }: { mes: string }) {
     <small className="linea-de-relacion">Mes de aplicación: {formatearMes(mes)}.</small>
     <p>Los días del descanso salen de las vacaciones que el gerente aprobó en Asistencia. El abono se ata al descanso que empieza en o después de su fecha y se reparte entre los meses del descanso en proporción a su remuneración vacacional: reduce el saldo de cada mes una sola vez y no cambia su mes de devengue.</p>
     <Resultado estado={estado} /><button className="boton-principal" disabled={pendiente} type="submit">Registrar abono vacacional</button>
+  </form>;
+}
+
+export function RegistroDeConciliacionDeCese({ mes, conceptos }: { mes: string; conceptos: Array<{ codigo: string; nombre: string }> }) {
+  const [estado, accion, pendiente] = useActionState(registrarConciliacionDeCeseDesdeFormulario, inicial);
+  return <form action={accion} className="formulario-dialogo formulario-de-importe">
+    <CamposComunes mes={mes} />
+    <label>Concepto<select name="concepto">{conceptos.map((opcion) => <option key={opcion.codigo} value={opcion.codigo}>{opcion.nombre}</option>)}</select></label>
+    <p>Escriba el importe real calculado fuera de la app. No entra al neto ni a las bases y no se calcula aquí.</p>
+    <Resultado estado={estado} /><button className="boton-principal" disabled={pendiente} type="submit">Registrar conciliación</button>
   </form>;
 }
