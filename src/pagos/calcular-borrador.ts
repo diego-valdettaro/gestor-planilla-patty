@@ -9,7 +9,8 @@ import { formatearFechaDeRelacion } from "@/relaciones-laborales/vigencia";
 import { desplazarFecha } from "@/turnos/semana";
 import { buscarConcepto, tieneTipoPropio } from "@/conceptos-de-preliquidacion/catalogo";
 
-import { bloqueoPorNetoNegativo, lineasDeFuentesExternas, netoDe, totalesPorSede, type TotalDeSede, type LineaDeFuenteExterna } from "./fuentes-en-el-neto";
+import { bloqueoDeCese, bloqueosPorDuplicacion, esBloqueoPorCeseSinConciliar, totalesDeConciliacion, type TotalesDeConciliacion } from "./conciliacion-de-cese";
+import { bloqueoPorNetoNegativo, importesVigentesDePersona, lineasDeFuentesExternas, netoDe, totalesPorSede, type TotalDeSede, type LineaDeFuenteExterna } from "./fuentes-en-el-neto";
 import { asociarAbono, descansosDe, diasConvencionalesDelMes, fechasEnMes, mesesDelDescanso, repartirAbono, ventanaDeVacaciones, type DescansoVacacional } from "./vacaciones";
 import { aportesDelDevengue, basesPorDevengue, bloqueoPorCambio, hayCambioIntramensual, type BasesPorDevengue, type LineaDeAporte } from "./aportes-y-bases";
 
@@ -53,6 +54,8 @@ export interface EntradaDeBorrador {
   vacacionesProvisionales: boolean;
   /** Clasificaciones de goce de permisos y suspensiones del corte; sin clasificación la jornada queda pendiente y bloquea. */
   clasificacionesDeGoce?: ClasificacionDeGoce[];
+  /** Finanzas confirmó el tipo «Conciliación de liquidación por cese» para el mes; sin ello (o sin filas vigentes) un cese del mes bloquea. */
+  conciliacionConfirmada?: boolean;
 }
 
 export interface LineaDeSueldo {
@@ -232,6 +235,8 @@ export interface PersonaDeBorrador {
   sedeDeAdscripcion: string | null;
   lineas: LineaDeBorrador[];
   bloqueos: string[];
+  /** Total de la conciliación de la liquidación por cese, aparte: no entra al neto ni a las bases. */
+  conciliacion: TotalesDeConciliacion;
   /** Sueldo básico + remuneración vacacional + su ajuste: reclasificar vacaciones no cambia el total mensual. */
   sueldoCalculadoCentimos: number;
   vacaciones: DescansoVacacionalDelBorrador[];
@@ -692,14 +697,18 @@ export function calcularBorrador(entrada: EntradaDeBorrador): BorradorDePagos {
     const bases = basesPorDevengue(entradaValida, relacion, lineas, mesesPendientes);
     lineas.push(...aportesDelDevengue(entrada, relacion, bases, bloqueos));
     const sueldoCalculadoCentimos = [...arrastre.lineas, ...actual.lineas].reduce((suma, linea) => suma + linea.importeCentimos, 0);
+    const vigentes = importesVigentesDePersona(entradaValida.importes, relacion.dni, mes);
+    const cese = bloqueoDeCese(relacion, mes, vigentes, entrada.conciliacionConfirmada === true);
+    if (cese) bloqueos.push(cese);
+    bloqueos.push(...bloqueosPorDuplicacion(vigentes, lineas));
     const neto = entrada.fuentesPendientes.length || bloqueos.length ? null : netoDe(lineas, sueldoCalculadoCentimos);
     if (neto !== null && neto < 0) bloqueos.push(bloqueoPorNetoNegativo(neto));
     return { relacion, vacaciones: desglose.vacaciones, sedeDeAdscripcion: String(condicionEn(entrada, relacion.id, "sede_de_adscripcion", fechaDeSede) ?? "") || null,
-      lineas, basesPorDevengue: bases, bloqueos,
+      lineas, basesPorDevengue: bases, bloqueos, conciliacion: totalesDeConciliacion(vigentes),
       sueldoCalculadoCentimos, netoCentimos: neto === null || neto < 0 ? null : neto };
   }).sort((a, b) => a.relacion.nombre.localeCompare(b.relacion.nombre) || a.relacion.dni.localeCompare(b.relacion.dni));
   // El resumen usa las faltas efectivas por devengue, no selecciona otra afiliación al día 25.
-  bloqueosDelMes.push(...new Set(personas.flatMap(persona => persona.bloqueos.filter(bloqueo => bloqueo.startsWith("No hay ")))));
+  bloqueosDelMes.push(...new Set(personas.flatMap(persona => persona.bloqueos.filter(bloqueo => bloqueo.startsWith("No hay ") || esBloqueoPorCeseSinConciliar(bloqueo)))));
   return { mesDePago: mes, corte: entrada.corte, revisiones: entrada.revisiones, personas, bloqueosDelMes,
     vacacionesProvisionales: entrada.vacacionesProvisionales,
     sueldoCalculadoCentimos: personas.reduce((suma, persona) => suma + persona.sueldoCalculadoCentimos, 0),

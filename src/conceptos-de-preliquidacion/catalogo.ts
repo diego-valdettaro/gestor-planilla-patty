@@ -13,6 +13,8 @@
 //    incidencias y cuotas de préstamo).
 // Para valorar horas extra, la remuneración ordinaria computable usa sueldo básico más asignación familiar otorgada.
 // Las comisiones de ventas de esta app son complementarias variables y no entran en esa base (#122).
+// Los conceptos de la conciliación de la liquidación por cese (#128) son importes reales calculados fuera de la app: no entran al
+// neto ni a las bases y no llevan código PLAME (null) hasta que el contador valide cómo se declaran. Su tipo propio amplía los cinco del ADR 0009.
 
 export const TIPOS_DE_CONCEPTO = [
   "ingreso_remunerativo",
@@ -20,6 +22,7 @@ export const TIPOS_DE_CONCEPTO = [
   "reduccion",
   "deduccion_del_trabajador",
   "aporte_patronal",
+  "conciliacion_de_liquidacion",
 ] as const;
 export type TipoDeConcepto = (typeof TIPOS_DE_CONCEPTO)[number];
 
@@ -43,7 +46,7 @@ export interface ConceptoDePreliquidacion {
   tipo: TipoDeConcepto | "del_concepto_ajustado";
   efectoEnNeto: EfectoEnNeto;
   bases: EfectosEnBases;
-  /** Código de la Tabla 22 de SUNAT; null en el ajuste, que usa el del concepto que corrige. */
+  /** Código de la Tabla 22 de SUNAT; null en el ajuste, que usa el del concepto que corrige, y en la conciliación de liquidación, aún sin validar. */
   codigoPlame: string | null;
   origen: OrigenDeConcepto;
 }
@@ -61,7 +64,8 @@ export function efectoDelTipoEnNeto(tipo: TipoDeConcepto): Exclude<EfectoEnNeto,
     case "ingreso_no_remunerativo": return "suma";
     case "reduccion":
     case "deduccion_del_trabajador": return "resta";
-    case "aporte_patronal": return "ninguno";
+    case "aporte_patronal":
+    case "conciliacion_de_liquidacion": return "ninguno";
   }
 }
 
@@ -71,7 +75,7 @@ const NINGUNA: EfectosEnBases = { pensionaria: "no_afecta", essalud: "no_afecta"
 const SOLO_QUINTA: EfectosEnBases = { pensionaria: "no_afecta", essalud: "no_afecta", quinta: "suma" };
 const DEL_AJUSTADO: EfectosEnBases = { pensionaria: "del_concepto_ajustado", essalud: "del_concepto_ajustado", quinta: "del_concepto_ajustado" };
 
-function concepto(codigo: string, nombre: string, tipo: TipoDeConcepto, codigoPlame: string, origen: OrigenDeConcepto, bases: EfectosEnBases): ConceptoDePreliquidacion {
+function concepto(codigo: string, nombre: string, tipo: TipoDeConcepto, codigoPlame: string | null, origen: OrigenDeConcepto, bases: EfectosEnBases): ConceptoDePreliquidacion {
   return { codigo, nombre, tipo, efectoEnNeto: efectoDelTipoEnNeto(tipo), bases, codigoPlame, origen };
 }
 
@@ -113,6 +117,12 @@ export const CONCEPTOS: readonly ConceptoDePreliquidacion[] = [
     codigo: "ajuste_de_preliquidacion", nombre: "Ajuste de preliquidación", tipo: "del_concepto_ajustado", efectoEnNeto: "del_concepto_ajustado",
     bases: DEL_AJUSTADO, codigoPlame: null, origen: "ajuste",
   },
+  // Conciliación de la liquidación por cese (#128): importes cargados por Finanzas, sin efecto en el neto ni en las bases.
+  concepto("vacaciones_truncas", "Vacaciones truncas", "conciliacion_de_liquidacion", null, "fuente_externa", NINGUNA),
+  concepto("cts_trunca", "CTS trunca", "conciliacion_de_liquidacion", null, "fuente_externa", NINGUNA),
+  concepto("gratificacion_trunca", "Gratificación trunca", "conciliacion_de_liquidacion", null, "fuente_externa", NINGUNA),
+  concepto("remuneracion_pendiente_del_mes", "Remuneración pendiente del mes", "conciliacion_de_liquidacion", null, "fuente_externa", NINGUNA),
+  concepto("abono_de_liquidacion", "Abono de liquidación", "conciliacion_de_liquidacion", null, "fuente_externa", NINGUNA),
   // Aportes del empleador
   concepto("essalud_patronal", "EsSalud patronal", "aporte_patronal", "0804", "calculado", NINGUNA),
 ];

@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 
+import { netoDe } from "@/pagos/fuentes-en-el-neto";
+
 import { CONCEPTOS, TIPOS_DE_CONCEPTO, buscarConcepto, efectoDelTipoEnNeto, tieneTipoPropio, type TipoDeConcepto } from "./catalogo";
 
 const codigos = CONCEPTOS.map((concepto) => concepto.codigo);
+// Los cinco conceptos de la conciliación de la liquidación por cese (#128, C1).
+const CONCEPTOS_DE_CONCILIACION = ["vacaciones_truncas", "cts_trunca", "gratificacion_trunca", "remuneracion_pendiente_del_mes", "abono_de_liquidacion"];
 
 describe("catálogo de conceptos de preliquidación (ADR 0009)", () => {
   it("contiene los conceptos iniciales de la especificación #96", () => {
@@ -17,10 +21,13 @@ describe("catálogo de conceptos de preliquidación (ADR 0009)", () => {
     expect(new Set(codigos).size).toBe(codigos.length);
   });
 
-  it("cada concepto tiene uno de los cinco tipos, un código PLAME de cuatro dígitos y un origen; solo el ajuste toma ambos del concepto que corrige", () => {
+  it("cada concepto tiene uno de los seis tipos, un código PLAME de cuatro dígitos (null solo en la conciliación de liquidación) y un origen; solo el ajuste toma ambos del concepto que corrige", () => {
+    expect(TIPOS_DE_CONCEPTO).toHaveLength(6);
+    expect(TIPOS_DE_CONCEPTO).toContain("conciliacion_de_liquidacion");
     for (const concepto of CONCEPTOS.filter(tieneTipoPropio)) {
       expect(TIPOS_DE_CONCEPTO, concepto.codigo).toContain(concepto.tipo);
-      expect(concepto.codigoPlame, concepto.codigo).toMatch(/^\d{4}$/);
+      if (concepto.tipo === "conciliacion_de_liquidacion") expect(concepto.codigoPlame, concepto.codigo).toBeNull();
+      else expect(concepto.codigoPlame, concepto.codigo).toMatch(/^\d{4}$/);
     }
     expect(CONCEPTOS.filter((concepto) => !tieneTipoPropio(concepto)).map(({ codigo }) => codigo)).toEqual(["ajuste_de_preliquidacion"]);
     for (const concepto of CONCEPTOS) {
@@ -29,9 +36,10 @@ describe("catálogo de conceptos de preliquidación (ADR 0009)", () => {
     }
   });
 
-  it("el efecto en el neto sale del tipo: ingresos suman, reducciones y deducciones restan, el aporte patronal no toca el neto", () => {
+  it("el efecto en el neto sale del tipo: ingresos suman, reducciones y deducciones restan, el aporte patronal y la conciliación de liquidación no tocan el neto", () => {
     const esperado: Record<TipoDeConcepto, string> = {
       ingreso_remunerativo: "suma", ingreso_no_remunerativo: "suma", reduccion: "resta", deduccion_del_trabajador: "resta", aporte_patronal: "ninguno",
+      conciliacion_de_liquidacion: "ninguno",
     };
     for (const tipo of TIPOS_DE_CONCEPTO) expect(efectoDelTipoEnNeto(tipo)).toBe(esperado[tipo]);
     for (const concepto of CONCEPTOS.filter(tieneTipoPropio)) {
@@ -81,5 +89,24 @@ describe("catálogo de conceptos de preliquidación (ADR 0009)", () => {
     expect(buscarConcepto("comision_de_ventas")?.origen).toBe("fuente_externa");
     expect(buscarConcepto("horas_extra_25")?.origen).toBe("calculado");
     expect(buscarConcepto("reduccion_por_tardanza")?.origen).toBe("calculado");
+  });
+
+  it("CAL-01 el catálogo trae los cinco conceptos de la conciliación como fuente externa y sin código PLAME", () => {
+    for (const codigo of CONCEPTOS_DE_CONCILIACION) {
+      const concepto = buscarConcepto(codigo);
+      expect(concepto, codigo).toBeDefined();
+      expect(concepto?.origen, codigo).toBe("fuente_externa");
+      expect(concepto?.codigoPlame, codigo).toBeNull();
+      expect(concepto?.nombre.trim(), codigo).not.toBe("");
+    }
+  });
+
+  it("CAL-02 los cinco conceptos de la conciliación no afectan el neto ni las bases", () => {
+    for (const codigo of CONCEPTOS_DE_CONCILIACION) {
+      const concepto = buscarConcepto(codigo);
+      expect(concepto?.efectoEnNeto, codigo).toBe("ninguno");
+      expect(concepto?.bases, codigo).toEqual({ pensionaria: "no_afecta", essalud: "no_afecta", quinta: "no_afecta" });
+      expect(netoDe([{ concepto: codigo, importeCentimos: 130000 }], 80000), codigo).toBe(80000);
+    }
   });
 });

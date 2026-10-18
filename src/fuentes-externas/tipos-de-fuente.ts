@@ -14,7 +14,8 @@ export type CodigoDeTipoDeFuente =
   | "gratificacion_y_bonificacion"
   | "incidencias_de_tienda"
   | "ajustes_de_preliquidacion"
-  | "abonos_vacacionales";
+  | "abonos_vacacionales"
+  | "conciliacion_de_liquidacion_por_cese";
 
 export interface TipoDeFuente {
   codigo: CodigoDeTipoDeFuente;
@@ -35,6 +36,7 @@ export const TIPOS_DE_FUENTE: readonly TipoDeFuente[] = [
   { codigo: "incidencias_de_tienda", nombre: "Incidencias de tienda", conceptos: ["descuento_autorizado_por_incidencia"], flujoPropio: true },
   { codigo: "ajustes_de_preliquidacion", nombre: "Ajustes de preliquidación", conceptos: ["ajuste_de_preliquidacion"], flujoPropio: true },
   { codigo: "abonos_vacacionales", nombre: "Abonos anticipados de remuneración vacacional", conceptos: ["abono_anticipado_de_remuneracion_vacacional"], flujoPropio: true },
+  { codigo: "conciliacion_de_liquidacion_por_cese", nombre: "Conciliación de liquidación por cese", conceptos: ["vacaciones_truncas", "cts_trunca", "gratificacion_trunca", "remuneracion_pendiente_del_mes", "abono_de_liquidacion"], flujoPropio: true },
 ];
 
 export function buscarTipoDeFuente(codigo: string): TipoDeFuente | undefined {

@@ -45,7 +45,7 @@ describe("página de Fuentes externas (/pagos/fuentes-externas)", () => {
 
   afterEach(() => vi.useRealTimers());
 
-  it("muestra el mes actual de Lima, el recordatorio y una fila por tipo de fuente, todas pendientes al comienzo", async () => {
+  it("PA-01 muestra el mes actual de Lima, el recordatorio y una fila por tipo de fuente (incluida la conciliación por cese, sin XLSX), todas pendientes al comienzo", async () => {
     const html = await render();
 
     expect(html).toContain("Fuentes externas del mes de pago 10/2026");
@@ -54,8 +54,11 @@ describe("página de Fuentes externas (/pagos/fuentes-externas)", () => {
     for (const nombre of ["Comisiones de ventas", "Movilidad supeditada a asistencia", "Adelantos", "Préstamos (cuotas)", "Retención de quinta categoría", "Gratificación legal y bonificación extraordinaria"]) {
       expect(html).toContain(nombre);
     }
-    expect(html).toContain("9 pendientes");
-    expect(html.match(/>Pendiente</g)).toHaveLength(9);
+    expect(html).toContain("Conciliación de liquidación por cese");
+    expect(html).toContain('href="/pagos/fuentes-externas/conciliacion_de_liquidacion_por_cese?mes=2026-10"');
+    expect(html).not.toContain("importar?mes=2026-10&amp;tipo=conciliacion_de_liquidacion_por_cese");
+    expect(html).toContain("10 pendientes");
+    expect(html.match(/>Pendiente</g)).toHaveLength(10);
     expect(html).toContain('href="/pagos/fuentes-externas/comisiones_de_ventas?mes=2026-10"');
     expect(html).toContain("Confirmar sin importes");
     expect(html).toContain('href="/pagos/fuentes-externas/importar?mes=2026-10&amp;tipo=comisiones_de_ventas"');
@@ -64,7 +67,7 @@ describe("página de Fuentes externas (/pagos/fuentes-externas)", () => {
     expect(html).toContain('href="/pagos/fuentes-externas/ajustes_de_preliquidacion?mes=2026-10"');
     expect(html).toContain("Sin filas");
     // Una fuente pendiente sin filas no muestra S/ 0,00: el faltante no es cero.
-    expect(html.match(/<td class="numerico">—<\/td>/g)).toHaveLength(9);
+    expect(html.match(/<td class="numerico">—<\/td>/g)).toHaveLength(10);
   });
 
   it("distingue Pendiente, Confirmada con importes y Confirmada sin importes con texto, filas e importe total", async () => {
@@ -81,7 +84,7 @@ describe("página de Fuentes externas (/pagos/fuentes-externas)", () => {
     expect(html).toContain("Confirmada por usuario-fin-1");
     expect(html).toContain("Carga manual");
     expect(html).toContain("Volver a pendiente");
-    expect(html).toContain("7 pendientes");
+    expect(html).toContain("8 pendientes");
     expect(html).toContain("Confirmar sin importes");
   });
 
@@ -99,7 +102,7 @@ describe("página de Fuentes externas (/pagos/fuentes-externas)", () => {
     const html = await render("2026-11");
 
     expect(html).toContain("Fuentes externas del mes de pago 11/2026");
-    expect(html).toContain("9 pendientes");
+    expect(html).toContain("10 pendientes");
     expect(html).not.toContain("Confirmada sin importes");
   });
 
@@ -138,6 +141,6 @@ describe("página de Fuentes externas (/pagos/fuentes-externas)", () => {
     const html = await render("2026-10");
 
     expect(html).not.toContain("S/ 250,50");
-    expect(html).toContain("9 pendientes");
+    expect(html).toContain("10 pendientes");
   });
 });

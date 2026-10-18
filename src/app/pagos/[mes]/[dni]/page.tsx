@@ -10,6 +10,7 @@ import { formatearMes, textoDeProcedencia } from "@/fuentes-externas/valores";
 import { ROTULO_DEL_NETO, estadoDeLaPersona, type LineaDeFuenteExterna } from "@/pagos/fuentes-en-el-neto";
 import { formatearPorcentaje } from "@/reglas-legales/valores";
 import { totalDeHorasExtraCentimos, totalDeTrabajoEnDescansoOFeriadoCentimos, type DescansoVacacionalDelBorrador, type LineaDeBorrador } from "@/pagos/calcular-borrador";
+import { TIPO_DE_CONCILIACION } from "@/pagos/conciliacion-de-cese";
 import { prepararBorrador } from "@/pagos/preparar-borrador";
 import { fuentesDelBorrador } from "@/pagos/servicio";
 import { formatearFechaDeRelacion } from "@/relaciones-laborales/vigencia";
@@ -112,7 +113,10 @@ export default async function PaginaDePersona({ params }: { params: Promise<{ me
   const persona = borrador.personas.find(({ relacion }) => relacion.dni === dni);
   if (!persona) notFound();
   const { relacion, lineas, bloqueos, vacaciones } = persona;
-  const fuentesPendientes = (borrador.fuentes ?? []).filter(({ estado }) => estado === "Pendiente").map(({ nombre }) => nombre);
+  // Los borradores sin conciliación (p. ej. simulados) no traen el campo: el panel solo aparece si hay importes cargados.
+  const hayConciliacion = Boolean(persona.conciliacion?.conceptosCentimos || persona.conciliacion?.abonosCentimos);
+  // Como en prepararBorrador (DP2): la conciliación pendiente no deja sin neto a la persona; su bloqueo es el del cese.
+  const fuentesPendientes = (borrador.fuentes ?? []).filter(({ codigo, estado }) => estado === "Pendiente" && codigo !== TIPO_DE_CONCILIACION).map(({ nombre }) => nombre);
   const jornadasDeGoce = [...new Map((borrador.revisiones ?? []).flatMap(({ hechos }) => hechos)
     .filter((hecho) => hecho.dni === dni && (hecho.resultado === "permiso" || hecho.resultado === "suspension"))
     .map((hecho) => [hecho.fecha, hecho])).values()].sort((a, b) => a.fecha.localeCompare(b.fecha));
@@ -135,6 +139,11 @@ export default async function PaginaDePersona({ params }: { params: Promise<{ me
       <ul>{jornadasDeGoce.map((jornada) => <ClasificacionDeGoce key={jornada.fecha} dni={dni} fecha={jornada.fecha} etiqueta={jornada.resultado === "permiso" ? "Permiso" : "Suspensión"} estado={estadoDe(jornada.fecha)} />)}</ul>
     </section>}
     <section className="tarjeta panel"><h2>Resumen</h2><p>Mes de pago {formatearMes(mes)}. Corte de incidencias {borrador.corte.inicio} al {borrador.corte.fin}.</p><p>Sueldo calculado (sueldo básico más remuneración vacacional): {formatearSoles(persona.sueldoCalculadoCentimos)}. {ROTULO_DEL_NETO}: {persona.netoCentimos == null ? "Incompleto" : formatearSoles(persona.netoCentimos)}. Las bases y los aportes se muestran abajo; los marcados «Pendiente» esperan una decisión o un dato.</p><NotaDelSubtotal />{fuentesPendientes.map((nombre) => <p key={nombre}>Fuente pendiente: {nombre}. El neto no se calcula hasta confirmarla.</p>)}<p>Horas extra calculadas: {formatearSoles(totalDeHorasExtraCentimos(lineas))}.</p><p>Trabajo en descanso o feriado calculado: {formatearSoles(totalDeTrabajoEnDescansoOFeriadoCentimos(lineas))}.</p></section>
+    {hayConciliacion && <section className="tarjeta panel" aria-labelledby="titulo-conciliacion"><header className="panel-cabecera"><div><h2 id="titulo-conciliacion">Conciliación de liquidación por cese</h2><p>Importes reales calculados fuera de la app, cargados por Finanzas en la fuente. No entran al neto ni a las bases.</p></div></header>
+      <p>Total de la conciliación (no entra al neto): {formatearSoles(persona.conciliacion.conceptosCentimos)}.</p>
+      <p>Abonos de la liquidación ya pagados fuera (aparte, no se restan del total): {formatearSoles(persona.conciliacion.abonosCentimos)}.</p>
+      <p><Link href={`/pagos/fuentes-externas/conciliacion_de_liquidacion_por_cese?mes=${mes}`}>Ver la fuente de conciliación</Link></p>
+    </section>}
     <section className="tarjeta panel"><header className="panel-cabecera"><h2>Conceptos</h2></header>{lineas.length ? <><p className="aviso-desplazamiento">Desplácese horizontalmente para ver todas las columnas.</p><div className="panel-tabla primera-columna-fija" role="region" aria-label="Conceptos de la persona" tabIndex={0}><table><thead><tr><th>Concepto</th><th>Cantidad</th><th>Mes de devengue</th><th>Mes de pago</th><th>Corte de incidencias</th><th>Origen</th><th className="numerico">Importe</th></tr></thead><tbody>{lineas.map((linea, i) => <tr key={i}><th scope="row">{buscarConcepto(linea.concepto)?.nombre ?? linea.concepto}{linea.concepto === "trabajo_en_descanso_o_feriado" && linea.regularizacion && <small className="linea-de-relacion">Regularización de descanso sustitutorio no otorgado</small>}<details><summary>Ver base</summary>{baseDeLinea(linea, relacion.dni, responsables, borrador.fuentes)}</details></th><td>{linea.concepto === "horas_extra_25" || linea.concepto === "horas_extra_35" || linea.concepto === "trabajo_en_descanso_o_feriado" ? `${linea.minutos} min` : linea.concepto === "reduccion_por_tardanza" ? `${linea.minutos} min` : linea.dias === undefined ? "—" : `${linea.dias} ${linea.dias === 1 ? "día" : "días"}`}</td><td>{formatearMes(linea.mesDeDevengue)}{linea.mesDeDevengue !== mes && <small className="linea-de-relacion">Devengue anterior</small>}</td><td>{formatearMes(linea.mesDePago)}</td><td>{linea.corte.inicio} al {linea.corte.fin}</td><td>{origenDeLinea(linea, borrador.fuentes)}</td><td className="numerico">{"efectoEnNeto" in linea && linea.efectoEnNeto === "resta" ? "−" : ""}{formatearSoles(linea.importeCentimos)}</td></tr>)}</tbody></table></div></> : <section className="estado-vacio"><h3>Sin conceptos calculables en este mes de pago</h3><p>Revise la relación laboral y sus condiciones vigentes.</p></section>}</section>
     <p>{persona.sedeDeAdscripcion ? `Imputado a la sede de adscripción ${persona.sedeDeAdscripcion}` : "Sede de adscripción pendiente"}</p>
     <section className="tarjeta panel" aria-labelledby="titulo-bases"><header className="panel-cabecera"><div><h2 id="titulo-bases">Bases y aportes</h2><p>Cada mes de devengue conserva sus tres bases, que son independientes. La movilidad supeditada a asistencia integra solo la base de quinta categoría. «Pendiente» significa que falta una decisión o un dato; no es cero. La retención de quinta se importa o confirma desde fuera.</p></div></header>

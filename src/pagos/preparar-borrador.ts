@@ -8,6 +8,7 @@ import { TIPOS_DE_FUENTE } from "@/fuentes-externas/tipos-de-fuente";
 import { corteDeIncidencias, obtenerDiasDeVacaciones, obtenerHechosDeJornadas, obtenerHechosDelCorte, type LectorDeHechosDeAsistencia } from "@/periodos/hechos-para-pagos";
 
 import { calcularBorrador } from "./calcular-borrador";
+import { TIPO_DE_CONCILIACION } from "./conciliacion-de-cese";
 import { ventanaDeVacaciones } from "./vacaciones";
 
 export interface FuentesDelBorrador {
@@ -44,7 +45,9 @@ export async function prepararBorrador(fuentes: FuentesDelBorrador, mesDePago: s
     problemasDelCorte: hechos.problemas.map(({ mensaje }) => mensaje), revisiones: hechos.revisiones,
     hechosPorDni: hechos.hechosPorDni, sustitutorios, hechosDeOrigenPorDni, importes, diasDeVacaciones: vacaciones.fechasPorDni, abonosVacacionales,
     vacacionesProvisionales: vacaciones.provisional, clasificacionesDeGoce,
-    fuentesPendientes: TIPOS_DE_FUENTE.filter((tipo) => !confirmados.has(tipo.codigo)).map((tipo) => tipo.nombre),
+    // La conciliación pendiente no deja sin neto al resto: solo bloquea cuando hay un cese del mes sin conciliar (DP2).
+    fuentesPendientes: TIPOS_DE_FUENTE.filter((tipo) => tipo.codigo !== TIPO_DE_CONCILIACION && !confirmados.has(tipo.codigo)).map((tipo) => tipo.nombre),
+    conciliacionConfirmada: confirmados.has(TIPO_DE_CONCILIACION),
   });
   return { ...borrador, fuentes: TIPOS_DE_FUENTE.map((tipo) => ({
     codigo: tipo.codigo, nombre: tipo.nombre,

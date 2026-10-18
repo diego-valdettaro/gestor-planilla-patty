@@ -4,8 +4,9 @@ import { useActionState } from "react";
 
 import { CONCEPTOS } from "@/conceptos-de-preliquidacion/catalogo";
 import { formatearMes } from "@/fuentes-externas/valores";
+import { esConceptoDeConciliacion } from "@/pagos/conciliacion-de-cese";
 
-import { decidirIncidenciaDesdeFormulario, registrarAbonoVacacionalDesdeFormulario, registrarAjusteDesdeFormulario, registrarIncidenciaDesdeFormulario, type EstadoEspecial } from "./acciones-especiales";
+import { decidirIncidenciaDesdeFormulario, registrarAbonoVacacionalDesdeFormulario, registrarAjusteDesdeFormulario, registrarConciliacionDeCeseDesdeFormulario, registrarIncidenciaDesdeFormulario, type EstadoEspecial } from "./acciones-especiales";
 
 const inicial: EstadoEspecial = {};
 
@@ -55,7 +56,7 @@ export function DecisionDeIncidencia({ id, estadoActual }: { id: string; estadoA
 export function RegistroDeAjuste({ mes }: { mes: string }) {
   const [estado, accion, pendiente] = useActionState(registrarAjusteDesdeFormulario, inicial);
   return <form action={accion} className="formulario-dialogo formulario-de-importe"><CamposComunes mes={mes} />
-    <label>Concepto que se corrige<select name="conceptoAjustado" required>{CONCEPTOS.filter((concepto) => concepto.codigo !== "ajuste_de_preliquidacion").map((concepto) => <option key={concepto.codigo} value={concepto.codigo}>{concepto.nombre}</option>)}</select></label>
+    <label>Concepto que se corrige<select name="conceptoAjustado" required>{CONCEPTOS.filter((concepto) => concepto.codigo !== "ajuste_de_preliquidacion" && !esConceptoDeConciliacion(concepto.codigo)).map((concepto) => <option key={concepto.codigo} value={concepto.codigo}>{concepto.nombre}</option>)}</select></label>
     <label>Sentido del ajuste<select name="sentidoAjuste"><option value="suma">Aumentar el concepto</option><option value="resta">Reducir el concepto</option></select></label>
     <label>Motivo<textarea maxLength={250} name="motivo" required rows={2} /></label>
     <p>El ajuste toma el efecto sobre el neto y las bases del concepto corregido. La versión finalizada anterior queda intacta.</p>
@@ -73,5 +74,15 @@ export function RegistroDeAbonoVacacional({ mes }: { mes: string }) {
     <small className="linea-de-relacion">Mes de aplicación: {formatearMes(mes)}.</small>
     <p>Los días del descanso salen de las vacaciones que el gerente aprobó en Asistencia. El abono se ata al descanso que empieza en o después de su fecha y se reparte entre los meses del descanso en proporción a su remuneración vacacional: reduce el saldo de cada mes una sola vez y no cambia su mes de devengue.</p>
     <Resultado estado={estado} /><button className="boton-principal" disabled={pendiente} type="submit">Registrar abono vacacional</button>
+  </form>;
+}
+
+export function RegistroDeConciliacionDeCese({ mes, conceptos }: { mes: string; conceptos: Array<{ codigo: string; nombre: string }> }) {
+  const [estado, accion, pendiente] = useActionState(registrarConciliacionDeCeseDesdeFormulario, inicial);
+  return <form action={accion} className="formulario-dialogo formulario-de-importe">
+    <CamposComunes mes={mes} />
+    <label>Concepto<select name="concepto">{conceptos.map((opcion) => <option key={opcion.codigo} value={opcion.codigo}>{opcion.nombre}</option>)}</select></label>
+    <p>Escriba el importe real calculado fuera de la app. No entra al neto ni a las bases y no se calcula aquí.</p>
+    <Resultado estado={estado} /><button className="boton-principal" disabled={pendiente} type="submit">Registrar conciliación</button>
   </form>;
 }
