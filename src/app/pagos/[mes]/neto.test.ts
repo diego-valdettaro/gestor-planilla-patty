@@ -7,6 +7,11 @@ const simulacro = vi.hoisted(() => ({ actor: vi.fn(), preparar: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn(), notFound: vi.fn() }));
 vi.mock("@/autenticacion/sesion-del-servidor", () => ({ obtenerActorActual: simulacro.actor }));
 vi.mock("@/pagos/preparar-borrador", () => ({ prepararBorrador: simulacro.preparar }));
+// `dependenciasDeFinalizacion` lo crea F-60 (cableado) en `servicio.ts`; esta prueba no ejerce la finalización, solo necesita que la página la encuentre (sin versiones ni pago).
+vi.mock("@/pagos/servicio", async () => {
+  const { crearRepositorioDeVersionesEnMemoria } = await import("@/pagos/versiones-en-memoria");
+  return { fuentesDelBorrador: {}, dependenciasDeFinalizacion: { fuentes: {}, versiones: crearRepositorioDeVersionesEnMemoria().repositorio, pago: { mesConPagoConfirmado: async () => false }, ahora: () => new Date("2026-10-26T15:00:00Z") } };
+});
 
 const ROTULO = "Neto antes de aportes del trabajador";
 const corte = { inicio: "2026-09-26", fin: "2026-10-25" };

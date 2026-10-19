@@ -5,8 +5,11 @@ import { repositorioDePeriodos } from "@/periodos/servicio";
 import { repositorioDeFuentesExternas } from "@/fuentes-externas/servicio";
 import { repositorioDeDescansosYFeriados } from "@/descansos-y-feriados/servicio";
 import { repositorioDeClasificacionesDeGoce } from "@/clasificaciones-de-goce/servicio";
+import { db } from "@/db/client";
 
+import type { DependenciasDeFinalizacion } from "./finalizar-mes";
 import type { FuentesDelBorrador } from "./preparar-borrador";
+import { RepositorioPostgresDeVersiones } from "./repositorio-postgres-de-versiones";
 
 export const fuentesDelBorrador: FuentesDelBorrador = {
   relaciones: repositorioDeRelacionesLaborales,
@@ -16,4 +19,12 @@ export const fuentesDelBorrador: FuentesDelBorrador = {
   externas: repositorioDeFuentesExternas,
   descansos: repositorioDeDescansosYFeriados,
   clasificaciones: repositorioDeClasificacionesDeGoce,
+};
+
+/** Finalizar el mes (#129): versiones en PostgreSQL y el indicador de pago confirmado del repositorio de fuentes externas. */
+export const dependenciasDeFinalizacion: DependenciasDeFinalizacion = {
+  fuentes: fuentesDelBorrador,
+  versiones: new RepositorioPostgresDeVersiones(db),
+  pago: repositorioDeFuentesExternas,
+  ahora: () => new Date(),
 };

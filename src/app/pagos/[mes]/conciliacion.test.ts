@@ -12,9 +12,14 @@ import type { FuentesDelBorrador } from "@/pagos/preparar-borrador";
 // /pagos/[mes] con la conciliación por cese (#128): borrador real (prepararBorrador) con lectores sintéticos y repositorio en memoria.
 // Esperados de ejemplos-sinteticos.md (C-E1, C-E2), diseño 5.1/5.2 y aritmética del sueldo (200000 céntimos; 12 días de 30 = 80000).
 const simulacro = vi.hoisted(() => ({ actor: vi.fn(), preparar: vi.fn() }));
-vi.mock("next/navigation", () => ({ redirect: vi.fn(), notFound: vi.fn() }));
+vi.mock("next/navigation", () => ({ redirect: vi.fn(), notFound: vi.fn(), useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("@/autenticacion/sesion-del-servidor", () => ({ obtenerActorActual: simulacro.actor }));
 vi.mock("@/pagos/preparar-borrador", () => ({ prepararBorrador: simulacro.preparar }));
+// `dependenciasDeFinalizacion` lo crea F-60 (cableado) en `servicio.ts`; esta prueba no ejerce la finalización, solo necesita que la página la encuentre (sin versiones ni pago).
+vi.mock("@/pagos/servicio", async () => {
+  const { crearRepositorioDeVersionesEnMemoria } = await import("@/pagos/versiones-en-memoria");
+  return { fuentesDelBorrador: {}, dependenciasDeFinalizacion: { fuentes: {}, versiones: crearRepositorioDeVersionesEnMemoria().repositorio, pago: { mesConPagoConfirmado: async () => false }, ahora: () => new Date("2026-10-26T15:00:00Z") } };
+});
 
 const MES = "2026-10";
 const TIPO = "conciliacion_de_liquidacion_por_cese";
@@ -95,7 +100,7 @@ describe("mes de pago con la conciliación de la liquidación por cese", () => {
     const html = await render();
 
     expect(html).not.toContain("no tiene su liquidación conciliada");
-    expect(html).toContain("No hay bloqueos del mes ni de las personas.");
+    expect(html).toContain("El mes no tiene bloqueos. Puede finalizarlo.");
     expect(fila(html, "Ana")).toContain("Calculada");
     expect(fila(html, "Ana")).toContain("S/ 800,00");
   });

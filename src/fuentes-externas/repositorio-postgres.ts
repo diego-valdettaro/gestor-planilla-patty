@@ -2,7 +2,7 @@ import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import * as schema from "@/db/schema";
-import { colaboradores, confirmacionesDeFuente, cuentasLocales, importacionesDeFuente, importesExternos } from "@/db/schema";
+import { colaboradores, confirmacionesDeFuente, cuentasLocales, importacionesDeFuente, importesExternos, versionesDePago } from "@/db/schema";
 
 import type {
   AlmacenDeFuentesExternas,
@@ -165,9 +165,10 @@ class AlmacenPostgresDeFuentesExternas implements AlmacenDeFuentesExternas {
     return false;
   }
 
-  // El ticket de finalización debe consultar aquí las versiones finales; aún no existe su tabla.
-  async mesFinalizado(_mes: string): Promise<boolean> {
-    return false;
+  // Un mes está finalizado cuando tiene alguna versión finalizada (#129): desde entonces sus fuentes no vuelven a «Pendiente».
+  async mesFinalizado(mes: string): Promise<boolean> {
+    const [version] = await this.db.select({ id: versionesDePago.id }).from(versionesDePago).where(eq(versionesDePago.mesDePago, mes)).limit(1);
+    return version !== undefined;
   }
 
   protected confirmaciones() {
