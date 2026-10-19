@@ -2,12 +2,13 @@ import type { RepositorioDeDescansosYFeriados } from "@/descansos-y-feriados/ges
 import type { RepositorioDeRelacionesLaborales } from "@/relaciones-laborales/gestionar-relaciones-laborales";
 import type { RepositorioDeCondicionesLaborales } from "@/condiciones-laborales/gestionar-condiciones-laborales";
 import type { RepositorioDeReglasLegales } from "@/reglas-legales/gestionar-reglas-legales";
+import type { ReglaLegal } from "@/reglas-legales/vigencia";
 import type { RepositorioDeClasificacionesDeGoce } from "@/clasificaciones-de-goce/gestionar-clasificaciones";
 import type { RepositorioDeFuentesExternas } from "@/fuentes-externas/gestionar-fuentes-externas";
 import { TIPOS_DE_FUENTE } from "@/fuentes-externas/tipos-de-fuente";
 import { corteDeIncidencias, obtenerDiasDeVacaciones, obtenerHechosDeJornadas, obtenerHechosDelCorte, type LectorDeHechosDeAsistencia } from "@/periodos/hechos-para-pagos";
 
-import { calcularBorrador } from "./calcular-borrador";
+import { calcularBorrador, type EntradaDeBorrador } from "./calcular-borrador";
 import { TIPO_DE_CONCILIACION } from "./conciliacion-de-cese";
 import { ventanaDeVacaciones } from "./vacaciones";
 
@@ -39,7 +40,7 @@ export async function prepararBorrador(fuentes: FuentesDelBorrador, mesDePago: s
     .filter(({ estado, origenFecha }) => estado === "no_otorgado" && origenFecha < corte.inicio)
     .map(({ dni, origenFecha }) => ({ dni, fecha: origenFecha })));
   const confirmados = new Set(confirmaciones.map(({ tipoDeFuente }) => tipoDeFuente));
-  const borrador = calcularBorrador({
+  const entrada: Omit<EntradaDeBorrador, "reglas"> & { reglas: ReglaLegal[] } = {
     mesDePago, corte, relaciones, condiciones: condiciones.filter((dato) => dato.reemplazadaEn === null),
     reglas: reglas.filter((regla) => regla.reemplazadaEn === null),
     problemasDelCorte: hechos.problemas.map(({ mensaje }) => mensaje), revisiones: hechos.revisiones,
@@ -48,10 +49,12 @@ export async function prepararBorrador(fuentes: FuentesDelBorrador, mesDePago: s
     // La conciliación pendiente no deja sin neto al resto: solo bloquea cuando hay un cese del mes sin conciliar (DP2).
     fuentesPendientes: TIPOS_DE_FUENTE.filter((tipo) => tipo.codigo !== TIPO_DE_CONCILIACION && !confirmados.has(tipo.codigo)).map((tipo) => tipo.nombre),
     conciliacionConfirmada: confirmados.has(TIPO_DE_CONCILIACION),
-  });
-  return { ...borrador, fuentes: TIPOS_DE_FUENTE.map((tipo) => ({
+  };
+  const borrador = calcularBorrador(entrada);
+  // La entrada se expone para que la finalización detecte cambios y guarde qué reglas y fuentes produjeron los importes (ADR 0014).
+  return { ...borrador, entrada, fuentes: TIPOS_DE_FUENTE.map((tipo) => ({
     codigo: tipo.codigo, nombre: tipo.nombre,
-    estado: confirmados.has(tipo.codigo) ? "Confirmada" : "Pendiente",
+    estado: confirmados.has(tipo.codigo) ? "Confirmada" as const : "Pendiente" as const,
     filas: importes.filter((importe) => importe.tipoDeFuente === tipo.codigo).length,
   })) };
 }

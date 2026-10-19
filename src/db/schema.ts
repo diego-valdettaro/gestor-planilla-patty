@@ -657,3 +657,42 @@ export const clasificacionesDeGoce = pgTable(
   },
   (table) => [primaryKey({ columns: [table.dni, table.fecha], name: "clasificaciones_de_goce_pk" })],
 );
+
+// Versiones finalizadas de la preliquidación del mes (issue #129, ADR 0007 y 0014): la cabecera guarda mes, número, actor, fecha,
+// corte, reglas usadas, revisiones de asistencia y estado de las fuentes de origen; cada persona, su subtotal «Neto antes de
+// aportes del trabajador» con sus líneas y bases en céntimos. Los jsonb se escriben una vez con la versión. La inmutabilidad (disparadores
+// que rechazan UPDATE y DELETE) vive en la migración 0041: Drizzle no la modela.
+export const versionesDePago = pgTable(
+  "versiones_de_pago",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    mesDePago: text("mes_de_pago").notNull(),
+    numero: integer("numero").notNull(),
+    finalizadaPorId: uuid("finalizada_por_id").notNull().references(() => cuentasLocales.id),
+    finalizadaEn: timestamp("finalizada_en", { withTimezone: true }).notNull(),
+    corteInicio: date("corte_inicio", { mode: "string" }).notNull(),
+    corteFin: date("corte_fin", { mode: "string" }).notNull(),
+    reglas: jsonb("reglas").notNull(),
+    revisiones: jsonb("revisiones").notNull(),
+    fuentes: jsonb("fuentes").notNull(),
+  },
+  (table) => [
+    uniqueIndex("versiones_de_pago_mes").on(table.mesDePago, table.numero),
+    check("versiones_de_pago_mes_valido", sql`${table.mesDePago} ~ '^\\d{4}-(0[1-9]|1[0-2])$'`),
+  ],
+);
+
+export const versionesDePagoPersonas = pgTable(
+  "versiones_de_pago_personas",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    versionId: uuid("version_id").notNull().references(() => versionesDePago.id),
+    relacionId: uuid("relacion_id").notNull().references(() => relacionesLaborales.id),
+    dni: text("dni").notNull(),
+    nombre: text("nombre").notNull(),
+    subtotalCentimos: integer("subtotal_centimos").notNull(),
+    lineas: jsonb("lineas").notNull(),
+    bases: jsonb("bases").notNull(),
+  },
+  (table) => [index("versiones_de_pago_personas_version").on(table.versionId)],
+);
