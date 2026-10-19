@@ -192,19 +192,18 @@ function resumenDelCambio(anterior: HuellaDeRevision, actual: HuellaDeRevision):
   return { datosCambiados, subtotalAnteriorCentimos: anterior.subtotalCentimos, subtotalActualCentimos: actual.subtotalCentimos, personas };
 }
 
-/** Alcance y huella de un borrador ya preparado, sin volver a leer los datos: la pantalla usa el mismo borrador que muestra, así la huella que Finanzas confirma es la de lo que vio (ADR 0014). */
-export async function evaluarBorradorPreparado(versiones: RepositorioDeVersiones, borrador: BorradorPreparado, mes: string): Promise<ResultadoDeEvaluacion> {
+/** Alcance y huella de un borrador ya preparado, sin volver a leer los datos: la pantalla usa el mismo borrador y las mismas versiones que muestra, así la huella que Finanzas confirma es la de lo que vio (ADR 0014). */
+export function evaluarBorradorPreparado(borrador: BorradorPreparado, guardadas: ReadonlyArray<{ numero: number }>): ResultadoDeEvaluacion {
   const huella = huellaDe(borrador);
   const impedimento = impedimentoDe(borrador);
   if (impedimento) return { ...impedimento, huella };
-  const guardadas = await versiones.listarVersiones(mes);
   return { estado: "lista", huella, alcance: { personas: borrador.personas.length, subtotalCentimos: borrador.netoCalculadoCentimos,
     numeroDeVersion: Math.max(0, ...guardadas.map(({ numero }) => numero)) + 1, periodos: borrador.revisiones.map(({ inicio, fin }) => ({ inicio, fin })) } };
 }
 
 export async function evaluarFinalizacion(dependencias: DependenciasDeFinalizacion, actor: Actor | undefined, solicitud: { mes: string }): Promise<ResultadoDeEvaluacion> {
   exigirFinanzas(actor);
-  return evaluarBorradorPreparado(dependencias.versiones, await prepararBorrador(dependencias.fuentes, solicitud.mes), solicitud.mes);
+  return evaluarBorradorPreparado(await prepararBorrador(dependencias.fuentes, solicitud.mes), await dependencias.versiones.listarVersiones(solicitud.mes));
 }
 
 /** Sin bloqueos toda persona tiene su subtotal; si faltara, guardar un cero escondería un error del cálculo. */

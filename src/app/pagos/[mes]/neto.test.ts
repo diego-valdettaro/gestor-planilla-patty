@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Neto en /pagos/[mes] (#127). Valores de ejemplos-sinteticos.md (E1, E2, E4, E8) escritos como el borrador que entregaría el cálculo.
 const simulacro = vi.hoisted(() => ({ actor: vi.fn(), preparar: vi.fn() }));
-vi.mock("next/navigation", () => ({ redirect: vi.fn(), notFound: vi.fn() }));
+vi.mock("next/navigation", () => ({ redirect: vi.fn(), notFound: vi.fn(), useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("@/autenticacion/sesion-del-servidor", () => ({ obtenerActorActual: simulacro.actor }));
 vi.mock("@/pagos/preparar-borrador", () => ({ prepararBorrador: simulacro.preparar }));
 // `dependenciasDeFinalizacion` lo crea F-60 (cableado) en `servicio.ts`; esta prueba no ejerce la finalización, solo necesita que la página la encuentre (sin versiones ni pago).

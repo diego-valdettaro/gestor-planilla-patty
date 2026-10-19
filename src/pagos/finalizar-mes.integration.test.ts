@@ -285,6 +285,25 @@ describe.skipIf(!databaseUrl)("persistencia de las versiones finalizadas en Post
     expect(antes?.personas).toHaveLength(3);
   });
 
+  it("F-72 la base rechaza una versión cuyo mes de pago no tiene formato AAAA-MM, como las demás tablas de Pagos", async () => {
+    const mesesInvalidos = ["2095-13", "2095-00", "2095-1", "95-10", "2095-10-01", "texto", ""];
+    const aceptados: string[] = [];
+    for (const mes of mesesInvalidos) {
+      try {
+        await pool.query(
+          "INSERT INTO versiones_de_pago (mes_de_pago, numero, finalizada_por_id, finalizada_en, corte_inicio, corte_fin, reglas, revisiones, fuentes) VALUES ($1, 1, $2, now(), '2095-09-26', '2095-10-25', '[]', '[]', '[]')",
+          [mes, cuenta.id]);
+        aceptados.push(mes);
+      } catch (error) {
+        // Se rechaza por la restricción del formato de mes, no por otra causa (clave foránea, nulo, tipo).
+        expect(String(error), `mes «${mes}»`).toContain("versiones_de_pago_mes_valido");
+      }
+    }
+
+    expect(aceptados).toEqual([]);
+    expect(await pool.query("SELECT 1 FROM versiones_de_pago WHERE finalizada_por_id = $1", [cuenta.id])).toHaveProperty("rowCount", 0);
+  });
+
   it("F-62 la consulta mesFinalizado de las fuentes externas dice la verdad: solo el mes con alguna versión finalizada está finalizado", async () => {
     expect(await externas.mesFinalizado("2095-10")).toBe(false);
 

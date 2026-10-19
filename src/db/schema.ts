@@ -675,9 +675,11 @@ export const versionesDePago = pgTable(
     reglas: jsonb("reglas").notNull(),
     revisiones: jsonb("revisiones").notNull(),
     fuentes: jsonb("fuentes").notNull(),
-    huella: text("huella").notNull(),
   },
-  (table) => [uniqueIndex("versiones_de_pago_mes").on(table.mesDePago, table.numero)],
+  (table) => [
+    uniqueIndex("versiones_de_pago_mes").on(table.mesDePago, table.numero),
+    check("versiones_de_pago_mes_valido", sql`${table.mesDePago} ~ '^\\d{4}-(0[1-9]|1[0-2])$'`),
+  ],
 );
 
 export const versionesDePagoPersonas = pgTable(

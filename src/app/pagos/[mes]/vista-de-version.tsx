@@ -34,7 +34,7 @@ export function VistaDeVersion({ actor, version }: { actor: Actor; version: Vers
       <TablaDesplazable etiqueta="Reglas legales usadas"><thead><tr><th>Regla</th><th className="numerico">Valor</th><th>Vigente desde</th><th>Fuente oficial</th><th>Activada por</th></tr></thead>
         <tbody>{version.reglas.map((regla) => {
           const definicion = buscarDefinicion(regla.codigo);
-          return <tr key={regla.codigo}><th scope="row">{definicion?.nombre ?? regla.codigo}</th><td className="numerico">{definicion ? formatearValorLegal(definicion.unidad, regla.valor) : regla.valor}</td><td>{fecha(regla.vigenteDesde)}</td><td>{regla.fuenteOficial}</td><td>{regla.activadaPor}</td></tr>;
+          return <tr key={`${regla.codigo}-${regla.vigenteDesde}`}><th scope="row">{definicion?.nombre ?? regla.codigo}</th><td className="numerico">{definicion ? formatearValorLegal(definicion.unidad, regla.valor) : regla.valor}</td><td>{fecha(regla.vigenteDesde)}</td><td>{regla.fuenteOficial}</td><td>{regla.activadaPor}</td></tr>;
         })}</tbody></TablaDesplazable></section>
     <section className="tarjeta panel"><header className="panel-cabecera"><h2>Revisiones de asistencia de origen</h2></header>
       <TablaDesplazable etiqueta="Revisiones de asistencia de origen"><thead><tr><th>Período de planilla</th><th>Revisión</th></tr></thead>

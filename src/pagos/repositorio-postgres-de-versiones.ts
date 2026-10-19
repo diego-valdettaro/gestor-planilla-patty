@@ -1,5 +1,3 @@
-import { createHash } from "node:crypto";
-
 import { asc, eq, inArray, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
@@ -27,7 +25,7 @@ export class RepositorioPostgresDeVersiones implements RepositorioDeVersiones {
       const corte = corteDeIncidencias(nueva.mesDePago);
       const [cabecera] = await tx.insert(versionesDePago).values({
         mesDePago: nueva.mesDePago, numero: ultimo + 1, finalizadaPorId: nueva.finalizadaPorId, finalizadaEn: nueva.finalizadaEn, corteInicio: corte.inicio, corteFin: corte.fin,
-        reglas: nueva.reglas, revisiones: nueva.revisiones, fuentes: nueva.fuentes, huella: huellaDelContenido(nueva),
+        reglas: nueva.reglas, revisiones: nueva.revisiones, fuentes: nueva.fuentes,
       }).returning({ id: versionesDePago.id });
       await tx.insert(versionesDePagoPersonas).values(nueva.personas.map((persona) => ({
         versionId: cabecera.id, relacionId: persona.relacionId, dni: persona.dni, nombre: persona.nombre, subtotalCentimos: persona.subtotalCentimos,
@@ -69,9 +67,4 @@ export class RepositorioPostgresDeVersiones implements RepositorioDeVersiones {
       };
     });
   }
-}
-
-/** Resumen del contenido guardado (la columna `huella` de la cabecera); no es la huella de revisión de Finanzas. */
-function huellaDelContenido(nueva: NuevaVersionDePago): string {
-  return createHash("sha256").update(JSON.stringify(nueva)).digest("hex");
 }

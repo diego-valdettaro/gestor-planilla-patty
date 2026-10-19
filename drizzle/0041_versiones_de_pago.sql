@@ -1,7 +1,7 @@
 -- Versiones finalizadas de la preliquidación del mes (#129, ADR 0007 y 0014). Una versión guarda el mes completo: su cabecera
 -- (mes, número, quién y cuándo la finalizó, el corte, las reglas usadas, las revisiones de asistencia y el estado de las fuentes
 -- de origen) y una fila por persona con su subtotal «Neto antes de aportes del trabajador», sus líneas y sus bases, en céntimos.
--- Los meses son texto AAAA-MM. Además del esquema trae las restricciones con
+-- Los meses son texto AAAA-MM (CHECK de formato, como en las demás tablas de Pagos). Además del esquema trae las restricciones con
 -- comportamiento propio: número único por mes y versión inmutable (disparadores al final); el subtotal entero lo exige el tipo.
 CREATE TABLE "versiones_de_pago" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
@@ -14,8 +14,8 @@ CREATE TABLE "versiones_de_pago" (
   "reglas" jsonb NOT NULL,
   "revisiones" jsonb NOT NULL,
   "fuentes" jsonb NOT NULL,
-  "huella" text NOT NULL,
-  CONSTRAINT "versiones_de_pago_finalizada_por_fk" FOREIGN KEY ("finalizada_por_id") REFERENCES "cuentas_locales"("id")
+  CONSTRAINT "versiones_de_pago_finalizada_por_fk" FOREIGN KEY ("finalizada_por_id") REFERENCES "cuentas_locales"("id"),
+  CONSTRAINT "versiones_de_pago_mes_valido" CHECK ("mes_de_pago" ~ '^\d{4}-(0[1-9]|1[0-2])$')
 );
 CREATE UNIQUE INDEX "versiones_de_pago_mes" ON "versiones_de_pago" USING btree ("mes_de_pago", "numero");
 

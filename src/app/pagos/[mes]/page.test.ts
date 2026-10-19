@@ -257,6 +257,62 @@ describe("finalización del mes en la pantalla", () => {
     expect(await versiones.listarVersiones("2026-10")).toHaveLength(0);
   });
 
+  // F-71 (adenda 4, hallazgo R9): el panel no debe invitar a finalizar cuando «Finalizar mes» no está disponible (interacción §3 y §4.2).
+  describe("F-71 el aviso del panel de bloqueos coincide con el estado de la acción", () => {
+    const panelDeBloqueos = (html: string) => html.split("<section").find((seccion) => seccion.includes('id="bloqueos-del-mes"')) ?? "";
+
+    it("sin versión y con personas dice «El mes no tiene bloqueos. Puede finalizarlo.»", async () => {
+      expect(panelDeBloqueos(await render())).toContain("El mes no tiene bloqueos. Puede finalizarlo.");
+    });
+
+    it.each([
+      ["con una versión finalizada", async () => { await versiones.guardarVersion(versionDelPlan(200000, "2026-10-20T15:00:00Z")); }],
+      ["con el pago realizado confirmado", async () => { await versiones.guardarVersion(versionDelPlan(200000, "2026-10-20T15:00:00Z")); simulacro.pagoConfirmado.mockResolvedValue(true); }],
+      ["sin personas", async () => { simulacro.preparar.mockResolvedValue(borradorDelPlan({ personas: [], sueldoCalculadoCentimos: 0, netoCalculadoCentimos: 0 })); }],
+    ])("%s dice solo «El mes no tiene bloqueos.»", async (_caso, preparar) => {
+      await preparar();
+
+      const panel = panelDeBloqueos(await render());
+
+      expect(panel).toContain("El mes no tiene bloqueos.");
+      expect(panel).not.toContain("Puede finalizarlo");
+    });
+  });
+
+  // F-70 (adenda 4, interacción §4.6 «Éxito», D19): mientras el pago no esté confirmado, la pantalla explica cómo corregir sin tocar la versión guardada.
+  describe("F-70 cómo corregir un mes finalizado sin pago confirmado", () => {
+    const textoDe = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+
+    it("con versión finalizada y sin pago confirmado explica los dos caminos y que la versión anterior nunca cambia", async () => {
+      await versiones.guardarVersion(versionDelPlan(200000, "2026-10-20T15:00:00Z"));
+
+      const texto = textoDe(await render());
+
+      // Camino de asistencia: reabrir el período en Períodos, corregir, aprobar, cerrar de nuevo y finalizar otra versión.
+      expect(texto).toContain("Finanzas reabre el período en Períodos");
+      expect(texto).toContain("el gerente corrige y vuelve a aprobar");
+      expect(texto).toContain("Finanzas lo cierra de nuevo");
+      // Camino de fuente externa o regla sin cambio de asistencia: no se reabren períodos, se recalcula el borrador.
+      expect(texto).toContain("no se reabren períodos");
+      expect(texto).toContain("se recalcula el borrador");
+      expect(texto).toContain("se finaliza otra versión");
+      expect(texto).toContain("La versión anterior nunca cambia");
+    });
+
+    it.each([
+      ["sin versión finalizada", async () => undefined],
+      ["con el pago realizado confirmado", async () => { await versiones.guardarVersion(versionDelPlan(200000, "2026-10-20T15:00:00Z")); simulacro.pagoConfirmado.mockResolvedValue(true); }],
+    ])("%s no lo muestra", async (_caso, preparar) => {
+      await preparar();
+
+      const texto = textoDe(await render());
+
+      expect(texto).not.toContain("reabre el período");
+      expect(texto).not.toContain("se recalcula el borrador");
+      expect(texto).not.toContain("La versión anterior nunca cambia");
+    });
+  });
+
   it("F-53 el historial lista una fila por versión con número, fecha, responsable, estado y enlace", async () => {
     await versiones.guardarVersion(versionDelPlan(200000, "2026-10-20T15:00:00Z", "usuario-fin-1"));
     await versiones.guardarVersion(versionDelPlan(210000, "2026-10-26T15:00:00Z", "usuario-fin-2"));
@@ -315,6 +371,47 @@ describe("finalización del mes en la pantalla", () => {
     expect(html).not.toContain("Finalizar mes");
     expect(html).not.toContain("Crear otra versión");
     expect(simulacro.preparar).not.toHaveBeenCalled();
+  });
+
+  // F-74 (adenda 4): una regla puede tener varias vigencias guardadas; la tabla las pinta todas y sin claves de fila duplicadas.
+  // `renderToStaticMarkup` (servidor) no avisa de claves duplicadas, así que además del marcado y de un espía de `console.error`
+  // se recorre el árbol de elementos que devuelve el componente: entre hermanos, una misma clave es el aviso «same key» de React.
+  const clavesRepetidas = (nodo: React.ReactNode, repetidas: string[] = []): string[] => {
+    if (Array.isArray(nodo)) {
+      const claves = nodo.flatMap((hijo) => React.isValidElement(hijo) && hijo.key !== null ? [hijo.key] : []);
+      repetidas.push(...claves.filter((clave, i) => claves.indexOf(clave) !== i));
+      for (const hijo of nodo) clavesRepetidas(hijo, repetidas);
+    } else if (React.isValidElement(nodo)) {
+      clavesRepetidas((nodo.props as { children?: React.ReactNode }).children, repetidas);
+    }
+    return repetidas;
+  };
+
+  it("F-74 la tabla de reglas legales de una versión muestra todas las reglas aunque un código tenga varias vigencias, sin claves de fila duplicadas", async () => {
+    await versiones.guardarVersion({ ...versionDelPlan(200000, "2026-10-20T15:00:00Z"), reglas: [
+      { codigo: "onp_tasa", valor: 1300, vigenteDesde: "2026-01-01", fuenteOficial: "DEMO sintética A", activadaPorId: "u-1", activadaPor: "finanzas" },
+      { codigo: "onp_tasa", valor: 1400, vigenteDesde: "2026-07-01", fuenteOficial: "DEMO sintética B", activadaPorId: "u-1", activadaPor: "finanzas" },
+    ] });
+    const guardada = await versiones.buscarVersion("2026-10", 1);
+    const { VistaDeVersion } = await import("./vista-de-version");
+    const avisos = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    try {
+      const html = await render("2026-10", { version: "1" });
+      const filasDeReglas = (html.split("<section").find((seccion) => seccion.includes("<h2>Reglas legales usadas</h2>")) ?? "").split("<tr").filter((fila) => fila.includes("Tasa de ONP"));
+
+      expect(filasDeReglas).toHaveLength(2);
+      expect(filasDeReglas[0]).toContain("13,00 %");
+      expect(filasDeReglas[0]).toContain("01/01/2026");
+      expect(filasDeReglas[0]).toContain("DEMO sintética A");
+      expect(filasDeReglas[1]).toContain("14,00 %");
+      expect(filasDeReglas[1]).toContain("01/07/2026");
+      expect(filasDeReglas[1]).toContain("DEMO sintética B");
+      expect(avisos.mock.calls.map((llamada) => llamada.map(String).join(" ")).filter((aviso) => /same key|misma clave|Encountered two children/i.test(aviso))).toEqual([]);
+      expect(clavesRepetidas(VistaDeVersion({ actor: { id: "f", rol: "finanzas" } as Actor, version: guardada! }))).toEqual([]);
+    } finally {
+      avisos.mockRestore();
+    }
   });
 
   it("F-56 abrir una versión que no existe responde «no encontrada»", async () => {
