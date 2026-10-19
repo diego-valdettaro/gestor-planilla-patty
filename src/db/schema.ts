@@ -3,6 +3,7 @@ import {
   bigint,
   boolean,
   check,
+  foreignKey,
   date,
   doublePrecision,
   integer,
@@ -695,4 +696,24 @@ export const versionesDePagoPersonas = pgTable(
     bases: jsonb("bases").notNull(),
   },
   (table) => [index("versiones_de_pago_personas_version").on(table.versionId)],
+);
+
+// Constancia del pago realizado de un mes (issue #130, ADR 0013): lo registra Finanzas una sola vez por mes, sobre la versión
+// finalizada que pagó, con la fecha del pago, quién lo confirmó y cuándo. La unicidad por mes y la inmutabilidad (disparadores que
+// rechazan UPDATE y DELETE) viven en la migración 0042: Drizzle no las modela.
+export const constanciasDePago = pgTable(
+  "constancias_de_pago",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    mesDePago: text("mes_de_pago").notNull(),
+    numeroDeVersion: integer("numero_de_version").notNull(),
+    fechaDelPago: date("fecha_del_pago", { mode: "string" }).notNull(),
+    confirmadaPorId: uuid("confirmada_por_id").notNull().references(() => cuentasLocales.id),
+    confirmadaEn: timestamp("confirmada_en", { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("constancias_de_pago_mes").on(table.mesDePago),
+    foreignKey({ columns: [table.mesDePago, table.numeroDeVersion], foreignColumns: [versionesDePago.mesDePago, versionesDePago.numero], name: "constancias_de_pago_version_fk" }),
+    check("constancias_de_pago_mes_valido", sql`${table.mesDePago} ~ '^\\d{4}-(0[1-9]|1[0-2])$'`),
+  ],
 );

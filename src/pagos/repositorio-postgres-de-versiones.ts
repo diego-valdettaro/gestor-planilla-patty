@@ -1,13 +1,14 @@
 import { asc, eq, inArray, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
-import { cuentasLocales, versionesDePago, versionesDePagoPersonas } from "@/db/schema";
+import { constanciasDePago, cuentasLocales, versionesDePago, versionesDePagoPersonas } from "@/db/schema";
 import type * as schema from "@/db/schema";
 import { corteDeIncidencias } from "@/periodos/hechos-para-pagos";
 
 import type { BasesPorDevengue } from "./aportes-y-bases";
 import type { LineaDeBorrador } from "./calcular-borrador";
-import type { FuenteUsada, NuevaVersionDePago, PersonaDeVersion, ReglaUsada, RepositorioDeVersiones, RevisionUsada, VersionDePago } from "./finalizar-mes";
+import { MENSAJE_DE_PAGO_CONFIRMADO, type FuenteUsada, type NuevaVersionDePago, type PersonaDeVersion, type ReglaUsada, type RepositorioDeVersiones, type RevisionUsada, type VersionDePago } from "./finalizar-mes";
+import { bloquearPagoDelMes } from "./repositorio-postgres-de-constancias";
 
 // Adaptador PostgreSQL del puerto de versiones (#129, ADR 0007 y 0014, P5): la cabecera lleva mes, número, actor, fecha, reglas,
 // revisiones y fuentes; cada persona, su subtotal en céntimos con sus líneas y bases. Las versiones solo se agregan: nunca se reescriben.
@@ -20,6 +21,11 @@ export class RepositorioPostgresDeVersiones implements RepositorioDeVersiones {
   async guardarVersion(nueva: NuevaVersionDePago): Promise<VersionDePago> {
     // Todo o nada: si una fila no se puede escribir, la transacción deshace también la cabecera.
     const numero = await this.db.transaction(async (tx) => {
+      // Tras la constancia el mes no admite otra versión (ADR 0013): se comprueba en la misma transacción y con el bloqueo del mes,
+      // para que una confirmación que llega a la vez no se cuele entre la comprobación y el guardado.
+      await bloquearPagoDelMes(tx, nueva.mesDePago);
+      const [pagado] = await tx.select({ id: constanciasDePago.id }).from(constanciasDePago).where(eq(constanciasDePago.mesDePago, nueva.mesDePago));
+      if (pagado) throw new Error(MENSAJE_DE_PAGO_CONFIRMADO);
       const [{ ultimo }] = await tx.select({ ultimo: sql<number>`coalesce(max(${versionesDePago.numero}), 0)::int` }).from(versionesDePago)
         .where(eq(versionesDePago.mesDePago, nueva.mesDePago));
       const corte = corteDeIncidencias(nueva.mesDePago);

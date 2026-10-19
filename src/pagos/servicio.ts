@@ -9,6 +9,7 @@ import { db } from "@/db/client";
 
 import type { DependenciasDeFinalizacion } from "./finalizar-mes";
 import type { FuentesDelBorrador } from "./preparar-borrador";
+import { RepositorioPostgresDeConstancias } from "./repositorio-postgres-de-constancias";
 import { RepositorioPostgresDeVersiones } from "./repositorio-postgres-de-versiones";
 
 export const fuentesDelBorrador: FuentesDelBorrador = {
@@ -21,10 +22,10 @@ export const fuentesDelBorrador: FuentesDelBorrador = {
   clasificaciones: repositorioDeClasificacionesDeGoce,
 };
 
-/** Finalizar el mes (#129): versiones en PostgreSQL y el indicador de pago confirmado del repositorio de fuentes externas. */
+/** Finalizar el mes (#129): versiones en PostgreSQL y las constancias de pago realizado (#130). */
 export const dependenciasDeFinalizacion: DependenciasDeFinalizacion = {
   fuentes: fuentesDelBorrador,
   versiones: new RepositorioPostgresDeVersiones(db),
-  pago: repositorioDeFuentesExternas,
+  pago: new RepositorioPostgresDeConstancias(db),
   ahora: () => new Date(),
 };

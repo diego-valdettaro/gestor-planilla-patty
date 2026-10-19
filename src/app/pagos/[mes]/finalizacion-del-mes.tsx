@@ -23,8 +23,10 @@ const PANEL_DE_BLOQUEOS = "#bloqueos-del-mes";
  * `decidirPantalla`. El componente se mantiene montado también cuando el mes pasa a tener bloqueos (entonces muestra el botón deshabilitado con su causa),
  * para que el foco al panel «Bloqueos del mes» se pida después de que la página refrescada lo muestre (F-75).
  */
-export function FinalizacionDelMes({ mes, etiqueta, bloqueos, evaluacion, causaDeshabilitado }: {
+export function FinalizacionDelMes({ mes, etiqueta, bloqueos, evaluacion, causaDeshabilitado, secundaria = false }: {
   mes: string; etiqueta: string;
+  /** «Crear otra versión» convive con «Confirmar pago realizado», la acción principal (§4.2, §6.1): se presenta como acción secundaria. */
+  secundaria?: boolean;
   /** Bloqueos que muestra el panel «Bloqueos del mes» en esta versión de la página (el mismo N de su título). */
   bloqueos: number;
   /** Lo revisado (alcance y huella) cuando se puede finalizar; sin ello, el botón se muestra deshabilitado con su causa. */
@@ -86,15 +88,16 @@ export function FinalizacionDelMes({ mes, etiqueta, bloqueos, evaluacion, causaD
     enfocar(PANEL_DE_BLOQUEOS);
   }, [verificacion, vigente, bloqueos]);
 
+  const clase = secundaria ? "boton-secundario" : "boton-principal";
   const revisar = () => { cerrar(false); setDescartado(resultado); router.refresh(); };
 
   if (!evaluacion) {
-    return <><button aria-describedby="causa-de-finalizar" className="boton-principal" disabled type="button">{etiqueta}</button><small className="linea-de-relacion" id="causa-de-finalizar">{causaDeshabilitado}</small></>;
+    return <><button aria-describedby="causa-de-finalizar" className={clase} disabled type="button">{etiqueta}</button><small className="linea-de-relacion" id="causa-de-finalizar">{causaDeshabilitado}</small></>;
   }
   return <>
     <form action={verificar}>
       <input name="mes" type="hidden" value={mes} />
-      <button aria-haspopup="dialog" className="boton-principal" ref={boton} type="submit">{etiqueta}</button>
+      <button aria-haspopup="dialog" className={clase} ref={boton} type="submit">{etiqueta}</button>
     </form>
     {vigente.mensaje && <p className="mensaje-operacion listo" role="status">{vigente.mensaje}</p>}
     <DialogoDeFinalizacion accion={finalizar} alCancelar={() => cerrar(false)} alRevisar={revisar} alcance={evaluacion.alcance} cambio={vigente.cambio} dialogoRef={dialogo}

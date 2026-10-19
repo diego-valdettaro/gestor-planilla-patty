@@ -3,7 +3,9 @@
 import { revalidatePath } from "next/cache";
 
 import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
-import { MENSAJES_PARA_FINANZAS, MENSAJE_DE_ERROR_AL_GUARDAR, evaluarFinalizacion, finalizarMes, type HuellaDeRevision, type ResultadoDeEvaluacion, type ResultadoDeFinalizacion, type ResumenDeCambio } from "@/pagos/finalizar-mes";
+import { confirmarPago, MENSAJE_DE_ERROR_AL_CONFIRMAR, MENSAJE_DE_FECHA_FUTURA, MENSAJE_DE_FECHA_INVALIDA, MENSAJE_DE_VERSION_OBSOLETA, MENSAJE_SIN_VERSION_FINALIZADA } from "@/pagos/confirmar-pago";
+import { MENSAJE_DE_MES_YA_CONFIRMADO, MENSAJE_DE_PERIODO_FUENTE_REABIERTO } from "@/pagos/constancias-de-pago";
+import { MENSAJES_PARA_FINANZAS, MENSAJE_DE_ERROR_AL_GUARDAR, MENSAJE_SIN_PERMISO, evaluarFinalizacion, finalizarMes, type HuellaDeRevision, type ResultadoDeEvaluacion, type ResultadoDeFinalizacion, type ResumenDeCambio } from "@/pagos/finalizar-mes";
 import { dependenciasDeFinalizacion } from "@/pagos/servicio";
 
 export interface EstadoDeFinalizacion {
@@ -29,6 +31,34 @@ export async function finalizarMesDesdeFormulario(estadoAnterior: EstadoDeFinali
     return { error: mensajeParaFinanzas(causa) };
   }
 }
+
+export interface EstadoDeConfirmacionDePago {
+  error?: string;
+  listo?: number;
+  mensaje?: string;
+}
+
+/** Finanzas confirma que pagó la versión que vio en el diálogo (§6.2); la constancia se refleja en el mes y en /periodos, donde sus períodos fuente dejan de poder reabrirse (D10). */
+export async function confirmarPagoDesdeFormulario(estadoAnterior: EstadoDeConfirmacionDePago, formData: FormData): Promise<EstadoDeConfirmacionDePago> {
+  try {
+    const actor = await obtenerActorActual().catch(() => undefined);
+    const mes = texto(formData, "mes");
+    const numeroDeVersion = Number(texto(formData, "version"));
+    if (!Number.isInteger(numeroDeVersion)) throw new Error("La versión del formulario no es un número.");
+    await confirmarPago(dependenciasDeFinalizacion, actor, { mes, numeroDeVersion, fechaDelPago: texto(formData, "fecha") });
+    revalidatePath(`/pagos/${mes}`);
+    revalidatePath("/periodos");
+    return { listo: (estadoAnterior.listo ?? 0) + 1, mensaje: "Pago realizado confirmado." };
+  } catch (causa) {
+    // Lo que no es un rechazo del dominio es un detalle técnico que la pantalla no debe filtrar.
+    return { error: causa instanceof Error && MENSAJES_DE_CONFIRMACION.includes(causa.message) ? causa.message : MENSAJE_DE_ERROR_AL_CONFIRMAR };
+  }
+}
+
+/** Los rechazos del dominio que Finanzas debe leer tal cual al confirmar el pago. */
+const MENSAJES_DE_CONFIRMACION: readonly string[] = [
+  MENSAJE_SIN_PERMISO, MENSAJE_DE_FECHA_FUTURA, MENSAJE_DE_FECHA_INVALIDA, MENSAJE_DE_MES_YA_CONFIRMADO, MENSAJE_SIN_VERSION_FINALIZADA, MENSAJE_DE_VERSION_OBSOLETA, MENSAJE_DE_PERIODO_FUENTE_REABIERTO,
+];
 
 /** Antes de abrir el diálogo: si ya hay bloqueos nuevos no se abre y la pantalla se actualiza para mostrarlos (interacción §6.1.c). */
 export async function verificarFinalizacionDesdeFormulario(estadoAnterior: EstadoDeFinalizacion, formData: FormData): Promise<EstadoDeFinalizacion> {

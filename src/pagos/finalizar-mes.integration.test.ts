@@ -19,6 +19,7 @@ import { RepositorioPostgresDeReglasLegales } from "@/reglas-legales/repositorio
 import { RepositorioPostgresDeRelacionesLaborales } from "@/relaciones-laborales/repositorio-postgres";
 
 import { consultarVersion, evaluarFinalizacion, finalizarMes, listarVersiones, type DependenciasDeFinalizacion, type NuevaVersionDePago } from "./finalizar-mes";
+import { RepositorioPostgresDeConstancias } from "./repositorio-postgres-de-constancias";
 import { RepositorioPostgresDeVersiones } from "./repositorio-postgres-de-versiones";
 
 // Persistencia de las versiones finalizadas (#129, ADR 0007 y 0014) contra PostgreSQL real: sin dobles de repositorio.
@@ -89,7 +90,7 @@ describe.skipIf(!databaseUrl)("persistencia de las versiones finalizadas en Post
         reglas: new RepositorioPostgresDeReglasLegales(db), asistencia: new RepositorioPostgresDePeriodos(db), externas,
         descansos: new RepositorioPostgresDeDescansosYFeriados(db), clasificaciones: new RepositorioPostgresDeClasificacionesDeGoce(db),
       },
-      versiones, pago: externas, ahora: () => AHORA,
+      versiones, pago: new RepositorioPostgresDeConstancias(db), ahora: () => AHORA,
     };
   });
 

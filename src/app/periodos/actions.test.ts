@@ -2,10 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const simulacro = vi.hoisted(() => ({
   actor: vi.fn(),
-  repositorio: { aprobarAsistencia: vi.fn(), cerrar: vi.fn(), reabrir: vi.fn(), crear: vi.fn(), decidirHorasExtra: vi.fn(), listar: vi.fn() },
+  revalidar: vi.fn(),
+  repositorio: { aprobarAsistencia: vi.fn(), cerrar: vi.fn(), reabrir: vi.fn(), crear: vi.fn(), decidirHorasExtra: vi.fn(), listar: vi.fn(), mesPagadoDelPeriodo: vi.fn() },
 }));
 
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("next/cache", () => ({ revalidatePath: simulacro.revalidar }));
 vi.mock("@/autenticacion/sesion-del-servidor", () => ({ obtenerActorActual: simulacro.actor }));
 vi.mock("@/periodos/servicio", () => ({ repositorioDePeriodos: simulacro.repositorio }));
 
@@ -87,4 +88,38 @@ describe("acciones de Períodos (borde del servidor)", () => {
       expect((await aprobar()).error).toContain("No se puede aprobar");
     });
   });
+});
+
+// Reabrir desde /periodos aplica el bloqueo de los períodos fuente de un mes pagado (#130, ADR 0013, D10, contrato C2); el contraste es un período de otro mes.
+describe("acción de reapertura de /periodos y pago realizado confirmado (borde del servidor)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    simulacro.actor.mockResolvedValue({ id: "f1", rol: "finanzas" });
+  });
+
+  const casosG17: Array<{ fila: string; descripcion: string; comprobar: () => Promise<void> }> = [
+    {
+      fila: "A8", descripcion: "un período fuente de un mes pagado lanza con la causa, no reabre y no refresca",
+      comprobar: async () => {
+        simulacro.repositorio.mesPagadoDelPeriodo.mockResolvedValue("2019-11");
+
+        await expect(reabrirPeriodoDesdeFormulario(formulario({ periodoId: "p1", motivo: "Corrección" }))).rejects.toThrow("Sustenta la preliquidación con pago realizado confirmado de 11/2019");
+
+        expect(simulacro.repositorio.reabrir).not.toHaveBeenCalled();
+        expect(simulacro.revalidar).not.toHaveBeenCalled();
+      },
+    },
+    {
+      fila: "A9", descripcion: "un período de otro mes se reabre y /periodos se refresca",
+      comprobar: async () => {
+        simulacro.repositorio.mesPagadoDelPeriodo.mockResolvedValue(undefined);
+
+        await reabrirPeriodoDesdeFormulario(formulario({ periodoId: "p2", motivo: "Corrección" }));
+
+        expect(simulacro.repositorio.reabrir).toHaveBeenCalledWith("p2", "f1", "Corrección", expect.any(Date));
+        expect(simulacro.revalidar).toHaveBeenCalledWith("/periodos");
+      },
+    },
+  ];
+  it.each(casosG17)("G17 $fila $descripcion", async ({ comprobar }) => comprobar());
 });

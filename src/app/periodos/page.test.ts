@@ -9,10 +9,11 @@ const listarResumen = vi.fn();
 const listarAprobaciones = vi.fn();
 const listarSedesConColaboradoresActivos = vi.fn();
 const listarColaboradoresActivos = vi.fn();
+const mesPagadoDelPeriodo = vi.fn();
 
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 vi.mock("@/autenticacion/sesion-del-servidor", () => ({ obtenerActorActual }));
-vi.mock("@/periodos/servicio", () => ({ repositorioDePeriodos: { listar, listarResumen, listarAprobaciones } }));
+vi.mock("@/periodos/servicio", () => ({ repositorioDePeriodos: { listar, listarResumen, listarAprobaciones, mesPagadoDelPeriodo } }));
 vi.mock("@/turnos/servicio", () => ({
   repositorioDeTurnos: { listarSedesConColaboradoresActivos, listarColaboradoresActivos },
 }));
@@ -45,6 +46,7 @@ describe("página de Períodos de planilla (/periodos)", () => {
     vi.clearAllMocks();
     obtenerActorActual.mockResolvedValue({ rol: "finanzas" });
     listarAprobaciones.mockResolvedValue([]);
+    mesPagadoDelPeriodo.mockResolvedValue(undefined);
     listarSedesConColaboradoresActivos.mockResolvedValue(["Centro"]);
     listarColaboradoresActivos.mockResolvedValue([{ dni: "00000001", nombre: "Ana" }]);
     listarResumen.mockResolvedValue({ filas: [], bloqueos: [], totales: { jornadasTrabajadas: 0, minutosTrabajados: 0, noAsistencias: { falta: 0, descanso: 0, feriado: 0, vacaciones: 0, permiso: 0, suspension: 0 }, cantidadTardanzas: 0, minutosPenalizados: 0, horasExtra: { pendiente: { minutosAl25: 0, minutosAl35: 0 }, aprobada: { minutosAl25: 0, minutosAl35: 0 }, descartada: { minutosAl25: 0, minutosAl35: 0 } } } });
@@ -195,6 +197,7 @@ describe("página de Períodos de planilla (/periodos)", () => {
       expect(html).not.toContain("<th scope=\"row\">Taller</th>");
       expect(html).toContain('data-aprobar="p1:Tiendas"');
       expect(listarResumen).not.toHaveBeenCalled();
+      expect(mesPagadoDelPeriodo).not.toHaveBeenCalled();
       for (const prohibido of ["Exportar XLSX", "/exportar", "Totales del período completo", "Cerrar período", "Reabrir período", "Aprobar horas extra", "Nuevo período"]) {
         expect(html).not.toContain(prohibido);
       }
@@ -454,4 +457,77 @@ describe("página de Períodos de planilla (/periodos)", () => {
       expect(fila.map(({ atributos }) => atributos.includes("numerico"))).toEqual([false, false, false, true, true, true, false]);
     });
   });
+});
+
+// «Reabrir período» de un período fuente de un mes con pago realizado confirmado (#130, ADR 0013, D10, §4.7; contrato C2). Z2 y Z4 son guardas del
+// comportamiento vigente (el mes no pagado y el período abierto no cambian); Z5 (el gerente no consulta el mes pagado) está arriba, en la prueba del gerente.
+describe("«Reabrir período» y pago realizado confirmado en /periodos", () => {
+  const periodoCerrado = { id: "p1", inicio: "2019-10-26", fin: "2019-11-25", estado: "cerrado" };
+  const causa = "Sustenta la preliquidación con pago realizado confirmado de 11/2019";
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    obtenerActorActual.mockResolvedValue({ rol: "finanzas" });
+    listarAprobaciones.mockResolvedValue([]);
+    mesPagadoDelPeriodo.mockResolvedValue(undefined);
+    listarSedesConColaboradoresActivos.mockResolvedValue(["Centro"]);
+    listarColaboradoresActivos.mockResolvedValue([]);
+    listarResumen.mockResolvedValue({ filas: [], bloqueos: [], totales: { jornadasTrabajadas: 0, minutosTrabajados: 0, noAsistencias: { falta: 0, descanso: 0, feriado: 0, vacaciones: 0, permiso: 0, suspension: 0 }, cantidadTardanzas: 0, minutosPenalizados: 0, horasExtra: { pendiente: { minutosAl25: 0, minutosAl35: 0 }, aprobada: { minutosAl25: 0, minutosAl35: 0 }, descartada: { minutosAl25: 0, minutosAl35: 0 } } } });
+  });
+
+  const casosG22: Array<{ fila: string; descripcion: string; comprobar: () => Promise<void> }> = [
+    {
+      fila: "Z1", descripcion: "un período cerrado que sustenta 11/2019 pagado muestra «Reabrir período» deshabilitado con la causa y sin el formulario de reapertura",
+      comprobar: async () => {
+        listar.mockResolvedValue([periodoCerrado]);
+        mesPagadoDelPeriodo.mockResolvedValue("2019-11");
+
+        const html = await render();
+
+        expect(html).toMatch(new RegExp(`<button[^>]*disabled=""[^>]*>Reabrir período</button><small[^>]*>${causa}</small>`));
+        expect(html).not.toContain("¿Reabrir este período de planilla?");
+        expect(html).not.toContain("Motivo de reapertura");
+        expect(mesPagadoDelPeriodo).toHaveBeenCalledWith("p1");
+      },
+    },
+    {
+      fila: "Z2", descripcion: "un período cerrado de un mes no pagado conserva «Reabrir período» habilitado con su diálogo y sin causa",
+      comprobar: async () => {
+        listar.mockResolvedValue([periodoCerrado]);
+
+        const html = await render();
+
+        expect(html).toContain("¿Reabrir este período de planilla?");
+        expect(html).toContain("Motivo de reapertura");
+        expect(html).not.toMatch(/<button[^>]*disabled[^>]*>Reabrir período<\/button>/);
+        expect(html).not.toContain("Sustenta la preliquidación");
+      },
+    },
+    {
+      fila: "Z3", descripcion: "el Administrador, que también reabre, lo ve igualmente deshabilitado con la causa",
+      comprobar: async () => {
+        obtenerActorActual.mockResolvedValue({ rol: "administrador" });
+        listar.mockResolvedValue([periodoCerrado]);
+        mesPagadoDelPeriodo.mockResolvedValue("2019-11");
+
+        const html = await render();
+
+        expect(html).toMatch(new RegExp(`<button[^>]*disabled=""[^>]*>Reabrir período</button><small[^>]*>${causa}</small>`));
+        expect(html).not.toContain("Motivo de reapertura");
+      },
+    },
+    {
+      fila: "Z4", descripcion: "un período abierto no muestra «Reabrir período» ni la causa",
+      comprobar: async () => {
+        listar.mockResolvedValue([{ ...periodoCerrado, estado: "abierto" }]);
+        mesPagadoDelPeriodo.mockResolvedValue("2019-11");
+
+        const html = await render();
+
+        expect(html).not.toContain("Reabrir período");
+        expect(html).not.toContain("Sustenta la preliquidación");
+      },
+    },
+  ];
+  it.each(casosG22)("G22 $fila $descripcion", async ({ comprobar }) => comprobar());
 });

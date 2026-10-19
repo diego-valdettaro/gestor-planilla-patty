@@ -4,17 +4,20 @@ import { notFound, redirect } from "next/navigation";
 import { NOMBRE_DE_ROL, puedeGestionarPagos } from "@/autenticacion/permisos";
 import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
 import { formatearSoles } from "@/condiciones-laborales/valores";
+import { fechaDeHoyEnLima } from "@/condiciones-laborales/vigencia";
 import { formatearMes } from "@/fuentes-externas/valores";
 import { totalDeHorasExtraCentimos } from "@/pagos/calcular-borrador";
 import { ROTULO_DEL_NETO, estadoDeLaPersona, totalesPorSede } from "@/pagos/fuentes-en-el-neto";
 import { consultarVersion, evaluarBorradorPreparado, listarVersiones } from "@/pagos/finalizar-mes";
 import { prepararBorrador } from "@/pagos/preparar-borrador";
 import { dependenciasDeFinalizacion, fuentesDelBorrador } from "@/pagos/servicio";
+import { formatearFechaDeRelacion } from "@/relaciones-laborales/vigencia";
 
 import { NavegacionDePagos } from "../navegacion-de-pagos";
 import { BloqueoDePagos } from "../bloqueo";
 import { NotaDelSubtotal } from "../nota-del-subtotal";
 import { SinPermisoDePagos } from "../sin-permiso";
+import { ConfirmacionDelPago } from "./confirmacion-del-pago";
 import { CorreccionDelMes } from "./correccion-del-mes";
 import { estadoDelMes } from "./estado-del-mes";
 import { FinalizacionDelMes } from "./finalizacion-del-mes";
@@ -62,15 +65,26 @@ export default async function PaginaDelMes({ params, searchParams }: { params: P
   const accion = estado.accion;
   // «Puede finalizarlo» solo si «Finalizar mes» está disponible: sin versión, con personas y sin causa que lo deshabilite (interacción §3).
   const puedeFinalizar = accion.tipo === "finalizar" && !accion.causaDeshabilitado;
+  // «Finalizar mes» (sin versión) y «Crear otra versión» (con versión y sin pago) abren el mismo diálogo de finalización.
+  const finalizacion = accion.tipo === "finalizar" ? { etiqueta: accion.etiqueta, causaDeshabilitado: accion.causaDeshabilitado } : estado.otraVersion;
   // El diálogo se prepara con el alcance y la huella del MISMO borrador y de las mismas versiones que se muestran, sin volver a leer los datos (ADR 0014): solo se evalúa cuando se puede finalizar.
-  const evaluacion = accion.tipo !== "ninguna" && !accion.causaDeshabilitado ? evaluarBorradorPreparado(borrador, versiones) : undefined;
+  const evaluacion = finalizacion && !finalizacion.causaDeshabilitado ? evaluarBorradorPreparado(borrador, versiones) : undefined;
+  // La constancia (versión pagada, fecha y responsable) viene del historial; el diálogo de pago declara la versión vigente que se muestra.
+  const constancia = versiones.find(({ pago }) => pago)?.pago;
+  const vigente = versiones[0];
+  // Con claves estables cada acción conserva su estado (por ejemplo el aviso «Versión N guardada») cuando pasa de principal a secundaria o la otra aparece.
+  const evaluada = evaluacion?.estado === "lista" ? { alcance: evaluacion.alcance, huella: evaluacion.huella } : undefined;
+  const acciones = accion.tipo === "ninguna" ? [<ConfirmacionDelPago explicacion={accion.explicacion} key="pago" />]
+    : accion.tipo === "confirmar_pago" ? [
+      <ConfirmacionDelPago confirmacion={{ mes, numeroDeVersion: vigente.numero, personas: vigente.personas, subtotalCentimos: vigente.subtotalCentimos, responsable: actor.nombreUsuario ?? NOMBRE_DE_ROL[actor.rol], hoy: fechaDeHoyEnLima(dependenciasDeFinalizacion.ahora()) }} key="pago" />,
+      estado.otraVersion && <FinalizacionDelMes bloqueos={bloqueosDelPanel} causaDeshabilitado={estado.otraVersion.causaDeshabilitado} etiqueta={estado.otraVersion.etiqueta} evaluacion={evaluada} key="finalizacion" mes={mes} secundaria />,
+    ] : [
+      <FinalizacionDelMes bloqueos={bloqueosDelPanel} causaDeshabilitado={accion.causaDeshabilitado} etiqueta={accion.etiqueta} evaluacion={evaluada} key="finalizacion" mes={mes} />,
+      <small className="linea-de-relacion" key="nota">{accion.nota}</small>,
+    ];
   return <main className="contenido pagina">
-    <header className="encabezado encabezado-pagina"><div><p className="eyebrow">{NOMBRE_DE_ROL[actor.rol]}</p><h1 tabIndex={-1}>Mes de pago {formatearMes(mes)}</h1><p>Corte de incidencias: {borrador.corte.inicio} al {borrador.corte.fin}</p><p>Revisiones de asistencia: {borrador.revisiones.length} períodos</p><span className={`insignia ${estado.insignia.clase}`}>{estado.insignia.texto}</span></div>
-      <span className="acciones-configuracion">
-        {accion.tipo === "ninguna" ? <small className="linea-de-relacion">{accion.explicacion}</small>
-          : <FinalizacionDelMes bloqueos={bloqueosDelPanel} causaDeshabilitado={accion.causaDeshabilitado} etiqueta={accion.etiqueta} mes={mes}
-            evaluacion={evaluacion?.estado === "lista" ? { alcance: evaluacion.alcance, huella: evaluacion.huella } : undefined} />}
-      </span></header>
+    <header className="encabezado encabezado-pagina"><div><p className="eyebrow">{NOMBRE_DE_ROL[actor.rol]}</p><h1 tabIndex={-1}>Mes de pago {formatearMes(mes)}</h1><p>Corte de incidencias: {borrador.corte.inicio} al {borrador.corte.fin}</p><p>Revisiones de asistencia: {borrador.revisiones.length} períodos</p><span className={`insignia ${estado.insignia.clase}`}>{estado.insignia.texto}</span>{constancia && <p>{`Pago realizado el ${formatearFechaDeRelacion(constancia.fechaDelPago)} · Responsable: ${constancia.responsable}`}</p>}</div>
+      <span className="acciones-configuracion">{acciones}</span></header>
     <NavegacionDePagos actual="meses" />
     <section className="tarjeta panel" aria-labelledby="titulo-bloqueos" id="bloqueos-del-mes" tabIndex={-1}><header className="panel-cabecera"><h2 id="titulo-bloqueos">Bloqueos del mes ({bloqueosDelPanel})</h2></header>
       {borrador.bloqueosDelMes.length || bloqueadas ? <div>{borrador.bloqueosDelMes.map((bloqueo, i) => <BloqueoDePagos key={i} mensaje={bloqueo} mes={mes} />)}{borrador.personas.filter(({ bloqueos }) => bloqueos.length).map(({ relacion, bloqueos }) => <div key={relacion.id}><Link href={`/pagos/${mes}/${relacion.dni}`}>{relacion.nombre}</Link>{bloqueos.map((bloqueo, i) => <BloqueoDePagos key={i} mensaje={bloqueo} mes={mes} relacionId={relacion.id} />)}</div>)}</div> : <p className="mensaje-operacion listo">{puedeFinalizar ? "El mes no tiene bloqueos. Puede finalizarlo." : "El mes no tiene bloqueos."}</p>}
@@ -80,7 +94,7 @@ export default async function PaginaDelMes({ params, searchParams }: { params: P
     <section className="tarjeta panel"><header className="panel-cabecera"><div><h2>Totales del mes completo</h2><p>Incompleto. {bloqueadas} {bloqueadas === 1 ? "persona con bloqueo" : "personas con bloqueo"}. El neto de los totales suma solo a las personas calculadas y aún no es definitivo.</p><NotaDelSubtotal /></div></header><p className="aviso-desplazamiento">Desplácese horizontalmente para ver todas las columnas.</p><div className="panel-tabla" role="region" aria-label="Totales del mes completo" tabIndex={0}><table><thead><tr><th className="numerico">Sueldo calculado</th><th className="numerico">Otros ingresos</th><th className="numerico">Reducciones</th><th className="numerico">Deducciones</th><th className="numerico">{ROTULO_DEL_NETO}</th><th className="numerico">Aportes patronales</th></tr></thead><tbody><tr><td className="numerico">{formatearSoles(borrador.sueldoCalculadoCentimos)}</td><td className="numerico">Horas extra {formatearSoles(totalDeHorasExtra)}. Desglose restante pendiente</td><td>Desglose pendiente</td><td>Desglose pendiente</td><td className="numerico">{calculadas > 0 ? formatearSoles(netoCalculado) : "Incompleto"}</td><td>Desglose pendiente</td></tr></tbody></table></div></section>
     <section className="tarjeta panel"><header className="panel-cabecera"><h2>Por sede de adscripción</h2></header>{porSede.length ? <><p className="aviso-desplazamiento">Desplácese horizontalmente para ver todas las columnas.</p><div className="panel-tabla primera-columna-fija" role="region" aria-label="Sueldo por sede de adscripción" tabIndex={0}><table><thead><tr><th>Sede</th><th className="numerico">Personas (n.º)</th><th className="numerico">Sueldo calculado</th><th className="numerico">{ROTULO_DEL_NETO}</th></tr></thead><tbody>{porSede.map(({ sede, personas: deLaSede }) => <tr key={sede}><th scope="row">{sede}</th><td className="numerico">{deLaSede.length}</td><td className="numerico">{formatearSoles(deLaSede.reduce((suma, persona) => suma + persona.sueldoCalculadoCentimos, 0))}</td><td className="numerico">{(netoDeSede.get(sede)?.calculadas ?? 0) > 0 ? formatearSoles(netoDeSede.get(sede)?.netoCentimos ?? 0) : "Incompleto"}{(netoDeSede.get(sede)?.calculadas ?? 0) < deLaSede.length && <small className="linea-de-relacion">Incompleto</small>}</td></tr>)}</tbody></table></div></> : <p className="estado-vacio">No hay personas en este mes.</p>}</section>
     <section className="tarjeta panel"><header className="panel-cabecera"><h2>Personas del mes</h2></header>{personas.length ? <><p className="aviso-desplazamiento">Desplácese horizontalmente para ver todas las columnas.</p><div className="panel-tabla primera-columna-fija" role="region" aria-label="Personas del mes" tabIndex={0}><table><thead><tr><th>Persona</th><th>Grupo / sede de adscripción</th><th className="numerico">Sueldo calculado</th><th className="numerico">{ROTULO_DEL_NETO}</th><th>Estado</th></tr></thead><tbody>{personas.map(({ relacion, sedeDeAdscripcion, sueldoCalculadoCentimos, bloqueos, netoCentimos }) => <tr key={relacion.id}><th scope="row"><Link href={`/pagos/${mes}/${relacion.dni}`}>{relacion.nombre}</Link><small className="linea-de-relacion">DNI {relacion.dni}</small></th><td>{relacion.grupo}<small className="linea-de-relacion">{sedeDeAdscripcion ?? "Sede pendiente"}</small></td><td className="numerico">{formatearSoles(sueldoCalculadoCentimos)}</td><td className="numerico">{netoCentimos == null ? "Incompleto" : formatearSoles(netoCentimos)}</td><td><span className={`insignia ${netoCentimos == null ? "advertencia" : "ok"}`}>{estadoDeLaPersona({ netoCentimos: netoCentimos ?? null, bloqueos })}</span>{bloqueos.some((bloqueo) => bloqueo.startsWith("Neto negativo")) && <small className="linea-de-relacion">Neto negativo</small>}</td></tr>)}</tbody></table></div></> : <section className="estado-vacio"><h3>Este mes no incluye personas con esos criterios</h3><p>Quite los filtros para consultar la población completa.</p></section>}</section>
-    {accion.tipo === "crear_otra_version" && <CorreccionDelMes />}
+    {estado.otraVersion && <CorreccionDelMes />}
     <HistorialDeVersiones mes={mes} versiones={versiones} />
   </main>;
 }

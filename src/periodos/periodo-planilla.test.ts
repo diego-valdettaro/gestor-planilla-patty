@@ -25,6 +25,7 @@ function repositorio(periodos: PeriodoPlanilla[] = []): RepositorioDePeriodos {
     decidirHorasExtra: vi.fn(),
     cerrar: vi.fn(),
     reabrir: vi.fn(),
+    mesPagadoDelPeriodo: vi.fn(),
     listarRevisiones: vi.fn(),
     listarAprobaciones: vi.fn(),
     aprobarAsistencia: vi.fn(),
@@ -62,6 +63,48 @@ describe("cierre y reapertura de períodos de planilla", () => {
   it("rechaza la reapertura de un gerente de área", async () => {
     await expect(reabrirPeriodo(repositorio(), actor("gerente_de_area"), "periodo-1", "Motivo")).rejects.toThrow("Solo Finanzas");
   });
+});
+
+// G12 · No se reabre un período que sustenta un mes con pago realizado confirmado, sea cual sea el rol que lo intente (ADR 0013, contrato C2, D10, E5, E7).
+describe("reapertura de períodos y pago realizado confirmado", () => {
+  const CAUSA = "Sustenta la preliquidación con pago realizado confirmado de 11/2019";
+  const casosG12: Array<{ fila: string; descripcion: string; comprobar: () => Promise<void> }> = [
+    {
+      fila: "B1", descripcion: "el período 26/10-25/11 (fuente del 2019-11 pagado) se rechaza con la causa y no se reabre",
+      comprobar: async () => {
+        const repo = repositorio([periodo("2019-10-26", "2019-11-25")]);
+        vi.mocked(repo.mesPagadoDelPeriodo).mockResolvedValue("2019-11");
+
+        await expect(reabrirPeriodo(repo, actor("finanzas"), "2019-10-26-2019-11-25", "Corrección")).rejects.toThrow(CAUSA);
+
+        expect(repo.reabrir).not.toHaveBeenCalled();
+      },
+    },
+    {
+      fila: "B2", descripcion: "el período 26/11-25/12 (mes 2019-12 sin pago) se reabre una vez con el motivo recortado",
+      comprobar: async () => {
+        const repo = repositorio([periodo("2019-11-26", "2019-12-25")]);
+        vi.mocked(repo.mesPagadoDelPeriodo).mockResolvedValue(undefined);
+
+        await reabrirPeriodo(repo, actor("finanzas"), "2019-11-26-2019-12-25", "  Corrección  ");
+
+        expect(repo.reabrir).toHaveBeenCalledTimes(1);
+        expect(repo.reabrir).toHaveBeenCalledWith("2019-11-26-2019-12-25", "cuenta-1", "Corrección", expect.any(Date));
+      },
+    },
+    {
+      fila: "B3", descripcion: "el Administrador del sistema tampoco puede reabrir el período fuente: la regla es del dato, no del rol",
+      comprobar: async () => {
+        const repo = repositorio([periodo("2019-10-26", "2019-11-25")]);
+        vi.mocked(repo.mesPagadoDelPeriodo).mockResolvedValue("2019-11");
+
+        await expect(reabrirPeriodo(repo, actor("administrador"), "2019-10-26-2019-11-25", "Corrección")).rejects.toThrow(CAUSA);
+
+        expect(repo.reabrir).not.toHaveBeenCalled();
+      },
+    },
+  ];
+  it.each(casosG12)("G12 $fila $descripcion", async ({ comprobar }) => comprobar());
 });
 
 describe("decisión en lote de horas extra", () => {

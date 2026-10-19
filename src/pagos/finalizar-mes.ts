@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
 
 import { exigir, puedeGestionarPagos, type Actor } from "@/autenticacion/permisos";
-import type { AlmacenDeFuentesExternas } from "@/fuentes-externas/gestionar-fuentes-externas";
 import type { CodigoDeTipoDeFuente } from "@/fuentes-externas/tipos-de-fuente";
 import type { CodigoDeReglaLegal } from "@/reglas-legales/catalogo";
 
 import type { BasesPorDevengue } from "./aportes-y-bases";
 import type { LineaDeBorrador } from "./calcular-borrador";
+import type { RepositorioDeConstancias } from "./constancias-de-pago";
 import { prepararBorrador, type FuentesDelBorrador } from "./preparar-borrador";
 
 // Finalización del mes completo (#129, ADR 0007 y 0014): evalúa, guarda una versión inmutable del mes entero o no guarda nada, y consulta el historial.
@@ -74,17 +74,18 @@ export interface RepositorioDeVersiones {
 export interface DependenciasDeFinalizacion {
   fuentes: FuentesDelBorrador;
   versiones: RepositorioDeVersiones;
-  pago: Pick<AlmacenDeFuentesExternas, "mesConPagoConfirmado">;
+  /** Constancias del pago realizado (#130): finalizar consulta si el mes ya se pagó; confirmar el pago las guarda. */
+  pago: RepositorioDeConstancias;
   ahora: () => Date;
 }
 
 /** Solo Finanzas opera Pagos; el servidor decide aquí, antes de leer importes (ADR 0007, #96 historia 2). Sin sesión tampoco hay permiso. */
-function exigirFinanzas(actor: Actor | undefined): asserts actor is Actor {
+export function exigirFinanzas(actor: Actor | undefined): asserts actor is Actor {
   exigir(actor !== undefined && puedeGestionarPagos(actor), MENSAJE_SIN_PERMISO);
 }
 
 const MENSAJE_SIN_PERSONAS = "Este mes no incluye personas";
-const MENSAJE_SIN_PERMISO = "No tiene permiso para consultar ni editar Pagos.";
+export const MENSAJE_SIN_PERMISO = "No tiene permiso para consultar ni editar Pagos.";
 export const MENSAJE_DE_ERROR_AL_GUARDAR = "No se guardó ninguna versión";
 export const MENSAJE_DE_PAGO_CONFIRMADO = "Este mes ya tiene su pago realizado confirmado; no admite una nueva versión.";
 /** Los únicos errores pensados para mostrarse a Finanzas; cualquier otro es un detalle técnico que la pantalla no debe filtrar. */
@@ -239,7 +240,9 @@ export interface ResumenDeVersion {
   finalizadaPor: string;
   finalizadaEn: Date;
   /** La más reciente rige; las anteriores quedan reemplazadas sin modificarse. */
-  estado: "Vigente" | "Reemplazada";
+  estado: "Vigente" | "Reemplazada" | "Pago realizado confirmado";
+  /** Solo la versión que Finanzas confirmó como pagada: cuándo se pagó y quién lo confirmó. */
+  pago?: { fechaDelPago: string; responsable: string };
   personas: number;
   subtotalCentimos: number;
 }
@@ -248,8 +251,14 @@ export interface ResumenDeVersion {
 export async function listarVersiones(dependencias: DependenciasDeFinalizacion, actor: Actor | undefined, mes: string): Promise<ResumenDeVersion[]> {
   exigirFinanzas(actor);
   const versiones = [...await dependencias.versiones.listarVersiones(mes)].sort((a, b) => b.numero - a.numero);
-  return versiones.map((version, indice) => ({ numero: version.numero, finalizadaPorId: version.finalizadaPorId, finalizadaPor: version.finalizadaPor,
-    finalizadaEn: version.finalizadaEn, estado: indice === 0 ? "Vigente" : "Reemplazada", personas: version.personas.length, subtotalCentimos: version.subtotalCentimos }));
+  const constancia = await dependencias.pago.buscar(mes);
+  return versiones.map((version, indice) => {
+    const pagada = constancia?.numeroDeVersion === version.numero;
+    return { numero: version.numero, finalizadaPorId: version.finalizadaPorId, finalizadaPor: version.finalizadaPor,
+      finalizadaEn: version.finalizadaEn, estado: pagada ? "Pago realizado confirmado" : indice === 0 ? "Vigente" : "Reemplazada",
+      ...(pagada ? { pago: { fechaDelPago: constancia.fechaDelPago, responsable: constancia.confirmadaPor } } : {}),
+      personas: version.personas.length, subtotalCentimos: version.subtotalCentimos };
+  });
 }
 
 /** Una versión completa del mes, o undefined si no existe en ese mes. */

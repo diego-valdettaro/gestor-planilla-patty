@@ -7,7 +7,7 @@ import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
 import { BotonDeAccionConfirmada } from "@/app/boton-de-accion-confirmada";
 import { CAUSAS_DE_DESCARTE, NOMBRE_DE_CAUSA_DE_DESCARTE } from "@/asistencias/descarte-de-hora-extra";
 import { TEXTO_DE_CAUSA_DE_BLOQUEO } from "@/periodos/aprobacion-de-asistencia";
-import { aprobacionesVisiblesPara, calcularSugerenciaDePeriodo, crearResumenVacio } from "@/periodos/periodo-planilla";
+import { aprobacionesVisiblesPara, calcularSugerenciaDePeriodo, causaDeReaperturaBloqueada, crearResumenVacio } from "@/periodos/periodo-planilla";
 import type { AprobacionDeGrupo, BloqueoDePeriodo, PeriodoPlanilla, DetalleDeJornada, FilaDeResumen, ResumenDePeriodo } from "@/periodos/periodo-planilla";
 import { repositorioDePeriodos } from "@/periodos/servicio";
 
@@ -33,6 +33,8 @@ export default async function PaginaDePeriodos({ searchParams }: { searchParams:
   const resumen = periodo ? await repositorioDePeriodos.listarResumen({ periodoId: periodo.id, sede: query.sede, dni: query.dni }) : crearResumenVacio();
   const sedes = [...new Set(resumen.filas.flatMap(({ jornadas }) => jornadas.map(({ sede }) => sede).filter((sede): sede is string => Boolean(sede))))].sort();
   const colaboradores = [...new Map(resumen.filas.map(({ dni, nombre }) => [dni, { dni, nombre }])).values()].sort((a, b) => a.nombre.localeCompare(b.nombre));
+  // Un período cerrado que sustenta un mes con pago realizado confirmado no se reabre (ADR 0013, D10): el botón se muestra deshabilitado con su causa.
+  const mesPagado = periodo?.estado === "cerrado" ? await repositorioDePeriodos.mesPagadoDelPeriodo(periodo.id) : undefined;
   const sugerencia = calcularSugerenciaDePeriodo(periodos, new Date());
   const sinAprobar = aprobaciones.filter(({ estado }) => estado !== "aprobada").map(({ grupo }) => grupo);
 
@@ -52,7 +54,8 @@ export default async function PaginaDePeriodos({ searchParams }: { searchParams:
       </form>
       <section className="tarjeta panel">
         <header className="panel-cabecera"><div><h2>Período {periodo.inicio} a {periodo.fin}</h2><p>Estado actual: {periodo.estado === "abierto" ? <span className="insignia ok">Abierto</span> : <span className="insignia neutro">Cerrado</span>}</p></div>{periodo.estado === "abierto" ? <CierreDelPeriodo periodoId={periodo.id} sinAprobar={sinAprobar} /> : null}</header>
-        {periodo.estado === "cerrado" ? <BotonDeAccionConfirmada accion={reabrirPeriodoDesdeFormulario} confirmar="Reabrir período" descripcion={`El período de planilla del ${periodo.inicio} al ${periodo.fin} volverá a estar abierto: se podrán importar y modificar asistencias de esas fechas hasta que se cierre de nuevo. La reapertura queda registrada con el motivo indicado. Las aprobaciones de asistencia siguen vigentes salvo que una corrección invalide la de su grupo.`} etiqueta="Reabrir período" titulo="¿Reabrir este período de planilla?"><input type="hidden" name="periodoId" value={periodo.id} /><label>Motivo de reapertura<input name="motivo" required /></label></BotonDeAccionConfirmada> : null}
+        {periodo.estado === "cerrado" && mesPagado ? <div><button aria-describedby="causa-de-reapertura" className="boton-secundario" disabled type="button">Reabrir período</button><small className="linea-de-relacion" id="causa-de-reapertura">{causaDeReaperturaBloqueada(mesPagado)}</small></div> : null}
+        {periodo.estado === "cerrado" && !mesPagado ? <BotonDeAccionConfirmada accion={reabrirPeriodoDesdeFormulario} confirmar="Reabrir período" descripcion={`El período de planilla del ${periodo.inicio} al ${periodo.fin} volverá a estar abierto: se podrán importar y modificar asistencias de esas fechas hasta que se cierre de nuevo. La reapertura queda registrada con el motivo indicado. Las aprobaciones de asistencia siguen vigentes salvo que una corrección invalide la de su grupo.`} etiqueta="Reabrir período" titulo="¿Reabrir este período de planilla?"><input type="hidden" name="periodoId" value={periodo.id} /><label>Motivo de reapertura<input name="motivo" required /></label></BotonDeAccionConfirmada> : null}
         <AprobacionDeAsistencia actor={actor} periodo={periodo} aprobaciones={aprobaciones} />
         {periodo.estado === "abierto" ? <DecisionesDeHorasExtra periodoId={periodo.id} filas={resumen.filas} /> : null}
         <TotalesGenerales resumen={resumen} />

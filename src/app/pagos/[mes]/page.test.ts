@@ -1,3 +1,4 @@
+import { conIndicadorDePago, crearRepositorioDeConstanciasEnMemoria } from "@/pagos/constancias-en-memoria";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -27,7 +28,7 @@ function prepararDependencias() {
     listarVersiones: (mes) => { simulacro.leerVersiones(mes); return repositorio.listarVersiones(mes); },
     buscarVersion: (mes, numero) => { simulacro.leerVersiones(mes); return repositorio.buscarVersion(mes, numero); },
   };
-  simulacro.dependencias = { fuentes: {} as FuentesDelBorrador, versiones, pago: { mesConPagoConfirmado: simulacro.pagoConfirmado }, ahora: () => new Date("2026-10-26T15:00:00Z") } satisfies DependenciasDeFinalizacion;
+  simulacro.dependencias = { fuentes: {} as FuentesDelBorrador, versiones, pago: conIndicadorDePago(simulacro.pagoConfirmado), ahora: () => new Date("2026-10-26T15:00:00Z") } satisfies DependenciasDeFinalizacion;
   return repositorio;
 }
 
@@ -124,7 +125,8 @@ const versionDelPlan = (anaCentimos: number, fecha: string, actor = "finanzas"):
 
 /** La cabecera del objeto (primer `<header>`), sin el diálogo: lo que ve Finanzas antes de abrir nada. */
 const cabecera = (html: string) => html.slice(html.indexOf("<header"), html.indexOf("</header>")).replace(/<dialog[\s\S]*?<\/dialog>/g, "");
-const dialogoDe = (html: string) => /<dialog[\s\S]*?<\/dialog>/.exec(html)?.[0] ?? "";
+const dialogosDe = (html: string) => html.match(/<dialog[\s\S]*?<\/dialog>/g) ?? [];
+const dialogoDe = (html: string) => dialogosDe(html)[0] ?? "";
 const seccionDelHistorial = (html: string) => html.split("<section").find((seccion) => seccion.includes('id="titulo-historial"')) ?? "";
 const contar = (html: string, patron: RegExp) => (html.match(patron) ?? []).length;
 
@@ -193,27 +195,6 @@ describe("finalización del mes en la pantalla", () => {
     expect(dialogoDe(html)).toBe("");
   });
 
-  it("F-59 en un mes finalizado sin pago la cabecera ofrece «Crear otra versión» con el mismo diálogo y sin «Confirmar pago realizado»", async () => {
-    await versiones.guardarVersion(versionDelPlan(200000, "2026-10-20T15:00:00Z"));
-
-    const html = await render();
-    const dialogo = dialogoDe(html);
-
-    expect(cabecera(html)).toMatch(/<button[^>]*boton-principal[^>]*>Crear otra versión<\/button>/);
-    expect(contar(cabecera(html), /boton-principal/g)).toBe(1);
-    expect(dialogo).toContain("La versión 2 no se podrá editar.");
-    expect(dialogo).toContain("3 personas del mes");
-    expect(dialogo).toContain("S/ 4.500,00");
-    expect(dialogo).toContain("Cancelar");
-    expect(dialogo).toMatch(/<button[^>]*>Finalizar mes<\/button>/);
-    expect(html).not.toContain("Confirmar pago realizado");
-    // El formulario envía lo que la acción del servidor lee: el mes y la huella de lo revisado.
-    expect(dialogo).toContain('name="mes" value="2026-10"');
-    const huella = JSON.parse(/name="huella" value="([^"]*)"/.exec(dialogo)![1].replaceAll("&quot;", '"')) as { entrada: string; subtotalCentimos: number };
-    expect(huella.entrada).toMatch(/^[0-9a-f]{64}$/);
-    expect(huella.subtotalCentimos).toBe(450000);
-  });
-
   it.each([
     ["con bloqueos", () => BLOQUEADO(), "Resuelva los 3 bloqueos para finalizar"],
     ["sin personas", () => borradorDelPlan({ personas: [], sueldoCalculadoCentimos: 0, netoCalculadoCentimos: 0 }), "Este mes no incluye personas"],
@@ -224,7 +205,7 @@ describe("finalización del mes en la pantalla", () => {
     const html = await render();
 
     expect(cabecera(html)).toMatch(new RegExp(`<button[^>]*disabled=""[^>]*>Crear otra versión</button><small[^>]*>${causa}</small>`));
-    expect(dialogoDe(html)).toBe("");
+    expect(dialogosDe(html).some((dialogo) => dialogo.includes("Finalizar mes"))).toBe(false);
   });
 
   // F-69 (adenda 3): la huella del diálogo es la del borrador que la página pintó; si los datos cambian después, confirmar avisa «cambió» y no guarda.
@@ -494,4 +475,143 @@ describe("finalización del mes en la pantalla", () => {
     expect(regiones).toBe(tablas);
     expect(avisos).toBe(tablas);
   });
+});
+
+// Confirmar el pago realizado en la pantalla del mes (#130, ADR 0013; interacción §3, §4.2, §4.7, §6.1, §6.2, D15, D19, V3, V4; decisión P2 de la orquestadora).
+// Mismas personas y cifras del plan que arriba (Ana S/ 2.000,00, Beto S/ 1.500,00, Carla S/ 1.000,00; total S/ 4.500,00). Para las constancias se usa el
+// repositorio en memoria real; la constancia E1 se escribe con la fecha del pago 02/12/2019 y el responsable «finanzas».
+describe("confirmar el pago realizado en la pantalla del mes", () => {
+  let versiones: ReturnType<typeof prepararDependencias>;
+  const dialogoDePago = (html: string) => dialogosDe(html).find((dialogo) => dialogo.includes("fuera de la app")) ?? "";
+  const confirmarPagoDe = async (numeroDeVersion: number) => {
+    const constancias = crearRepositorioDeConstanciasEnMemoria({ nombreDe: () => "finanzas" });
+    await constancias.repositorio.confirmar({ mesDePago: "2026-10", numeroDeVersion, fechaDelPago: "2019-12-02", confirmadaPorId: "u-1", confirmadaEn: new Date("2019-12-02T15:00:00Z") });
+    simulacro.dependencias = { ...(simulacro.dependencias as DependenciasDeFinalizacion), pago: constancias.repositorio };
+  };
+
+  beforeEach(() => {
+    vi.stubGlobal("React", React);
+    simulacro.actor.mockResolvedValue({ id: "f", rol: "finanzas", nombreUsuario: "finanzas" });
+    simulacro.preparar.mockReset();
+    versiones = prepararDependencias();
+    simulacro.preparar.mockResolvedValue(borradorDelPlan());
+  });
+
+  // G18 · La acción principal sigue el estado del mes (C4; §4.2 punto 1, §4.7).
+  const casosG18: Array<{ fila: string; descripcion: string; comprobar: () => Promise<void> }> = [
+    {
+      fila: "S1", descripcion: "finalizada sin pago: la cabecera trae «Confirmar pago realizado» como acción principal y el diálogo §6.2 del mes",
+      comprobar: async () => {
+        await versiones.guardarVersion(versionDelPlan(200000, "2026-10-20T15:00:00Z"));
+
+        const html = await render();
+
+        expect(cabecera(html)).toContain("Finalizada, versión 1");
+        expect(cabecera(html)).toMatch(/<button[^>]*boton-principal[^>]*>Confirmar pago realizado<\/button>/);
+        expect(dialogoDePago(html)).toContain("¿Confirmar que se pagó 10/2026 fuera de la app?");
+        expect(dialogoDePago(html)).toContain("Versión 1 del mes completo, 3 personas, S/ 4.500,00.");
+        expect(dialogoDePago(html)).toContain("Se registrará a nombre de finanzas");
+        expect(dialogoDePago(html)).toContain('max="2026-10-26"');
+      },
+    },
+    {
+      fila: "S2", descripcion: "sin versión finalizada: dice «Finalice el mes para poder confirmar el pago» y no hay botón ni diálogo de pago",
+      comprobar: async () => {
+        const html = await render();
+
+        expect(cabecera(html)).toContain("Finalice el mes para poder confirmar el pago");
+        expect(html).not.toContain("Confirmar pago realizado");
+        expect(dialogoDePago(html)).toBe("");
+      },
+    },
+    {
+      fila: "S3", descripcion: "con constancia: sin «Finalizar mes», «Crear otra versión» ni «Confirmar pago realizado», con la explicación y sin diálogos",
+      comprobar: async () => {
+        await versiones.guardarVersion(versionDelPlan(200000, "2026-10-20T15:00:00Z"));
+        await confirmarPagoDe(1);
+        simulacro.pagoConfirmado.mockResolvedValue(true);
+
+        const html = await render();
+
+        expect(cabecera(html)).toContain("Este mes ya tiene su pago realizado confirmado; no admite una nueva versión.");
+        for (const ausente of ["Finalizar mes", "Crear otra versión", "Confirmar pago realizado"]) expect(html).not.toContain(ausente);
+        expect(dialogosDe(html)).toEqual([]);
+      },
+    },
+    {
+      fila: "S4", descripcion: "finalizada con bloqueos nuevos: «Confirmar pago realizado» sigue disponible y solo «Crear otra versión» se deshabilita",
+      comprobar: async () => {
+        await versiones.guardarVersion(versionDelPlan(200000, "2026-10-20T15:00:00Z"));
+        simulacro.preparar.mockResolvedValue(BLOQUEADO());
+
+        const html = await render();
+
+        expect(cabecera(html)).toMatch(/<button[^>]*boton-principal[^>]*>Confirmar pago realizado<\/button>/);
+        expect(cabecera(html)).not.toMatch(/<button[^>]*disabled=""[^>]*>Confirmar pago realizado<\/button>/);
+        expect(cabecera(html)).toMatch(/<button[^>]*disabled=""[^>]*>Crear otra versión<\/button><small[^>]*>Resuelva los 3 bloqueos para finalizar<\/small>/);
+        expect(dialogoDePago(html)).toContain("¿Confirmar que se pagó 10/2026 fuera de la app?");
+      },
+    },
+    {
+      fila: "S5", descripcion: "finalizada sin pago: «Confirmar pago realizado» es la única acción principal y «Crear otra versión» queda como acción secundaria con su diálogo (sustituye a F-59)",
+      comprobar: async () => {
+        await versiones.guardarVersion(versionDelPlan(200000, "2026-10-20T15:00:00Z"));
+
+        const html = await render();
+        const dialogoDeFinalizar = dialogosDe(html).find((dialogo) => dialogo.includes("no se podrá editar")) ?? "";
+
+        expect(cabecera(html)).toMatch(/<button[^>]*boton-principal[^>]*>Confirmar pago realizado<\/button>/);
+        expect(cabecera(html)).toMatch(/<button[^>]*boton-secundario[^>]*>Crear otra versión<\/button>/);
+        expect(contar(cabecera(html), /boton-principal/g)).toBe(1);
+        expect(dialogoDeFinalizar).toContain("La versión 2 no se podrá editar.");
+        expect(dialogoDeFinalizar).toContain("3 personas del mes");
+        expect(dialogoDeFinalizar).toContain("S/ 4.500,00");
+        expect(dialogoDeFinalizar).toMatch(/<button[^>]*>Finalizar mes<\/button>/);
+        // El formulario envía lo que la acción del servidor lee: el mes y la huella de lo revisado.
+        expect(dialogoDeFinalizar).toContain('name="mes" value="2026-10"');
+        const huella = JSON.parse(/name="huella" value="([^"]*)"/.exec(dialogoDeFinalizar)![1].replaceAll("&quot;", '"')) as { entrada: string; subtotalCentimos: number };
+        expect(huella.entrada).toMatch(/^[0-9a-f]{64}$/);
+        expect(huella.subtotalCentimos).toBe(450000);
+      },
+    },
+  ];
+  it.each(casosG18)("G18 $fila $descripcion", async ({ comprobar }) => comprobar());
+
+  // G19 · La constancia es visible en la cabecera y en el historial (C3; §4.2 último párrafo, §4.7, V4).
+  const casosG19: Array<{ fila: string; descripcion: string; comprobar: () => Promise<void> }> = [
+    {
+      fila: "S6", descripcion: "con constancia, la cabecera muestra la insignia «Pago realizado confirmado», la fecha del pago y el responsable",
+      comprobar: async () => {
+        await versiones.guardarVersion(versionDelPlan(200000, "2026-10-20T15:00:00Z"));
+        await confirmarPagoDe(1);
+        simulacro.pagoConfirmado.mockResolvedValue(true);
+
+        const html = await render();
+
+        expect(cabecera(html)).toContain('<span class="insignia ok">Pago realizado confirmado</span>');
+        expect(cabecera(html)).toContain("Pago realizado el 02/12/2019 · Responsable: finanzas");
+      },
+    },
+    {
+      fila: "S7", descripcion: "el historial marca la versión pagada con fecha y responsable, deja la anterior «Reemplazada» y ambas siguen abriéndose",
+      comprobar: async () => {
+        await versiones.guardarVersion(versionDelPlan(200000, "2026-10-20T15:00:00Z", "usuario-fin-1"));
+        await versiones.guardarVersion(versionDelPlan(210000, "2026-10-26T15:00:00Z", "usuario-fin-2"));
+        await confirmarPagoDe(2);
+        simulacro.pagoConfirmado.mockResolvedValue(true);
+
+        const filas = seccionDelHistorial(await render()).split("<tr>").filter((fila) => /Versión \d/.test(fila));
+        const v2 = filas.find((fila) => fila.includes("Versión 2")) ?? "";
+        const v1 = filas.find((fila) => fila.includes("Versión 1")) ?? "";
+
+        expect(v2).toContain("Pago realizado confirmado");
+        expect(v2).toContain("Pagado el 02/12/2019 · finanzas");
+        expect(v2).toContain('href="/pagos/2026-10?version=2"');
+        expect(v1).toContain("Reemplazada");
+        expect(v1).not.toContain("Pagado el");
+        expect(v1).toContain('href="/pagos/2026-10?version=1"');
+      },
+    },
+  ];
+  it.each(casosG19)("G19 $fila $descripcion", async ({ comprobar }) => comprobar());
 });
