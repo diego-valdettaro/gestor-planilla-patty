@@ -344,11 +344,11 @@ describe("acción de confirmación del pago realizado de /pagos/[mes] (borde del
       },
     },
     {
-      fila: "A7", descripcion: "un formulario sin mes, sin fecha, sin versión o con la versión ilegible responde «No se registró el pago» sin lanzar y sin guardar",
+      fila: "A7", descripcion: "un formulario sin mes, sin versión o con la versión ilegible responde «No se registró el pago» sin lanzar y sin guardar",
       comprobar: async () => {
         await finalizarVersion();
         const incompletos: Array<Record<string, string>> = [
-          { mes: MES_PAGADO, version: "1" }, { version: "1", fecha: "2019-12-02" }, { mes: MES_PAGADO, fecha: "2019-12-02" },
+          { version: "1", fecha: "2019-12-02" }, { mes: MES_PAGADO, fecha: "2019-12-02" },
           { mes: MES_PAGADO, version: "uno", fecha: "2019-12-02" },
         ];
         for (const campos of incompletos) expect(await confirmarPagoDesdeFormulario({}, formulario(campos))).toEqual({ error: "No se registró el pago" });
@@ -388,4 +388,18 @@ describe("acción de confirmación del pago realizado de /pagos/[mes] (borde del
     },
   ];
   it.each(casosG25)("G25 $fila $descripcion", async ({ comprobar }) => comprobar());
+
+  // G28 · Sin fecha en el formulario (ausente o vacía) la acción responde el texto de la fecha inválida, no el genérico, y no guarda nada (QA-F01, §4.7).
+  const casosG28: Array<{ fila: string; descripcion: string; campos: Record<string, string> }> = [
+    { fila: "A12", descripcion: "una fecha vacía responde «Indique una fecha de pago válida.»", campos: { mes: MES_PAGADO, version: "1", fecha: "" } },
+    { fila: "A13", descripcion: "una fecha ausente responde «Indique una fecha de pago válida.»", campos: { mes: MES_PAGADO, version: "1" } },
+  ];
+  it.each(casosG28)("G28 $fila $descripcion y no guarda nada", async ({ campos }) => {
+    await finalizarVersion();
+
+    expect(await confirmarPagoDesdeFormulario({}, formulario(campos))).toEqual({ error: "Indique una fecha de pago válida." });
+
+    expect(constancias.guardadas()).toEqual([]);
+    expect(simulacro.revalidar).not.toHaveBeenCalled();
+  });
 });

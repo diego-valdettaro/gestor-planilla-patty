@@ -307,6 +307,18 @@ describe.skipIf(!databaseUrl)("persistencia de la constancia del pago realizado 
         expect(await constancias.buscar("2095-10")).toMatchObject({ numeroDeVersion: 1 });
       },
     },
+    {
+      fila: "P13", descripcion: "otro mes con más versiones no impide confirmar este: la comprobación de versión vigente filtra por mes (R2-SPEC-03)",
+      comprobar: async () => {
+        await versionar("2095-11", 3);
+        await versionar("2095-10");
+
+        await expect(constancias.confirmar(solicitud("2095-10", cuentas[0].id, "2019-12-02", 1))).resolves.toMatchObject({ mesDePago: "2095-10", numeroDeVersion: 1 });
+
+        expect(await filasDeConstancia("2095-10")).toBe(1);
+        expect(await filasDeConstancia("2095-11")).toBe(0);
+      },
+    },
   ];
   it.each(casosG26)("G26 $fila $descripcion", async ({ comprobar }) => comprobar());
 });

@@ -45,7 +45,7 @@ export async function confirmarPagoDesdeFormulario(estadoAnterior: EstadoDeConfi
     const mes = texto(formData, "mes");
     const numeroDeVersion = Number(texto(formData, "version"));
     if (!Number.isInteger(numeroDeVersion)) throw new Error("La versión del formulario no es un número.");
-    await confirmarPago(dependenciasDeFinalizacion, actor, { mes, numeroDeVersion, fechaDelPago: texto(formData, "fecha") });
+    await confirmarPago(dependenciasDeFinalizacion, actor, { mes, numeroDeVersion, fechaDelPago: fechaDelFormulario(formData) });
     revalidatePath(`/pagos/${mes}`);
     revalidatePath("/periodos");
     return { listo: (estadoAnterior.listo ?? 0) + 1, mensaje: "Pago realizado confirmado." };
@@ -83,6 +83,12 @@ function estadoDeImpedimento(resultado: Exclude<ResultadoDeEvaluacion, { estado:
 /** El mensaje de un error pensado para Finanzas; el resto se reemplaza para no filtrar detalles técnicos. */
 function mensajeParaFinanzas(causa: unknown): string {
   return causa instanceof Error && MENSAJES_PARA_FINANZAS.includes(causa.message) ? causa.message : MENSAJE_DE_ERROR_AL_GUARDAR;
+}
+
+/** Una fecha ausente o vacía llega al caso de uso como texto vacío: allí es una fecha inválida y Finanzas lee su mensaje (QA-F01). */
+function fechaDelFormulario(formData: FormData): string {
+  const valor = formData.get("fecha");
+  return typeof valor === "string" ? valor.trim() : "";
 }
 
 function texto(formData: FormData, campo: string): string {
