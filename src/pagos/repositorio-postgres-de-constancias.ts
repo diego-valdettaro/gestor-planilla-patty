@@ -4,6 +4,7 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { constanciasDePago, cuentasLocales, periodosPlanilla, versionesDePago } from "@/db/schema";
 import type * as schema from "@/db/schema";
 
+import { MENSAJE_DE_VERSION_OBSOLETA } from "./confirmar-pago";
 import { ErrorDeMesYaConfirmado, ErrorDePeriodoFuenteReabierto, ErrorDeVersionNoFinalizada, type ConstanciaDePago, type NuevaConstanciaDePago, type RepositorioDeConstancias } from "./constancias-de-pago";
 
 // Adaptador PostgreSQL del puerto de constancias (#130, ADR 0013): una constancia por mes (índice único de la migración 0042).
@@ -20,6 +21,16 @@ function codigoDeError(error: unknown): string | undefined {
 /** Serializa, hasta el final de la transacción, quien confirma el pago de un mes y quien le agrega una versión. */
 export async function bloquearPagoDelMes(tx: Pick<Db, "execute">, mes: string): Promise<void> {
   await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`pago-del-mes:${mes}`}, 0))`);
+}
+
+/**
+ * Con el bloqueo del mes tomado, la versión declarada debe seguir siendo la más reciente: si otra sesión finalizó una versión nueva entre la
+ * lectura del caso de uso y este bloqueo, no se registra el pago sobre una versión que Finanzas no vio (R1-SPEC-01, ADR 0013).
+ */
+async function exigirVersionVigente(tx: Pick<Db, "select">, nueva: NuevaConstanciaDePago): Promise<void> {
+  const [{ ultimo }] = await tx.select({ ultimo: sql<number>`coalesce(max(${versionesDePago.numero}), 0)::int` }).from(versionesDePago)
+    .where(eq(versionesDePago.mesDePago, nueva.mesDePago));
+  if (ultimo > nueva.numeroDeVersion) throw new Error(MENSAJE_DE_VERSION_OBSOLETA);
 }
 
 /**
@@ -43,6 +54,7 @@ export class RepositorioPostgresDeConstancias implements RepositorioDeConstancia
     try {
       await this.db.transaction(async (tx) => {
         await bloquearPagoDelMes(tx, nueva.mesDePago);
+        await exigirVersionVigente(tx, nueva);
         await exigirPeriodosFuenteCerrados(tx, nueva);
         await tx.insert(constanciasDePago).values(nueva);
       });

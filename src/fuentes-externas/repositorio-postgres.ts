@@ -2,7 +2,7 @@ import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import * as schema from "@/db/schema";
-import { colaboradores, confirmacionesDeFuente, cuentasLocales, importacionesDeFuente, importesExternos, versionesDePago } from "@/db/schema";
+import { colaboradores, confirmacionesDeFuente, constanciasDePago, cuentasLocales, importacionesDeFuente, importesExternos, versionesDePago } from "@/db/schema";
 
 import type {
   AlmacenDeFuentesExternas,
@@ -160,9 +160,10 @@ class AlmacenPostgresDeFuentesExternas implements AlmacenDeFuentesExternas {
     return anulados.length;
   }
 
-  // Pagos todavía no confirma pagos; el ticket de pago debe consultar aquí si el mes ya tiene una versión pagada.
-  async mesConPagoConfirmado(_mes: string): Promise<boolean> {
-    return false;
+  // Un mes tiene el pago realizado confirmado cuando existe su constancia (#130, ADR 0013): desde entonces sus fuentes son solo consulta.
+  async mesConPagoConfirmado(mes: string): Promise<boolean> {
+    const [constancia] = await this.db.select({ id: constanciasDePago.id }).from(constanciasDePago).where(eq(constanciasDePago.mesDePago, mes)).limit(1);
+    return constancia !== undefined;
   }
 
   // Un mes está finalizado cuando tiene alguna versión finalizada (#129): desde entonces sus fuentes no vuelven a «Pendiente».
