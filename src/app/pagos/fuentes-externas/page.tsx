@@ -18,10 +18,9 @@ import { ConfirmacionDeListado, VolverAPendiente } from "./formularios";
 import { InsigniaDeEstado } from "./insignia-de-estado";
 import { AnuncioDelResultado } from "./anuncio";
 import { mesDePagoDeLaConsulta } from "./mes-de-pago";
+import { MENSAJE_SOLO_CONSULTA } from "./solo-consulta";
 
 export const dynamic = "force-dynamic";
-
-const MENSAJE_SOLO_CONSULTA = (mes: string) => `El mes de pago ${formatearMes(mes)} tiene el pago realizado confirmado: sus fuentes externas son solo consulta y no admiten cambios.`;
 
 export default async function PaginaDeFuentesExternas({ searchParams }: { searchParams: Promise<{ mes?: string }> }) {
   const actor = await obtenerActorActual().catch(() => undefined);

@@ -20,10 +20,9 @@ import { AnuncioDelResultado } from "../anuncio";
 import { AnulacionDeImporte, ConfirmacionDeListado, RegistroDeImporte, VolverAPendiente } from "../formularios";
 import { DecisionDeIncidencia, RegistroDeAbonoVacacional, RegistroDeAjuste, RegistroDeConciliacionDeCese, RegistroDeIncidencia } from "../formularios-especiales";
 import { mesDePagoDeLaConsulta } from "../mes-de-pago";
+import { MENSAJE_SOLO_CONSULTA } from "../solo-consulta";
 
 export const dynamic = "force-dynamic";
-
-const MENSAJE_SOLO_CONSULTA = (mes: string) => `El mes de pago ${formatearMes(mes)} tiene el pago realizado confirmado: sus fuentes externas son solo consulta y no admiten cambios.`;
 
 const TEXTO_DE_EFECTO = { suma: "Suma al neto", resta: "Resta del neto", ninguno: "No cambia el neto", del_concepto_ajustado: "Según el concepto ajustado" } as const;
 
