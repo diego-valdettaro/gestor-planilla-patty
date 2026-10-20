@@ -143,4 +143,19 @@ describe("página de Fuentes externas (/pagos/fuentes-externas)", () => {
     expect(html).not.toContain("S/ 250,50");
     expect(html).toContain("10 pendientes");
   });
+
+  // G29 · Un mes con el pago realizado confirmado es solo consulta: la pantalla de fuentes no ofrece acciones y lo explica (diseño §4.2, QA-F02).
+  it("G29 S9 un mes con pago confirmado explica que es solo consulta y no ofrece importar, confirmar ni volver a pendiente; un mes sin pago sí", async () => {
+    await confirmarFuente(contexto.repositorio, finanzas, { tipoDeFuente: "adelantos", mes: "2026-10" });
+    contexto.mesesConPagoConfirmado.add("2026-10");
+
+    const pagado = await render("2026-10");
+    const libre = await render("2026-11");
+
+    expect(pagado).toContain("tiene el pago realizado confirmado");
+    for (const accion of ["Importar XLSX", "Volver a pendiente", "Confirmar sin importes", "Confirmar listado"]) expect(pagado).not.toContain(accion);
+    expect(pagado).toContain("Ver filas");
+    expect(libre).not.toContain("tiene el pago realizado confirmado");
+    expect(libre).toContain("Importar XLSX");
+  });
 });

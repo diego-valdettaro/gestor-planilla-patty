@@ -2,13 +2,18 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const simulacro = vi.hoisted(() => ({ actor: vi.fn(), redirigir: vi.fn() }));
+const simulacro = vi.hoisted(() => ({ actor: vi.fn(), redirigir: vi.fn(), repositorio: undefined as unknown }));
 
 simulacro.redirigir.mockImplementation((ruta: string) => { throw new Error(`REDIRECT ${ruta}`); });
 vi.mock("next/navigation", () => ({ redirect: simulacro.redirigir }));
 vi.mock("@/autenticacion/sesion-del-servidor", () => ({ obtenerActorActual: simulacro.actor }));
+vi.mock("@/fuentes-externas/servicio", () => ({
+  get repositorioDeFuentesExternas() { return simulacro.repositorio; },
+}));
 // La acción de servidor trae el módulo de base de datos; la página solo la pasa al formulario.
 vi.mock("./actions", () => ({ procesarArchivoDeFuente: vi.fn() }));
+
+import { crearRepositorioEnMemoria } from "@/fuentes-externas/repositorio-en-memoria";
 
 const finanzas = { id: "fin-1", rol: "finanzas", nombreUsuario: "finanzas" };
 
@@ -18,11 +23,15 @@ async function render(parametros: { mes?: string; tipo?: string } = {}) {
 }
 
 describe("página de importación de fuentes externas (/pagos/fuentes-externas/importar)", () => {
+  let contexto: ReturnType<typeof crearRepositorioEnMemoria>;
+
   beforeEach(() => {
     vi.stubGlobal("React", React);
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-10-07T15:00:00Z"));
     simulacro.redirigir.mockClear();
+    contexto = crearRepositorioEnMemoria({});
+    simulacro.repositorio = contexto.repositorio;
     simulacro.actor.mockResolvedValue(finanzas);
   });
 
@@ -68,5 +77,19 @@ describe("página de importación de fuentes externas (/pagos/fuentes-externas/i
   it("sin sesión lleva a iniciar sesión", async () => {
     simulacro.actor.mockRejectedValue(new Error("La sesión no es válida."));
     await expect(render()).rejects.toThrow("REDIRECT /iniciar-sesion");
+  });
+
+  // G31 · Un mes con el pago realizado confirmado es solo consulta: la importación no ofrece el formulario y lo explica (diseño §4.2 y §4.4, R3-SPEC-01).
+  it("G31 S11 un mes con pago confirmado explica que es solo consulta y no ofrece el formulario de importación; un mes sin pago sí", async () => {
+    contexto.mesesConPagoConfirmado.add("2026-10");
+
+    const pagado = await render({ mes: "2026-10", tipo: "adelantos" });
+    const libre = await render({ mes: "2026-11", tipo: "adelantos" });
+
+    expect(pagado).toContain("tiene el pago realizado confirmado");
+    for (const control of ["Validar archivo", "Archivo XLSX normalizado", 'type="file"', "Descargar plantilla normalizada"]) expect(pagado).not.toContain(control);
+    expect(pagado).toContain('href="/pagos/fuentes-externas?mes=2026-10"');
+    expect(libre).not.toContain("tiene el pago realizado confirmado");
+    expect(libre).toContain("Validar archivo");
   });
 });

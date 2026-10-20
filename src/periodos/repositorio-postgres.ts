@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import * as schema from "@/db/schema";
@@ -26,6 +26,7 @@ import { RevisionDeAsistenciaNoDisponibleError, type LectorDeHechosDeAsistencia,
 import { calcularBloqueosDeAprobacion, type BloqueoDeAprobacion, type JornadaParaAprobar } from "./aprobacion-de-asistencia";
 import {
   AprobacionBloqueadaError,
+  causaDeReaperturaBloqueada,
   crearResumenVacio,
   PeriodosSolapadosError,
   type AprobacionDeGrupo,
@@ -266,8 +267,16 @@ export class RepositorioPostgresDePeriodos implements RepositorioDePeriodos, Lec
     });
   }
 
+  async mesPagadoDelPeriodo(periodoId: string): Promise<string | undefined> {
+    return mesPagadoQueSustenta(this.db, periodoId);
+  }
+
   async reabrir(id: string, responsableId: string, motivo: string, registradoEn: Date): Promise<void> {
     await this.db.transaction(async (tx) => {
+      // Con el período bloqueado, igual que al aprobar o corregir (#114), se comprueba que no sustente un mes pagado antes de reabrirlo.
+      await tx.select({ id: periodosPlanilla.id }).from(periodosPlanilla).where(eq(periodosPlanilla.id, id)).for("update");
+      const mesPagado = await mesPagadoQueSustenta(tx, id);
+      if (mesPagado) throw new Error(causaDeReaperturaBloqueada(mesPagado));
       const actualizado = await tx.update(periodosPlanilla)
         .set({ estado: "abierto", cerradoPorId: null, cerradoEn: null })
         .where(and(eq(periodosPlanilla.id, id), eq(periodosPlanilla.estado, "cerrado")))
@@ -285,6 +294,16 @@ export class RepositorioPostgresDePeriodos implements RepositorioDePeriodos, Lec
 }
 
 type ConexionDeConsulta = Pick<NodePgDatabase<typeof schema>, "select">;
+
+/** El mes con pago realizado confirmado cuya versión pagada tiene una revisión de este período (ADR 0013); undefined si no sustenta ninguno. */
+async function mesPagadoQueSustenta(conexion: Pick<NodePgDatabase<typeof schema>, "execute">, periodoId: string): Promise<string | undefined> {
+  const { rows } = await conexion.execute<{ mes_de_pago: string }>(sql`
+    SELECT c.mes_de_pago FROM constancias_de_pago c
+    JOIN versiones_de_pago v ON v.mes_de_pago = c.mes_de_pago AND v.numero = c.numero_de_version
+    WHERE v.revisiones @> ${JSON.stringify([{ periodoId }])}::jsonb
+    LIMIT 1`);
+  return rows[0]?.mes_de_pago;
+}
 
 async function gruposSinAprobacionVigente(conexion: ConexionDeConsulta, periodoId: string): Promise<string[]> {
   const requeridos = await conexion.select({ nombre: grupos.nombre }).from(grupos).where(eq(grupos.gestionaAsistencia, true)).orderBy(asc(grupos.nombre));

@@ -3,12 +3,14 @@ import { redirect } from "next/navigation";
 
 import { NOMBRE_DE_ROL, puedeGestionarPagos } from "@/autenticacion/permisos";
 import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
+import { repositorioDeFuentesExternas } from "@/fuentes-externas/servicio";
 import { TIPOS_DE_FUENTE } from "@/fuentes-externas/tipos-de-fuente";
 import { formatearMes } from "@/fuentes-externas/valores";
 
 import { NavegacionDePagos } from "../../navegacion-de-pagos";
 import { SinPermisoDePagos } from "../../sin-permiso";
 import { mesDePagoDeLaConsulta } from "../mes-de-pago";
+import { MENSAJE_SOLO_CONSULTA } from "../solo-consulta";
 
 import { FormularioDeImportacionDeFuente } from "./formulario-de-importacion-de-fuente";
 
@@ -21,6 +23,7 @@ export default async function PaginaDeImportacionDeFuentes({ searchParams }: { s
 
   const { mes: mesPedido, tipo: tipoPedido } = await searchParams;
   const { mes, error: errorDeMes } = mesDePagoDeLaConsulta(mesPedido);
+  const soloConsulta = await repositorioDeFuentesExternas.mesConPagoConfirmado(mes);
   const tipos = TIPOS_DE_FUENTE.filter((tipo) => !tipo.flujoPropio).map(({ codigo, nombre }) => ({ codigo, nombre }));
   const tipoInicial = tipos.find((tipo) => tipo.codigo === tipoPedido)?.codigo ?? tipos[0].codigo;
 
@@ -35,9 +38,10 @@ export default async function PaginaDeImportacionDeFuentes({ searchParams }: { s
     </header>
     <NavegacionDePagos actual="fuentes-externas" />
     {errorDeMes && <p className="mensaje-operacion error" role="alert">{errorDeMes} Se muestra el mes {formatearMes(mes)}.</p>}
-    <section aria-labelledby="titulo-importar" className="tarjeta panel">
+    {soloConsulta && <p className="mensaje-operacion" role="status">{MENSAJE_SOLO_CONSULTA(mes)}</p>}
+    {!soloConsulta && <section aria-labelledby="titulo-importar" className="tarjeta panel">
       <header className="panel-cabecera"><div><h2 id="titulo-importar">Archivo fuente de preliquidación</h2><p>Primero se valida sin guardar nada. Importar otro archivo del mismo tipo y mes reemplaza al anterior y devuelve la fuente a Pendiente.</p></div></header>
       <FormularioDeImportacionDeFuente key={`${mes}-${tipoInicial}`} mes={mes} tipoInicial={tipoInicial} tipos={tipos} />
-    </section>
+    </section>}
   </main>;
 }

@@ -1,6 +1,7 @@
 import type { Actor } from "@/autenticacion/permisos";
 import { exigir, puedeAprobarAsistenciaDelGrupo, puedeGestionarPeriodos } from "@/autenticacion/permisos";
 import { validarDescarteDeHoraExtra, type DecisionDeHoraExtra } from "@/asistencias/descarte-de-hora-extra";
+import { formatearMes } from "@/fuentes-externas/valores";
 import type { BloqueoDeAprobacion } from "./aprobacion-de-asistencia";
 
 export type EstadoDePeriodo = "abierto" | "cerrado";
@@ -128,6 +129,8 @@ export interface RepositorioDePeriodos {
   decidirHorasExtra(periodoId: string, horasExtraIds: string[], decision: DecisionDeHoraExtra, responsableId: string, registradaEn: Date): Promise<void>;
   cerrar(id: string, responsableId: string, registradoEn: Date): Promise<void>;
   reabrir(id: string, responsableId: string, motivo: string, registradoEn: Date): Promise<void>;
+  /** El mes de pago (AAAA-MM) con pago realizado confirmado cuya versión pagada se sustenta en este período; undefined si no sustenta ninguno (#130, ADR 0013). */
+  mesPagadoDelPeriodo(periodoId: string): Promise<string | undefined>;
 }
 
 export class PeriodosSolapadosError extends Error {
@@ -200,10 +203,17 @@ export async function cerrarPeriodo(repositorio: RepositorioDePeriodos, actor: A
   await repositorio.cerrar(id, actor.id, ahora);
 }
 
+/** Por qué no se reabre un período fuente de un mes pagado (ADR 0013, D10); la pantalla muestra el mismo texto junto al botón deshabilitado. */
+export function causaDeReaperturaBloqueada(mesPagado: string): string {
+  return `Sustenta la preliquidación con pago realizado confirmado de ${formatearMes(mesPagado)}`;
+}
+
 export async function reabrirPeriodo(repositorio: RepositorioDePeriodos, actor: Actor, id: string, motivo: string, ahora = new Date()): Promise<void> {
   autorizarCierreDePeriodos(actor);
   const texto = motivo.trim();
   if (!texto) throw new Error("La reapertura del período requiere un motivo.");
+  const mesPagado = await repositorio.mesPagadoDelPeriodo(id);
+  if (mesPagado) throw new Error(causaDeReaperturaBloqueada(mesPagado));
   await repositorio.reabrir(id, actor.id, texto, ahora);
 }
 

@@ -233,4 +233,22 @@ describe("página de un tipo de fuente (/pagos/fuentes-externas/[tipo])", () => 
     simulacro.actor.mockRejectedValue(new Error("La sesión no es válida."));
     await expect(render()).rejects.toThrow("REDIRECT /iniciar-sesion");
   });
+
+  // G29 · Un mes con el pago realizado confirmado es solo consulta: la pantalla de la fuente no ofrece acciones y lo explica (diseño §4.2, QA-F02).
+  it("G29 S10 un mes con pago confirmado explica que es solo consulta y no ofrece importar, registrar, anular ni volver a pendiente; un mes sin pago sí", async () => {
+    await registrar();
+    await confirmarFuente(contexto.repositorio, finanzas, { tipoDeFuente: "comisiones_de_ventas", mes: "2026-10" });
+    contexto.mesesConPagoConfirmado.add("2026-10");
+
+    const pagado = await render("comisiones_de_ventas", "2026-10");
+
+    expect(pagado).toContain("tiene el pago realizado confirmado");
+    expect(pagado).toContain("Ana Sintética");
+    for (const accion of ["Importar XLSX", "Volver a pendiente", "Registrar importe", "Registrar un importe", "Anular", "Confirmar sin importes"]) expect(pagado).not.toContain(accion);
+
+    const libre = await render("comisiones_de_ventas", "2026-11");
+    expect(libre).not.toContain("tiene el pago realizado confirmado");
+    expect(libre).toContain("Importar XLSX");
+    expect(libre).toContain("Registrar un importe");
+  });
 });

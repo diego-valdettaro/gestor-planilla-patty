@@ -20,6 +20,7 @@ import { AnuncioDelResultado } from "../anuncio";
 import { AnulacionDeImporte, ConfirmacionDeListado, RegistroDeImporte, VolverAPendiente } from "../formularios";
 import { DecisionDeIncidencia, RegistroDeAbonoVacacional, RegistroDeAjuste, RegistroDeConciliacionDeCese, RegistroDeIncidencia } from "../formularios-especiales";
 import { mesDePagoDeLaConsulta } from "../mes-de-pago";
+import { MENSAJE_SOLO_CONSULTA } from "../solo-consulta";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +46,7 @@ export default async function PaginaDeUnaFuenteExterna({ params, searchParams }:
   if (!detalle) return null;
   const conceptos = tipo.conceptos.flatMap((conceptoCodigo) => buscarConcepto(conceptoCodigo) ?? []).map(({ codigo: conceptoCodigo, nombre }) => ({ codigo: conceptoCodigo, nombre }));
   const confirmada = detalle.estado !== "pendiente";
+  const soloConsulta = await repositorioDeFuentesExternas.mesConPagoConfirmado(mes);
 
   return <main className="contenido pagina">
     <header className="encabezado encabezado-pagina">
@@ -54,15 +56,16 @@ export default async function PaginaDeUnaFuenteExterna({ params, searchParams }:
         <p>Estado: <InsigniaDeEstado estado={detalle.estado} />{detalle.confirmacion && <> Confirmada por {detalle.confirmacion.confirmadaPor} el {formatearFechaDeRelacion(fechaDeHoyEnLima(detalle.confirmacion.confirmadaEn))}.</>}</p>
         <p><Link href={`/pagos/fuentes-externas?mes=${mes}`}>Volver a fuentes externas</Link></p>
       </div>
-      <span className="acciones-configuracion">
+      {!soloConsulta && <span className="acciones-configuracion">
         {!tipo.flujoPropio && <Link className="boton-secundario" href={`/pagos/fuentes-externas/importar?mes=${mes}&tipo=${tipo.codigo}`}>Importar XLSX<span className="sr-only"> de {tipo.nombre}</span></Link>}
         {confirmada
           ? <VolverAPendiente mes={mes} nombre={tipo.nombre} tipoDeFuente={tipo.codigo} />
           : <ConfirmacionDeListado filas={detalle.filas} mes={mes} nombre={tipo.nombre} tipoDeFuente={tipo.codigo} total={detalle.total} />}
-      </span>
+      </span>}
     </header>
     <NavegacionDePagos actual="fuentes-externas" />
     <AnuncioDelResultado />
+    {soloConsulta && <p className="mensaje-operacion" role="status">{MENSAJE_SOLO_CONSULTA(mes)}</p>}
     {errorDeMes && <p className="mensaje-operacion error" role="alert">{errorDeMes} Se muestra el mes {formatearMes(mes)}.</p>}
 
     <section aria-labelledby="titulo-filas" className="tarjeta panel">
@@ -71,19 +74,19 @@ export default async function PaginaDeUnaFuenteExterna({ params, searchParams }:
         ? <>
           <p className="aviso-desplazamiento">Desplácese horizontalmente para ver todas las columnas.</p>
           <div className="panel-tabla primera-columna-fija" role="region" aria-label={`Filas de ${tipo.nombre} de ${formatearMes(mes)}`} tabIndex={0}><table><thead><tr><th>Persona</th><th>Concepto</th><th>Fecha del hecho</th><th>Mes de devengue</th><th>Mes de aplicación</th><th className="numerico">Importe (S/)</th><th>Procedencia</th><th><span className="sr-only">Acciones</span></th></tr></thead>
-            <tbody>{detalle.importes.map((importe) => <FilaDeImporte confirmada={confirmada} importe={importe} key={importe.id} />)}</tbody></table></div>
+            <tbody>{detalle.importes.map((importe) => <FilaDeImporte confirmada={confirmada} importe={importe} key={importe.id} soloConsulta={soloConsulta} />)}</tbody></table></div>
         </>
-        : <section className="estado-vacio"><h3>No hay filas de {tipo.nombre} para este mes</h3><p>Cargue un importe abajo o confirme el listado sin importes.</p></section>}
+        : <section className="estado-vacio"><h3>No hay filas de {tipo.nombre} para este mes</h3>{soloConsulta ? <p>El mes está pagado: no se cargan importes.</p> : <p>Cargue un importe abajo o confirme el listado sin importes.</p>}</section>}
     </section>
 
-    <section aria-labelledby="titulo-registro" className="tarjeta panel">
+    {!soloConsulta && <section aria-labelledby="titulo-registro" className="tarjeta panel">
       <header className="panel-cabecera"><div><h2 id="titulo-registro">Registrar un importe</h2><p>Carga manual. Un importe no se edita: si está mal, anúlelo con motivo y regístrelo de nuevo. Las líneas calculadas se corrigen en su fuente o con un ajuste de preliquidación.</p></div></header>
       {tipo.codigo === "incidencias_de_tienda" ? <RegistroDeIncidencia mes={mes} /> : tipo.codigo === "ajustes_de_preliquidacion" ? <RegistroDeAjuste mes={mes} /> : tipo.codigo === "abonos_vacacionales" ? <RegistroDeAbonoVacacional mes={mes} /> : tipo.codigo === "conciliacion_de_liquidacion_por_cese" ? <RegistroDeConciliacionDeCese conceptos={conceptos} mes={mes} /> : <RegistroDeImporte conceptos={conceptos} mes={mes} tipoDeFuente={tipo.codigo} />}
-    </section>
+    </section>}
   </main>;
 }
 
-function FilaDeImporte({ importe, confirmada }: { importe: ImporteExterno; confirmada: boolean }) {
+function FilaDeImporte({ importe, confirmada, soloConsulta }: { importe: ImporteExterno; confirmada: boolean; soloConsulta: boolean }) {
   const concepto = buscarConcepto(importe.concepto);
   const nombreDelConcepto = concepto?.nombre ?? importe.concepto;
   return <tr>
@@ -94,6 +97,6 @@ function FilaDeImporte({ importe, confirmada }: { importe: ImporteExterno; confi
     <td>{formatearMes(importe.mesDeAplicacion)}</td>
     <td className="numerico">{formatearSoles(importe.monto)}</td>
     <td>{textoDeProcedencia(importe.procedencia)}<small className="linea-de-relacion">{importe.registradoPor}, {formatearFechaDeRelacion(fechaDeHoyEnLima(importe.registradoEn))}</small></td>
-    <td><span className="acciones-configuracion"><DecisionDeIncidencia estadoActual={importe.estadoDeIncidencia} id={importe.id} /><AnulacionDeImporte concepto={nombreDelConcepto} confirmada={confirmada} dni={importe.dni} importeId={importe.id} monto={importe.monto} persona={importe.nombre} /></span></td>
+    <td>{!soloConsulta && <span className="acciones-configuracion"><DecisionDeIncidencia estadoActual={importe.estadoDeIncidencia} id={importe.id} /><AnulacionDeImporte concepto={nombreDelConcepto} confirmada={confirmada} dni={importe.dni} importeId={importe.id} monto={importe.monto} persona={importe.nombre} /></span>}</td>
   </tr>;
 }

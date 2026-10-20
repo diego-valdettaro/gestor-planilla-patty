@@ -9,6 +9,7 @@ import type { HechoDiarioDeAsistencia } from "@/periodos/hechos-para-pagos";
 import type { ReglaLegal } from "@/reglas-legales/vigencia";
 
 import { consultarVersion, evaluarFinalizacion, finalizarMes, listarVersiones, type DependenciasDeFinalizacion } from "./finalizar-mes";
+import { conIndicadorDePago } from "./constancias-en-memoria";
 import { prepararBorrador, type FuentesDelBorrador } from "./preparar-borrador";
 import { crearRepositorioDeVersionesEnMemoria } from "./versiones-en-memoria";
 
@@ -62,7 +63,7 @@ function crearEscenario(opciones: { alEscribirFila?: (indice: number) => void } 
     externas: contexto.repositorio,
     descansos: { listarSustitutoriosParaPagos: async () => [] },
   };
-  const dependencias: DependenciasDeFinalizacion = { fuentes, versiones: almacenDeVersiones.repositorio, pago: contexto.repositorio, ahora: () => AHORA };
+  const dependencias: DependenciasDeFinalizacion = { fuentes, versiones: almacenDeVersiones.repositorio, pago: conIndicadorDePago(contexto.repositorio.mesConPagoConfirmado), ahora: () => AHORA };
   const confirmarTodas = () => Promise.all(TIPOS_DE_FUENTE.map(({ codigo }) => confirmarFuente(contexto.repositorio, finanzas, { tipoDeFuente: codigo, mes: MES })));
   const quitarCondicion = (relacionId: string, dato: CondicionLaboral["dato"]) => {
     condiciones.splice(condiciones.findIndex((candidata) => candidata.relacionId === relacionId && candidata.dato === dato), 1);
@@ -374,7 +375,7 @@ describe("finalización del mes completo", () => {
         asistencia: { listar: prohibido, leerHechosDelPeriodo: prohibido },
         externas: { listarImportesDelMes: prohibido, listarConfirmacionesDelMes: prohibido, listarAbonosVacacionales: prohibido },
         descansos: { listarSustitutoriosParaPagos: prohibido } },
-      versiones: { guardarVersion: prohibido, listarVersiones: prohibido, buscarVersion: prohibido }, pago: { mesConPagoConfirmado: prohibido }, ahora: () => AHORA,
+      versiones: { guardarVersion: prohibido, listarVersiones: prohibido, buscarVersion: prohibido }, pago: { mesConPagoConfirmado: prohibido, buscar: prohibido, confirmar: prohibido }, ahora: () => AHORA,
     };
     const huella = { entrada: "x", datos: {}, subtotalCentimos: 0, personas: [] };
     const sinPermiso: Array<Actor | undefined> = [

@@ -1,3 +1,4 @@
+import { conIndicadorDePago } from "@/pagos/constancias-en-memoria";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -18,7 +19,7 @@ vi.mock("@/pagos/preparar-borrador", () => ({ prepararBorrador: simulacro.prepar
 // `dependenciasDeFinalizacion` lo crea F-60 (cableado) en `servicio.ts`; esta prueba no ejerce la finalización, solo necesita que la página la encuentre (sin versiones ni pago).
 vi.mock("@/pagos/servicio", async () => {
   const { crearRepositorioDeVersionesEnMemoria } = await import("@/pagos/versiones-en-memoria");
-  return { fuentesDelBorrador: {}, dependenciasDeFinalizacion: { fuentes: {}, versiones: crearRepositorioDeVersionesEnMemoria().repositorio, pago: { mesConPagoConfirmado: async () => false }, ahora: () => new Date("2026-10-26T15:00:00Z") } };
+  return { fuentesDelBorrador: {}, dependenciasDeFinalizacion: { fuentes: {}, versiones: crearRepositorioDeVersionesEnMemoria().repositorio, pago: conIndicadorDePago(async () => false), ahora: () => new Date("2026-10-26T15:00:00Z") } };
 });
 
 const MES = "2026-10";

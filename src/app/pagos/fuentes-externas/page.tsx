@@ -18,6 +18,7 @@ import { ConfirmacionDeListado, VolverAPendiente } from "./formularios";
 import { InsigniaDeEstado } from "./insignia-de-estado";
 import { AnuncioDelResultado } from "./anuncio";
 import { mesDePagoDeLaConsulta } from "./mes-de-pago";
+import { MENSAJE_SOLO_CONSULTA } from "./solo-consulta";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,7 @@ export default async function PaginaDeFuentesExternas({ searchParams }: { search
 
   const casosDeUso = crearCasosDeUsoDeFuentesExternas(repositorioDeFuentesExternas, { obtenerActorActual });
   const filas = await casosDeUso.estado(mes);
+  const soloConsulta = await repositorioDeFuentesExternas.mesConPagoConfirmado(mes);
   const pendientes = filas.filter((fila) => fila.estado === "pendiente").length;
 
   return <main className="contenido pagina">
@@ -49,16 +51,18 @@ export default async function PaginaDeFuentesExternas({ searchParams }: { search
       {errorDeMes && <p className="mensaje-operacion error" role="alert">{errorDeMes} Se muestra el mes {formatearMes(mes)}.</p>}
     </section>
 
+    {soloConsulta && <p className="mensaje-operacion" role="status">{MENSAJE_SOLO_CONSULTA(mes)}</p>}
+
     <section aria-labelledby="titulo-fuentes" className="tarjeta panel">
       <header className="panel-cabecera"><div><h2 id="titulo-fuentes">Tipos de fuente</h2><p>Confirme cada tipo para el mes completo, incluso si no tiene importes.</p></div><span className={pendientes ? "insignia advertencia" : "insignia ok"}>{pendientes ? `${pendientes} ${pendientes === 1 ? "pendiente" : "pendientes"}` : "Todas confirmadas"}</span></header>
       <p className="aviso-desplazamiento">Desplácese horizontalmente para ver todas las columnas.</p>
       <div className="panel-tabla primera-columna-fija tabla-de-fuentes" role="region" aria-label={`Tipos de fuente de ${formatearMes(mes)}`} tabIndex={0}><table><thead><tr><th>Tipo de fuente</th><th>Estado</th><th className="numerico">Filas (n.º)</th><th className="numerico">Importe total (S/)</th><th>Último origen</th><th><span className="sr-only">Acciones</span></th></tr></thead>
-        <tbody>{filas.map((fila) => <FilaDeFuenteExterna fila={fila} key={fila.tipo.codigo} mes={mes} />)}</tbody></table></div>
+        <tbody>{filas.map((fila) => <FilaDeFuenteExterna fila={fila} key={fila.tipo.codigo} mes={mes} soloConsulta={soloConsulta} />)}</tbody></table></div>
     </section>
   </main>;
 }
 
-function FilaDeFuenteExterna({ fila, mes }: { fila: FilaDeFuente; mes: string }) {
+function FilaDeFuenteExterna({ fila, mes, soloConsulta }: { fila: FilaDeFuente; mes: string; soloConsulta: boolean }) {
   const { tipo, estado, confirmacion, ultimoOrigen } = fila;
   return <tr>
     <th scope="row"><Link href={`/pagos/fuentes-externas/${tipo.codigo}?mes=${mes}`}>{tipo.nombre}</Link></th>
@@ -68,10 +72,10 @@ function FilaDeFuenteExterna({ fila, mes }: { fila: FilaDeFuente; mes: string })
     <td>{ultimoOrigen ? <>{textoDeProcedencia(ultimoOrigen.procedencia)}<small className="linea-de-relacion">{ultimoOrigen.registradoPor}, {formatearFechaDeRelacion(fechaDeHoyEnLima(ultimoOrigen.registradoEn))}</small></> : "Sin filas"}</td>
     <td><span className="acciones-configuracion">
       <Link className="boton-secundario" href={`/pagos/fuentes-externas/${tipo.codigo}?mes=${mes}`}>Ver filas<span className="sr-only"> de {tipo.nombre}</span></Link>
-      {!tipo.flujoPropio && <Link className="boton-secundario" href={`/pagos/fuentes-externas/importar?mes=${mes}&tipo=${tipo.codigo}`}>Importar XLSX<span className="sr-only"> de {tipo.nombre}</span></Link>}
-      {estado === "pendiente"
+      {!soloConsulta && !tipo.flujoPropio && <Link className="boton-secundario" href={`/pagos/fuentes-externas/importar?mes=${mes}&tipo=${tipo.codigo}`}>Importar XLSX<span className="sr-only"> de {tipo.nombre}</span></Link>}
+      {!soloConsulta && (estado === "pendiente"
         ? <ConfirmacionDeListado filas={fila.filas} mes={mes} nombre={tipo.nombre} tipoDeFuente={tipo.codigo} total={fila.total} />
-        : <VolverAPendiente mes={mes} nombre={tipo.nombre} tipoDeFuente={tipo.codigo} />}
+        : <VolverAPendiente mes={mes} nombre={tipo.nombre} tipoDeFuente={tipo.codigo} />)}
     </span></td>
   </tr>;
 }
