@@ -615,3 +615,49 @@ describe("confirmar el pago realizado en la pantalla del mes", () => {
   ];
   it.each(casosG19)("G19 $fila $descripcion", async ({ comprobar }) => comprobar());
 });
+
+describe("G10 exportar la preliquidación desde la pantalla (#131, interacción 4.8)", () => {
+  let versiones: ReturnType<typeof prepararDependencias>;
+
+  beforeEach(() => {
+    vi.stubGlobal("React", React);
+    simulacro.actor.mockResolvedValue({ id: "f", rol: "finanzas" });
+    simulacro.preparar.mockReset();
+    versiones = prepararDependencias();
+    simulacro.preparar.mockResolvedValue(borradorDelPlan());
+  });
+
+  it("F-21 un mes con personas ofrece «Exportar preliquidación (XLSX)» a la ruta de descarga del mes, con la ayuda que la distingue del período", async () => {
+    const html = cabecera(await render());
+
+    expect(html).toMatch(/<a[^>]*href="\/pagos\/2026-10\/exportar"[^>]*>Exportar preliquidación \(XLSX\)<\/a>/);
+    expect(html).toContain("No es una planilla oficial ni sustituye PLAME. Para el resumen de asistencia, use la exportación del período.");
+    expect(contar(html, /Exportar preliquidación/g)).toBe(1);
+  });
+
+  it("F-22 un mes sin personas deja la exportación deshabilitada y dice qué revisar", async () => {
+    simulacro.preparar.mockResolvedValue(borradorDelPlan({ personas: [], sueldoCalculadoCentimos: 0, netoCalculadoCentimos: 0 }));
+
+    const html = cabecera(await render());
+
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Exportar preliquidación \(XLSX\)<\/button>/);
+    expect(html).toContain("No hay datos para exportar: revise las relaciones laborales confirmadas por Recursos Humanos");
+    expect(html).not.toContain("/exportar");
+  });
+
+  it("F-23 una versión abierta ofrece exportar esa versión", async () => {
+    await versiones.guardarVersion(versionDelPlan(200000, "2026-10-20T15:00:00Z"));
+
+    const html = await render("2026-10", { version: "1" });
+
+    expect(html).toMatch(/<a[^>]*href="\/pagos\/2026-10\/exportar\?version=1"[^>]*>Exportar esta versión \(XLSX\)<\/a>/);
+    expect(html).toContain("No es una planilla oficial ni sustituye PLAME.");
+  });
+
+  it("F-24 quien no es Finanzas no ve ninguna acción de exportar (guarda de lo ya existente)", async () => {
+    simulacro.actor.mockResolvedValue({ id: "a", rol: "administrador" });
+
+    expect(await render()).not.toContain("exportar");
+    expect(await render("2026-10", { version: "1" })).not.toContain("exportar");
+  });
+});
