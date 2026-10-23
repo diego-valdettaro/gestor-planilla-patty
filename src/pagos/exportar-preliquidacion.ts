@@ -99,12 +99,12 @@ function detalle(linea: LineaDeBorrador): string {
 
 const procedencia = (linea: LineaDeBorrador): string => ("procedencia" in linea && linea.origen === "Fuente externa" ? `Fuente externa · ${linea.procedencia}` : linea.origen);
 
-function hojaDeConceptos(personas: PersonaParaExportar[]): Fila[] {
+function hojaDeConceptos(personas: PersonaParaExportar[], mes: string): Fila[] {
   return [
-    ["DNI", "Persona", "Sede de adscripción", "Concepto", "Efecto en el neto", "Importe (S/)", "Fecha del hecho", "Mes de devengue", "Mes de aplicación", "Procedencia", "Detalle"],
+    ["DNI", "Persona", "Sede de adscripción", "Concepto", "Efecto en el neto", "Importe (S/)", "Fecha del hecho", "Mes de devengue", "Mes de aplicación", "Mes de pago", "Procedencia", "Detalle"],
     ...personas.flatMap((persona) => persona.lineas.map((linea): Fila => [
       persona.dni, persona.nombre, persona.sedeDeAdscripcion ?? "Sede pendiente", buscarConcepto(linea.concepto)?.nombre ?? linea.concepto,
-      EFECTO_EN_EL_SUBTOTAL[efectoEnElSubtotal(linea)], soles(linea.importeCentimos), fechaDelHecho(linea), formatearMes(linea.mesDeDevengue), formatearMes(linea.mesDePago),
+      EFECTO_EN_EL_SUBTOTAL[efectoEnElSubtotal(linea)], soles(linea.importeCentimos), fechaDelHecho(linea), formatearMes(linea.mesDeDevengue), formatearMes(linea.mesDePago), formatearMes(mes),
       procedencia(linea), detalle(linea),
     ])),
   ];
@@ -152,7 +152,7 @@ export function construirArchivoDePreliquidacion(preliquidacion: PreliquidacionP
   const libro = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(libro, XLSX.utils.aoa_to_sheet(encabezado(preliquidacion)), HOJA_DE_ENCABEZADO);
   XLSX.utils.book_append_sheet(libro, XLSX.utils.aoa_to_sheet(hojaDePersonas(preliquidacion.personas)), "Personas");
-  XLSX.utils.book_append_sheet(libro, XLSX.utils.aoa_to_sheet(hojaDeConceptos(preliquidacion.personas)), "Conceptos");
+  XLSX.utils.book_append_sheet(libro, XLSX.utils.aoa_to_sheet(hojaDeConceptos(preliquidacion.personas, preliquidacion.mes)), "Conceptos");
   XLSX.utils.book_append_sheet(libro, XLSX.utils.aoa_to_sheet(hojaDeBases(preliquidacion.personas)), "Bases");
   XLSX.utils.book_append_sheet(libro, XLSX.utils.aoa_to_sheet(hojaDeFuentes(preliquidacion.fuentes)), "Fuentes");
   return { nombre: nombreDelArchivo(preliquidacion), contenido: XLSX.write(libro, { type: "array", bookType: "xlsx" }) as Uint8Array };

@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
+import * as XLSX from "xlsx";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { Actor } from "@/autenticacion/permisos";
@@ -17,8 +18,6 @@ import { TIPOS_DE_FUENTE } from "@/fuentes-externas/tipos-de-fuente";
 import { RepositorioPostgresDePeriodos } from "@/periodos/repositorio-postgres";
 import { RepositorioPostgresDeReglasLegales } from "@/reglas-legales/repositorio-postgres";
 import { RepositorioPostgresDeRelacionesLaborales } from "@/relaciones-laborales/repositorio-postgres";
-
-import * as XLSX from "xlsx";
 
 import { exportarPreliquidacion } from "./exportar-mes";
 import { evaluarFinalizacion, finalizarMes, type DependenciasDeFinalizacion } from "./finalizar-mes";

@@ -65,7 +65,7 @@ describe("G1 estado y encabezado de la exportación", () => {
   });
 });
 
-const ENCABEZADO_DE_CONCEPTOS = ["DNI", "Persona", "Sede de adscripción", "Concepto", "Efecto en el neto", "Importe (S/)", "Fecha del hecho", "Mes de devengue", "Mes de aplicación", "Procedencia", "Detalle"];
+const ENCABEZADO_DE_CONCEPTOS = ["DNI", "Persona", "Sede de adscripción", "Concepto", "Efecto en el neto", "Importe (S/)", "Fecha del hecho", "Mes de devengue", "Mes de aplicación", "Mes de pago", "Procedencia", "Detalle"];
 const ENCABEZADO_DE_BASES = ["DNI", "Persona", "Sede de adscripción", "Mes de devengue", "Base pensionaria (S/)", "Base de EsSalud remunerativa (S/)", "Base de EsSalud aplicable (S/)", "Base de quinta categoría (S/)"];
 
 describe("G2 líneas: conceptos, tres tiempos, procedencia y bases", () => {
@@ -73,22 +73,28 @@ describe("G2 líneas: conceptos, tres tiempos, procedencia y bases", () => {
     const { hojas } = leer(construirArchivoDePreliquidacion(base));
     expect(hojas["Conceptos"]).toEqual([
       ENCABEZADO_DE_CONCEPTOS,
-      ["99913004", "Néstor Neto Negativo", "Tienda Benavides", "Sueldo básico", "Suma", 1500, "01/12/2019 al 30/12/2019", "12/2019", "12/2019", "Condición laboral", "30 días"],
-      ["99913004", "Néstor Neto Negativo", "Tienda Benavides", "Cuota de préstamo", "Resta", 3000, "02/12/2019", "12/2019", "12/2019", "Fuente externa · Carga manual de finanzas", ""],
+      ["99913004", "Néstor Neto Negativo", "Tienda Benavides", "Sueldo básico", "Suma", 1500, "01/12/2019 al 30/12/2019", "12/2019", "12/2019", "12/2019", "Condición laboral", "30 días"],
+      ["99913004", "Néstor Neto Negativo", "Tienda Benavides", "Cuota de préstamo", "Resta", 3000, "02/12/2019", "12/2019", "12/2019", "12/2019", "Fuente externa · Carga manual de finanzas", ""],
     ]);
   });
 
   it("F-04 un importe aplicado un mes después conserva su devengue y su mes de aplicación por separado", () => {
     const regularizacion: LineaDeFuenteExterna = { ...prestamo, concepto: "adelanto", tipoDeFuente: "adelantos", importeCentimos: 12345, fechaDelHecho: "2019-10-15", mesDeDevengue: "2019-10", mesDePago: "2019-12" };
     const { hojas } = leer(construirArchivoDePreliquidacion({ ...base, personas: [{ ...nestor, lineas: [regularizacion] }] }));
-    expect(hojas["Conceptos"][1]).toEqual(["99913004", "Néstor Neto Negativo", "Tienda Benavides", "Adelanto", "Resta", 123.45, "15/10/2019", "10/2019", "12/2019", "Fuente externa · Carga manual de finanzas", ""]);
+    expect(hojas["Conceptos"][1]).toEqual(["99913004", "Néstor Neto Negativo", "Tienda Benavides", "Adelanto", "Resta", 123.45, "15/10/2019", "10/2019", "12/2019", "12/2019", "Fuente externa · Carga manual de finanzas", ""]);
   });
 
   it("F-04 un aporte del trabajador no entra al subtotal «Neto antes de aportes del trabajador» y lo dice", () => {
     const onp = { concepto: "aporte_onp", importeCentimos: 19500, baseCentimos: 150000, tasaEnCentesimasDePunto: 1300, tipo: "deduccion_del_trabajador", efectoEnNeto: "resta",
       mesDeDevengue: "2019-12", mesDePago: "2019-12", corte: CORTE, origen: "Reglas legales y condiciones laborales" } as const;
     const { hojas } = leer(construirArchivoDePreliquidacion({ ...base, personas: [{ ...nestor, lineas: [onp] }] }));
-    expect(hojas["Conceptos"][1]).toEqual(["99913004", "Néstor Neto Negativo", "Tienda Benavides", "Aporte ONP", "No entra al subtotal", 195, "", "12/2019", "12/2019", "Reglas legales y condiciones laborales", ""]);
+    expect(hojas["Conceptos"][1]).toEqual(["99913004", "Néstor Neto Negativo", "Tienda Benavides", "Aporte ONP", "No entra al subtotal", 195, "", "12/2019", "12/2019", "12/2019", "Reglas legales y condiciones laborales", ""]);
+  });
+
+  it("F-04 el mes de pago del archivo y el mes de aplicación de la línea son datos distintos", () => {
+    const aplicadaDespues: LineaDeFuenteExterna = { ...prestamo, mesDePago: "2020-01" };
+    const { hojas } = leer(construirArchivoDePreliquidacion({ ...base, personas: [{ ...nestor, lineas: [aplicadaDespues] }] }));
+    expect(hojas["Conceptos"][1].slice(7, 10)).toEqual(["12/2019", "01/2020", "12/2019"]);
   });
 
   it("F-06 las bases por devengue de cada persona; la que no se puede determinar dice «Pendiente»", () => {
