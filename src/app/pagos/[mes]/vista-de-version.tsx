@@ -11,6 +11,7 @@ import { buscarDefinicion } from "@/reglas-legales/catalogo";
 import { formatearValorLegal } from "@/reglas-legales/valores";
 import { formatearFechaDeRelacion } from "@/relaciones-laborales/vigencia";
 
+import { ExportacionDePreliquidacion } from "./exportacion-de-preliquidacion";
 import { NavegacionDePagos } from "../navegacion-de-pagos";
 import { NotaDelSubtotal } from "../nota-del-subtotal";
 import { TablaDesplazable } from "./tabla-desplazable";
@@ -27,7 +28,7 @@ export function VistaDeVersion({ actor, version }: { actor: Actor; version: Vers
       <p>Versión {numero}, finalizada por {version.finalizadaPor} el {fecha(fechaDeHoyEnLima(version.finalizadaEn))}</p>
       <span className="insignia neutro">Solo lectura</span>
       <p><Link href={`/pagos/${mes}`}>Volver al mes de pago {formatearMes(mes)}</Link></p>
-    </div></header>
+    </div><span className="acciones-configuracion"><ExportacionDePreliquidacion etiqueta="Exportar esta versión (XLSX)" href={`/pagos/${mes}/exportar?version=${numero}`} /></span></header>
     <NavegacionDePagos actual="meses" />
     <section className="tarjeta panel"><header className="panel-cabecera"><div><h2>Totales de la versión {numero}</h2><p>{`Subtotal «${ROTULO_DEL_NETO}» del mes completo: ${formatearSoles(version.subtotalCentimos)}, de ${version.personas.length} ${version.personas.length === 1 ? "persona" : "personas"}. Esta versión no se puede editar.`}</p><NotaDelSubtotal /></div></header></section>
     <section className="tarjeta panel"><header className="panel-cabecera"><h2>Reglas legales usadas</h2></header>

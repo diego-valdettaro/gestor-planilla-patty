@@ -9,6 +9,7 @@ import { formatearMes } from "@/fuentes-externas/valores";
 import { totalDeHorasExtraCentimos } from "@/pagos/calcular-borrador";
 import { ROTULO_DEL_NETO, estadoDeLaPersona, totalesPorSede } from "@/pagos/fuentes-en-el-neto";
 import { consultarVersion, evaluarBorradorPreparado, listarVersiones } from "@/pagos/finalizar-mes";
+import { MENSAJE_SIN_DATOS_PARA_EXPORTAR } from "@/pagos/exportar-mes";
 import { prepararBorrador } from "@/pagos/preparar-borrador";
 import { dependenciasDeFinalizacion, fuentesDelBorrador } from "@/pagos/servicio";
 import { formatearFechaDeRelacion } from "@/relaciones-laborales/vigencia";
@@ -20,6 +21,7 @@ import { SinPermisoDePagos } from "../sin-permiso";
 import { ConfirmacionDelPago } from "./confirmacion-del-pago";
 import { CorreccionDelMes } from "./correccion-del-mes";
 import { estadoDelMes } from "./estado-del-mes";
+import { ExportacionDePreliquidacion } from "./exportacion-de-preliquidacion";
 import { FinalizacionDelMes } from "./finalizacion-del-mes";
 import { HistorialDeVersiones } from "./historial-de-versiones";
 import { VistaDeVersion } from "./vista-de-version";
@@ -84,7 +86,7 @@ export default async function PaginaDelMes({ params, searchParams }: { params: P
     ];
   return <main className="contenido pagina">
     <header className="encabezado encabezado-pagina"><div><p className="eyebrow">{NOMBRE_DE_ROL[actor.rol]}</p><h1 tabIndex={-1}>Mes de pago {formatearMes(mes)}</h1><p>Corte de incidencias: {borrador.corte.inicio} al {borrador.corte.fin}</p><p>Revisiones de asistencia: {borrador.revisiones.length} períodos</p><span className={`insignia ${estado.insignia.clase}`}>{estado.insignia.texto}</span>{constancia && <p>{`Pago realizado el ${formatearFechaDeRelacion(constancia.fechaDelPago)} · Responsable: ${constancia.responsable}`}</p>}</div>
-      <span className="acciones-configuracion">{acciones}</span></header>
+      <span className="acciones-configuracion">{acciones}<ExportacionDePreliquidacion etiqueta="Exportar preliquidación (XLSX)" href={`/pagos/${mes}/exportar`} sinDatos={borrador.personas.length === 0 ? MENSAJE_SIN_DATOS_PARA_EXPORTAR : undefined} /></span></header>
     <NavegacionDePagos actual="meses" />
     <section className="tarjeta panel" aria-labelledby="titulo-bloqueos" id="bloqueos-del-mes" tabIndex={-1}><header className="panel-cabecera"><h2 id="titulo-bloqueos">Bloqueos del mes ({bloqueosDelPanel})</h2></header>
       {borrador.bloqueosDelMes.length || bloqueadas ? <div>{borrador.bloqueosDelMes.map((bloqueo, i) => <BloqueoDePagos key={i} mensaje={bloqueo} mes={mes} />)}{borrador.personas.filter(({ bloqueos }) => bloqueos.length).map(({ relacion, bloqueos }) => <div key={relacion.id}><Link href={`/pagos/${mes}/${relacion.dni}`}>{relacion.nombre}</Link>{bloqueos.map((bloqueo, i) => <BloqueoDePagos key={i} mensaje={bloqueo} mes={mes} relacionId={relacion.id} />)}</div>)}</div> : <p className="mensaje-operacion listo">{puedeFinalizar ? "El mes no tiene bloqueos. Puede finalizarlo." : "El mes no tiene bloqueos."}</p>}

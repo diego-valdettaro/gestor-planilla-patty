@@ -77,6 +77,19 @@ export function netoDe(lineas: Array<{ concepto: string; conceptoAjustado?: stri
   }, sueldo);
 }
 
+/** El sueldo calculado de una persona: sueldo básico, remuneración vacacional y su ajuste (el borrador lo guarda aparte; la versión finalizada, no). */
+export function sueldoCalculadoDe(lineas: Array<{ concepto: string; importeCentimos: number }>): number {
+  return lineas.reduce((suma, linea) => suma + (YA_EN_EL_SUELDO.has(linea.concepto) ? linea.importeCentimos : 0), 0);
+}
+
+/** Qué hace una línea en el subtotal, con la misma regla de `netoDe`: el sueldo y sus reclasificaciones componen el sueldo calculado (suman), los aportes del trabajador no entran. */
+export function efectoEnElSubtotal(linea: { concepto: string; conceptoAjustado?: string; efectoEnNeto?: string }): "suma" | "resta" | "ninguno" {
+  if (YA_EN_EL_SUELDO.has(linea.concepto)) return "suma";
+  if (APORTES_DEL_TRABAJADOR.has(linea.concepto) || (linea.conceptoAjustado && APORTES_DEL_TRABAJADOR.has(linea.conceptoAjustado))) return "ninguno";
+  const efecto = linea.efectoEnNeto ?? buscarConcepto(linea.concepto)?.efectoEnNeto;
+  return efecto === "suma" ? "suma" : efecto === "resta" ? "resta" : "ninguno";
+}
+
 /** Soles con signo (U+2212) y céntimos exactos; `formatearSoles` no sirve con negativos con céntimos. */
 export function formatearSolesConSigno(centimos: number): string {
   const absoluto = Math.abs(centimos);
