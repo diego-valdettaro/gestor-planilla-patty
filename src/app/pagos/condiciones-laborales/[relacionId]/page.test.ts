@@ -9,10 +9,7 @@ vi.mock("@/autenticacion/sesion-del-servidor", () => ({ obtenerActorActual: simu
 vi.mock("@/condiciones-laborales/servicio", () => ({
   get repositorioDeCondicionesLaborales() { return simulacro.repositorio; },
 }));
-vi.mock("./formularios", () => ({
-  RegistroDeCondicion: ({ nombreDeLaPersona, sedes }: { nombreDeLaPersona: string; sedes: string[] }) => createElement("button", undefined, `Registrar nuevo valor · ${nombreDeLaPersona} · sedes:${sedes.join("|")}`),
-  CorreccionDeCondicion: ({ dato, valorActual }: { dato: string; valorActual: string }) => createElement("button", undefined, `Corregir ${dato} ${valorActual}`),
-}));
+vi.mock("../actions", () => ({ registrarCondicionDesdeFormulario: vi.fn(), corregirCondicionDesdeFormulario: vi.fn() }));
 
 import type { Actor } from "@/autenticacion/permisos";
 import { corregirCondicionLaboral, registrarCondicionLaboral } from "@/condiciones-laborales/gestionar-condiciones-laborales";
@@ -46,13 +43,56 @@ describe("página de detalle de Condiciones laborales (/pagos/condiciones-labora
     expect(html).toContain("Condiciones laborales de Beto Ruiz");
     expect(html).toContain("DNI 99900002 · Grupo Taller · Ingreso 08/01/2024 – vigente");
     expect(html).toContain("Volver a condiciones laborales");
-    expect(html.match(/<button>Registrar nuevo valor/g)).toHaveLength(1);
-    expect(html).toContain("sedes:Tienda Benavides|Taller");
-    for (const titulo of ["Sueldo", "Jornada ordinaria diaria", "Régimen laboral", "Afiliación pensionaria", "Esquema de comisión AFP", "Asignación familiar otorgada", "Sede de adscripción"]) {
+    expect([...html.matchAll(/<button[^>]*>Registrar nuevo valor/g)]).toHaveLength(1);
+    for (const titulo of ["Sueldo", "Banco de pago", "Movilidad fija mensual", "Jornada ordinaria diaria", "Régimen laboral", "Afiliación pensionaria", "Esquema de comisión AFP", "Asignación familiar otorgada", "Sede de adscripción"]) {
       expect(html).toContain(`>${titulo}</h2>`);
     }
-    expect(html.match(/Pendiente: todavía no hay ningún valor/g)).toHaveLength(7);
+    expect(html.match(/Pendiente: todavía no hay ningún valor/g)).toHaveLength(9);
     expect(html).not.toContain("S/ 0,00");
+  });
+
+  it("G24 permite elegir e ingresar banco y movilidad fija mensual", async () => {
+    const { CampoDeValor } = await import("./formularios") as unknown as { CampoDeValor: (props: { dato: "banco_de_pago" | "movilidad_fija"; sedes: string[] }) => React.ReactElement };
+    expect(typeof CampoDeValor).toBe("function");
+
+    const banco = renderToStaticMarkup(createElement(CampoDeValor, { dato: "banco_de_pago", sedes: [] }));
+    const movilidad = renderToStaticMarkup(createElement(CampoDeValor, { dato: "movilidad_fija", sedes: [] }));
+    expect(banco).toContain("Banco de pago");
+    expect(banco).toContain('name="valor"');
+    expect(movilidad).toContain("Movilidad fija mensual");
+    expect(movilidad).toContain('name="valor"');
+  });
+
+  it("G24 muestra banco y bono fijo con sus vigencias en la ficha", async () => {
+    await registrar("banco_de_pago", "BCP", "2026-09-01");
+    await registrar("movilidad_fija", "280", "2026-09-01");
+
+    const html = await render(BETO_RELACION);
+
+    expect(html).toContain("Banco de pago");
+    expect(html).toContain("BCP");
+    expect(html).toContain("Movilidad fija mensual");
+    expect(html).toContain("S/ 280,00");
+    expect(html).toContain("01/09/2026</td><td>Vigente");
+  });
+
+  it("G24 explica el tratamiento contable pendiente y el bloqueo del pago por movilidad fija", async () => {
+    await registrar("movilidad_fija", "280", "2026-09-01");
+
+    const html = await render(BETO_RELACION);
+
+    expect(html).toContain("Clasificación contable pendiente");
+    expect(html).toContain("La finalización del pago queda bloqueada hasta que se confirme su tratamiento.");
+  });
+
+  it("G32 no muestra bloqueo de clasificación cuando la movilidad fija vigente es cero", async () => {
+    await registrar("movilidad_fija", "0", "2026-09-01");
+
+    const html = await render(BETO_RELACION);
+
+    expect(html).toContain("S/ 0,00");
+    expect(html).not.toContain("Clasificación contable pendiente");
+    expect(html).not.toContain("La finalización del pago queda bloqueada");
   });
 
   it("un cambio de sueldo dentro del mes aparece como dos filas con vigencias contiguas", async () => {
@@ -76,7 +116,7 @@ describe("página de detalle de Condiciones laborales (/pagos/condiciones-labora
 
     expect(html).toContain("Reemplazado");
     expect(html).toContain("Motivo: Error de digitación");
-    expect(html.match(/Corregir sueldo/g)).toHaveLength(1);
+    expect([...html.matchAll(/<button[^>]*>Corregir<span class="sr-only"> sueldo/g)]).toHaveLength(1);
   });
 
   it("deshabilita Corregir con la causa visible cuando una versión finalizada usó el valor", async () => {

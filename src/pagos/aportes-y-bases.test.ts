@@ -11,6 +11,7 @@ function entrada(): EntradaDeBorrador {
     mesDePago: "2026-10", corte: { inicio: "2026-09-26", fin: "2026-10-25" }, relaciones: [relacion],
     condiciones: [
       { relacionId: "r1", dato: "sueldo", valor: 300000, vigenteDesde: "2026-01-01" },
+      { relacionId: "r1", dato: "movilidad_fija", valor: 0, vigenteDesde: "2026-01-01" },
       { relacionId: "r1", dato: "jornada_ordinaria_diaria", valor: 480, vigenteDesde: "2026-01-01" },
       { relacionId: "r1", dato: "regimen_laboral", valor: "general", vigenteDesde: "2026-01-01" },
       { relacionId: "r1", dato: "elegibilidad_familiar", valor: true, vigenteDesde: "2026-01-01" },

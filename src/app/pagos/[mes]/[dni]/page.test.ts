@@ -1,6 +1,7 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { calcularBorrador, type EntradaDeBorrador } from "@/pagos/calcular-borrador";
 
 const simulacro = vi.hoisted(() => ({ actor: vi.fn(), preparar: vi.fn(), redirigir: vi.fn(), noEncontrado: vi.fn() }));
 simulacro.redirigir.mockImplementation((ruta: string) => { throw new Error(`REDIRECT ${ruta}`); });
@@ -9,9 +10,26 @@ vi.mock("next/navigation", () => ({ redirect: simulacro.redirigir, notFound: sim
 vi.mock("@/autenticacion/sesion-del-servidor", () => ({ obtenerActorActual: simulacro.actor }));
 vi.mock("@/pagos/preparar-borrador", () => ({ prepararBorrador: simulacro.preparar }));
 
-async function render(dni = "12345678") {
+async function render(dni = "12345678", mes = "2026-10") {
   const { default: Pagina } = await import("./page");
-  return renderToStaticMarkup(await Pagina({ params: Promise.resolve({ mes: "2026-10", dni }) }));
+  return renderToStaticMarkup(await Pagina({ params: Promise.resolve({ mes, dni }) }));
+}
+
+function calcularEscenarioMovilidad(ingreso: string, movilidades: Array<{ valor: number; vigenteDesde: string }>) {
+  const relacion = { id: "r1", dni: "12345678", nombre: "Ana", grupo: "Taller", ingreso, cese: null, ingresoConfirmado: true, ceseConfirmado: false };
+  const condiciones: EntradaDeBorrador["condiciones"] = [
+    { relacionId: "r1", dato: "sueldo", valor: 200000, vigenteDesde: "2026-01-01" },
+    { relacionId: "r1", dato: "jornada_ordinaria_diaria", valor: 480, vigenteDesde: "2026-01-01" },
+    { relacionId: "r1", dato: "regimen_laboral", valor: "general", vigenteDesde: "2026-01-01" },
+    { relacionId: "r1", dato: "afiliacion_pensionaria", valor: "onp", vigenteDesde: "2026-01-01" },
+    { relacionId: "r1", dato: "elegibilidad_familiar", valor: false, vigenteDesde: "2026-01-01" },
+    { relacionId: "r1", dato: "sede_de_adscripcion", valor: "Taller", vigenteDesde: "2026-01-01" },
+    ...movilidades.map(({ valor, vigenteDesde }) => ({ relacionId: "r1", dato: "movilidad_fija" as const, valor, vigenteDesde })),
+  ];
+  const entrada: EntradaDeBorrador = { mesDePago: "2026-02", corte: { inicio: "2026-01-26", fin: "2026-02-25" }, relaciones: [relacion], condiciones,
+    reglas: [{ codigo: "onp_tasa", valor: 1300, vigenteDesde: "2026-01-01" }, { codigo: "essalud_tasa", valor: 900, vigenteDesde: "2026-01-01" }, { codigo: "essalud_base_minima", valor: 100000, vigenteDesde: "2026-01-01" }],
+    problemasDelCorte: [], revisiones: [], hechosPorDni: {}, sustitutorios: [], hechosDeOrigenPorDni: {}, fuentesPendientes: [], importes: [], diasDeVacaciones: {}, abonosVacacionales: [], vacacionesProvisionales: false };
+  return calcularBorrador(entrada);
 }
 
 describe("desglose de una persona", () => {
@@ -21,11 +39,69 @@ describe("desglose de una persona", () => {
     simulacro.preparar.mockClear();
     simulacro.preparar.mockResolvedValue({ corte: { inicio: "2026-09-26", fin: "2026-10-25" }, vacacionesProvisionales: false, personas: [
       { vacaciones: [], relacion: { id: "r1", dni: "12345678", nombre: "Ana", grupo: "Taller", ingreso: "2026-10-01", cese: null, ceseConfirmado: false },
-        sueldoCalculadoCentimos: 100000, netoCentimos: null, basesPorDevengue: [], bloqueos: ["Sin jornada ordinaria diaria vigente el 2026-10-25."],
+        movilidadFijaPendiente: { tramos: [] }, sueldoCalculadoCentimos: 100000, netoCentimos: null, basesPorDevengue: [], bloqueos: ["Sin jornada ordinaria diaria vigente el 2026-10-25."],
         lineas: [{ concepto: "sueldo_basico", importeCentimos: 100000, dias: 30, sueldoMensualCentimos: 100000,
           desde: "2026-10-01", hasta: "2026-10-31", mesDeDevengue: "2026-10", mesDePago: "2026-10",
           corte: { inicio: "2026-09-26", fin: "2026-10-25" }, origen: "Condición laboral" }] },
     ] });
+  });
+
+  it("G33 presenta movilidad fija prorrateada pendiente aparte del neto y las bases", async () => {
+    const borrador = calcularEscenarioMovilidad("2026-02-15", [{ valor: 28000, vigenteDesde: "2026-01-01" }]);
+    const calculada = borrador.personas[0];
+    expect(calculada.movilidadFijaPendiente.tramos).toEqual([{ desde: "2026-02-15", hasta: "2026-02-28", dias: 14,
+      importeCentimos: 14000, montoMensualCentimos: 28000, mesDeDevengue: "2026-02" }]);
+    expect(calculada.netoCentimos).toBeNull();
+    expect(calculada.basesPorDevengue).toEqual([{ mesDeDevengue: "2026-02", pensionariaCentimos: null,
+      essaludRemunerativaCentimos: null, essaludAplicableCentimos: null, quintaCentimos: null }]);
+    expect(calculada.bloqueos).toEqual([expect.stringContaining("clasificación contable de movilidad fija")]);
+    simulacro.preparar.mockResolvedValueOnce({ ...borrador, fuentes: [] });
+
+    const html = await render("12345678", "2026-02");
+
+    expect(html).toContain("Movilidad fija mensual pendiente de clasificación");
+    expect(html).toContain("S/ 140,00");
+    expect(html).toContain("14 días");
+    expect(html).toContain("no se suma al neto ni a las bases");
+    expect(html).toContain("Neto antes de aportes del trabajador: Incompleto");
+    expect(html).toContain("2026-02-28");
+    expect(html).toContain("Pendiente</td>");
+    const conceptos = html.split('aria-label="Conceptos de la persona"')[1]?.split("</table>")[0] ?? "";
+    const bases = html.split('aria-label="Bases por mes de devengue"')[1]?.split("</table>")[0] ?? "";
+    expect(conceptos).not.toContain("S/ 140,00");
+    expect(bases.match(/<td class="numerico">Pendiente<\/td>/g)).toHaveLength(4);
+  });
+
+  it("G32 el detalle mensual no anuncia clasificación para cero y conserva bloqueo con positivo y mezcla", async () => {
+    const escenarios = [
+      { valor: 0, ingreso: "2026-02-15", aviso: false, cambios: [] as Array<{ valor: number; vigenteDesde: string }> },
+      { valor: 28000, ingreso: "2026-02-15", aviso: true, cambios: [] as Array<{ valor: number; vigenteDesde: string }> },
+      { valor: 0, ingreso: "2026-02-01", aviso: true, cambios: [{ valor: 28000, vigenteDesde: "2026-02-15" }] },
+    ];
+    for (const escenario of escenarios) {
+      const movilidades = [{ valor: escenario.valor, vigenteDesde: "2026-01-01" }, ...escenario.cambios];
+      const borrador = calcularEscenarioMovilidad(escenario.ingreso, movilidades);
+      simulacro.preparar.mockResolvedValueOnce({ ...borrador, fuentes: [] });
+      const html = await render("12345678", "2026-02");
+      expect(html.includes("Movilidad fija mensual pendiente de clasificación")).toBe(escenario.aviso);
+      const persona = borrador.personas[0];
+      expect(persona.netoCentimos === null).toBe(escenario.aviso);
+      expect(persona.movilidadFijaPendiente.tramos.map(({ desde, hasta, montoMensualCentimos, importeCentimos }) => ({ desde, hasta, montoMensualCentimos, importeCentimos }))).toEqual(
+        escenario.cambios.length
+          ? [{ desde: "2026-02-01", hasta: "2026-02-14", montoMensualCentimos: 0, importeCentimos: 0 }, { desde: "2026-02-15", hasta: "2026-02-28", montoMensualCentimos: 28000, importeCentimos: 14000 }]
+          : [{ desde: "2026-02-15", hasta: "2026-02-28", montoMensualCentimos: escenario.valor, importeCentimos: escenario.valor === 0 ? 0 : 14000 }]);
+      expect(persona.basesPorDevengue).toHaveLength(1);
+      if (escenario.aviso) {
+        expect(persona.bloqueos).toEqual([expect.stringContaining("clasificación contable de movilidad fija")]);
+        expect(persona.basesPorDevengue[0]).toEqual({ mesDeDevengue: "2026-02", pensionariaCentimos: null,
+          essaludRemunerativaCentimos: null, essaludAplicableCentimos: null, quintaCentimos: null });
+      } else {
+        expect(persona.netoCentimos).toBe(106667);
+        expect(persona.bloqueos).toEqual([]);
+        expect(persona.basesPorDevengue[0]).toEqual({ mesDeDevengue: "2026-02", pensionariaCentimos: 106667,
+          essaludRemunerativaCentimos: 106667, essaludAplicableCentimos: 106667, quintaCentimos: 106667 });
+      }
+    }
   });
 
   it("muestra las bases por mes de devengue, con «Pendiente» donde falta una decisión, y explica un aporte", async () => {

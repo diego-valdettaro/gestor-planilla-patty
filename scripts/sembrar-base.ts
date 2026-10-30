@@ -203,6 +203,7 @@ async function limpiar(pool: Pool): Promise<void> {
     DELETE FROM sedes WHERE nombre IN (${sedes});
     DELETE FROM reglas_legales WHERE activada_por_id IN (SELECT id FROM cuentas_locales WHERE nombre_usuario IN (${usuarios}));
     DELETE FROM gerentes_de_grupo WHERE cuenta_id IN (SELECT id FROM cuentas_locales WHERE nombre_usuario IN (${usuarios}));
+    DELETE FROM politicas_tardanzas_grupo WHERE grupo IN (${NOMBRES_DE_GRUPO.map((nombre) => `'${nombre.replace(/'/g, "''")}'`).join(", ")});
     DELETE FROM grupos WHERE nombre IN (${NOMBRES_DE_GRUPO.map((nombre) => `'${nombre.replace(/'/g, "''")}'`).join(", ")});
     DELETE FROM sesiones WHERE cuenta_id IN (SELECT id FROM cuentas_locales WHERE nombre_usuario IN (${usuarios}));
     DELETE FROM cuentas_locales WHERE nombre_usuario IN (${usuarios});
@@ -639,10 +640,10 @@ async function main(): Promise<void> {
       await crearModeloDeHorario(modelos, actorAdmin, modelo);
     }
 
-    // --- Política de tardanzas: una vigente por sede activa ---
-    for (const sede of [SEDES.benavides, SEDES.sanIsidro, SEDES.taller, SEDES.administracion]) {
+    // --- Política operativa de tardanzas para cada grupo que gestiona asistencia ---
+    for (const grupo of [GRUPOS.tiendas, GRUPOS.taller]) {
       await configurarPoliticaDePenalizacionPorTardanzas(tardanzas, actorAdmin, {
-        sede, toleranciaEnMinutos: 10, tardanzasAcumuladas: 3, horasPenalizadas: 1, version: 1, vigenteDesde: PERIODO_ANTERIOR.inicio,
+        grupo, toleranciaEnMinutos: 10, tardanzasAcumuladas: 3, horasPenalizadas: 1,
       });
     }
 

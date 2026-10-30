@@ -127,7 +127,7 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
             eq(asistenciasEsperadas.estado, "pendiente"),
           )).returning({ id: asistenciasEsperadas.id });
           if (!actualizada) throw new Error("Una jornada cambió mientras se confirmaba la selección.");
-          const politica = await buscarPoliticaVigente(tx, fila.sede, fila.fecha);
+          const politica = await buscarPoliticaVigente(tx, fila.sede, fila.fecha, fila.dni);
           if (!politica) throw new Error(`No existe una política de tardanzas vigente para ${fila.sede}.`);
           const minutosDeTardanza = minutosDeTardanzaFueraDeTolerancia(politica, fila.entradaProgramada, fila.entradaPropuesta);
           if (minutosDeTardanza !== undefined) {
@@ -317,8 +317,8 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
       .then((filas) => filas as FilaDeResumenSemanal[]);
   }
 
-  async buscarPoliticaVigente(sede: string, fecha: string) {
-    return this.repositorioDeTardanzas.buscarPoliticaVigente(sede, fecha);
+  async buscarPoliticaVigente(sede: string, fecha: string, dni?: string) {
+    return this.repositorioDeTardanzas.buscarPoliticaVigente(sede, fecha, dni);
   }
 
   async contarTardanzas(dni: string, inicio: string, fin: string): Promise<number> {

@@ -1,19 +1,25 @@
 import React, { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { CreadorDeGrupo } from "./creador-de-grupo";
+import { getTableName } from "drizzle-orm";
 
 const obtenerActorActual = vi.fn();
 const listarGrupos = vi.fn();
+const listarGruposConAtributos = vi.fn();
+const listarPoliticasDeGrupo = vi.fn();
 const listarColaboradores = vi.fn();
 const listarModelosPorSede = vi.fn();
 const filasDeSedes = vi.fn();
+const filasDePoliticas = vi.fn();
 const GERENTE_DE_TIENDAS = { rol: "gerente_de_area", grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] };
 
 function consulta(filas: () => unknown) {
   const cadena: Record<string, unknown> = {};
-  cadena.from = () => cadena;
+  let tabla: string | undefined;
+  cadena.from = (objeto: Parameters<typeof getTableName>[0]) => { tabla = getTableName(objeto); return cadena; };
   cadena.where = () => cadena;
-  cadena.orderBy = () => Promise.resolve(filas());
+  cadena.orderBy = () => Promise.resolve(tabla === "politicas_de_penalizacion_por_tardanzas" ? filasDePoliticas() : filas());
   return cadena;
 }
 
@@ -22,14 +28,14 @@ vi.mock("@/autenticacion/sesion-del-servidor", () => ({ obtenerActorActual }));
 vi.mock("@/db/client", () => ({ db: { select: () => consulta(() => filasDeSedes()) } }));
 vi.mock("@/colaboradores/servicio", () => ({ repositorioDeColaboradores: { listar: listarColaboradores } }));
 vi.mock("@/turnos/servicio", () => ({
-  repositorioDeGrupos: { listarConAtributos: async () => ((await listarGrupos()) as string[]).map((nombre) => ({ nombre, gestionaAsistencia: true })) },
+  repositorioDeGrupos: { listarConAtributos: listarGruposConAtributos },
   repositorioDeModelosDeHorario: { listarPorSede: listarModelosPorSede },
 }));
+vi.mock("@/tardanzas/servicio", () => ({ repositorioDeTardanzas: { listarPoliticasDeGrupo } }));
 vi.mock("@/app/boton-de-accion-confirmada", () => ({ BotonDeAccionConfirmada: () => createElement("button") }));
-vi.mock("./actions", () => ({ asignarEquipoOperativoASede: vi.fn(), cambiarGrupoDeColaboradorDeConfiguracion: vi.fn(), crearModeloHorario: vi.fn(), desactivarColaborador: vi.fn(), desactivarModeloHorario: vi.fn(), eliminarModeloHorario: vi.fn(), eliminarSede: vi.fn(), guardarColaborador: vi.fn(), guardarModeloHorario: vi.fn(), guardarPoliticaDeTardanzas: vi.fn(), guardarGestionDeAsistenciaDelGrupo: vi.fn(), guardarSede: vi.fn(), reactivarColaborador: vi.fn(), reactivarModeloHorario: vi.fn() }));
+vi.mock("./actions", () => ({ asignarEquipoOperativoASede: vi.fn(), cambiarGrupoDeColaboradorDeConfiguracion: vi.fn(), crearGrupoDeConfiguracion: vi.fn(), crearModeloHorario: vi.fn(), desactivarColaborador: vi.fn(), desactivarModeloHorario: vi.fn(), eliminarModeloHorario: vi.fn(), eliminarSede: vi.fn(), guardarColaborador: vi.fn(), guardarModeloHorario: vi.fn(), guardarPoliticaDeTardanzas: vi.fn(), guardarGestionDeAsistenciaDelGrupo: vi.fn(), guardarSede: vi.fn(), reactivarColaborador: vi.fn(), reactivarModeloHorario: vi.fn() }));
 vi.mock("./filtros-de-colaboradores", () => ({ FiltrosDeColaboradores: () => createElement("div") }));
 vi.mock("./editor-de-grupo", () => ({ EditorDeGrupo: () => createElement("div") }));
-vi.mock("./creador-de-grupo", () => ({ CreadorDeGrupo: () => createElement("div") }));
 
 async function render(searchParams: Record<string, string> = {}) {
   const { default: PaginaDeConfiguracion } = await import("./page");
@@ -43,8 +49,67 @@ describe("página de Configuración (/configuracion)", () => {
     obtenerActorActual.mockResolvedValue({ rol: "administrador" });
     filasDeSedes.mockReturnValue([]);
     listarGrupos.mockResolvedValue([]);
+    listarGruposConAtributos.mockImplementation(async () => ((await listarGrupos()) as string[]).map((nombre) => ({ nombre, gestionaAsistencia: true })));
+    listarPoliticasDeGrupo.mockResolvedValue([]);
     listarColaboradores.mockResolvedValue([]);
     listarModelosPorSede.mockResolvedValue([]);
+    filasDePoliticas.mockReturnValue([]);
+  });
+
+  it("G18 coloca Grupos y sedes antes de Modelos y Colaboradores, y permite elegir gestión al crear", async () => {
+    const html = await render();
+    const grupos = html.indexOf("<h2>Grupos y sedes</h2>");
+    const modelos = html.indexOf("<h2>Modelos de horario</h2>");
+    const colaboradores = html.indexOf("<h2>Colaboradores</h2>");
+    const creador = renderToStaticMarkup(createElement(CreadorDeGrupo));
+
+    expect(grupos).toBeGreaterThanOrEqual(0);
+    expect(grupos).toBeLessThan(modelos);
+    expect(modelos).toBeLessThan(colaboradores);
+    expect(creador).toContain('name="gestiona"');
+    expect(creador).toContain('value="true"');
+    expect(creador).toContain('value="false"');
+  });
+
+  it("G19 no ofrece configurar tardanzas para grupos que no gestionan asistencia", async () => {
+    filasDeSedes.mockReturnValue([{ nombre: "Oficina", grupo: "Administración" }]);
+    listarGrupos.mockResolvedValue(["Administración"]);
+    listarGruposConAtributos.mockResolvedValue([{ nombre: "Administración", gestionaAsistencia: false }]);
+
+    const html = await render();
+
+    expect(html).not.toContain("Guardar política");
+  });
+
+  it("G19 muestra el conflicto histórico y exige elegir una política sin preselección", async () => {
+    filasDeSedes.mockReturnValue([{ nombre: "Centro", grupo: "Tiendas", activa: true }, { nombre: "Norte", grupo: "Tiendas", activa: true }]);
+    listarGrupos.mockResolvedValue(["Tiendas"]);
+    listarPoliticasDeGrupo.mockResolvedValue([{ grupo: "Tiendas", conflicto: true, toleranciaEnMinutos: null, tardanzasAcumuladas: null, horasPenalizadas: null }]);
+    filasDePoliticas.mockReturnValue([
+      { sede: "Centro", toleranciaEnMinutos: 10, tardanzasAcumuladas: 3, horasPenalizadas: 1, vigenteDesde: "2026-01-01", version: 1 },
+      { sede: "Norte", toleranciaEnMinutos: 15, tardanzasAcumuladas: 2, horasPenalizadas: 1, vigenteDesde: "2026-01-01", version: 1 },
+    ]);
+
+    const html = await render();
+
+    expect(html).toContain("Tiendas tiene políticas históricas en conflicto");
+    expect(html).toContain('name="politicaSeleccionada"');
+    expect(html).toContain("Centro · vigente desde 2026-01-01 · sede activa · 10 min · 3 tardanzas · 1 h");
+    expect(html).toContain("Norte · vigente desde 2026-01-01 · sede activa · 15 min · 2 tardanzas · 1 h");
+    expect(html).not.toMatch(/name="politicaSeleccionada"[^>]*checked/);
+  });
+
+  it("G20 permite alta sin sede fija cuando el grupo existe", async () => {
+    listarGrupos.mockResolvedValue(["Tiendas"]);
+    const html = await render();
+    const desdeColaboradores = html.slice(html.indexOf("<h2>Colaboradores</h2>"));
+    const formularioDeAlta = desdeColaboradores.match(/<form[^>]*>.*?<\/form>/s)?.[0] ?? "";
+
+    expect(formularioDeAlta).toContain('name="dni"');
+    expect(formularioDeAlta).toContain('name="nombre"');
+    expect(formularioDeAlta).toContain('name="grupo"');
+    expect(formularioDeAlta).not.toContain('name="sede"');
+    expect(formularioDeAlta).not.toMatch(/<button[^>]*disabled=/);
   });
 
   it("no explica acciones deshabilitadas cuando hay sedes y grupos", async () => {
@@ -61,9 +126,10 @@ describe("página de Configuración (/configuracion)", () => {
 
     expect(html).toMatch(/aria-describedby="motivo-crear-modelo"[^>]*disabled=""/);
     expect(html).toContain('id="motivo-crear-modelo"');
-    expect(html).toContain("Crear colaborador está deshabilitado porque no hay sedes activas ni grupos.");
+    expect(html).toContain("Crear colaborador está deshabilitado porque no hay grupos. Cree un grupo primero.");
     expect(html).toContain("Crear sede está deshabilitado porque no hay grupos.");
-    expect(html).toContain("Guardar política está deshabilitado porque no hay sedes activas.");
+    expect(html).toContain("Los grupos actuales no gestionan asistencia; no se requiere una política de tardanzas.");
+    expect(html).not.toContain("Guardar política de");
   });
 
   it("al gerente de área le ofrece modelos y colaboradores de sus grupos, sin acciones globales", async () => {

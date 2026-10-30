@@ -7,12 +7,22 @@ import { calcularBorrador, totalDeHorasExtraCentimos, totalDeTrabajoEnDescansoOF
 const mes = "2026-10";
 const persona = { id: "r1", dni: "12345678", nombre: "Ana", grupo: "Taller", ingreso: "2026-01-01", cese: null, ingresoConfirmado: true, ceseConfirmado: false };
 
-function entrada(parcial: Partial<EntradaDeBorrador> = {}): EntradaDeBorrador {
+function entrada(
+  parcial: Partial<EntradaDeBorrador> = {},
+  opciones: { movilidadFijaCeroPara?: string[] } = {},
+): EntradaDeBorrador {
+  const condiciones = parcial.condiciones ?? [{ relacionId: "r1", dato: "sueldo" as const, valor: 300001, vigenteDesde: "2026-01-01" }];
+  const idsConMovilidadCero = opciones.movilidadFijaCeroPara ?? (parcial.relaciones ?? [persona]).map(({ id }) => id);
+  const condicionesConMovilidadCero = [
+    ...condiciones,
+    ...idsConMovilidadCero
+      .filter((relacionId) => !condiciones.some((condicion) => condicion.relacionId === relacionId && condicion.dato === "movilidad_fija"))
+      .map((relacionId) => ({ relacionId, dato: "movilidad_fija" as const, valor: 0, vigenteDesde: "2026-01-01" })),
+  ];
   return {
     mesDePago: mes,
     corte: { inicio: "2026-09-26", fin: "2026-10-25" },
     relaciones: [persona],
-    condiciones: [{ relacionId: "r1", dato: "sueldo", valor: 300001, vigenteDesde: "2026-01-01" }],
     reglas: [],
     problemasDelCorte: [],
     revisiones: [],
@@ -25,6 +35,7 @@ function entrada(parcial: Partial<EntradaDeBorrador> = {}): EntradaDeBorrador {
     abonosVacacionales: [],
     vacacionesProvisionales: false,
     ...parcial,
+    condiciones: condicionesConMovilidadCero,
   };
 }
 
@@ -73,10 +84,28 @@ describe("borrador de sueldo", () => {
   });
 
   it("separa dato faltante y cobertura incompleta del cero, sin neto definitivo", () => {
-    const resultado = calcularBorrador(entrada({ condiciones: [], problemasDelCorte: ["Falta cobertura del corte."] }));
+    const resultado = calcularBorrador(entrada({ condiciones: [], problemasDelCorte: ["Falta cobertura del corte."] }, { movilidadFijaCeroPara: [] }));
     expect(resultado.personas[0].netoCentimos).toBeNull();
     expect(resultado.personas[0].bloqueos.some((texto) => texto.includes("sueldo"))).toBe(true);
     expect(resultado.bloqueosDelMes).toContain("Falta cobertura del corte.");
+  });
+
+  it("no propaga movilidad cero entre relaciones; el opt-out conserva el dato ausente", () => {
+    const beto = { ...persona, id: "r2", dni: "87654321", nombre: "Beto" };
+    const datos = entrada({
+      relaciones: [persona, beto],
+      condiciones: [
+        { relacionId: "r1", dato: "sueldo", valor: 300000, vigenteDesde: "2026-01-01" },
+        { relacionId: "r2", dato: "sueldo", valor: 250000, vigenteDesde: "2026-01-01" },
+      ],
+    }, { movilidadFijaCeroPara: ["r1"] });
+    const resultado = calcularBorrador(datos);
+
+    expect(datos.condiciones).toContainEqual(expect.objectContaining({ relacionId: "r1", dato: "movilidad_fija", valor: 0 }));
+    expect(datos.condiciones).not.toContainEqual(expect.objectContaining({ relacionId: "r2", dato: "movilidad_fija" }));
+    const personaSinMovilidad = resultado.personas.find(({ relacion }) => relacion.dni === beto.dni)!;
+    expect(personaSinMovilidad.netoCentimos).toBeNull();
+    expect(personaSinMovilidad.bloqueos).toContain("Pendiente: movilidad fija sin dato vigente el 2026-10-01. Registre el importe o cero en Condiciones laborales.");
   });
 });
 

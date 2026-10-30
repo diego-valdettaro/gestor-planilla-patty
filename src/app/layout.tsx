@@ -4,6 +4,7 @@ import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
 
 import { Navegacion } from "./navegacion";
 import { BotonDeFeedback } from "./boton-feedback";
+import { ProveedorCambiosPendientes } from "./asistencias/cambios-pendientes";
 import "./global.css";
 
 export const metadata: Metadata = {
@@ -15,7 +16,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const actor = await obtenerActorActual().catch(() => undefined);
   return (
     <html lang="es">
-      <body><Navegacion actor={actor} />{children}{actor && <BotonDeFeedback />}</body>
+      <body><ProveedorCambiosPendientes><Navegacion actor={actor} />{children}{actor && <BotonDeFeedback />}</ProveedorCambiosPendientes></body>
     </html>
   );
 }

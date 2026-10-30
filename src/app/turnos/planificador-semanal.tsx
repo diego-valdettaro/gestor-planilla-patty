@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { IconoCandado } from "@/app/icono-candado";
+import { SelectorSemanal } from "@/app/selector-semanal";
 import type { Grupo } from "@/turnos/configurar-equipos-operativos";
 import type { ModeloDeHorario } from "@/turnos/gestionar-modelos-de-horario";
 import { estaVigenteEn, type Vigencia } from "@/relaciones-laborales/vigencia";
@@ -18,7 +19,7 @@ import { resumirPlanSemanal } from "./resumen-plan-semanal";
 import { esElegibleParaPublicar, seleccionEfectiva } from "./seleccion-de-publicacion";
 
 type Celda = Omit<CeldaDePlanSemanalEnBorrador, "planId">;
-type Colaborador = { dni: string; nombre: string; sede: string };
+type Colaborador = { dni: string; nombre: string; sede: string | null };
 type Modelo = ModeloDeHorario;
 type Publicado = HorarioSemanalParaCopiar;
 type Confirmacion = { tipo: "cambiar-semana"; destino: string } | { tipo: "publicar" } | { tipo: "republicar"; dni: string; nombre: string };
@@ -299,27 +300,6 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
   </>;
 }
 
-function SelectorSemanal({ semana, alSeleccionar }: { semana: string; alSeleccionar: (semana: string) => void }) {
-  const [mes, setMes] = useState(semana.slice(0, 7));
-  const [semanaEnHover, setSemanaEnHover] = useState<string>();
-  const [calendarioAbierto, setCalendarioAbierto] = useState(false);
-  const disparador = useRef<HTMLButtonElement>(null);
-  const inicioSemana = new Date(`${semana}T00:00:00Z`);
-  const finSemana = new Date(inicioSemana); finSemana.setUTCDate(finSemana.getUTCDate() + 6);
-  const formato = new Intl.DateTimeFormat("es-PE", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
-  useEffect(() => setMes(semana.slice(0, 7)), [semana]);
-
-  function cerrarCalendario() {
-    setCalendarioAbierto(false);
-    disparador.current?.focus();
-  }
-  function seleccionar(fecha: string) {
-    cerrarCalendario();
-    alSeleccionar(inicio(fecha));
-  }
-
-  return <section aria-label="Selector semanal" className="selector-semanal"><button aria-label="Semana anterior" className="boton-secundario" onClick={() => alSeleccionar(desplazarSemana(semana, -7))} type="button">‹</button><div className="selector-fecha-semanal"><span>Semana</span><button aria-expanded={calendarioAbierto} aria-haspopup="dialog" className="boton-fecha-semanal" ref={disparador} onClick={() => setCalendarioAbierto((abierto) => !abierto)} type="button"><strong>{formato.format(inicioSemana)} al {formato.format(finSemana)}</strong></button></div><button aria-label="Semana siguiente" className="boton-secundario" onClick={() => alSeleccionar(desplazarSemana(semana, 7))} type="button">›</button>{calendarioAbierto && <div aria-label="Elegir semana" className="calendario-semanal" onKeyDown={(evento) => { if (evento.key === "Escape") { evento.stopPropagation(); cerrarCalendario(); } }} role="dialog"><div className="encabezado-calendario-semanal"><button aria-label="Mes anterior" className="boton-secundario" onClick={() => setMes(desplazarMes(mes, -1))} type="button">‹</button><strong>{nombreDelMes(mes)}</strong><button aria-label="Mes siguiente" className="boton-secundario" onClick={() => setMes(desplazarMes(mes, 1))} type="button">›</button></div><div aria-hidden="true" className="dias-calendario-semanal">{["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"].map((dia) => <span key={dia}>{dia}</span>)}</div><div className="dias-calendario-semanal fechas-calendario-semanal">{diasDelCalendario(mes).map((fecha) => { const semanaDeFecha = inicio(fecha); const esSemanaActiva = (semanaEnHover ?? semana) === semanaDeFecha; return <button aria-label={`Elegir la semana del ${fecha}`} className={`${fecha.slice(0, 7) === mes ? "" : "fuera-de-mes "}${esSemanaActiva ? "semana-activa" : ""}`} key={fecha} onClick={() => seleccionar(fecha)} onMouseEnter={() => setSemanaEnHover(semanaDeFecha)} onMouseLeave={() => setSemanaEnHover(undefined)} type="button">{Number(fecha.slice(-2))}</button>; })}</div><p>Seleccione cualquier día para ver su semana completa.</p><div className="acciones-calendario-semanal"><button className="boton-secundario" onClick={() => seleccionar(new Date().toISOString().slice(0, 10))} type="button">Hoy</button><button className="boton-secundario" onClick={cerrarCalendario} type="button">Cancelar</button></div></div>}</section>;
-}
 const ETIQUETA_DE_MOTIVO: Record<MotivoPlanificadoDeNoAsistencia, string> = {
   descanso: "Descanso",
   feriado: "Feriado",
@@ -383,11 +363,6 @@ function etiquetaDeConfirmacion(confirmacion: Confirmacion | undefined) {
   if (confirmacion?.tipo === "republicar") return "Republicar cambios";
   return "Confirmar";
 }
-function inicio(fecha: string) { return inicioDeSemana(fecha); }
-function desplazarMes(mes: string, cantidad: number) { const fecha = new Date(`${mes}-01T00:00:00Z`); fecha.setUTCMonth(fecha.getUTCMonth() + cantidad); return fecha.toISOString().slice(0, 7); }
-function nombreDelMes(mes: string) { return new Intl.DateTimeFormat("es-PE", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${mes}-01T00:00:00Z`)); }
-function diasDelCalendario(mes: string) { const primero = new Date(`${mes}-01T00:00:00Z`); const inicioCalendario = new Date(primero); inicioCalendario.setUTCDate(inicioCalendario.getUTCDate() - ((inicioCalendario.getUTCDay() + 6) % 7)); return Array.from({ length: 42 }, (_, indice) => { const fecha = new Date(inicioCalendario); fecha.setUTCDate(fecha.getUTCDate() + indice); return fecha.toISOString().slice(0, 10); }); }
-function desplazarSemana(semana: string, dias: number) { const fecha = new Date(`${semana}T00:00:00Z`); fecha.setUTCDate(fecha.getUTCDate() + dias); return fecha.toISOString().slice(0, 10); }
 function estaPublicadaLaSemana(dni: string, dias: string[], publicados: Map<string, Publicado>) { return dias.every((fecha) => publicados.has(`${dni}:${fecha}`)); }
 function filaCompletaDe(dni: string, dias: string[], celdas: Map<string, Celda>, publicados: Map<string, Publicado>) {
   return dias.every((fecha) => { const clave = `${dni}:${fecha}`; return celdas.has(clave) || publicados.has(clave); });

@@ -321,6 +321,16 @@ test("confirma colaboradores por un rango que corta la semana desde las vistas m
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page).toHaveURL(/\/turnos$/);
 
+  // La base de validate parte de un seed limpio; esta acción pública configura
+  // el requisito de dominio que la confirmación necesita para calcular tardanzas.
+  await page.goto("/configuracion");
+  const politicaTiendas = page.locator("form.formulario-politica").filter({ hasText: "Tiendas" });
+  await politicaTiendas.locator('input[name="toleranciaEnMinutos"]').fill("10");
+  await politicaTiendas.locator('input[name="tardanzasAcumuladas"]').fill("3");
+  await politicaTiendas.locator('input[name="horasPenalizadas"]').fill("1");
+  await politicaTiendas.getByRole("button", { name: "Guardar política de Tiendas" }).click();
+  await expect(politicaTiendas.locator('input[name="toleranciaEnMinutos"]')).toHaveValue("10");
+
   const semana = fechaDeLaSemanaDeDemo(0);
   await page.goto(`/asistencias?vista=mensual&grupo=Tiendas&fecha=${semana}&colaborador=99900006`);
   await page.getByRole("button", { name: "Confirmar por rango" }).click();
@@ -400,10 +410,10 @@ test("Finanzas no ve Horarios y consulta Asistencias en solo lectura", async ({ 
 test("cada rol ve en el menú exactamente las rutas que puede abrir", async ({ page }) => {
   const errores = observarErroresDelNavegador(page);
   const casos: Array<[string, string[]]> = [
-    ["admin", ["Configuración", "Cuentas", "Horarios", "Asistencia", "Períodos de planilla", "Relaciones laborales"]],
-    ["finanzas", ["Cuentas", "Asistencia", "Períodos de planilla", "Relaciones laborales", "Pagos"]],
-    ["gerente-tiendas", ["Configuración", "Horarios", "Asistencia", "Períodos de planilla"]],
-    ["gerente-administracion", ["Configuración"]],
+    ["admin", ["Configuración", "Cuentas", "Relaciones laborales", "Planificación de horarios", "Registro de asistencias", "Revisión de asistencia para planilla"]],
+    ["finanzas", ["Cuentas", "Relaciones laborales", "Registro de asistencias", "Revisión de asistencia para planilla", "Pagos"]],
+    ["gerente-tiendas", ["Configuración", "Planificación de horarios", "Registro de asistencias", "Revisión de asistencia para planilla"]],
+    ["gerente-administracion", ["Configuración", "Registro de asistencias"]],
     ["gerente-sin-grupos", []],
     ["rrhh", ["Relaciones laborales"]],
   ];
@@ -451,17 +461,20 @@ test("el gerente aprueba la asistencia de su grupo y Finanzas ve por qué no pue
   expect(errores).toEqual([]);
 });
 
-test("un rol sin pantallas explica qué esperar y el gerente del grupo Administración no entra a Horarios", async ({ page }) => {
+test("un rol sin pantallas explica qué esperar y el gerente de Administración conserva solo su acceso autorizado", async ({ page }) => {
   await iniciarSesion(page, "gerente-sin-grupos");
   await expect(page.getByText("Todavía no tiene grupos asignados.")).toBeVisible();
 
   await page.context().clearCookies();
   await iniciarSesion(page, "gerente-administracion");
-  await expect(page).toHaveURL(/\/configuracion$/);
+  await expect(page).toHaveURL(/\/asistencias$/);
+  await expect(page.getByRole("heading", { name: "Registrar incidencia de tienda" })).toBeVisible();
   await page.goto("/turnos");
   await expect(page.getByRole("heading", { name: "Sin permiso", level: 1 })).toBeVisible();
-  await page.goto("/asistencias");
+  await page.goto("/periodos");
   await expect(page.getByRole("heading", { name: "Sin permiso", level: 1 })).toBeVisible();
+  await page.goto("/asistencias");
+  await expect(page.getByRole("heading", { name: "Registrar incidencia de tienda" })).toBeVisible();
 });
 
 test("Recursos Humanos confirma un ingreso y el gerente ve su efecto en Horarios", async ({ page }) => {
@@ -622,6 +635,13 @@ test("Administración confirma o cancela el ajuste de una asistencia confirmada"
   await confirmacion.getByRole("button", { name: "Confirmar ajuste" }).click();
   await expect(confirmacion).toBeHidden();
   await expect(celda).toContainText("15:00");
+
+  await celda.click();
+  await expect(dialogo.getByLabel("Motivo del ajuste")).toHaveValue("");
+  await page.keyboard.press("Escape");
+  await expect(dialogo).toBeHidden();
+  await expect(page.getByRole("dialog", { name: "Cambios sin guardar" })).toHaveCount(0);
+  await expect(celda).toBeFocused();
   expect(errores).toEqual([]);
 });
 
@@ -719,7 +739,7 @@ test("en ancho estrecho el menú se opera con teclado e identifica la sección p
   await page.goto("/asistencias");
 
   const navegacion = page.getByRole("navigation", { name: "Navegación principal" });
-  await expect(navegacion.getByText("Asistencia", { exact: true })).toBeVisible();
+  await expect(navegacion.getByText("Registro de asistencias", { exact: true })).toBeVisible();
   const menu = navegacion.getByRole("button", { name: "Menú" });
   await expect(menu).toHaveAttribute("aria-expanded", "false");
   await expect(navegacion.getByRole("link", { name: /Configuración/ })).toBeHidden();
@@ -727,14 +747,14 @@ test("en ancho estrecho el menú se opera con teclado e identifica la sección p
   await menu.focus();
   await page.keyboard.press("Enter");
   await expect(navegacion.getByRole("button", { name: "Cerrar menú" })).toHaveAttribute("aria-expanded", "true");
-  await expect(navegacion.getByRole("link", { name: /Asistencia.*sección actual/ })).toHaveAttribute("aria-current", "page");
+  await expect(navegacion.getByRole("link", { name: /Registro de asistencias.*sección actual/ })).toHaveAttribute("aria-current", "page");
   await expect(navegacion.getByRole("button", { name: "Cerrar sesión" })).toBeVisible();
 
   await page.keyboard.press("Escape");
   await expect(navegacion.getByRole("button", { name: "Menú" })).toHaveAttribute("aria-expanded", "false");
 
   await navegacion.getByRole("button", { name: "Menú" }).click();
-  await navegacion.getByRole("link", { name: /Horarios/ }).click();
+  await navegacion.getByRole("link", { name: /Planificación de horarios/ }).click();
   await expect(page).toHaveURL(/\/turnos$/);
   await expect(navegacion.getByRole("button", { name: "Menú" })).toHaveAttribute("aria-expanded", "false");
   expect(errores).toEqual([]);

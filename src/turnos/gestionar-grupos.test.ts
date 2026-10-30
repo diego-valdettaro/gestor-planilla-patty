@@ -52,3 +52,15 @@ describe("gestionar grupos", () => {
     expect(atributos).toEqual([["Administración", false]]);
   });
 });
+
+describe("G03 elección de gestión de asistencia al crear grupo", () => {
+  it.each([{ gestion: true }, { gestion: false }])("guarda el valor elegido: $gestion", async ({ gestion }) => {
+    const creados: Array<{ nombre: string; gestionaAsistencia: boolean | undefined }> = [];
+    const repositorio: RepositorioDeGrupos = {
+      crear: async (nombre: string, gestionaAsistencia?: boolean) => { creados.push({ nombre, gestionaAsistencia }); },
+      actualizarGestionDeAsistencia: async () => { throw new Error("El alta debe ser atómica"); },
+    };
+    await crearGrupo(repositorio, { id: "admin-1", rol: "administrador" }, "Taller", gestion);
+    expect(creados).toEqual([{ nombre: "Taller", gestionaAsistencia: gestion }]);
+  });
+});

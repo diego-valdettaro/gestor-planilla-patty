@@ -10,6 +10,13 @@ export interface SolicitudDePoliticaDePenalizacionPorTardanzas {
   vigenteDesde: string;
 }
 
+export interface SolicitudDePoliticaPorGrupo {
+  grupo: string;
+  toleranciaEnMinutos: number;
+  tardanzasAcumuladas: number;
+  horasPenalizadas: number;
+}
+
 export interface PoliticaDePenalizacionPorTardanzas extends SolicitudDePoliticaDePenalizacionPorTardanzas {
   configuradaPorId: string;
   configuradaEn: Date;
@@ -31,7 +38,9 @@ export interface TardanzaCalculada {
 
 export interface RepositorioDeTardanzas {
   guardarPolitica(politica: PoliticaDePenalizacionPorTardanzas): Promise<void>;
-  buscarPoliticaVigente(sede: string, fecha: string): Promise<PoliticaDePenalizacionPorTardanzas | undefined>;
+  obtenerGrupo?(nombre: string): Promise<{ nombre: string; gestionaAsistencia: boolean } | undefined>;
+  guardarPoliticaDeGrupo?(politica: SolicitudDePoliticaPorGrupo & { configuradaPorId: string; configuradaEn: Date }): Promise<void>;
+  buscarPoliticaVigente(sede: string, fecha: string, dni?: string): Promise<PoliticaDePenalizacionPorTardanzas | undefined>;
   contarTardanzas(dni: string, inicio: string, fin: string): Promise<number>;
 }
 
@@ -40,18 +49,29 @@ export type RepositorioParaCalcularTardanzas = Pick<RepositorioDeTardanzas, "bus
 export async function configurarPoliticaDePenalizacionPorTardanzas(
   repositorio: RepositorioDeTardanzas,
   actor: Actor,
-  solicitud: SolicitudDePoliticaDePenalizacionPorTardanzas,
+  solicitud: SolicitudDePoliticaDePenalizacionPorTardanzas | SolicitudDePoliticaPorGrupo,
 ): Promise<void> {
   autorizarConfiguracion(actor);
-  validarPolitica(solicitud);
-  await repositorio.guardarPolitica({ ...solicitud, configuradaPorId: actor.id, configuradaEn: new Date() });
+  if ("grupo" in solicitud) {
+    if (!solicitud.grupo.trim()) throw new Error("El grupo es obligatorio.");
+    for (const valor of [solicitud.toleranciaEnMinutos, solicitud.tardanzasAcumuladas, solicitud.horasPenalizadas]) {
+      if (!Number.isInteger(valor) || valor <= 0) throw new Error("Los valores de la política deben ser enteros positivos.");
+    }
+    if (!repositorio.obtenerGrupo || !repositorio.guardarPoliticaDeGrupo) throw new Error("No está disponible la configuración de políticas por grupo.");
+    const grupo = await repositorio.obtenerGrupo(solicitud.grupo);
+    if (!grupo) throw new Error("El grupo no existe.");
+    if (!grupo.gestionaAsistencia) throw new Error("El grupo no gestiona asistencia.");
+    await repositorio.guardarPoliticaDeGrupo({ ...solicitud, configuradaPorId: actor.id, configuradaEn: new Date() });
+    return;
+  }
+  throw new Error("La política de tardanzas se configura por grupo operativo que gestiona asistencia.");
 }
 
 export async function calcularTardanza(
   repositorio: RepositorioParaCalcularTardanzas,
   solicitud: SolicitudDeCalculoDeTardanza,
 ): Promise<TardanzaCalculada | undefined> {
-  const politica = await repositorio.buscarPoliticaVigente(solicitud.sede, solicitud.fecha);
+  const politica = await repositorio.buscarPoliticaVigente(solicitud.sede, solicitud.fecha, solicitud.dni);
   if (!politica) throw new Error("No existe una política de tardanzas vigente para la sede.");
   const minutosDeTardanza = minutosDeTardanzaFueraDeTolerancia(politica, solicitud.entradaProgramada, solicitud.entradaReal);
   if (minutosDeTardanza === undefined) return undefined;
@@ -79,13 +99,6 @@ export function calcularMinutosPenalizados(
   politica: Pick<PoliticaDePenalizacionPorTardanzas, "tardanzasAcumuladas" | "horasPenalizadas">,
 ): number {
   return numeroDeTardanza % politica.tardanzasAcumuladas === 0 ? politica.horasPenalizadas * 60 : 0;
-}
-
-function validarPolitica(solicitud: SolicitudDePoliticaDePenalizacionPorTardanzas): void {
-  if (!solicitud.sede.trim() || !solicitud.vigenteDesde.trim()) throw new Error("La sede y la vigencia son obligatorias.");
-  for (const valor of [solicitud.toleranciaEnMinutos, solicitud.tardanzasAcumuladas, solicitud.horasPenalizadas, solicitud.version]) {
-    if (!Number.isInteger(valor) || valor <= 0) throw new Error("Los valores de la política deben ser enteros positivos.");
-  }
 }
 
 export function calcularMinutosDeTardanza(entradaProgramada: string, entradaReal: string): number {

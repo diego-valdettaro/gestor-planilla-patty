@@ -137,6 +137,24 @@ describe.skipIf(!databaseUrl)("condiciones laborales con vigencia (integración 
     expect((await consultarCondicionesVigentes(repositorio, finanzas, relacionAna, "2025-03-03")).sueldo).toBe(140000);
   });
 
+  it("G12 persiste banco y movilidad fija por vigencia, incluidos cero y el historial anterior", async () => {
+    await registrar(relacionBeto, "banco_de_pago", "BCP", "2026-09-01");
+    await registrar(relacionBeto, "banco_de_pago", "BBVA", "2026-10-01");
+    await registrar(relacionBeto, "movilidad_fija", "0", "2026-09-01");
+    await registrar(relacionBeto, "movilidad_fija", "280", "2026-10-01");
+
+    await expect(consultarCondicionesVigentes(repositorio, finanzas, relacionBeto, "2026-09-30"))
+      .resolves.toMatchObject({ banco_de_pago: "BCP", movilidad_fija: 0 });
+    await expect(consultarCondicionesVigentes(repositorio, finanzas, relacionBeto, "2026-10-01"))
+      .resolves.toMatchObject({ banco_de_pago: "BBVA", movilidad_fija: 28000 });
+
+    await expect(pool.query(`INSERT INTO condiciones_laborales
+      (relacion_laboral_id,dato,movilidad_fija_centimos,vigente_desde,registrado_por_id)
+      VALUES ($1,'movilidad_fija',-1,'2026-11-01',$2)`, [relacionBeto, cuentaFinanzas]))
+      .rejects.toMatchObject({ code: "23514" });
+  });
+
+
   it("dos registros simultáneos de la misma vigencia dejan uno solo", async () => {
     const resultados = await Promise.allSettled([
       registrar(relacionBeto, "sueldo", "2100", "2027-02-01"),

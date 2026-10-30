@@ -25,7 +25,7 @@ const finanzas: Actor = { id: "11111111-1111-4111-8111-111111111111", rol: "fina
 const persona = (id: string, dni: string, nombre: string, cese: string | null) =>
   ({ id, dni, nombre, grupo: "Taller", ingreso: "2026-01-01", cese, ingresoConfirmado: true, ceseConfirmado: cese !== null });
 const condiciones = (relacionId: string) => ([
-  ["sueldo", 200000], ["jornada_ordinaria_diaria", 480], ["regimen_laboral", "general"], ["afiliacion_pensionaria", "onp"], ["elegibilidad_familiar", false], ["sede_de_adscripcion", "Taller"],
+  ["sueldo", 200000], ["jornada_ordinaria_diaria", 480], ["regimen_laboral", "general"], ["afiliacion_pensionaria", "onp"], ["elegibilidad_familiar", false], ["sede_de_adscripcion", "Taller"], ["movilidad_fija", 0],
 ] as const).map(([dato, valor]) => ({ id: `${relacionId}-${dato}`, relacionId, dato, valor, vigenteDesde: "2026-01-01", registradaPorId: "f-1", registradaPor: "finanzas", registradaEn: new Date("2026-01-01T00:00:00Z"), reemplazadaEn: null, motivoDeReemplazo: null }));
 const reglas = ([["onp_tasa", 1300], ["essalud_tasa", 900], ["essalud_base_minima", 100000]] as const).map(([codigo, valor]) => ({
   id: codigo, codigo, valor, vigenteDesde: "2026-01-01", fuenteOficial: "DEMO sintética; no usar en producción", activadaPorId: "f-1", activadaPor: "finanzas", activadaEn: new Date("2026-01-01T00:00:00Z"), reemplazadaEn: null, motivoDeReemplazo: null,

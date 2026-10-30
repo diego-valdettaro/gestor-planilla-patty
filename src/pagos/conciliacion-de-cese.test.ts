@@ -18,7 +18,7 @@ const carlos = persona("r3", "33333333", "Carlos", { cese: "2026-10-12", ceseCon
 const beto = persona("r4", "44444444", "Beto", { cese: "2026-09-28", ceseConfirmado: true });
 
 const condiciones = (relacionId: string, sueldo: number): EntradaDeBorrador["condiciones"] => ([
-  ["sueldo", sueldo], ["jornada_ordinaria_diaria", 480], ["regimen_laboral", "general"], ["afiliacion_pensionaria", "onp"], ["elegibilidad_familiar", false], ["sede_de_adscripcion", "Taller"],
+  ["sueldo", sueldo], ["movilidad_fija", 0], ["jornada_ordinaria_diaria", 480], ["regimen_laboral", "general"], ["afiliacion_pensionaria", "onp"], ["elegibilidad_familiar", false], ["sede_de_adscripcion", "Taller"],
 ] as const).map(([dato, valor]) => ({ relacionId, dato, valor, vigenteDesde: "2026-01-01" }));
 
 const reglasDemo: EntradaDeBorrador["reglas"] = [

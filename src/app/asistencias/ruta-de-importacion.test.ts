@@ -24,6 +24,6 @@ describe("ruta de importación de asistencias", () => {
     expect(html).toContain('class="boton-secundario importar-archivo"');
     expect(html).toContain("Importar archivo");
     expect(html).toContain("Vista mensual");
-    expect(html).toContain('name="colaborador" value="00000011"');
+    expect(html).toContain('href="/asistencias?vista=mensual&amp;grupo=Tiendas&amp;fecha=2026-09-14&amp;colaborador=00000011"');
   });
 });

@@ -76,7 +76,7 @@ export interface RepositorioDeAsistencias {
   ajustar(solicitud: AjusteDeAsistencia, responsableId: string): Promise<void>;
   decidirHoraExtra(dni: string, fecha: string, decision: DecisionDeHoraExtra, responsableId: string): Promise<void>;
   registrarEstadoManual(estadoManual: EstadoManual): Promise<void>;
-  buscarPoliticaVigente(sede: string, fecha: string): Promise<PoliticaDePenalizacionPorTardanzas | undefined>;
+  buscarPoliticaVigente(sede: string, fecha: string, dni?: string): Promise<PoliticaDePenalizacionPorTardanzas | undefined>;
   contarTardanzas(dni: string, inicio: string, fin: string): Promise<number>;
 }
 

@@ -11,7 +11,7 @@ const persona = (id: string, dni: string, nombre: string) => ({ id, dni, nombre,
 const ana = persona("r1", "12345678", "Ana");
 
 const condiciones = (relacionId: string, sueldo: number, sede = "Taller", omitir: string[] = []): EntradaDeBorrador["condiciones"] => ([
-  ["sueldo", sueldo], ["jornada_ordinaria_diaria", 480], ["regimen_laboral", "general"], ["afiliacion_pensionaria", "onp"], ["elegibilidad_familiar", false], ["sede_de_adscripcion", sede],
+  ["sueldo", sueldo], ["movilidad_fija", 0], ["jornada_ordinaria_diaria", 480], ["regimen_laboral", "general"], ["afiliacion_pensionaria", "onp"], ["elegibilidad_familiar", false], ["sede_de_adscripcion", sede],
 ] as const).filter(([dato]) => !omitir.includes(dato)).map(([dato, valor]) => ({ relacionId, dato, valor, vigenteDesde: "2026-01-01" }));
 
 function importe(concepto: string, tipoDeFuente: ImporteExterno["tipoDeFuente"], monto: number, parcial: Partial<ImporteExterno> = {}): ImporteExterno {

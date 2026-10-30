@@ -8,7 +8,7 @@ const { listarGrupos, listarColaboradores, listarResumen, listarResumenMensual }
   listarResumenMensual: vi.fn(),
 }));
 
-vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
+vi.mock("next/navigation", () => ({ redirect: vi.fn(), useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("@/autenticacion/sesion-del-servidor", () => ({ obtenerActorActual: vi.fn() }));
 vi.mock("@/turnos/servicio", () => ({
   repositorioDeGrupos: { listarOperablesPor: listarGrupos },
@@ -52,7 +52,7 @@ describe("página semanal de asistencias", () => {
     }) }));
 
     expect(html).toContain("No hay colaboradores activos");
-    expect(html).toContain('select disabled="" name="colaborador"');
+    expect(html).toContain('<select aria-label="Colaborador" disabled=""></select>');
     expect(html).not.toContain("<table");
   });
 
@@ -124,13 +124,27 @@ describe("página semanal de asistencias", () => {
     expect(html).not.toContain("Confirmar por rango");
   });
 
-  it.each([["Recursos Humanos", { id: "rrhh-1", rol: "recursos_humanos" as const }], ["un gerente que solo gestiona Administración", { id: "ger-2", rol: "gerente_de_area" as const, grupos: [{ nombre: "Administración", gestionaAsistencia: false }] }]])("rechaza a %s", async (_nombre, actor) => {
+  it("rechaza a Recursos Humanos", async () => {
     const { obtenerActorActual } = await import("@/autenticacion/sesion-del-servidor");
-    vi.mocked(obtenerActorActual).mockResolvedValue(actor);
+    vi.mocked(obtenerActorActual).mockResolvedValue({ id: "rrhh-1", rol: "recursos_humanos" });
     const { default: PaginaDeAsistencias } = await import("./page");
     const html = renderToStaticMarkup(await PaginaDeAsistencias({ searchParams: Promise.resolve({}) }));
 
     expect(html).toContain("Sin permiso");
     expect(listarColaboradores).not.toHaveBeenCalled();
+  });
+
+  it("da al gerente sin asistencia registro de incidencias sin mostrar la matriz", async () => {
+    const { obtenerActorActual } = await import("@/autenticacion/sesion-del-servidor");
+    vi.mocked(obtenerActorActual).mockResolvedValue({ id: "ger-2", rol: "gerente_de_area", grupos: [{ nombre: "Administración", gestionaAsistencia: false }] });
+    listarGrupos.mockResolvedValue([]);
+    listarColaboradores.mockResolvedValue([{ dni: "00000012", nombre: "Bea Admin", sede: "Oficina" }]);
+    const { default: PaginaDeAsistencias } = await import("./page");
+    const html = renderToStaticMarkup(await PaginaDeAsistencias({ searchParams: Promise.resolve({}) }));
+
+    expect(html).toContain("Registro de incidencias");
+    expect(html).toContain("Registrar incidencia de tienda");
+    expect(html).not.toContain("Matriz semanal");
+    expect(listarResumen).not.toHaveBeenCalled();
   });
 });

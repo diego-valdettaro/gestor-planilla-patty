@@ -67,6 +67,7 @@ describe.skipIf(!databaseUrl)("exportación de la preliquidación con PostgreSQL
         { ...base, dato: "sueldo" as const, sueldoCentimos: sueldo }, { ...base, dato: "jornada_ordinaria_diaria" as const, jornadaMinutos: 480 },
         { ...base, dato: "regimen_laboral" as const, regimen: "general" as const }, { ...base, dato: "afiliacion_pensionaria" as const, afiliacionPensionaria: "onp" as const },
         { ...base, dato: "elegibilidad_familiar" as const, elegibleAsignacionFamiliar: false }, { ...base, dato: "sede_de_adscripcion" as const, sedeDeAdscripcion: sede },
+        { ...base, dato: "movilidad_fija" as const, movilidadFijaCentimos: 0 },
       ];
     }));
     await db.insert(schema.reglasLegales).values([

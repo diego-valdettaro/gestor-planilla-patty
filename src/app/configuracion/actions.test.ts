@@ -5,6 +5,14 @@ const simulacro = vi.hoisted(() => ({
   asignar: vi.fn(),
   cambiarGrupoDeColaborador: vi.fn(),
   revalidar: vi.fn(),
+  registrarColaborador: vi.fn(),
+  configurarPoliticaDeTardanzas: vi.fn(),
+  seleccionar: vi.fn(() => ({
+    from: () => ({
+      where: () => ({ orderBy: () => ({ limit: async () => [] }) }),
+    }),
+  })),
+  insertar: vi.fn(() => { throw new Error("No debe escribir antes de validar la modalidad de política."); }),
   repositorioDeTurnos: {},
   repositorioDeColaboradores: {},
 }));
@@ -15,12 +23,29 @@ vi.mock("@/turnos/configurar-equipos-operativos", () => ({ asignarGrupoASede: si
 vi.mock("@/turnos/servicio", () => ({ repositorioDeTurnos: simulacro.repositorioDeTurnos, repositorioDeModelosDeHorario: { buscarPorId: () => { throw new Error("No debe leer modelos antes de autorizar."); }, obtenerGrupoDeSede: async () => "Tiendas" }, repositorioDeGrupos: {} }));
 vi.mock("@/colaboradores/servicio", () => ({ repositorioDeColaboradores: simulacro.repositorioDeColaboradores }));
 vi.mock("@/colaboradores/casos-de-uso-servidor", () => ({
-  crearCasosDeUsoDeColaboradores: () => ({ cambiarGrupo: simulacro.cambiarGrupoDeColaborador }),
+  crearCasosDeUsoDeColaboradores: () => ({ cambiarGrupo: simulacro.cambiarGrupoDeColaborador, registrar: simulacro.registrarColaborador }),
 }));
 vi.mock("@/tardanzas/servicio", () => ({ repositorioDeTardanzas: {} }));
-vi.mock("@/db/client", () => ({ db: { select: () => { throw new Error("No debe leer la base antes de autorizar."); }, insert: () => { throw new Error("No debe escribir antes de autorizar."); }, delete: () => { throw new Error("No debe escribir antes de autorizar."); } } }));
+vi.mock("@/tardanzas/casos-de-uso-servidor", () => ({ crearCasosDeUsoDeTardanzas: () => ({ configurarPolitica: simulacro.configurarPoliticaDeTardanzas }) }));
+vi.mock("@/db/client", () => ({ db: { select: simulacro.seleccionar, insert: simulacro.insertar, delete: () => { throw new Error("No debe escribir antes de autorizar."); } } }));
 
 import { asignarEquipoOperativoASede, cambiarGrupoDeColaboradorDeConfiguracion, crearModeloHorario, desactivarColaborador, desactivarModeloHorario, eliminarSede, guardarColaborador, guardarGestionDeAsistenciaDelGrupo, guardarPoliticaDeTardanzas, guardarSede, reactivarModeloHorario } from "./actions";
+
+describe("G16 alta de colaborador sin sede", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("envía sede nula y revalida las vistas después de registrar", async () => {
+    simulacro.actor.mockResolvedValue({ id: "admin-1", rol: "administrador" });
+    simulacro.registrarColaborador.mockResolvedValue(undefined);
+
+    await expect(guardarColaborador(formulario({ dni: "00001024", nombre: "Ada Ruiz", grupo: "Tiendas" }))).resolves.toBeUndefined();
+
+    expect(simulacro.registrarColaborador).toHaveBeenCalledWith({ dni: "00001024", nombre: "Ada Ruiz", sede: null, grupo: "Tiendas", activo: true });
+    expect(simulacro.revalidar).toHaveBeenCalledWith("/configuracion");
+    expect(simulacro.revalidar).toHaveBeenCalledWith("/turnos");
+    expect(simulacro.revalidar).toHaveBeenCalledWith("/asistencias");
+  });
+});
 
 describe("asignar grupo de una sede desde Configuración", () => {
   beforeEach(() => {
@@ -128,5 +153,32 @@ describe("acciones de Configuración reservadas al Administrador (borde del serv
     await expect(desactivarModeloHorario(datos)).rejects.toThrow("No tiene permiso para administrar modelos de horario.");
     await expect(reactivarModeloHorario(datos)).rejects.toThrow("No tiene permiso para administrar modelos de horario.");
     await expect(crearModeloHorario(datos)).rejects.toThrow("No tiene permiso para administrar modelos de horario.");
+  });
+});
+
+describe("G04 acción: política de tardanzas solo por grupo", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    simulacro.actor.mockResolvedValue({ id: "admin-1", rol: "administrador" });
+  });
+
+  it.each([
+    ["sede de un grupo con asistencia", "Sede Tiendas"],
+    ["sede de un grupo sin asistencia", "Sede Administración"],
+  ])("rechaza la solicitud operativa antigua para %s antes de leer o escribir", async (_caso, sede) => {
+    const datos = formulario({ sede, toleranciaEnMinutos: "10", tardanzasAcumuladas: "3", horasPenalizadas: "1", version: "2", vigenteDesde: "2026-09-01" });
+
+    let rechazada = false;
+    try {
+      await guardarPoliticaDeTardanzas(datos);
+    } catch {
+      rechazada = true;
+    }
+
+    expect(simulacro.seleccionar).not.toHaveBeenCalled();
+    expect(simulacro.insertar).not.toHaveBeenCalled();
+    expect(simulacro.configurarPoliticaDeTardanzas).not.toHaveBeenCalled();
+    expect(simulacro.revalidar).not.toHaveBeenCalled();
+    expect(rechazada).toBe(true);
   });
 });
