@@ -4,11 +4,14 @@ import {
   NOMBRE_DE_ROL,
   ROLES,
   exigir,
+  puedeAbrirConfiguracion,
   puedeAdministrarCuentas,
   puedeAdministrarPersonalDelGrupo,
   puedeConfigurarGlobalmente,
   puedeConsultarAsistencias,
+  puedeConsultarColaboradores,
   puedeConsultarConfiguracion,
+  puedeConsultarPersonal,
   puedeAprobarAsistenciaDelGrupo,
   puedeConsultarHorarios,
   puedeConsultarPeriodos,
@@ -63,6 +66,9 @@ describe("matriz de permisos por rol", () => {
     ["consultar horarios", puedeConsultarHorarios, [administrador, gerenteDeTiendas], [finanzas, recursosHumanos, gerenteSinGrupos, gerenteDeAdministracion]],
     ["consultar períodos (un gerente solo para aprobar sus grupos)", puedeConsultarPeriodos, [administrador, finanzas, gerenteDeTiendas, gerenteDeVariosGrupos], [recursosHumanos, gerenteSinGrupos, gerenteDeAdministracion]],
     ["consultar configuración", puedeConsultarConfiguracion, [administrador, gerenteDeTiendas, gerenteDeAdministracion], [finanzas, recursosHumanos, gerenteSinGrupos]],
+    ["abrir Configuración (Finanzas solo para Cuentas)", puedeAbrirConfiguracion, [administrador, gerenteDeTiendas, gerenteDeAdministracion, finanzas], [recursosHumanos, gerenteSinGrupos]],
+    ["consultar colaboradores", puedeConsultarColaboradores, [administrador, gerenteDeTiendas, gerenteDeAdministracion], [finanzas, recursosHumanos, gerenteSinGrupos]],
+    ["abrir Personal (colaboradores o relaciones laborales)", puedeConsultarPersonal, [administrador, gerenteDeTiendas, gerenteDeAdministracion, finanzas, recursosHumanos], [gerenteSinGrupos]],
   ];
 
   it.each(casos)("%s", (_nombre, puede, permitidos, rechazados) => {

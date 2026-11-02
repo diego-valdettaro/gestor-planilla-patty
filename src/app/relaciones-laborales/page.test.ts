@@ -50,7 +50,8 @@ describe("página de Relaciones laborales (/relaciones-laborales)", () => {
 
     const html = await render({ desde: "2026-05-01" });
 
-    expect(html).toContain("<h1>Relaciones laborales</h1>");
+    expect(html).toContain("<h1>Personal</h1>");
+    expect(html).not.toContain("Secciones de personal");
     expect(html).toContain("Registre y confirme las fechas de ingreso y cese");
     // Beto tiene una relación sin cese: no se le ofrece un reingreso.
     expect(html).toContain("ingreso:99900001");

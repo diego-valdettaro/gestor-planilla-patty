@@ -47,7 +47,8 @@ test("una contraseña incorrecta muestra un error recuperable", async ({ page })
 // agotaban juntos los 30 segundos de una sola prueba.
 for (const recorrido of [
   { ruta: "/configuracion", titulo: "Configuración" },
-  { ruta: "/cuentas", titulo: "Cuentas" },
+  { ruta: "/cuentas", titulo: "Configuración" },
+  { ruta: "/personal", titulo: "Personal" },
   { ruta: "/turnos", titulo: "Planificación de horarios" },
   { ruta: "/asistencias", titulo: "Asistencias" },
   { ruta: "/periodos", titulo: "Períodos de planilla" },
@@ -323,7 +324,7 @@ test("confirma colaboradores por un rango que corta la semana desde las vistas m
 
   // La base de validate parte de un seed limpio; esta acción pública configura
   // el requisito de dominio que la confirmación necesita para calcular tardanzas.
-  await page.goto("/configuracion");
+  await page.goto("/configuracion?grupo=Tiendas");
   const politicaTiendas = page.locator("form.formulario-politica").filter({ hasText: "Tiendas" });
   await politicaTiendas.locator('input[name="toleranciaEnMinutos"]').fill("10");
   await politicaTiendas.locator('input[name="tardanzasAcumuladas"]').fill("3");
@@ -394,8 +395,8 @@ test("Finanzas no ve Horarios y consulta Asistencias en solo lectura", async ({ 
   await iniciarSesion(page, "finanzas");
   const menu = page.getByRole("navigation", { name: "Navegación principal" });
   await expect(menu.getByRole("link", { name: /Horarios/ })).toHaveCount(0);
-  await expect(menu.getByRole("link", { name: /Configuración/ })).toHaveCount(0);
-  await expect(menu.getByRole("link", { name: /Cuentas/ })).toBeVisible();
+  await expect(menu.getByRole("link", { name: /Configuración/ })).toBeVisible();
+  await expect(menu.getByRole("link", { name: /Cuentas/ })).toHaveCount(0);
 
   await page.goto("/turnos");
   await expect(page.getByRole("heading", { name: "Sin permiso", level: 1 })).toBeVisible();
@@ -410,12 +411,12 @@ test("Finanzas no ve Horarios y consulta Asistencias en solo lectura", async ({ 
 test("cada rol ve en el menú exactamente las rutas que puede abrir", async ({ page }) => {
   const errores = observarErroresDelNavegador(page);
   const casos: Array<[string, string[]]> = [
-    ["admin", ["Configuración", "Cuentas", "Relaciones laborales", "Planificación de horarios", "Registro de asistencias", "Revisión de asistencia para planilla"]],
-    ["finanzas", ["Cuentas", "Relaciones laborales", "Registro de asistencias", "Revisión de asistencia para planilla", "Pagos"]],
-    ["gerente-tiendas", ["Configuración", "Planificación de horarios", "Registro de asistencias", "Revisión de asistencia para planilla"]],
-    ["gerente-administracion", ["Configuración", "Registro de asistencias"]],
+    ["admin", ["Configuración", "Personal", "Planificación de horarios", "Registro de asistencias", "Revisión de asistencia para planilla"]],
+    ["finanzas", ["Configuración", "Personal", "Registro de asistencias", "Revisión de asistencia para planilla", "Pagos"]],
+    ["gerente-tiendas", ["Configuración", "Personal", "Planificación de horarios", "Registro de asistencias", "Revisión de asistencia para planilla"]],
+    ["gerente-administracion", ["Configuración", "Personal", "Registro de asistencias"]],
     ["gerente-sin-grupos", []],
-    ["rrhh", ["Relaciones laborales"]],
+    ["rrhh", ["Personal"]],
   ];
 
   for (const [usuario, enlaces] of casos) {
@@ -497,7 +498,7 @@ test("Recursos Humanos confirma un ingreso y el gerente ve su efecto en Horarios
   await page.context().clearCookies();
   await iniciarSesion(page, "rrhh");
   await expect(page).toHaveURL(/\/relaciones-laborales$/);
-  await expect(page.getByRole("heading", { name: "Relaciones laborales", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Personal", level: 1 })).toBeVisible();
   // Tras confirmar, Luis también aparece en la consulta de vigencia: la fila de la tabla de relaciones es la primera.
   const relacionDeLuis = page.locator("tr", { hasText: "Luis Pendiente" }).first();
   await expect(relacionDeLuis).toContainText("Ingreso por confirmar");
@@ -520,7 +521,7 @@ test("Finanzas crea una cuenta de gerente de área y la ve con su rol y sin grup
 
   await iniciarSesion(page, "finanzas");
   await page.goto("/cuentas");
-  await expect(page.getByRole("heading", { name: "Cuentas", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Configuración", level: 1 })).toBeVisible();
   const rol = page.getByLabel("Rol");
   await expect(rol.locator("option")).toHaveText(["Rol…", "Gerente de área", "Recursos Humanos"]);
 
@@ -706,7 +707,7 @@ async function elementosQueDesbordan(page: Page): Promise<string> {
   });
 }
 
-const rutasAutenticadas = ["/configuracion", "/cuentas", "/turnos", "/asistencias", "/asistencias/importar", "/periodos", "/relaciones-laborales"];
+const rutasAutenticadas = ["/configuracion", "/cuentas", "/turnos", "/asistencias", "/asistencias/importar", "/periodos", "/personal", "/relaciones-laborales"];
 
 for (const [nombre, ancho, alto] of [["375 px", 375, 812], ["escritorio", 1280, 800]] as const) {
   test(`las rutas autenticadas caben en ${nombre} sin errores de consola`, async ({ page }) => {
@@ -747,7 +748,7 @@ test("en ancho estrecho el menú se opera con teclado e identifica la sección p
   await menu.focus();
   await page.keyboard.press("Enter");
   await expect(navegacion.getByRole("button", { name: "Cerrar menú" })).toHaveAttribute("aria-expanded", "true");
-  await expect(navegacion.getByRole("link", { name: /Registro de asistencias.*sección actual/ })).toHaveAttribute("aria-current", "page");
+  await expect(navegacion.getByRole("link", { name: /Registro de asistencias/ })).toHaveAttribute("aria-current", "page");
   await expect(navegacion.getByRole("button", { name: "Cerrar sesión" })).toBeVisible();
 
   await page.keyboard.press("Escape");

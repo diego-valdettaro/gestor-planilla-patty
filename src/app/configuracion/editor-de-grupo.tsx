@@ -73,9 +73,21 @@ export function EditorDeGrupo({
             ))}
           </select>
         </label>
-        <button className="boton-principal" disabled={pendiente} type="submit">
-          {pendiente ? "Guardando…" : "Guardar"}
-        </button>
+        <div className="acciones-formulario">
+          <button className="boton-principal" disabled={pendiente} type="submit">
+            {pendiente ? "Guardando…" : "Guardar"}
+          </button>
+          <button
+            className="boton-secundario"
+            onClick={() => {
+              setGrupo(grupoActual ?? "");
+              setAbierto(false);
+            }}
+            type="button"
+          >
+            Cancelar
+          </button>
+        </div>
         {estado.error && (
           <p className="mensaje-operacion error" role="alert">
             {estado.error}

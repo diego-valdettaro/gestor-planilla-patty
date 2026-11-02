@@ -3,20 +3,20 @@ import { describe, expect, it } from "vitest";
 import { NAVEGACION_SIN_SALTO, rutaDeFiltros } from "./navegacion-de-filtros";
 
 describe("rutaDeFiltros", () => {
-  it("sin grupo y con inactivos apagado apunta a /configuracion sin parámetros", () => {
-    expect(rutaDeFiltros({ mostrarInactivos: false })).toBe("/configuracion");
+  it("sin grupo y con inactivos apagado apunta a /personal sin parámetros", () => {
+    expect(rutaDeFiltros({ mostrarInactivos: false })).toBe("/personal");
   });
 
   it("solo grupo agrega ?grupo=", () => {
-    expect(rutaDeFiltros({ grupo: "taller", mostrarInactivos: false })).toBe("/configuracion?grupo=taller");
+    expect(rutaDeFiltros({ grupo: "taller", mostrarInactivos: false })).toBe("/personal?grupo=taller");
   });
 
   it("solo mostrar inactivos agrega ?inactivos=1", () => {
-    expect(rutaDeFiltros({ mostrarInactivos: true })).toBe("/configuracion?inactivos=1");
+    expect(rutaDeFiltros({ mostrarInactivos: true })).toBe("/personal?inactivos=1");
   });
 
   it("combina grupo e inactivos en la misma URL", () => {
-    expect(rutaDeFiltros({ grupo: "tiendas", mostrarInactivos: true })).toBe("/configuracion?grupo=tiendas&inactivos=1");
+    expect(rutaDeFiltros({ grupo: "tiendas", mostrarInactivos: true })).toBe("/personal?grupo=tiendas&inactivos=1");
   });
 });
 

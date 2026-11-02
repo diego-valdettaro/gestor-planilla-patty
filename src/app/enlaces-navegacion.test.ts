@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Actor } from "@/autenticacion/permisos";
 
-import { enlacesPermitidos, esEnlaceActivo, rutaDeInicio, seccionActiva } from "./enlaces-navegacion";
+import { enlacesPermitidos, esEnlaceActivo, esSeccionActiva, rutaDeInicio, seccionActiva } from "./enlaces-navegacion";
 
 const TIENDAS = { nombre: "Tiendas", gestionaAsistencia: true };
 const ADMINISTRACION = { nombre: "Administración", gestionaAsistencia: false };
@@ -17,28 +17,33 @@ const recursosHumanos: Actor = { id: "r", rol: "recursos_humanos" };
 const rutas = (actor: Actor) => enlacesPermitidos(actor).map((enlace) => enlace.href);
 
 describe("enlaces de navegación", () => {
-  it("G23 usa etiquetas de issue y deja Cuentas/Relaciones laborales antes de operación", () => {
+  it("G23 usa etiquetas de issue y deja Configuración y Personal antes de operación", () => {
     expect(enlacesPermitidos(administrador).map(({ href, etiqueta }) => [href, etiqueta])).toEqual([
-      ["/configuracion", "Configuración"], ["/cuentas", "Cuentas"], ["/relaciones-laborales", "Relaciones laborales"],
+      ["/configuracion", "Configuración"], ["/personal", "Personal"],
       ["/turnos", "Planificación de horarios"], ["/asistencias", "Registro de asistencias"], ["/periodos", "Revisión de asistencia para planilla"],
     ]);
     expect(enlacesPermitidos(finanzas).map(({ href, etiqueta }) => [href, etiqueta])).toEqual([
-      ["/cuentas", "Cuentas"], ["/relaciones-laborales", "Relaciones laborales"], ["/asistencias", "Registro de asistencias"],
+      ["/configuracion", "Configuración"], ["/personal", "Personal"], ["/asistencias", "Registro de asistencias"],
       ["/periodos", "Revisión de asistencia para planilla"], ["/pagos", "Pagos"],
     ]);
   });
   it("muestra a cada rol exactamente las rutas que puede abrir", () => {
-    expect(rutas(administrador)).toEqual(["/configuracion", "/cuentas", "/relaciones-laborales", "/turnos", "/asistencias", "/periodos"]);
-    expect(rutas(gerenteDeTiendas)).toEqual(["/configuracion", "/turnos", "/asistencias", "/periodos"]);
-    expect(rutas(gerenteDeAdministracion)).toEqual(["/configuracion", "/asistencias"]);
+    expect(rutas(administrador)).toEqual(["/configuracion", "/personal", "/turnos", "/asistencias", "/periodos"]);
+    expect(rutas(gerenteDeTiendas)).toEqual(["/configuracion", "/personal", "/turnos", "/asistencias", "/periodos"]);
+    expect(rutas(gerenteDeAdministracion)).toEqual(["/configuracion", "/personal", "/asistencias"]);
     expect(rutas(gerenteSinGrupos)).toEqual([]);
-    expect(rutas(finanzas)).toEqual(["/cuentas", "/relaciones-laborales", "/asistencias", "/periodos", "/pagos"]);
-    expect(rutas(recursosHumanos)).toEqual(["/relaciones-laborales"]);
+    expect(rutas(finanzas)).toEqual(["/configuracion", "/personal", "/asistencias", "/periodos", "/pagos"]);
+    expect(rutas(recursosHumanos)).toEqual(["/personal"]);
   });
 
-  it("nombra cada sección con el vocabulario del dominio", () => {
-    expect(enlacesPermitidos(administrador).map((enlace) => enlace.etiqueta)).toEqual(["Configuración", "Cuentas", "Relaciones laborales", "Planificación de horarios", "Registro de asistencias", "Revisión de asistencia para planilla"]);
-    expect(enlacesPermitidos(finanzas).map((enlace) => enlace.etiqueta)).toEqual(["Cuentas", "Relaciones laborales", "Registro de asistencias", "Revisión de asistencia para planilla", "Pagos"]);
+  it("agrupa Cuentas bajo Configuración y Relaciones laborales bajo Personal", () => {
+    const [configuracion, personal] = enlacesPermitidos(administrador);
+
+    expect(esSeccionActiva("/cuentas", configuracion)).toBe(true);
+    expect(esSeccionActiva("/cuentas", personal)).toBe(false);
+    expect(esSeccionActiva("/relaciones-laborales", personal)).toBe(true);
+    expect(esSeccionActiva("/personal", personal)).toBe(true);
+    expect(seccionActiva("/cuentas", enlacesPermitidos(finanzas))?.etiqueta).toBe("Configuración");
   });
 
   it("marca activa la ruta y sus subrutas, sin confundir prefijos parecidos", () => {
@@ -57,7 +62,7 @@ describe("enlaces de navegación", () => {
     expect(rutaDeInicio(gerenteDeTiendas)).toBe("/turnos");
     expect(rutaDeInicio(gerenteDeAdministracion)).toBe("/asistencias");
     expect(rutaDeInicio(finanzas)).toBe("/asistencias");
-    expect(rutaDeInicio(recursosHumanos)).toBe("/relaciones-laborales");
+    expect(rutaDeInicio(recursosHumanos)).toBe("/personal");
     expect(rutaDeInicio(gerenteSinGrupos)).toBeUndefined();
   });
 });

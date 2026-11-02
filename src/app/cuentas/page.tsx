@@ -1,10 +1,11 @@
 import { redirect } from "next/navigation";
 
 import { BotonDeAccionConfirmada } from "@/app/boton-de-accion-confirmada";
-import { NOMBRE_DE_ROL, puedeAdministrarCuentas, puedeConfigurarGlobalmente, rolesQueSePuedenCrear } from "@/autenticacion/permisos";
+import { NOMBRE_DE_ROL, puedeAdministrarCuentas, puedeConfigurarGlobalmente, puedeConsultarConfiguracion, rolesQueSePuedenCrear } from "@/autenticacion/permisos";
 import { repositorioDeCuentas } from "@/autenticacion/servicio";
 import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
 
+import { MenuDeConfiguracion } from "../configuracion/menu-de-configuracion";
 import { quitarGerenteDesdeFormulario } from "./actions";
 import { AsignadorDeGerente } from "./asignador-de-gerente";
 import { FormularioDeCuenta } from "./formulario-de-cuenta";
@@ -20,8 +21,10 @@ export default async function PaginaDeCuentas() {
   const gerentes = cuentas.filter((cuenta) => cuenta.rol === "gerente_de_area");
   const nombreDeCuenta = new Map(cuentas.map((cuenta) => [cuenta.id, cuenta.nombreUsuario]));
 
-  return <main className="contenido pagina">
-    <header className="encabezado encabezado-pagina"><div><p className="eyebrow">{NOMBRE_DE_ROL[actor.rol]}</p><h1>Cuentas</h1><p>Cree cuentas de acceso y asigne a cada gerente de área los grupos que dirige.</p></div></header>
+  return <main className="contenido pagina pagina-ajustes">
+    <header className="encabezado encabezado-pagina"><div><p className="eyebrow">{NOMBRE_DE_ROL[actor.rol]}</p><h1>Configuración</h1><p>Cree cuentas de acceso y asigne a cada gerente de área los grupos que dirige.</p></div></header>
+
+    <div className="disposicion-configuracion"><MenuDeConfiguracion cuentasActiva grupos={puedeConsultarConfiguracion(actor) ? grupos.map(({ nombre }) => nombre) : []} puedeCrearGrupos={false} puedeVerCuentas /><div className="contenido-configuracion">
 
     <section className="tarjeta panel">
       <header className="panel-cabecera"><div><h2>Crear cuenta</h2><p>{puedeConfigurarGlobalmente(actor) ? "Puede crear cuentas de cualquier rol." : "Puede crear cuentas de gerente de área y de Recursos Humanos."}</p></div></header>
@@ -44,5 +47,6 @@ export default async function PaginaDeCuentas() {
       <header className="panel-cabecera"><div><h2>Cuentas</h2><p>Cuentas de acceso y, en los gerentes de área, los grupos que dirigen.</p></div><span className="insignia neutro">{cuentas.length} cuentas</span></header>
       {cuentas.length ? <div className="panel-tabla"><table><thead><tr><th>Usuario</th><th>Rol</th><th>Grupos asignados</th></tr></thead><tbody>{cuentas.map((cuenta) => <tr key={cuenta.id}><td>{cuenta.nombreUsuario}</td><td>{NOMBRE_DE_ROL[cuenta.rol]}</td><td>{cuenta.rol === "gerente_de_area" ? (cuenta.grupos.length ? cuenta.grupos.join(", ") : <span className="insignia neutro">Sin grupos</span>) : "—"}</td></tr>)}</tbody></table></div> : <section className="estado-vacio"><h3>No hay cuentas</h3><p>Cree la primera con el formulario de arriba.</p></section>}
     </section>
+  </div></div>
   </main>;
 }

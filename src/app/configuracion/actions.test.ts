@@ -135,7 +135,7 @@ describe("acciones de Configuración reservadas al Administrador (borde del serv
     simulacro.actor.mockResolvedValue(actor);
     const datos = formulario({ nombre: "Sede nueva", grupo: "Tiendas", sede: "Lima", dni: "00000001", gestiona: "false", toleranciaEnMinutos: "10", tardanzasAcumuladas: "3", horasPenalizadas: "1", vigenteDesde: "2026-09-01" });
 
-    await expect(guardarSede(datos)).rejects.toThrow("No tiene permiso para cambiar la configuración.");
+    await expect(guardarSede({}, datos)).rejects.toThrow("No tiene permiso para cambiar la configuración.");
     await expect(eliminarSede(datos)).rejects.toThrow("No tiene permiso para cambiar la configuración.");
     await expect(desactivarColaborador(datos)).rejects.toThrow("No tiene permiso para cambiar la configuración.");
     await expect(guardarPoliticaDeTardanzas(datos)).rejects.toThrow("No tiene permiso para cambiar la configuración.");
@@ -180,5 +180,46 @@ describe("G04 acción: política de tardanzas solo por grupo", () => {
     expect(simulacro.configurarPoliticaDeTardanzas).not.toHaveBeenCalled();
     expect(simulacro.revalidar).not.toHaveBeenCalled();
     expect(rechazada).toBe(true);
+  });
+});
+
+describe("guardarSede: un nombre repetido se explica en lugar de ignorarse", () => {
+  function simularInsercion(devueltas: unknown[], existente?: { grupo: string | null }) {
+    simulacro.insertar.mockImplementation((() => ({ values: () => ({ onConflictDoNothing: () => ({ returning: async () => devueltas }) }) })) as never);
+    simulacro.seleccionar.mockImplementation((() => ({ from: () => ({ where: async () => (existente ? [existente] : []) }) })) as never);
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    simulacro.actor.mockResolvedValue({ id: "a1", rol: "administrador" });
+  });
+
+  it("crea la sede y avisa al formulario que terminó", async () => {
+    simularInsercion([{ id: "s1" }]);
+
+    const estado = await guardarSede({}, formulario({ nombre: "Tienda Centro", grupo: "Tiendas" }));
+
+    expect(estado).toEqual({ listo: 1 });
+    expect(simulacro.revalidar).toHaveBeenCalledWith("/configuracion");
+  });
+
+  it.each([
+    ["en este grupo", { grupo: "Taller" }, "Ya existe la sede «Taller» en este grupo."],
+    ["en otro grupo", { grupo: "Tiendas" }, "Ya existe una sede llamada «Taller» en el grupo Tiendas. El nombre de una sede no se puede repetir."],
+    ["sin grupo (datos anteriores)", { grupo: null }, "Ya existe una sede llamada «Taller» sin grupo asignado, de datos anteriores. Use otro nombre."],
+  ])("explica que la sede ya existe %s", async (_caso, existente, mensaje) => {
+    simularInsercion([], existente);
+
+    const estado = await guardarSede({}, formulario({ nombre: "Taller", grupo: "Taller" }));
+
+    expect(estado).toEqual({ error: mensaje, nombre: "Taller" });
+    expect(simulacro.revalidar).not.toHaveBeenCalled();
+  });
+
+  it("pide el nombre cuando llega vacío", async () => {
+    simularInsercion([{ id: "s1" }]);
+
+    expect(await guardarSede({}, formulario({ nombre: "   ", grupo: "Tiendas" }))).toEqual({ error: "Escriba el nombre de la sede.", nombre: "" });
+    expect(simulacro.insertar).not.toHaveBeenCalled();
   });
 });

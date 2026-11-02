@@ -309,7 +309,7 @@ test("S-01 Atrás y Adelante SPA no atrapan navegación sin una edición pendien
 test("G28 el gerente de grupo sin gestión de asistencia registra incidencias sin ver datos salariales", async ({ page }) => {
   test.setTimeout(60_000);
   await iniciarSesion(page);
-  await page.goto("/configuracion");
+  await page.goto("/personal");
   const dni = String(99000000 + Date.now() % 999999).slice(-8);
   const formulario = page.locator("form").filter({ has: page.getByLabel("DNI", { exact: true }) });
   await formulario.getByLabel("DNI").fill(dni);
@@ -338,14 +338,17 @@ test("G28 el recorrido desde el menú persiste incidencias de grupos propios y e
   const grupoAjeno = `Ajeno G28 ${sufijo}`;
 
   async function crearGrupo(nombre: string) {
+    await page.goto("/configuracion");
+    await page.getByText("+ Nuevo grupo", { exact: true }).click();
     const formularioGrupo = page.locator("form").filter({ has: page.getByLabel("Nombre del grupo", { exact: true }) });
     await formularioGrupo.getByLabel("Nombre del grupo").fill(nombre);
-    await formularioGrupo.locator('input[name="gestiona"][value="false"]').check();
+    await formularioGrupo.getByLabel("Gestiona asistencia y horarios").uncheck();
     await formularioGrupo.getByRole("button", { name: "Crear grupo" }).click();
     await expect(page.getByRole("list", { name: "Grupos operativos" })).toContainText(nombre);
   }
 
   async function crearPersona(dni: string, nombre: string, grupo: string) {
+    await page.goto("/personal");
     const formularioPersona = page.locator("form").filter({ has: page.getByLabel("DNI", { exact: true }) });
     await formularioPersona.getByLabel("DNI", { exact: true }).fill(dni);
     await formularioPersona.getByLabel("Nombre", { exact: true }).fill(nombre);
@@ -476,7 +479,7 @@ test("G31 el conflicto muestra las opciones vigentes y futuras de las sedes", as
   const fixture = await crearFixtureConflictoPolitica();
   try {
     await iniciarSesion(page);
-    await page.goto("/configuracion");
+    await page.goto(`/configuracion?grupo=${encodeURIComponent(fixture.grupo)}`);
     const conflicto = page.locator("form.formulario-politica").filter({ hasText: `${fixture.grupo} tiene políticas históricas en conflicto` });
     await expect(conflicto).toBeVisible();
     await expect(conflicto).toContainText(`${fixture.sedes.actual} · vigente desde 2026-09-01 · sede activa · 10 min · 3 tardanzas · 1 h`);
@@ -491,7 +494,7 @@ test("G31 enviar el conflicto sin política elegida muestra validación en clien
   const fixture = await crearFixtureConflictoPolitica();
   try {
     await iniciarSesion(page);
-    await page.goto("/configuracion");
+    await page.goto(`/configuracion?grupo=${encodeURIComponent(fixture.grupo)}`);
     const conflicto = page.locator("form.formulario-politica").filter({ hasText: `${fixture.grupo} tiene políticas históricas en conflicto` });
     await expect(conflicto).toBeVisible();
     const radios = conflicto.locator('input[name="politicaSeleccionada"]');
@@ -516,7 +519,7 @@ test("G31 el conflicto incluye las futuras y la sede inactiva que originan opcio
   const fixture = await crearFixtureConflictoPolitica();
   try {
     await iniciarSesion(page);
-    await page.goto("/configuracion");
+    await page.goto(`/configuracion?grupo=${encodeURIComponent(fixture.grupo)}`);
     const conflicto = page.locator("form.formulario-politica").filter({ hasText: `${fixture.grupo} tiene políticas históricas en conflicto` });
     await expect(conflicto).toBeVisible();
     await expect(conflicto).toContainText(`${fixture.sedes.actual} · vigente desde 2026-09-01 · sede activa · 10 min · 3 tardanzas · 1 h`);
@@ -533,7 +536,7 @@ test("G31 al elegir una política futura se aplica como política única desde a
   const fixture = await crearFixtureConflictoPolitica();
   try {
     await iniciarSesion(page);
-    await page.goto("/configuracion");
+    await page.goto(`/configuracion?grupo=${encodeURIComponent(fixture.grupo)}`);
     const conflicto = page.locator("form.formulario-politica").filter({ hasText: `${fixture.grupo} tiene políticas históricas en conflicto` });
     await expect(conflicto).toBeVisible();
     await conflicto.locator(`input[name="politicaSeleccionada"][value="${fixture.politicas.futura}"]`).check();

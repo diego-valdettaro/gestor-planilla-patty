@@ -106,6 +106,21 @@ export function puedeConsultarConfiguracion(actor: Actor): boolean {
   return actor.rol === "administrador" || gruposDe(actor).length > 0;
 }
 
+/** Abrir la pantalla Configuración: el Administrador y los gerentes con sus grupos, y Finanzas solo para Cuentas. */
+export function puedeAbrirConfiguracion(actor: Actor): boolean {
+  return puedeConsultarConfiguracion(actor) || puedeAdministrarCuentas(actor);
+}
+
+/** Listar y dar de alta colaboradores: el Administrador y los gerentes de área, dentro de sus grupos. */
+export function puedeConsultarColaboradores(actor: Actor): boolean {
+  return puedeConsultarConfiguracion(actor);
+}
+
+/** Abrir la sección Personal: colaboradores y relaciones laborales. */
+export function puedeConsultarPersonal(actor: Actor): boolean {
+  return puedeConsultarColaboradores(actor) || puedeConsultarRelacionesLaborales(actor);
+}
+
 /** Horarios, modelos de horario y asistencias de un grupo: solo si el grupo gestiona asistencia. */
 export function puedeOperarAsistenciaDelGrupo(actor: Actor, grupo: string): boolean {
   if (actor.rol === "administrador") return true;

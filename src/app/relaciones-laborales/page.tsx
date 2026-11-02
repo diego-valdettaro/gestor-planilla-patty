@@ -8,6 +8,7 @@ import type { PersonaConRelacionVigente, RelacionConPersona } from "@/relaciones
 import { repositorioDeRelacionesLaborales } from "@/relaciones-laborales/servicio";
 import { estaVigenteEn, formatearFechaDeRelacion, vigenciasConfirmadas } from "@/relaciones-laborales/vigencia";
 
+import { PestanasDePersonal } from "../personal/pestanas-de-personal";
 import { ConfirmacionDeFecha, FormularioDeFecha, FormularioDeIngreso } from "./formularios";
 
 export const dynamic = "force-dynamic";
@@ -40,12 +41,13 @@ export default async function PaginaDeRelacionesLaborales({ searchParams }: { se
   const porConfirmar = relaciones.filter((relacion) => !relacion.ingresoConfirmado || (relacion.cese !== null && !relacion.ceseConfirmado)).length;
 
   return <main className="contenido pagina">
-    <header className="encabezado encabezado-pagina"><div><p className="eyebrow">{NOMBRE_DE_ROL[actor.rol]}</p><h1>Relaciones laborales</h1><p>{puedeGestionar ? "Registre y confirme las fechas de ingreso y cese. Esas fechas definen cuándo el gerente puede publicar horarios y quién entra en Pagos." : "Consulte las fechas de ingreso y cese confirmadas por Recursos Humanos. Su rol solo puede consultarlas."}</p></div></header>
+    <header className="encabezado encabezado-pagina"><div><p className="eyebrow">{NOMBRE_DE_ROL[actor.rol]}</p><h1>Personal</h1><p>{puedeGestionar ? "Registre y confirme las fechas de ingreso y cese. Esas fechas definen cuándo el gerente puede publicar horarios y quién entra en Pagos." : "Consulte las fechas de ingreso y cese confirmadas por Recursos Humanos. Su rol solo puede consultarlas."}</p></div></header>
+    <PestanasDePersonal actor={actor} activa="relaciones-laborales" />
 
     {puedeGestionar && <section className="tarjeta panel">
       <header className="panel-cabecera"><div><h2>Registrar ingreso</h2><p>Para un reingreso elija a la misma persona: conserva su DNI y recibe otra relación laboral. La persona la da de alta el gerente de su grupo.</p></div></header>
       <FormularioDeIngreso colaboradores={colaboradoresParaIngreso.map(({ dni, nombre, grupo }) => ({ dni, nombre, grupo }))} />
-      {!colaboradoresParaIngreso.length && <section className="estado-vacio"><h3>No hay colaboradores para registrar</h3><p>{colaboradores.length ? "Todos los colaboradores tienen una relación laboral sin cese. Registre el cese de una para poder registrar su reingreso." : "El gerente de cada grupo da de alta a sus colaboradores en Configuración; después podrá registrar su ingreso aquí."}</p></section>}
+      {!colaboradoresParaIngreso.length && <section className="estado-vacio"><h3>No hay colaboradores para registrar</h3><p>{colaboradores.length ? "Todos los colaboradores tienen una relación laboral sin cese. Registre el cese de una para poder registrar su reingreso." : "El gerente de cada grupo da de alta a sus colaboradores en Personal; después podrá registrar su ingreso aquí."}</p></section>}
     </section>}
 
     <section className="tarjeta panel">
