@@ -1,6 +1,6 @@
 "use server";
 
-import { desc, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { exigir, puedeConfigurarGlobalmente, puedeConsultarHorarios } from "@/autenticacion/permisos";
@@ -8,7 +8,7 @@ import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
 import { crearCasosDeUsoDeColaboradores } from "@/colaboradores/casos-de-uso-servidor";
 import { repositorioDeColaboradores } from "@/colaboradores/servicio";
 import { db } from "@/db/client";
-import { politicasDePenalizacionPorTardanzas, sedes } from "@/db/schema";
+import { sedes } from "@/db/schema";
 import { crearCasosDeUsoDeTardanzas } from "@/tardanzas/casos-de-uso-servidor";
 import { repositorioDeTardanzas } from "@/tardanzas/servicio";
 import { asignarGrupoASede } from "@/turnos/configurar-equipos-operativos";
@@ -27,7 +27,7 @@ export async function guardarSede(formData: FormData): Promise<void> {
 
 export async function crearGrupoDeConfiguracion(_estadoAnterior: EstadoDeCreacionDeGrupo, formData: FormData): Promise<EstadoDeCreacionDeGrupo> {
   try {
-    await crearGrupo(repositorioDeGrupos, await obtenerActorActual(), texto(formData, "nombre"));
+    await crearGrupo(repositorioDeGrupos, await obtenerActorActual(), texto(formData, "nombre"), texto(formData, "gestiona") === "true");
     revalidatePath("/configuracion");
     revalidatePath("/turnos");
     return { listo: true };
@@ -87,7 +87,7 @@ export async function guardarColaborador(formData: FormData): Promise<void> {
   await casos.registrar({
     dni: texto(formData, "dni"),
     nombre: texto(formData, "nombre"),
-    sede: texto(formData, "sede"),
+    sede: textoOpcional(formData, "sede"),
     grupo: texto(formData, "grupo"),
     activo: true,
   });
@@ -144,21 +144,26 @@ export async function reactivarColaborador(formData: FormData): Promise<void> {
 export async function guardarPoliticaDeTardanzas(formData: FormData): Promise<void> {
   await exigirConfiguracionGlobal();
   const casos = crearCasosDeUsoDeTardanzas(repositorioDeTardanzas, { obtenerActorActual });
-  const sede = texto(formData, "sede");
-  const [ultimaPolitica] = await db.select({ version: politicasDePenalizacionPorTardanzas.version })
-    .from(politicasDePenalizacionPorTardanzas)
-    .where(eq(politicasDePenalizacionPorTardanzas.sede, sede))
-    .orderBy(desc(politicasDePenalizacionPorTardanzas.version))
-    .limit(1);
-  await casos.configurarPolitica({
-    sede,
-    toleranciaEnMinutos: entero(formData, "toleranciaEnMinutos"),
-    tardanzasAcumuladas: entero(formData, "tardanzasAcumuladas"),
-    horasPenalizadas: entero(formData, "horasPenalizadas"),
-    version: (ultimaPolitica?.version ?? 0) + 1,
-    vigenteDesde: texto(formData, "vigenteDesde"),
-  });
-  revalidatePath("/configuracion");
+  const grupo = formData.get("grupo");
+  if (typeof grupo === "string" && grupo.trim()) {
+    const seleccion = formData.get("politicaSeleccionada");
+    if (typeof seleccion === "string" && seleccion) {
+      const valores = seleccion.split(",").map(Number);
+      if (valores.length !== 3 || valores.some((valor) => !Number.isInteger(valor) || valor <= 0)) throw new Error("La política seleccionada no es válida.");
+      await casos.configurarPolitica({ grupo: grupo.trim(), toleranciaEnMinutos: valores[0], tardanzasAcumuladas: valores[1], horasPenalizadas: valores[2] });
+    } else {
+      await casos.configurarPolitica({
+        grupo: grupo.trim(),
+        toleranciaEnMinutos: entero(formData, "toleranciaEnMinutos"),
+        tardanzasAcumuladas: entero(formData, "tardanzasAcumuladas"),
+        horasPenalizadas: entero(formData, "horasPenalizadas"),
+      });
+    }
+    revalidatePath("/configuracion");
+    revalidatePath("/asistencias");
+    return;
+  }
+  throw new Error("La política de tardanzas se configura por grupo operativo que gestiona asistencia.");
 }
 
 export async function crearModeloHorario(formData: FormData): Promise<void> {
@@ -226,6 +231,11 @@ function texto(formData: FormData, campo: string): string {
   const valor = formData.get(campo);
   if (typeof valor !== "string" || !valor.trim()) throw new Error(`El campo ${campo} es obligatorio.`);
   return valor.trim();
+}
+
+function textoOpcional(formData: FormData, campo: string): string | null {
+  const valor = formData.get(campo);
+  return typeof valor === "string" && valor.trim() ? valor.trim() : null;
 }
 
 function entero(formData: FormData, campo: string): number {

@@ -26,11 +26,18 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeAsistencias · horas extra p
   // DNI de 8 dígitos, único por ejecución (la restricción de la base exige exactamente 8 dígitos).
   const primerDni = 70_000_000 + Math.floor(Math.random() * 20_000_000);
   const colaboradores: string[] = [];
-  // Sede propia de la corrida: ajustar una asistencia reevalúa su tardanza con la política vigente de la sede.
+  const grupo = `Grupo extra ${cuentaId.slice(0, 8)}`;
+  // Grupo y sede propios: el recálculo debe resolver la política del grupo de la persona.
   const sede = `Sede extra ${cuentaId.slice(0, 8)}`;
 
   beforeAll(async () => {
     await db.insert(schema.cuentasLocales).values({ id: cuentaId, nombreUsuario: `extra-${cuentaId}`, hashContrasena: "prueba", rol: "finanzas" });
+    await db.insert(schema.grupos).values({ nombre: grupo, gestionaAsistencia: true });
+    await db.insert(schema.sedes).values({ nombre: sede, grupo, activa: true });
+    await db.insert(schema.politicasTardanzasGrupo).values({
+      grupo, toleranciaEnMinutos: 10, tardanzasAcumuladas: 3, horasPenalizadas: 1,
+      configuradaPorId: cuentaId, configuradaEn: new Date(),
+    });
     await db.insert(schema.politicasDePenalizacionPorTardanzas).values({
       sede, toleranciaEnMinutos: 10, tardanzasAcumuladas: 3, horasPenalizadas: 1, version: 1, vigenteDesde: "2000-01-01", configuradaPorId: cuentaId,
     });
@@ -47,7 +54,10 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeAsistencias · horas extra p
     }
     await db.delete(schema.asistenciasEsperadas).where(inArray(schema.asistenciasEsperadas.dni, colaboradores));
     await db.delete(schema.colaboradores).where(inArray(schema.colaboradores.dni, colaboradores));
+    await db.delete(schema.politicasTardanzasGrupo).where(eq(schema.politicasTardanzasGrupo.grupo, grupo));
     await db.delete(schema.politicasDePenalizacionPorTardanzas).where(eq(schema.politicasDePenalizacionPorTardanzas.sede, sede));
+    await db.delete(schema.sedes).where(eq(schema.sedes.nombre, sede));
+    await db.delete(schema.grupos).where(eq(schema.grupos.nombre, grupo));
     await db.delete(schema.cuentasLocales).where(eq(schema.cuentasLocales.id, cuentaId));
     await pool.end();
   });
@@ -55,7 +65,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeAsistencias · horas extra p
   async function crearColaborador(nombre: string): Promise<string> {
     const dni = String(primerDni + colaboradores.length);
     colaboradores.push(dni);
-    await db.insert(schema.colaboradores).values({ dni, nombre, sede: "Lima", grupo: "Tiendas", activo: true });
+    await db.insert(schema.colaboradores).values({ dni, nombre, sede, grupo, activo: true });
     await db.insert(schema.asistenciasEsperadas).values([...lunesASabado, "2037-03-08"].map((fecha) => ({ dni, fecha, estado: "pendiente" as const })));
     return dni;
   }

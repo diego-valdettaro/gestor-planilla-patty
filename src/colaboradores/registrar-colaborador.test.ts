@@ -205,3 +205,13 @@ describe("registrarColaborador", () => {
     expect(colaboradores.size).toBe(0);
   });
 });
+
+describe("G05 persona sin sede fija", () => {
+  it("R13 permite al gerente asignado registrar y consultar la persona sin sede", async () => {
+    const { repositorio } = crearRepositorioEnMemoria();
+    const actor = { id: "g1", rol: "gerente_de_area" as const, grupos: [{ nombre: "Taller", gestionaAsistencia: true }] };
+    const persona = { dni: "87654321", nombre: "Ana Prueba", grupo: "Taller", activo: true } as Colaborador;
+    await registrarColaborador(repositorio, actor, persona);
+    await expect(consultarColaborador(repositorio, actor, persona.dni)).resolves.toEqual(persona);
+  });
+});

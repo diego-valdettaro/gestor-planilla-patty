@@ -35,6 +35,7 @@ const columnas = {
   motivoDeAnulacion: importesExternos.motivoDeAnulacion,
   importacionId: importesExternos.importacionId,
   estadoDeIncidencia: importesExternos.estadoDeIncidencia,
+  motivoIncidencia: importesExternos.motivoIncidencia,
   sustento: importesExternos.sustento,
   autorizadoPor: importesExternos.autorizadoPor,
   fechaDeAutorizacion: importesExternos.fechaDeAutorizacion,
@@ -92,12 +93,28 @@ class AlmacenPostgresDeFuentesExternas implements AlmacenDeFuentesExternas {
     return fila && aImporte(fila);
   }
 
+  async buscarGrupoDePersona(dni: string): Promise<string | undefined> {
+    const [persona] = await this.db.select({ grupo: colaboradores.grupo }).from(colaboradores)
+      .where(eq(colaboradores.dni, dni)).for("update");
+    return persona?.grupo;
+  }
+
+  async gerenteAsignadoAlGrupo(cuentaId: string, grupo: string): Promise<boolean> {
+    // Orden de bloqueos de registro: persona primero, luego asignación gerente-grupo; el cambio concurrente espera
+    // aquí y se observa al confirmar la transacción antes de insertar la incidencia.
+    const [asignacion] = await this.db.select({ grupo: schema.gerentesDeGrupo.grupo })
+      .from(schema.gerentesDeGrupo)
+      .where(and(eq(schema.gerentesDeGrupo.grupo, grupo), eq(schema.gerentesDeGrupo.cuentaId, cuentaId)))
+      .for("update");
+    return Boolean(asignacion);
+  }
+
   async insertarImporte(nuevo: NuevoImporteExterno): Promise<ImporteExterno | undefined> {
     const [insertado] = await this.db.insert(importesExternos).values({
       tipoDeFuente: nuevo.tipoDeFuente, dni: nuevo.dni, concepto: nuevo.concepto, fechaDelHecho: nuevo.fechaDelHecho,
       mesDeDevengue: nuevo.mesDeDevengue, mesDeAplicacion: nuevo.mesDeAplicacion, montoCentimos: nuevo.monto,
       procedencia: nuevo.procedencia, registradoPorId: nuevo.responsableId, importacionId: nuevo.importacionId ?? null,
-      estadoDeIncidencia: nuevo.estadoDeIncidencia, conceptoAjustado: nuevo.conceptoAjustado,
+      estadoDeIncidencia: nuevo.estadoDeIncidencia, motivoIncidencia: nuevo.motivoIncidencia, conceptoAjustado: nuevo.conceptoAjustado,
       sentidoAjuste: nuevo.sentidoAjuste, motivoDeAjuste: nuevo.motivoDeAjuste,
     }).onConflictDoNothing().returning({ id: importesExternos.id });
     return insertado && this.buscarImporte(insertado.id);

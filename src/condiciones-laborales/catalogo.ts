@@ -3,6 +3,8 @@
 
 export const DATOS_LABORALES = [
   "sueldo",
+  "banco_de_pago",
+  "movilidad_fija",
   "jornada_ordinaria_diaria",
   "regimen_laboral",
   "afiliacion_pensionaria",
@@ -15,6 +17,8 @@ export type DatoLaboral = (typeof DATOS_LABORALES)[number];
 
 export const NOMBRE_DE_DATO: Record<DatoLaboral, string> = {
   sueldo: "Sueldo",
+  banco_de_pago: "Banco de pago",
+  movilidad_fija: "Movilidad fija mensual",
   jornada_ordinaria_diaria: "Jornada ordinaria diaria",
   regimen_laboral: "Régimen laboral",
   afiliacion_pensionaria: "Afiliación pensionaria",

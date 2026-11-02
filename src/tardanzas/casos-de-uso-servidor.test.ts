@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { crearCasosDeUsoDeTardanzas } from "./casos-de-uso-servidor";
 import type { PoliticaDePenalizacionPorTardanzas, RepositorioDeTardanzas } from "./politica-de-penalizacion";
@@ -12,6 +12,8 @@ function crearRepositorioEnMemoria(tardanzasAcumuladas = 0): {
     politicas,
     repositorio: {
       guardarPolitica: async (politica) => { politicas.push(politica); },
+      obtenerGrupo: async (nombre) => ({ nombre, gestionaAsistencia: true }),
+      guardarPoliticaDeGrupo: async () => undefined,
       buscarPoliticaVigente: async (sede, fecha) => politicas
         .filter((politica) => politica.sede === sede && politica.vigenteDesde <= fecha)
         .sort((primera, segunda) => segunda.vigenteDesde.localeCompare(primera.vigenteDesde))[0],
@@ -21,22 +23,23 @@ function crearRepositorioEnMemoria(tardanzasAcumuladas = 0): {
 }
 
 describe("casos de uso de tardanzas en el servidor", () => {
-  it("permite al Administrador versionar una política de penalización por sede", async () => {
-    const { politicas, repositorio } = crearRepositorioEnMemoria();
+  it("permite al Administrador configurar la política del grupo operativo", async () => {
+    const { repositorio } = crearRepositorioEnMemoria();
+    const guardarPoliticaDeGrupo = vi.fn();
+    repositorio.guardarPoliticaDeGrupo = guardarPoliticaDeGrupo;
     const casosDeUso = crearCasosDeUsoDeTardanzas(repositorio, {
       obtenerActorActual: async () => ({ id: "admin-1", rol: "administrador" }),
     });
 
     await casosDeUso.configurarPolitica({
-      sede: "Lima", toleranciaEnMinutos: 10, tardanzasAcumuladas: 3,
-      horasPenalizadas: 1, version: 1, vigenteDesde: "2026-09-01",
+      grupo: "Tiendas", toleranciaEnMinutos: 10, tardanzasAcumuladas: 3,
+      horasPenalizadas: 1,
     });
 
-    expect(politicas).toEqual([{
-      sede: "Lima", toleranciaEnMinutos: 10, tardanzasAcumuladas: 3,
-      horasPenalizadas: 1, version: 1, vigenteDesde: "2026-09-01",
-      configuradaPorId: "admin-1", configuradaEn: expect.any(Date),
-    }]);
+    expect(guardarPoliticaDeGrupo).toHaveBeenCalledWith({
+      grupo: "Tiendas", toleranciaEnMinutos: 10, tardanzasAcumuladas: 3,
+      horasPenalizadas: 1, configuradaPorId: "admin-1", configuradaEn: expect.any(Date),
+    });
   });
 
   it("calcula una tardanza solo cuando la entrada supera la tolerancia vigente", async () => {
@@ -44,10 +47,8 @@ describe("casos de uso de tardanzas en el servidor", () => {
     const casosDeUso = crearCasosDeUsoDeTardanzas(repositorio, {
       obtenerActorActual: async () => ({ id: "admin-1", rol: "administrador" }),
     });
-    await casosDeUso.configurarPolitica({
-      sede: "Lima", toleranciaEnMinutos: 10, tardanzasAcumuladas: 3,
-      horasPenalizadas: 1, version: 1, vigenteDesde: "2026-09-01",
-    });
+    repositorio.guardarPolitica({ sede: "Lima", toleranciaEnMinutos: 10, tardanzasAcumuladas: 3,
+      horasPenalizadas: 1, version: 1, vigenteDesde: "2026-09-01", configuradaPorId: "fixture", configuradaEn: new Date() });
 
     await expect(casosDeUso.calcularTardanza({
       dni: "00001024", sede: "Lima", fecha: "2026-09-01", entradaProgramada: "09:00",
@@ -77,14 +78,23 @@ describe("casos de uso de tardanzas en el servidor", () => {
     const casosDeUso = crearCasosDeUsoDeTardanzas(repositorio, {
       obtenerActorActual: async () => ({ id: "admin-1", rol: "administrador" }),
     });
-    await casosDeUso.configurarPolitica({
-      sede: "Lima", toleranciaEnMinutos: 10, tardanzasAcumuladas: 3,
-      horasPenalizadas: 1, version: 1, vigenteDesde: "2026-08-26",
-    });
+    await repositorio.guardarPolitica({ sede: "Lima", toleranciaEnMinutos: 10, tardanzasAcumuladas: 3,
+      horasPenalizadas: 1, version: 1, vigenteDesde: "2026-08-26", configuradaPorId: "fixture", configuradaEn: new Date() });
 
     await expect(casosDeUso.calcularTardanza({
       dni: "00001024", sede: "Lima", fecha: "2026-09-01", entradaProgramada: "09:00",
       entradaReal: "2026-09-01T09:11:00-05:00",
     })).resolves.toEqual({ minutosDeTardanza: 11, minutosPenalizados: 60, politicaVersion: 1 });
+  });
+
+  it("rechaza las solicitudes históricas de escritura por sede", async () => {
+    const { politicas, repositorio } = crearRepositorioEnMemoria();
+    const casosDeUso = crearCasosDeUsoDeTardanzas(repositorio, {
+      obtenerActorActual: async () => ({ id: "admin-1", rol: "administrador" }),
+    });
+    await expect(casosDeUso.configurarPolitica({ sede: "Lima", toleranciaEnMinutos: 10,
+      tardanzasAcumuladas: 3, horasPenalizadas: 1, version: 1, vigenteDesde: "2026-09-01" }))
+      .rejects.toThrow("La política de tardanzas se configura por grupo operativo que gestiona asistencia.");
+    expect(politicas).toEqual([]);
   });
 });

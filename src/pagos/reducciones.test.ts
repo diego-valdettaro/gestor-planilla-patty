@@ -10,6 +10,7 @@ const ana = { id: "r1", dni: "12345678", nombre: "Ana", grupo: "Taller", ingreso
 
 const condiciones: EntradaDeBorrador["condiciones"] = [
   { relacionId: "r1", dato: "sueldo", valor: 180000, vigenteDesde: "2026-01-01" },
+  { relacionId: "r1", dato: "movilidad_fija", valor: 0, vigenteDesde: "2026-01-01" },
   { relacionId: "r1", dato: "jornada_ordinaria_diaria", valor: 480, vigenteDesde: "2026-01-01" },
   { relacionId: "r1", dato: "elegibilidad_familiar", valor: false, vigenteDesde: "2026-01-01" },
   { relacionId: "r1", dato: "regimen_laboral", valor: "general", vigenteDesde: "2026-01-01" },

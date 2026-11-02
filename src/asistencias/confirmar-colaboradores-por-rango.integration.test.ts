@@ -88,6 +88,10 @@ describe.skipIf(!databaseUrl)("confirmación por rango en PostgreSQL", () => {
       vigenteDesde: "2036-03-01",
       configuradaPorId: cuentaId,
     });
+    await db.insert(schema.politicasTardanzasGrupo).values({
+      grupo, toleranciaEnMinutos: 10, tardanzasAcumuladas: 2, horasPenalizadas: 1,
+      configuradaPorId: cuentaId, configuradaEn: new Date(),
+    });
     const [registrada] = await db.select({ id: schema.asistenciasEsperadas.id }).from(schema.asistenciasEsperadas).where(and(
       eq(schema.asistenciasEsperadas.dni, ana),
       eq(schema.asistenciasEsperadas.fecha, fechas[2]),
@@ -107,6 +111,7 @@ describe.skipIf(!databaseUrl)("confirmación por rango en PostgreSQL", () => {
     await db.delete(schema.asistenciasEsperadas).where(inArray(schema.asistenciasEsperadas.dni, ids));
     await db.delete(schema.turnosPublicados).where(inArray(schema.turnosPublicados.dni, ids));
     await db.delete(schema.politicasDePenalizacionPorTardanzas).where(eq(schema.politicasDePenalizacionPorTardanzas.sede, sede));
+    await db.delete(schema.politicasTardanzasGrupo).where(eq(schema.politicasTardanzasGrupo.grupo, grupo));
     await db.delete(schema.periodosPlanilla).where(and(eq(schema.periodosPlanilla.inicio, "2036-03-01"), eq(schema.periodosPlanilla.fin, "2036-03-24")));
     await db.delete(schema.periodosPlanilla).where(and(eq(schema.periodosPlanilla.inicio, "2036-03-25"), eq(schema.periodosPlanilla.fin, "2036-04-30")));
     await db.delete(schema.periodosPlanilla).where(and(eq(schema.periodosPlanilla.inicio, "2036-02-01"), eq(schema.periodosPlanilla.fin, "2036-02-28")));

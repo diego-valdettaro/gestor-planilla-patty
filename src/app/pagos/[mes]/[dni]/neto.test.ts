@@ -28,7 +28,7 @@ const condicion = (dato: CondicionLaboral["dato"], valor: CondicionLaboral["valo
 function fuentesCon(repositorio: FuentesDelBorrador["externas"]): FuentesDelBorrador {
   return {
     relaciones: { listarConPersona: async () => [{ id: "r1", dni: DNI, nombre: "Ana", grupo: "Taller", ingreso: "2026-01-01", cese: null, ingresoConfirmado: true, ceseConfirmado: false }] },
-    condiciones: { listarTodas: async () => [condicion("sueldo", 200000), condicion("jornada_ordinaria_diaria", 480), condicion("regimen_laboral", "general"),
+    condiciones: { listarTodas: async () => [condicion("sueldo", 200000), condicion("movilidad_fija", 0), condicion("jornada_ordinaria_diaria", 480), condicion("regimen_laboral", "general"),
       condicion("afiliacion_pensionaria", "onp"), condicion("elegibilidad_familiar", false), condicion("sede_de_adscripcion", "Taller")] },
     // Reglas DEMO sintéticas requeridas por #126; no son tasas legales actuales.
     reglas: { listarTodas: async () => ([
@@ -62,7 +62,7 @@ const lineas = [
 function borrador(persona: Record<string, unknown> = {}, parcial: Record<string, unknown> = {}) {
   return { mesDePago: "2026-10", corte, vacacionesProvisionales: false, bloqueosDelMes: [], fuentes: TIPOS_DE_FUENTE.map(tipo => ({ ...tipo, estado: "Confirmada" })), revisiones: [], personas: [
     { vacaciones: [], relacion: { id: "r1", dni: "12345678", nombre: "Ana", grupo: "Taller", ingreso: "2026-01-01", cese: null, ceseConfirmado: false },
-      basesPorDevengue: [], sedeDeAdscripcion: "Taller", sueldoCalculadoCentimos: 200000, netoCentimos: 177000, bloqueos: [], lineas, ...persona },
+      movilidadFijaPendiente: { tramos: [] }, basesPorDevengue: [], sedeDeAdscripcion: "Taller", sueldoCalculadoCentimos: 200000, netoCentimos: 177000, bloqueos: [], lineas, ...persona },
   ], ...parcial };
 }
 

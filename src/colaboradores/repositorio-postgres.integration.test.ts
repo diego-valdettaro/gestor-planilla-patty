@@ -53,6 +53,28 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeColaboradores", () => {
     });
   });
 
+  it("G11 persiste y recupera un colaborador sin sede fija, conservando la adscripción laboral", async () => {
+    const sinSede = { dni: dniDePrueba(), nombre: "Persona sin sede", sede: null, grupo: "Tiendas", activo: true };
+    const cuentaId = randomUUID();
+    const sedeAdscripcion = `Sede adscripción G11 ${randomUUID()}`;
+    await db.insert(schema.cuentasLocales).values({ id: cuentaId, nombreUsuario: `rrhh-g11-${cuentaId}`, hashContrasena: "prueba", rol: "recursos_humanos" });
+    await db.insert(schema.sedes).values({ nombre: sedeAdscripcion, activa: true, grupo: "Tiendas" });
+    await repositorio.guardar(sinSede);
+    const [relacion] = await db.insert(schema.relacionesLaborales).values({ dni: sinSede.dni, ingreso: "2026-01-01", registradaPorId: cuentaId }).returning({ id: schema.relacionesLaborales.id });
+    await db.insert(schema.condicionesLaborales).values({ relacionLaboralId: relacion.id, dato: "sede_de_adscripcion", sedeDeAdscripcion: sedeAdscripcion, vigenteDesde: "2026-01-01", registradoPorId: cuentaId });
+    try {
+      await expect(repositorio.buscarPorDni(sinSede.dni)).resolves.toMatchObject({ dni: sinSede.dni, sede: null, grupo: "Tiendas" });
+      await expect(db.select({ sede: schema.condicionesLaborales.sedeDeAdscripcion }).from(schema.condicionesLaborales).where(eq(schema.condicionesLaborales.relacionLaboralId, relacion.id)))
+        .resolves.toEqual([{ sede: sedeAdscripcion }]);
+    } finally {
+      await db.delete(schema.condicionesLaborales).where(eq(schema.condicionesLaborales.relacionLaboralId, relacion.id));
+      await db.delete(schema.relacionesLaborales).where(eq(schema.relacionesLaborales.id, relacion.id));
+      await db.delete(schema.colaboradores).where(eq(schema.colaboradores.dni, sinSede.dni));
+      await db.delete(schema.sedes).where(eq(schema.sedes.nombre, sedeAdscripcion));
+      await db.delete(schema.cuentasLocales).where(eq(schema.cuentasLocales.id, cuentaId));
+    }
+  });
+
   it("deja que PostgreSQL rechace el DNI duplicado", async () => {
     await expect(
       repositorio.guardar({

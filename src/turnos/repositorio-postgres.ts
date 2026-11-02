@@ -318,7 +318,7 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
   }
 
   async listarColaboradoresActivosPorEquipo(equipo: string): Promise<
-    Array<{ dni: string; nombre: string; sede: string }>
+    Array<{ dni: string; nombre: string; sede: string | null }>
   > {
     return this.db
       .select({
@@ -332,7 +332,7 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
   }
 
   async listarColaboradoresProcesadosPorSemanaYEquipo(semana: string, equipo: string): Promise<
-    Array<{ dni: string; nombre: string; sede: string }>
+    Array<{ dni: string; nombre: string; sede: string | null }>
   > {
     return this.db.select({ dni: colaboradores.dni, nombre: colaboradores.nombre, sede: colaboradores.sede })
       .from(horariosSemanalesProcesados)
@@ -376,7 +376,7 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
   }
 
   async listarColaboradoresActivos(): Promise<
-    Array<{ dni: string; nombre: string; sede: string }>
+    Array<{ dni: string; nombre: string; sede: string | null }>
   > {
     return this.db
       .select({

@@ -48,6 +48,17 @@ function interpretarJornada(texto: string): number {
 export function interpretarValor(dato: DatoLaboral, texto: string): ValorLaboral {
   switch (dato) {
     case "sueldo": return interpretarSueldo(texto);
+    case "banco_de_pago": {
+      const banco = texto.trim();
+      if (!banco) throw new Error("Indique el banco de pago.");
+      return banco;
+    }
+    case "movilidad_fija": {
+      const coincide = NUMERO_DECIMAL.exec(texto.trim());
+      const centimos = coincide ? Number(coincide[1]) * 100 + Number((coincide[2] ?? "").padEnd(2, "0")) : NaN;
+      if (!Number.isSafeInteger(centimos) || centimos < 0 || centimos > MAXIMO_DE_CENTIMOS) throw new Error("La movilidad fija debe ser un importe no negativo, con hasta dos decimales.");
+      return centimos;
+    }
     case "jornada_ordinaria_diaria": return interpretarJornada(texto);
     case "regimen_laboral": return enCatalogo<Regimen>(REGIMENES, texto, "Elija un régimen laboral: general o REMYPE pequeña empresa.");
     case "afiliacion_pensionaria": return enCatalogo<Afiliacion>(AFILIACIONES, texto, "Elija una afiliación pensionaria: ONP o una AFP de la lista.");
@@ -80,7 +91,9 @@ export function formatearJornada(minutos: number): string {
 
 export function formatearValor(dato: DatoLaboral, valor: ValorLaboral): string {
   switch (dato) {
-    case "sueldo": return formatearSoles(Number(valor));
+    case "sueldo":
+    case "movilidad_fija": return formatearSoles(Number(valor));
+    case "banco_de_pago": return String(valor);
     case "jornada_ordinaria_diaria": return formatearJornada(Number(valor));
     case "regimen_laboral": return NOMBRE_DE_REGIMEN[valor as Regimen];
     case "afiliacion_pensionaria": return NOMBRE_DE_AFILIACION[valor as Afiliacion];

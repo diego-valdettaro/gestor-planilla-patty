@@ -64,6 +64,7 @@ describe.skipIf(!databaseUrl)("reducciones del borrador con permisos y suspensio
       { ...condicion, dato: "regimen_laboral", regimen: "general" },
       { ...condicion, dato: "afiliacion_pensionaria", afiliacionPensionaria: "onp" },
       { ...condicion, dato: "sede_de_adscripcion", sedeDeAdscripcion: sede },
+      { ...condicion, dato: "movilidad_fija", movilidadFijaCentimos: 0 },
     ]);
     // Valores sintéticos: esta prueba trata de reducciones, pero el borrador ahora exige las reglas de aportes vigentes.
     const regla = { vigenteDesde: "2093-01-01", fuenteOficial: "Valor sintético de prueba", activadaPorId: cuentaId };

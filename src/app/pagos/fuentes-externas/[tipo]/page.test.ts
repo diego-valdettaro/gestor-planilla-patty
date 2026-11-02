@@ -92,6 +92,32 @@ describe("página de un tipo de fuente (/pagos/fuentes-externas/[tipo])", () => 
     expect(await render("incidencias_de_tienda", "2026-10")).toContain("En investigación (fuera del neto)");
   });
 
+  it("G25B muestra en Finanzas el motivo de gerente, el pendiente y sus decisiones sin datos de planilla", async () => {
+    const ejecutarOriginal = contexto.repositorio.ejecutarSobreFuente.bind(contexto.repositorio);
+    contexto.repositorio.ejecutarSobreFuente = (tipo, mes, operacion) => ejecutarOriginal(tipo, mes, (almacen) => operacion({
+      ...almacen,
+      buscarGrupoDePersona: async () => "Tiendas",
+      gerenteAsignadoAlGrupo: async () => true,
+      insertarImporte: async (nuevo) => {
+        const importe = await almacen.insertarImporte(nuevo);
+        if (importe) importe.motivoIncidencia = nuevo.motivoIncidencia ?? null;
+        return importe;
+      },
+    }));
+    await registrarIncidencia(contexto.repositorio, { id: "ger-1", rol: "gerente_de_area", grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] }, {
+      dni: ANA, fechaDelHecho: "2026-09-28", monto: "25", motivo: "Producto dañado",
+    });
+
+    const html = await render("incidencias_de_tienda", "2026-10");
+
+    expect(html).toContain("Sin sustento");
+    expect(html).toContain("Motivo: Producto dañado");
+    expect(html).toContain("No descontar en este pago");
+    expect(html).toContain("Autorizar descuento");
+    expect(html).not.toContain("Banco de pago");
+    expect(html).not.toContain("Sueldo mensual");
+  });
+
   it("muestra el ajuste con concepto corregido, motivo y formulario dedicado", async () => {
     await registrarAjuste(contexto.repositorio, finanzas, { dni: ANA, fechaDelHecho: "2026-09-28", mesDeDevengue: "2026-09", mesDeAplicacion: "2026-10", monto: "25", conceptoAjustado: "sueldo_basico", sentidoAjuste: "resta", motivo: "Diferencia previa" });
     const html = await render("ajustes_de_preliquidacion", "2026-10");

@@ -68,3 +68,56 @@ describe("incidencias de tienda y ajustes", () => {
     expect(await repositorio.listarImportesDelMes(datos.mesDeAplicacion)).toEqual([]);
   });
 });
+
+function contextoDeIncidenciaDeGerente() {
+  const contexto = crearRepositorioEnMemoria({ [datos.dni]: "Ana" });
+  const original = contexto.repositorio.ejecutarSobreFuente.bind(contexto.repositorio);
+  contexto.repositorio.ejecutarSobreFuente = (tipo, mes, operacion) => original(tipo, mes, async (almacen) => {
+    const insertar = almacen.insertarImporte.bind(almacen);
+    const adaptado = {
+      ...almacen,
+      buscarGrupoDePersona: async () => "Taller",
+      gerenteAsignadoAlGrupo: async (cuentaId: string, grupo: string) => cuentaId === gerenteTaller.id && grupo === "Taller",
+      insertarImporte: async (nuevo: Parameters<typeof insertar>[0] & { motivoIncidencia?: string }) => {
+        const resultado = await insertar(nuevo);
+        if (resultado && nuevo.motivoIncidencia) Object.assign(resultado, { motivoIncidencia: nuevo.motivoIncidencia });
+        return resultado;
+      },
+    };
+    return operacion(adaptado);
+  });
+  return contexto;
+}
+const gerenteTaller: Actor = { id: "g1", rol: "gerente_de_area", grupos: [{ nombre: "Taller", gestionaAsistencia: true }] };
+const solicitudGerente = (fechaDelHecho: string) => ({ dni: datos.dni, fechaDelHecho, monto: "80,50", motivo: "Producto dañado" }) as unknown as Parameters<typeof registrarIncidencia>[2];
+
+describe("G06 incidencia por corte", () => {
+  const casos = [
+    { fila: "R15", fecha: "2026-10-25", mes: "2026-10", devengue: "2026-10", pagado: false },
+    { fila: "R16", fecha: "2026-10-26", mes: "2026-11", devengue: "2026-10", pagado: false },
+    { fila: "R17", fecha: "2026-12-26", mes: "2027-01", devengue: "2026-12", pagado: false },
+    { fila: "R18", fecha: "2026-10-25", mes: "2026-10", devengue: "2026-10", pagado: true },
+  ];
+  it.each(casos)("$fila deriva el pago de la fecha y respeta el pago confirmado", async ({ fecha, mes, devengue, pagado }) => {
+    const { repositorio, mesesConPagoConfirmado } = contextoDeIncidenciaDeGerente();
+    if (pagado) mesesConPagoConfirmado.add(mes);
+    const operacion = registrarIncidencia(repositorio, gerenteTaller, solicitudGerente(fecha));
+    if (pagado) {
+      await expect(operacion).rejects.toThrow(/pago realizado confirmado/i);
+      expect(await repositorio.listarImportesDelMes(mes)).toEqual([]);
+    } else {
+      await expect(operacion).resolves.toMatchObject({ fechaDelHecho: fecha, mesDeAplicacion: mes, mesDeDevengue: devengue, monto: 8050, motivoIncidencia: "Producto dañado", estadoDeIncidencia: "sin_sustento" });
+    }
+  });
+});
+
+describe("G07 decisión financiera de incidencia registrada por gerente", () => {
+  const casos = [{ fila: "R20", decision: "autorizar" as const, total: 8050 }, { fila: "R21", decision: "no_descontar" as const, total: 0 }];
+  it.each(casos)("$fila aplica solo la decisión de Finanzas", async ({ decision, total }) => {
+    const { repositorio } = contextoDeIncidenciaDeGerente();
+    const incidencia = await registrarIncidencia(repositorio, gerenteTaller, solicitudGerente("2026-10-25"));
+    await decidirIncidencia(repositorio, finanzas, { id: incidencia.id, decision, sustento: "Acta", autorizadoPor: "Finanzas", fechaDeAutorizacion: "2026-10-26" });
+    await confirmarFuente(repositorio, finanzas, { tipoDeFuente: "incidencias_de_tienda", mes: "2026-10" });
+    expect((await consultarImportesDePersona(repositorio, finanzas, datos.dni, "2026-10")).incidencias_de_tienda).toMatchObject({ estado: "confirmado", total });
+  });
+});

@@ -37,6 +37,8 @@ describe("página de Condiciones laborales (/pagos/condiciones-laborales)", () =
     // Beto completo, con un cambio de sueldo; Ana (reingreso) con AFP sin esquema; la primera relación de Ana sin nada.
     await registrar(BETO_RELACION, "sueldo", "1500", "2024-01-08");
     await registrar(BETO_RELACION, "sueldo", "1800", "2026-09-16");
+    await registrar(BETO_RELACION, "banco_de_pago", "BCP", "2024-01-08");
+    await registrar(BETO_RELACION, "movilidad_fija", "0", "2024-01-08");
     await registrar(BETO_RELACION, "jornada_ordinaria_diaria", "8", "2024-01-08");
     await registrar(BETO_RELACION, "regimen_laboral", "remype_pequena_empresa", "2024-01-08");
     await registrar(BETO_RELACION, "afiliacion_pensionaria", "onp", "2024-01-08");
@@ -72,9 +74,9 @@ describe("página de Condiciones laborales (/pagos/condiciones-laborales)", () =
     const html = await render();
 
     expect(html).toContain("Pendiente");
-    expect(html).toContain("Falta: sueldo, jornada ordinaria diaria, régimen laboral");
     expect(html).not.toContain("S/ 0,00");
-    expect(html).toContain("Falta: jornada ordinaria diaria, régimen laboral, esquema de comisión AFP, asignación familiar otorgada, sede de adscripción");
+    expect(html).toContain("Falta: banco de pago, movilidad fija mensual, jornada ordinaria diaria, régimen laboral, esquema de comisión AFP, asignación familiar otorgada, sede de adscripción");
+    expect(html).toContain("Falta: sueldo, banco de pago, movilidad fija mensual, jornada ordinaria diaria, régimen laboral, afiliación pensionaria, asignación familiar otorgada, sede de adscripción");
   });
 
   it("filtra por grupo, sede, persona y datos faltantes y rotula el alcance", async () => {

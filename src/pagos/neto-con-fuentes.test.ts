@@ -25,7 +25,7 @@ function fuentesCon(repositorio: FuentesDelBorrador["externas"]): FuentesDelBorr
   return {
     relaciones: { listarConPersona: async () => [{ id: "r1", dni: DNI, nombre: "Ana", grupo: "Taller", ingreso: "2026-01-01", cese: null, ingresoConfirmado: true, ceseConfirmado: false }] },
     condiciones: { listarTodas: async () => [condicion("sueldo", 200000), condicion("jornada_ordinaria_diaria", 480), condicion("regimen_laboral", "general"),
-      condicion("afiliacion_pensionaria", "onp"), condicion("elegibilidad_familiar", false), condicion("sede_de_adscripcion", "Taller")] },
+      condicion("movilidad_fija", 0), condicion("afiliacion_pensionaria", "onp"), condicion("elegibilidad_familiar", false), condicion("sede_de_adscripcion", "Taller")] },
     // Reglas DEMO sintéticas requeridas por #126; no son tasas legales actuales.
     reglas: { listarTodas: async () => ([
       ["onp_tasa", 1300], ["essalud_tasa", 900], ["essalud_base_minima", 100000],

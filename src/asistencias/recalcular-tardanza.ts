@@ -22,7 +22,7 @@ export async function recalcularTardanzaDeAsistencia(
 ): Promise<void> {
   const turno = asistencia.instantaneaDeTurno;
   if (!turno?.sede || !turno.entradaProgramada) throw new Error(`La asistencia de ${asistencia.fecha} no conserva la entrada programada ni la sede aplicadas.`);
-  const politica = await buscarPoliticaVigente(tx, turno.sede, asistencia.fecha);
+  const politica = await buscarPoliticaVigente(tx, turno.sede, asistencia.fecha, asistencia.dni);
   if (!politica) throw new Error(`No existe una política de tardanzas vigente para ${turno.sede}.`);
 
   const minutosDeTardanza = minutosDeTardanzaFueraDeTolerancia(politica, turno.entradaProgramada, asistencia.entradaReal);
@@ -58,7 +58,7 @@ export async function recalcularPenalizaciones(
   )).orderBy(asc(asistenciasEsperadas.fecha));
   for (const [indice, fila] of filas.entries()) {
     if (!fila.instantanea?.sede) throw new Error(`La tardanza de ${fila.fecha} no conserva la sede aplicada.`);
-    const politica = await buscarPoliticaVigente(tx, fila.instantanea.sede, fila.fecha);
+    const politica = await buscarPoliticaVigente(tx, fila.instantanea.sede, fila.fecha, alcance.dni);
     if (!politica) throw new Error(`No existe una política de tardanzas vigente para ${fila.instantanea.sede}.`);
     await tx.update(tardanzas).set({
       minutosPenalizados: calcularMinutosPenalizados(indice + 1, politica),

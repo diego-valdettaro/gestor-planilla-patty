@@ -28,7 +28,7 @@ export interface EntradaDeBorrador {
   mesDePago: string;
   corte: Corte;
   relaciones: RelacionConPersona[];
-  condiciones: Array<{ relacionId: string; dato: DatoLaboral; valor: ValorLaboral; vigenteDesde: string }>;
+  condiciones: Array<{ relacionId: string; dato: DatoLaboral | "movilidad_fija"; valor: ValorLaboral; vigenteDesde: string }>;
   reglas: Array<{ codigo: CodigoDeReglaLegal; valor: number; vigenteDesde: string }>;
   problemasDelCorte: string[];
   revisiones: RevisionDeAsistenciaParaPagos[];
@@ -231,6 +231,7 @@ export function totalDeTrabajoEnDescansoOFeriadoCentimos(lineas: LineaDeBorrador
 
 export interface PersonaDeBorrador {
   relacion: RelacionConPersona;
+  movilidadFijaPendiente: { tramos: TramoDeMovilidadFija[] };
   basesPorDevengue: BasesPorDevengue[];
   sedeDeAdscripcion: string | null;
   lineas: LineaDeBorrador[];
@@ -256,6 +257,15 @@ export interface BorradorDePagos {
   netoCalculadoCentimos: number;
   /** Personas sin neto por un bloqueo propio. */
   personasBloqueadas: number;
+}
+
+export interface TramoDeMovilidadFija {
+  desde: string;
+  hasta: string;
+  dias: number;
+  importeCentimos: number;
+  montoMensualCentimos: number;
+  mesDeDevengue: string;
 }
 
 function finDeMes(mes: string): string {
@@ -285,10 +295,32 @@ function sueldoEn(entrada: EntradaDeBorrador, relacionId: string, fecha: string)
   return Number(condicionEn(entrada, relacionId, "sueldo", fecha)) || undefined;
 }
 
-function condicionEn(entrada: EntradaDeBorrador, relacionId: string, datoBuscado: DatoLaboral, fecha: string): ValorLaboral | undefined {
+function condicionEn(entrada: EntradaDeBorrador, relacionId: string, datoBuscado: DatoLaboral | "movilidad_fija", fecha: string): ValorLaboral | undefined {
   const vigentes = entrada.condiciones.filter((dato) => dato.relacionId === relacionId && dato.dato === datoBuscado && dato.vigenteDesde <= fecha)
     .sort((a, b) => a.vigenteDesde.localeCompare(b.vigenteDesde));
   return vigentes.at(-1)?.valor;
+}
+
+/** Cálculo informativo separado de bases y neto hasta definir el tratamiento contable. */
+function movilidadFijaDelMes(entrada: EntradaDeBorrador, relacion: RelacionConPersona, mes: string): TramoDeMovilidadFija[] {
+  const primero = `${mes}-01`;
+  const ultimo = finDeMes(mes);
+  const desde = relacion.ingreso > primero ? relacion.ingreso : primero;
+  const cese = relacion.ceseConfirmado ? relacion.cese : null;
+  const hasta = cese && cese < ultimo ? cese : ultimo;
+  if (desde > hasta) return [];
+  const cambios = entrada.condiciones.filter((dato) => dato.relacionId === relacion.id && dato.dato === "movilidad_fija" && dato.vigenteDesde > desde && dato.vigenteDesde <= hasta)
+    .map((dato) => dato.vigenteDesde).sort();
+  const inicios = [desde, ...new Set(cambios)];
+  const diasDelMes = Number(ultimo.slice(-2));
+  return inicios.flatMap((inicio, indice) => {
+    const siguiente = inicios[indice + 1];
+    const fin = siguiente ? desplazarFecha(siguiente, -1) : hasta;
+    const monto = condicionEn(entrada, relacion.id, "movilidad_fija", inicio);
+    if (typeof monto !== "number") return [];
+    const dias = Math.round((Date.parse(`${fin}T00:00:00Z`) - Date.parse(`${inicio}T00:00:00Z`)) / 86_400_000) + 1;
+    return [{ desde: inicio, hasta: fin, dias, importeCentimos: mitadArriba(monto * dias, diasDelMes), montoMensualCentimos: monto, mesDeDevengue: mes }];
+  });
 }
 
 interface Pieza { inicio: string; fin: string; descanso: DescansoVacacional | null; vacaciones: number }
@@ -648,12 +680,31 @@ export function calcularBorrador(entrada: EntradaDeBorrador): BorradorDePagos {
     const hechos = (entrada.hechosPorDni[relacion.dni] ?? []).filter((hecho) =>
       hecho.fecha >= relacion.ingreso && (!relacion.ceseConfirmado || relacion.cese === null || hecho.fecha <= relacion.cese));
     const bloqueos = [...actual.bloqueos, ...arrastre.bloqueos];
+    const mesesDeMovilidad = conArrastre ? [anterior, mes] : [mes];
+    const tramosDeMovilidad = mesesDeMovilidad.flatMap((devengue) => movilidadFijaDelMes(entrada, relacion, devengue));
+    const mesesDeMovilidadPendiente = new Set<string>();
+    for (const devengue of mesesDeMovilidad) {
+      const desde = relacion.ingreso > `${devengue}-01` ? relacion.ingreso : `${devengue}-01`;
+      const ultimo = finDeMes(devengue);
+      const cese = relacion.ceseConfirmado ? relacion.cese : null;
+      const hasta = cese && cese < ultimo ? cese : ultimo;
+      if (desde > hasta) continue;
+      const valor = condicionEn(entrada, relacion.id, "movilidad_fija", desde);
+      if (typeof valor !== "number") {
+        bloqueos.push(`Pendiente: movilidad fija sin dato vigente el ${desde}. Registre el importe o cero en Condiciones laborales.`);
+        mesesDeMovilidadPendiente.add(devengue);
+      }
+      if (tramosDeMovilidad.some((tramo) => tramo.mesDeDevengue === devengue && tramo.montoMensualCentimos > 0)) {
+        bloqueos.push(`Pendiente: clasificación contable de movilidad fija de ${devengue}.`);
+        mesesDeMovilidadPendiente.add(devengue);
+      }
+    }
     const fechaDeConsulta = relacion.ingreso > `${mes}-01` ? relacion.ingreso : `${mes}-01`;
     // La sede de adscripción agrupa los totales: se consulta como siempre, el día 25 (o el ingreso, si es posterior).
     const fechaDeSede = relacion.ingreso > `${mes}-25` ? relacion.ingreso : `${mes}-25`;
     const afiliacion = condicionEn(entrada, relacion.id, "afiliacion_pensionaria", fechaDeConsulta);
     for (const dato of DATOS_LABORALES) {
-      if (dato === "sueldo" || (dato === "comision_afp" && !esAfp(afiliacion))) continue;
+      if (dato === "sueldo" || dato === "banco_de_pago" || dato === "movilidad_fija" || (dato === "comision_afp" && !esAfp(afiliacion))) continue;
       if (hayCambioIntramensual(entrada.condiciones.filter(c => c.relacionId === relacion.id && c.dato === dato), relacion, mes)) continue;
       if (condicionEn(entrada, relacion.id, dato, fechaDeConsulta) === undefined) {
         bloqueos.push(`Sin ${NOMBRE_DE_DATO[dato].toLocaleLowerCase("es")} vigente el ${fechaDeConsulta}. Registre el valor en Condiciones laborales.`);
@@ -683,7 +734,7 @@ export function calcularBorrador(entrada: EntradaDeBorrador): BorradorDePagos {
     const lineas: LineaDeBorrador[] = [...arrastre.lineas, ...actual.lineas, ...sobretiempo.lineas, ...enDescanso.lineas, ...reduccionesDeAsistencia.lineas, ...familiar.lineas, ...externas];
     const desglose = vacacionesDeLaPersona(entrada, relacion, conArrastre ? [anterior, mes] : [mes], descansos, lineas);
     bloqueos.push(...desglose.bloqueos);
-    const mesesPendientes = new Set(familiar.pendiente ? [mes] : []);
+    const mesesPendientes = new Set([...(familiar.pendiente ? [mes] : []), ...mesesDeMovilidadPendiente]);
     for (const importe of ajustesInvalidos) mesesPendientes.add(importe.mesDeDevengue);
     if (actual.bloqueos.length) mesesPendientes.add(mes);
     // Una incidencia sin resolver puede cambiar el sueldo del corte: sus bases no se muestran como si fueran definitivas.
@@ -703,7 +754,7 @@ export function calcularBorrador(entrada: EntradaDeBorrador): BorradorDePagos {
     bloqueos.push(...bloqueosPorDuplicacion(vigentes, lineas));
     const neto = entrada.fuentesPendientes.length || bloqueos.length ? null : netoDe(lineas, sueldoCalculadoCentimos);
     if (neto !== null && neto < 0) bloqueos.push(bloqueoPorNetoNegativo(neto));
-    return { relacion, vacaciones: desglose.vacaciones, sedeDeAdscripcion: String(condicionEn(entrada, relacion.id, "sede_de_adscripcion", fechaDeSede) ?? "") || null,
+    return { relacion, movilidadFijaPendiente: { tramos: tramosDeMovilidad }, vacaciones: desglose.vacaciones, sedeDeAdscripcion: String(condicionEn(entrada, relacion.id, "sede_de_adscripcion", fechaDeSede) ?? "") || null,
       lineas, basesPorDevengue: bases, bloqueos, conciliacion: totalesDeConciliacion(vigentes),
       sueldoCalculadoCentimos, netoCentimos: neto === null || neto < 0 ? null : neto };
   }).sort((a, b) => a.relacion.nombre.localeCompare(b.relacion.nombre) || a.relacion.dni.localeCompare(b.relacion.dni));

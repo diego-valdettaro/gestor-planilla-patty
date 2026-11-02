@@ -116,6 +116,10 @@ describe.skipIf(!databaseUrl)("aprobación de asistencia por grupo (integración
     await db.insert(schema.politicasDePenalizacionPorTardanzas).values([sedeA, sedeCircuito].map((sede) => ({
       sede, toleranciaEnMinutos: 30, tardanzasAcumuladas: 3, horasPenalizadas: 1, version: 1, vigenteDesde: "2000-01-01", configuradaPorId: finanzasId,
     })));
+    await db.insert(schema.politicasTardanzasGrupo).values([grupoA, grupoCircuito].map((grupo) => ({
+      grupo, toleranciaEnMinutos: 30, tardanzasAcumuladas: 3, horasPenalizadas: 1,
+      configuradaPorId: finanzasId, configuradaEn: new Date(),
+    })));
     const creados = await db.insert(schema.periodosPlanilla).values([
       { inicio: dias[0], fin: dias[3], estado: "abierto" },
       { inicio: "2074-06-01", fin: "2074-06-02", estado: "abierto" },
@@ -162,6 +166,7 @@ describe.skipIf(!databaseUrl)("aprobación de asistencia por grupo (integración
     await db.delete(schema.relacionesLaborales).where(inArray(schema.relacionesLaborales.dni, personas));
     await db.delete(schema.colaboradores).where(inArray(schema.colaboradores.dni, personas));
     await db.delete(schema.politicasDePenalizacionPorTardanzas).where(inArray(schema.politicasDePenalizacionPorTardanzas.sede, [sedeA, sedeCircuito]));
+    await db.delete(schema.politicasTardanzasGrupo).where(inArray(schema.politicasTardanzasGrupo.grupo, [grupoA, grupoCircuito]));
     await db.delete(schema.sedes).where(inArray(schema.sedes.nombre, [sedeA, sedeCircuito]));
     await db.delete(schema.gerentesDeGrupo).where(eq(schema.gerentesDeGrupo.cuentaId, gerenteId));
     await db.delete(schema.grupos).where(inArray(schema.grupos.nombre, [grupoA, grupoB, grupoCircuito, grupoSinAsistencia]));

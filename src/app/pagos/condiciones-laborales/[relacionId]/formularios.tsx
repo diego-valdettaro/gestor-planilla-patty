@@ -12,12 +12,16 @@ import { corregirCondicionDesdeFormulario, registrarCondicionDesdeFormulario, ty
 const estadoInicial: EstadoDeFormularioDeCondicion = {};
 
 /** Control del valor según el dato: importe, horas o una lista del catálogo; las sedes son las existentes y activas. */
-function CampoDeValor({ dato, sedes }: { dato: DatoLaboral; sedes: string[] }) {
+export function CampoDeValor({ dato, sedes }: { dato: DatoLaboral; sedes: string[] }) {
   switch (dato) {
     case "sueldo":
       return <label>Sueldo mensual (S/)<input autoComplete="off" inputMode="decimal" name="valor" placeholder="1800,00" required /></label>;
     case "jornada_ordinaria_diaria":
       return <label>Jornada ordinaria diaria (horas)<input autoComplete="off" inputMode="decimal" name="valor" placeholder="8" required /></label>;
+    case "banco_de_pago":
+      return <label>Banco de pago<input autoComplete="off" name="valor" placeholder="BCP" required /></label>;
+    case "movilidad_fija":
+      return <label>Movilidad fija mensual (S/)<input autoComplete="off" inputMode="decimal" name="valor" placeholder="280,00" required /></label>;
     case "regimen_laboral":
       return <label>Régimen laboral<select defaultValue="" name="valor" required><option disabled value="">Elija un régimen…</option>{REGIMENES.map((regimen) => <option key={regimen} value={regimen}>{NOMBRE_DE_REGIMEN[regimen]}</option>)}</select></label>;
     case "afiliacion_pensionaria":

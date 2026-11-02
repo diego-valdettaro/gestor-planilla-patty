@@ -7,6 +7,7 @@ import {
   puedeConsultarRelacionesLaborales,
   puedeConsultarPeriodos,
   puedeGestionarPagos,
+  puedeRegistrarIncidenciasDeGrupo,
 } from "@/autenticacion/permisos";
 
 export type EnlaceDeNavegacion = { href: string; etiqueta: string; icono: string };
@@ -15,10 +16,10 @@ export type EnlaceDeNavegacion = { href: string; etiqueta: string; icono: string
 const enlacesDeLaAplicacion: (EnlaceDeNavegacion & { permitido: (actor: Actor) => boolean })[] = [
   { href: "/configuracion", etiqueta: "Configuración", icono: "♧", permitido: puedeConsultarConfiguracion },
   { href: "/cuentas", etiqueta: "Cuentas", icono: "◉", permitido: puedeAdministrarCuentas },
-  { href: "/turnos", etiqueta: "Horarios", icono: "▣", permitido: puedeConsultarHorarios },
-  { href: "/asistencias", etiqueta: "Asistencia", icono: "◷", permitido: puedeConsultarAsistencias },
-  { href: "/periodos", etiqueta: "Períodos de planilla", icono: "▤", permitido: puedeConsultarPeriodos },
   { href: "/relaciones-laborales", etiqueta: "Relaciones laborales", icono: "☰", permitido: puedeConsultarRelacionesLaborales },
+  { href: "/turnos", etiqueta: "Planificación de horarios", icono: "▣", permitido: puedeConsultarHorarios },
+  { href: "/asistencias", etiqueta: "Registro de asistencias", icono: "◷", permitido: (actor) => puedeConsultarAsistencias(actor) || puedeRegistrarIncidenciasDeGrupo(actor) },
+  { href: "/periodos", etiqueta: "Revisión de asistencia para planilla", icono: "▤", permitido: puedeConsultarPeriodos },
   { href: "/pagos", etiqueta: "Pagos", icono: "¤", permitido: puedeGestionarPagos },
 ];
 

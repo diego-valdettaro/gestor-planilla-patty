@@ -14,6 +14,8 @@ import { crearCasosDeUsoDeImportaciones } from "@/importaciones/casos-de-uso-ser
 import { ErroresDeImportacion, type VistaPreviaDeImportacion } from "@/importaciones/importar-semana-por-sede";
 import { parsearArchivoHuellero, type ErrorDeImportacion } from "@/importaciones/parsear-archivo-huellero";
 import { repositorioDeImportaciones } from "@/importaciones/servicio";
+import { registrarIncidencia } from "@/fuentes-externas/incidencias-y-ajustes";
+import { repositorioDeFuentesExternas } from "@/fuentes-externas/servicio";
 
 export interface EstadoDeImportacion {
   error?: string;
@@ -25,6 +27,30 @@ export interface EstadoDeImportacion {
 export interface EstadoDeRegistroManual {
   error?: string;
   listo?: string;
+}
+
+export interface EstadoDeRegistroDeIncidencia {
+  error?: string;
+  listo?: string;
+}
+
+export async function registrarIncidenciaDeTienda(
+  _estadoAnterior: EstadoDeRegistroDeIncidencia,
+  formData: FormData,
+): Promise<EstadoDeRegistroDeIncidencia> {
+  try {
+    const motivo = obtenerTexto(formData, "motivo");
+    const importe = await registrarIncidencia(repositorioDeFuentesExternas, await obtenerActorActual(), {
+      dni: obtenerTexto(formData, "dni"),
+      fechaDelHecho: obtenerTexto(formData, "fechaDelHecho"),
+      monto: obtenerTexto(formData, "monto"),
+      motivo,
+    });
+    revalidatePath("/asistencias");
+    return { listo: importe.estadoDeIncidencia === "sin_sustento" ? "La incidencia quedó registrada para revisión." : "La incidencia quedó registrada." };
+  } catch (causa) {
+    return { error: causa instanceof Error ? causa.message : "No se pudo registrar la incidencia." };
+  }
 }
 
 export async function evaluarConfirmacionPorRango(solicitud: {

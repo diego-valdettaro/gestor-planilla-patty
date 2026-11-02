@@ -68,6 +68,8 @@ describe("historial de un dato", () => {
 describe("valores vigentes y datos faltantes", () => {
   const completas = [
     condicion({ dato: "sueldo", valor: 150000, vigenteDesde: "2026-03-02" }),
+    condicion({ dato: "banco_de_pago", valor: "BCP", vigenteDesde: "2026-03-02" }),
+    condicion({ dato: "movilidad_fija", valor: 0, vigenteDesde: "2026-03-02" }),
     condicion({ dato: "jornada_ordinaria_diaria", valor: 480, vigenteDesde: "2026-03-02" }),
     condicion({ dato: "regimen_laboral", valor: "general", vigenteDesde: "2026-03-02" }),
     condicion({ dato: "afiliacion_pensionaria", valor: "onp", vigenteDesde: "2026-03-02" }),
@@ -75,21 +77,23 @@ describe("valores vigentes y datos faltantes", () => {
     condicion({ dato: "sede_de_adscripcion", valor: "Taller", vigenteDesde: "2026-03-02" }),
   ];
 
-  it("devuelve los siete datos de la fecha, con undefined donde falta", () => {
+  it("devuelve los datos completos de la fecha, con undefined donde falta", () => {
     const vigentes = valoresVigentesEn(completas, "2026-04-01");
     expect(vigentes.sueldo).toBe(150000);
+    expect(vigentes.banco_de_pago).toBe("BCP");
+    expect(vigentes.movilidad_fija).toBe(0);
     expect(vigentes.elegibilidad_familiar).toBe(false);
     expect(vigentes.comision_afp).toBeUndefined();
   });
 
   it("con ONP no se exige el esquema de comisión; con AFP sí", () => {
     expect(datosFaltantes(valoresVigentesEn(completas, "2026-04-01"))).toEqual([]);
-    const conAfp = [...completas.slice(0, 3), condicion({ dato: "afiliacion_pensionaria", valor: "afp_integra", vigenteDesde: "2026-03-02" }), ...completas.slice(4)];
+    const conAfp = [...completas.filter(({ dato }) => dato !== "afiliacion_pensionaria"), condicion({ dato: "afiliacion_pensionaria", valor: "afp_integra", vigenteDesde: "2026-03-02" })];
     expect(datosFaltantes(valoresVigentesEn(conAfp, "2026-04-01"))).toEqual(["comision_afp"]);
   });
 
   it("una persona sin nada tiene todos los datos pendientes menos el esquema", () => {
-    expect(datosFaltantes(valoresVigentesEn([], "2026-04-01"))).toEqual(["sueldo", "jornada_ordinaria_diaria", "regimen_laboral", "afiliacion_pensionaria", "elegibilidad_familiar", "sede_de_adscripcion"]);
+    expect(datosFaltantes(valoresVigentesEn([], "2026-04-01"))).toEqual(["sueldo", "banco_de_pago", "movilidad_fija", "jornada_ordinaria_diaria", "regimen_laboral", "afiliacion_pensionaria", "elegibilidad_familiar", "sede_de_adscripcion"]);
   });
 });
 

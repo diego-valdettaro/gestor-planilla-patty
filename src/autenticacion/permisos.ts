@@ -88,6 +88,11 @@ export function puedeConsultarAsistencias(actor: Actor): boolean {
   return actor.rol === "administrador" || actor.rol === "finanzas" || gerenteConGrupoQueGestionaAsistencia(actor);
 }
 
+/** Solo habilita el registro de incidencias de tienda para personas de grupos asignados; no permite consultar asistencias. */
+export function puedeRegistrarIncidenciasDeGrupo(actor: Actor): boolean {
+  return actor.rol === "gerente_de_area" && gruposDe(actor).length > 0;
+}
+
 /** Finanzas ve asistencias en solo lectura; revisar y confirmar es del gerente de cada grupo. */
 export function puedeRevisarAsistencias(actor: Actor): boolean {
   return actor.rol === "administrador" || gerenteConGrupoQueGestionaAsistencia(actor);

@@ -2,7 +2,7 @@ import type { Actor } from "@/autenticacion/permisos";
 import { exigir, puedeConfigurarGlobalmente } from "@/autenticacion/permisos";
 
 export interface RepositorioDeGrupos {
-  crear(nombre: string): Promise<void>;
+  crear(nombre: string, gestionaAsistencia?: boolean): Promise<void>;
   actualizarGestionDeAsistencia(nombre: string, gestionaAsistencia: boolean): Promise<void>;
 }
 
@@ -12,11 +12,11 @@ export class GrupoDuplicadoError extends Error {
   }
 }
 
-export async function crearGrupo(repositorio: RepositorioDeGrupos, actor: Actor, nombre: string): Promise<void> {
+export async function crearGrupo(repositorio: RepositorioDeGrupos, actor: Actor, nombre: string, gestionaAsistencia = true): Promise<void> {
   exigir(puedeConfigurarGlobalmente(actor), "No tiene permiso para cambiar la configuracion.");
   const normalizado = nombre.trim();
   if (!normalizado) throw new Error("El nombre del grupo es obligatorio.");
-  await repositorio.crear(normalizado);
+  await repositorio.crear(normalizado, gestionaAsistencia);
 }
 
 export async function configurarGestionDeAsistenciaDelGrupo(

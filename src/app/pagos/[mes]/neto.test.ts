@@ -17,9 +17,10 @@ vi.mock("@/pagos/servicio", async () => {
 const ROTULO = "Neto antes de aportes del trabajador";
 const corte = { inicio: "2026-09-26", fin: "2026-10-25" };
 const relacion = (id: string, dni: string, nombre: string) => ({ id, dni, nombre, grupo: "Taller" });
-const calculada = { relacion: relacion("r1", "12345678", "Ana"), sedeDeAdscripcion: "Taller", sueldoCalculadoCentimos: 200000, netoCentimos: 177000, bloqueos: [], lineas: [] };
-const benavides = { relacion: relacion("r2", "87654321", "Beto"), sedeDeAdscripcion: "Tiendas Benavides", sueldoCalculadoCentimos: 100000, netoCentimos: 100000, bloqueos: [], lineas: [] };
-const negativa = { relacion: relacion("r3", "11112222", "Carla"), sedeDeAdscripcion: "Taller", sueldoCalculadoCentimos: 100000, netoCentimos: null, lineas: [],
+const movilidadSinTramos = { tramos: [] };
+const calculada = { relacion: relacion("r1", "12345678", "Ana"), movilidadFijaPendiente: movilidadSinTramos, sedeDeAdscripcion: "Taller", sueldoCalculadoCentimos: 200000, netoCentimos: 177000, bloqueos: [], lineas: [] };
+const benavides = { relacion: relacion("r2", "87654321", "Beto"), movilidadFijaPendiente: movilidadSinTramos, sedeDeAdscripcion: "Tiendas Benavides", sueldoCalculadoCentimos: 100000, netoCentimos: 100000, bloqueos: [], lineas: [] };
+const negativa = { relacion: relacion("r3", "11112222", "Carla"), movilidadFijaPendiente: movilidadSinTramos, sedeDeAdscripcion: "Taller", sueldoCalculadoCentimos: 100000, netoCentimos: null, lineas: [],
   bloqueos: ["Neto negativo: S/ −200,00. Revise deducciones y adelantos, o registre un ajuste de preliquidación. No se arrastra al mes siguiente."] };
 
 function borrador(parcial: Record<string, unknown> = {}) {

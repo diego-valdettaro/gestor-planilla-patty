@@ -6,11 +6,12 @@ import {
   type RepositorioDeTardanzas,
   type SolicitudDeCalculoDeTardanza,
   type SolicitudDePoliticaDePenalizacionPorTardanzas,
+  type SolicitudDePoliticaPorGrupo,
 } from "./politica-de-penalizacion";
 
 export function crearCasosDeUsoDeTardanzas(repositorio: RepositorioDeTardanzas, sesion: SesionDelServidor) {
   return {
-    async configurarPolitica(solicitud: SolicitudDePoliticaDePenalizacionPorTardanzas): Promise<void> {
+    async configurarPolitica(solicitud: SolicitudDePoliticaDePenalizacionPorTardanzas | SolicitudDePoliticaPorGrupo): Promise<void> {
       await configurarPoliticaDePenalizacionPorTardanzas(repositorio, await sesion.obtenerActorActual(), solicitud);
     },
     async calcularTardanza(solicitud: SolicitudDeCalculoDeTardanza) {

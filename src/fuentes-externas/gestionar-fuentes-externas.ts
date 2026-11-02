@@ -28,6 +28,7 @@ export interface ImporteExterno extends ClaveDeImporte {
   conceptoAjustado: string | null;
   sentidoAjuste: "suma" | "resta" | null;
   motivoDeAjuste: string | null;
+  motivoIncidencia?: string | null;
 }
 
 /** Conteos de la validación que aprobó un archivo fuente; con todo o nada, un archivo importado no tiene filas con error. */
@@ -85,6 +86,7 @@ export interface NuevoImporteExterno extends ClaveDeImporte {
   /** El archivo fuente del que viene el importe; ausente en la carga manual. */
   importacionId?: string;
   estadoDeIncidencia?: ImporteExterno["estadoDeIncidencia"];
+  motivoIncidencia?: string;
   conceptoAjustado?: string;
   sentidoAjuste?: ImporteExterno["sentidoAjuste"];
   motivoDeAjuste?: string;
@@ -92,6 +94,10 @@ export interface NuevoImporteExterno extends ClaveDeImporte {
 
 /** Operaciones sobre una fuente (tipo y mes de aplicación); dentro de `ejecutarSobreFuente` corren en una transacción con la fuente bloqueada. */
 export interface AlmacenDeFuentesExternas {
+  /** Lectura y bloqueo transaccionales de la persona para validar el alcance del gerente. */
+  buscarGrupoDePersona?(dni: string): Promise<string | undefined>;
+  /** Verifica y bloquea la asignación vigente del gerente dentro de la misma transacción. */
+  gerenteAsignadoAlGrupo?(cuentaId: string, grupo: string): Promise<boolean>;
   /** Importes no anulados de la fuente. */
   listarImportes(tipo: CodigoDeTipoDeFuente, mes: string): Promise<ImporteExterno[]>;
   buscarImporte(id: string): Promise<ImporteExterno | undefined>;

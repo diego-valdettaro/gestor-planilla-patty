@@ -25,7 +25,7 @@ export const colaboradores = pgTable("colaboradores", {
   id: uuid("id").primaryKey().defaultRandom(),
   dni: text("dni").notNull().unique(),
   nombre: text("nombre").notNull(),
-  sede: text("sede").notNull(),
+  sede: text("sede"),
   grupo: text("grupo").notNull().references(() => grupos.nombre),
   activo: boolean("activo").notNull().default(true),
   creadoEn: timestamp("creado_en", { withTimezone: true }).notNull().defaultNow(),
@@ -341,6 +341,16 @@ export const politicasDePenalizacionPorTardanzas = pgTable(
   ],
 );
 
+export const politicasTardanzasGrupo = pgTable("politicas_tardanzas_grupo", {
+  grupo: text("grupo").primaryKey().references(() => grupos.nombre),
+  toleranciaEnMinutos: integer("tolerancia_en_minutos"),
+  tardanzasAcumuladas: integer("tardanzas_acumuladas"),
+  horasPenalizadas: integer("horas_penalizadas"),
+  conflicto: boolean("conflicto").notNull().default(false),
+  configuradaPorId: uuid("configurada_por_id").references(() => cuentasLocales.id),
+  configuradaEn: timestamp("configurada_en", { withTimezone: true }),
+});
+
 export const tardanzas = pgTable(
   "tardanzas",
   {
@@ -496,8 +506,10 @@ export const condicionesLaborales = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     relacionLaboralId: uuid("relacion_laboral_id").notNull().references(() => relacionesLaborales.id),
-    dato: text("dato", { enum: ["sueldo", "jornada_ordinaria_diaria", "regimen_laboral", "afiliacion_pensionaria", "comision_afp", "elegibilidad_familiar", "sede_de_adscripcion"] }).notNull(),
+    dato: text("dato", { enum: ["sueldo", "banco_de_pago", "movilidad_fija", "jornada_ordinaria_diaria", "regimen_laboral", "afiliacion_pensionaria", "comision_afp", "elegibilidad_familiar", "sede_de_adscripcion"] }).notNull(),
     sueldoCentimos: integer("sueldo_centimos"),
+    bancoDePago: text("banco_de_pago"),
+    movilidadFijaCentimos: integer("movilidad_fija_centimos"),
     jornadaMinutos: integer("jornada_minutos"),
     regimen: text("regimen", { enum: ["general", "remype_pequena_empresa"] }),
     afiliacionPensionaria: text("afiliacion_pensionaria", { enum: ["onp", "afp_habitat", "afp_integra", "afp_prima", "afp_profuturo"] }),
@@ -513,6 +525,7 @@ export const condicionesLaborales = pgTable(
   (table) => [
     index("condiciones_laborales_relacion_dato").on(table.relacionLaboralId, table.dato),
     uniqueIndex("condiciones_laborales_una_activa_por_vigencia").on(table.relacionLaboralId, table.dato, table.vigenteDesde).where(sql`${table.reemplazadaEn} IS NULL`),
+    check("condiciones_laborales_movilidad_fija_no_negativa", sql`${table.movilidadFijaCentimos} IS NULL OR ${table.movilidadFijaCentimos} BETWEEN 0 AND 2147483647`),
     check("condiciones_laborales_reemplazo_con_motivo", sql`(${table.reemplazadaEn} IS NULL) = (${table.motivoDeReemplazo} IS NULL)`),
   ],
 );
@@ -574,6 +587,7 @@ export const importesExternos = pgTable(
     /** El archivo fuente de preliquidación del que viene el importe; null en la carga manual. */
     importacionId: uuid("importacion_id").references((): AnyPgColumn => importacionesDeFuente.id),
     estadoDeIncidencia: text("estado_de_incidencia"),
+    motivoIncidencia: text("motivo_incidencia"),
     sustento: text("sustento"),
     autorizadoPor: text("autorizado_por"),
     fechaDeAutorizacion: date("fecha_de_autorizacion", { mode: "string" }),

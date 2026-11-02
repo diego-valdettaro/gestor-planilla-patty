@@ -62,7 +62,7 @@ function limitesDeFecha({ relacion, datos }: DetalleDeRelacion): Record<DatoLabo
 function PanelDeDato({ dato, detalle, hoy, sedes }: { dato: HistorialDeDato; detalle: DetalleDeRelacion; hoy: string; sedes: string[] }) {
   const titulo = `titulo-${dato.dato}`;
   return <section aria-labelledby={titulo} className="tarjeta panel">
-    <header className="panel-cabecera"><div><h2 id={titulo}>{NOMBRE_DE_DATO[dato.dato]}</h2><p>Vigente hoy ({formatearFechaDeRelacion(hoy)}): {dato.vigente === undefined ? <span className="insignia advertencia">Pendiente</span> : <strong>{formatearValor(dato.dato, dato.vigente)}</strong>}</p></div></header>
+    <header className="panel-cabecera"><div><h2 id={titulo}>{NOMBRE_DE_DATO[dato.dato]}</h2><p>Vigente hoy ({formatearFechaDeRelacion(hoy)}): {dato.vigente === undefined ? <span className="insignia advertencia">Pendiente</span> : <strong>{formatearValor(dato.dato, dato.vigente)}</strong>}</p>{dato.dato === "movilidad_fija" && Number(dato.vigente) > 0 && <p role="status"><strong>Clasificación contable pendiente.</strong> La finalización del pago queda bloqueada hasta que se confirme su tratamiento.</p>}</div></header>
     {dato.historial.length
       ? <div className="panel-tabla primera-columna-fija" role="region" aria-label={`Historial de ${enMinuscula(NOMBRE_DE_DATO[dato.dato])}`} tabIndex={0}><table><thead><tr><th>Valor</th><th>Vigente desde</th><th>Vigente hasta</th><th>Registrado por</th><th>Estado</th><th><span className="sr-only">Acciones</span></th></tr></thead>
         <tbody>{dato.historial.map((entrada) => <FilaDeHistorial dato={dato} detalle={detalle} entrada={entrada} key={entrada.id} sedes={sedes} />)}</tbody></table></div>

@@ -11,9 +11,9 @@ import { GrupoDuplicadoError, type RepositorioDeGrupos } from "./gestionar-grupo
 export class RepositorioPostgresDeGrupos implements RepositorioDeGrupos {
   constructor(private readonly db: NodePgDatabase<typeof schema>) {}
 
-  async crear(nombre: string): Promise<void> {
+  async crear(nombre: string, gestionaAsistencia = true): Promise<void> {
     try {
-      await this.db.insert(grupos).values({ nombre });
+      await this.db.insert(grupos).values({ nombre, gestionaAsistencia });
     } catch (causa) {
       if (esViolacionDeUnicidad(causa)) throw new GrupoDuplicadoError();
       throw causa;

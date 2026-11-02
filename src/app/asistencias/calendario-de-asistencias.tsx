@@ -6,6 +6,7 @@ import { IconoCandado } from "@/app/icono-candado";
 import { TIPOS_DE_ESTADO_MANUAL_REGISTRABLE, type TipoDeEstadoManualRegistrable } from "@/asistencias/estado-manual";
 
 import { registrarAsistenciaManual, type EstadoDeRegistroManual } from "./actions";
+import { useCambiosPendientes } from "./cambios-pendientes";
 import { crearResumenDeAjuste, type ResumenDeAjuste } from "./resumen-de-ajuste";
 import {
   celdaDeAsistenciaEsEditable,
@@ -45,16 +46,19 @@ export function CalendarioDeAsistencias({
   const [fechaSeleccionada, setFechaSeleccionada] = useState<string>();
   const [tipoDeAsistencia, setTipoDeAsistencia] = useState<TipoDeAsistencia>("trabajo");
   const dialogo = useRef<HTMLDialogElement>(null);
+  const celdaActiva = useRef<HTMLButtonElement | null>(null);
   const formulario = useRef<HTMLFormElement>(null);
   const titulo = useRef<HTMLHeadingElement>(null);
   const [resumen, setResumen] = useState<ResumenDeAjuste>();
+  const [edicionModificada, setEdicionModificada] = useState(false);
   const [estado, accion, pendiente] = useActionState(registrarAsistenciaManual, estadoInicial);
+  const { marcarPendiente, limpiarPendiente, confirmarDescarte } = useCambiosPendientes();
   const asistencia = fechaSeleccionada ? porFecha.get(fechaSeleccionada) : undefined;
   const estadoSeleccionado: EstadoDeCeldaAsistencia = estadoDeCeldaAsistencia(asistencia);
   const editable = !soloLectura && celdaDeAsistenciaEsEditable(asistencia);
 
   useEffect(() => {
-    if (estado.listo) dialogo.current?.close();
+    if (estado.listo) { limpiarPendiente(); setEdicionModificada(false); dialogo.current?.close(); }
   }, [estado.listo]);
 
   useEffect(() => {
@@ -70,7 +74,18 @@ export function CalendarioDeAsistencias({
     setFechaSeleccionada(fecha);
     setTipoDeAsistencia("trabajo");
     setResumen(undefined);
+    setEdicionModificada(false);
     dialogo.current?.showModal();
+  }
+
+  function cancelarEdicion() {
+    limpiarPendiente();
+    setEdicionModificada(false);
+    setFechaSeleccionada(undefined);
+    setResumen(undefined);
+    setTipoDeAsistencia("trabajo");
+    dialogo.current?.close();
+    requestAnimationFrame(() => celdaActiva.current?.focus());
   }
 
   function revisarAjuste() {
@@ -96,10 +111,14 @@ export function CalendarioDeAsistencias({
       const item = porFecha.get(fecha);
       const estadoDelDia = estadoDeCeldaAsistencia(item);
       const etiqueta = etiquetaDeCeldaAsistencia(estadoDelDia, item?.estadoManual ?? null);
-      return <button aria-label={`Asistencia del ${fecha}: ${etiqueta}`} className={`dia-calendario estado-color-${estadoDelDia}`} key={fecha} onClick={() => abrir(fecha)} type="button"><time>{Number(fecha.slice(-2))}</time><strong>{estadoDelDia === "liquidado" && <IconoCandado />}{etiqueta}</strong>{item ? item.estadoManual ? null : <><span>{item.sedeProgramada ?? "sin sede"}</span><span>{hora(item.entrada) ?? "sin entrada"}</span><span>{hora(item.salida) ?? "sin salida"}</span></> : <span>Sin planificación</span>}</button>;
+      return <button aria-label={`Asistencia del ${fecha}: ${etiqueta}`} className={`dia-calendario estado-color-${estadoDelDia}`} key={fecha} onClick={(evento) => { celdaActiva.current = evento.currentTarget; abrir(fecha); }} type="button"><time>{Number(fecha.slice(-2))}</time><strong>{estadoDelDia === "liquidado" && <IconoCandado />}{etiqueta}</strong>{item ? item.estadoManual ? null : <><span>{item.sedeProgramada ?? "sin sede"}</span><span>{hora(item.entrada) ?? "sin entrada"}</span><span>{hora(item.salida) ?? "sin salida"}</span></> : <span>Sin planificación</span>}</button>;
     })}</div></div>
-    <dialog aria-labelledby="titulo-asistencia" className="dialogo-confirmacion" ref={dialogo}>
-      {fechaSeleccionada && editable && asistencia ? <form action={accion} key={fechaSeleccionada} ref={formulario}>
+    <dialog aria-labelledby="titulo-asistencia" className="dialogo-confirmacion" onCancel={(evento) => {
+      evento.preventDefault();
+      if (edicionModificada) confirmarDescarte();
+      else cancelarEdicion();
+    }} ref={dialogo}>
+      {fechaSeleccionada && editable && asistencia ? <form action={accion} key={fechaSeleccionada} onInput={() => { setEdicionModificada(true); marcarPendiente(cancelarEdicion); }} ref={formulario}>
         <h2 id="titulo-asistencia" ref={titulo} tabIndex={-1}>{resumen ? "¿Confirmar el ajuste de asistencia?" : confirmada ? "Ajustar asistencia" : "Registrar asistencia"}</h2>
         {resumen ? <section aria-label="Resumen del ajuste">
           <p>Colaborador: {resumen.colaborador}. Fecha: {resumen.fecha}.</p>
@@ -114,7 +133,7 @@ export function CalendarioDeAsistencias({
         {asistencia.estado === "confirmada" ? <><input name="tipoDeAsistencia" type="hidden" value="trabajo" /><p>Asistencia confirmada: Jornada laboral</p></> : <label>Tipo de asistencia<select name="tipoDeAsistencia" onChange={(evento) => setTipoDeAsistencia(evento.target.value as TipoDeAsistencia)} value={tipoDeAsistencia}>{TIPOS_DE_ASISTENCIA.map((opcion) => <option key={opcion} value={opcion}>{etiquetaTipoDeAsistencia(opcion)}</option>)}</select></label>}
         {tipoDeAsistencia === "trabajo" ? <>{asistencia.estado === "confirmada" ? <p>Sede planificada: {asistencia.sedeProgramada}</p> : <><label>Sede<input defaultValue={asistencia.sedeProgramada ?? ""} name="sede" required /></label><p className="ayuda-campo">Debe coincidir con la sede planificada.</p></>}<label>Hora de ingreso<input defaultValue={hora(asistencia.entrada) ?? ""} name="entrada" required step="1" type="time" /></label><label>Hora de salida<input defaultValue={hora(asistencia.salida) ?? ""} name="salida" required step="1" type="time" /></label>{asistencia.estado === "confirmada" ? <label>Motivo del ajuste<input name="motivo" required /></label> : null}</> : <label>Comentario<input name="comentario" required /></label>}</div>
         <div className="acciones-dialogo">
-          <button className="boton-secundario" onClick={() => dialogo.current?.close()} type="button">Cancelar</button>
+          <button className="boton-secundario" onClick={cancelarEdicion} type="button">Cancelar</button>
           {resumen ? <><button className="boton-secundario" onClick={volverAlFormulario} type="button">Volver al formulario</button><button className="boton-principal" disabled={pendiente} type="submit">{pendiente ? "Guardando…" : "Confirmar ajuste"}</button></>
             : confirmada && tipoDeAsistencia === "trabajo" ? <button className="boton-principal" onClick={revisarAjuste} type="button">Revisar ajuste</button>
             : <button className="boton-principal" disabled={pendiente} type="submit">{pendiente ? "Guardando…" : "Guardar asistencia"}</button>}

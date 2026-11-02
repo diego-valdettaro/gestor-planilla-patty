@@ -38,7 +38,7 @@ function crearEscenario(opciones: { alEscribirFila?: (indice: number) => void } 
   };
   for (const { id, sueldo } of PERSONAS) {
     agregarCondicion(id, "sueldo", sueldo); agregarCondicion(id, "jornada_ordinaria_diaria", 480); agregarCondicion(id, "regimen_laboral", "general");
-    agregarCondicion(id, "afiliacion_pensionaria", "onp"); agregarCondicion(id, "elegibilidad_familiar", false); agregarCondicion(id, "sede_de_adscripcion", "Taller");
+    agregarCondicion(id, "movilidad_fija", 0); agregarCondicion(id, "afiliacion_pensionaria", "onp"); agregarCondicion(id, "elegibilidad_familiar", false); agregarCondicion(id, "sede_de_adscripcion", "Taller");
   }
   const reglas: ReglaLegal[] = ([["onp_tasa", 1300], ["essalud_tasa", 900], ["essalud_base_minima", 100000]] as const).map(([codigo, valor]) => ({
     id: `demo-${codigo}`, codigo, valor, vigenteDesde: "2026-01-01", fuenteOficial: "DEMO sintética; no usar en producción", activadaPorId: finanzas.id,

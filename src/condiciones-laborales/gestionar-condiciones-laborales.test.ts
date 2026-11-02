@@ -161,7 +161,7 @@ describe("condiciones laborales con vigencia", () => {
 
   describe("listado", () => {
     beforeEach(async () => {
-      for (const [dato, valor] of [["sueldo", "1800"], ["jornada_ordinaria_diaria", "8"], ["regimen_laboral", "general"], ["afiliacion_pensionaria", "onp"], ["elegibilidad_familiar", "no"], ["sede_de_adscripcion", "Taller"]] as const) {
+      for (const [dato, valor] of [["sueldo", "1800"], ["banco_de_pago", "BCP"], ["movilidad_fija", "0"], ["jornada_ordinaria_diaria", "8"], ["regimen_laboral", "general"], ["afiliacion_pensionaria", "onp"], ["elegibilidad_familiar", "no"], ["sede_de_adscripcion", "Taller"]] as const) {
         await registrar(BETO_RELACION, dato, valor, "2024-01-08");
       }
       await registrar(ANA_REINGRESO, "sueldo", "1700", "2026-06-01");
@@ -175,7 +175,7 @@ describe("condiciones laborales con vigencia", () => {
       // Solo sedes activas, más las que alguien tiene hoy aunque se hayan desactivado.
       expect(sedes).toEqual(["Taller", "Tienda Benavides"]);
       expect(filas.map(({ id }) => id)).toEqual([ANA_REINGRESO, ANA_RELACION, BETO_RELACION]);
-      expect(filas[0].faltantes).toEqual(["jornada_ordinaria_diaria", "regimen_laboral", "afiliacion_pensionaria", "elegibilidad_familiar", "sede_de_adscripcion"]);
+      expect(filas[0].faltantes).toEqual(["banco_de_pago", "movilidad_fija", "jornada_ordinaria_diaria", "regimen_laboral", "afiliacion_pensionaria", "elegibilidad_familiar", "sede_de_adscripcion"]);
       expect(filas[2].faltantes).toEqual([]);
       expect(filas[2].vigentes.sueldo).toBe(180000);
       expect(filas[1].vigentes.sueldo).toBeUndefined();
@@ -220,5 +220,21 @@ describe("condiciones laborales con vigencia", () => {
 
   it("una relación inexistente no tiene detalle", async () => {
     await expect(consultarDetalleDeRelacion(repositorio, finanzas, "no-existe", "2026-10-07")).resolves.toBeUndefined();
+  });
+});
+
+describe("G08 banco y bono por vigencia", () => {
+  const casos = [
+    { fila: "banco", dato: "banco_de_pago", primero: "BCP", segundo: "BBVA", esperadoPrimero: "BCP", esperadoSegundo: "BBVA" },
+    { fila: "movilidad", dato: "movilidad_fija", primero: "280", segundo: "560", esperadoPrimero: 28000, esperadoSegundo: 56000 },
+  ];
+  it.each(casos)("R22 conserva la historia de $fila", async ({ dato, primero, segundo, esperadoPrimero, esperadoSegundo }) => {
+    const { repositorio } = crearRepositorioEnMemoria();
+    await registrarCondicionLaboral(repositorio, finanzas, { relacionId: BETO_RELACION, dato, valor: primero, vigenteDesde: "2026-02-01" });
+    await registrarCondicionLaboral(repositorio, finanzas, { relacionId: BETO_RELACION, dato, valor: segundo, vigenteDesde: "2026-02-15" });
+    const antes = await consultarCondicionesVigentes(repositorio, finanzas, BETO_RELACION, "2026-02-14") as unknown as Record<string, unknown>;
+    const despues = await consultarCondicionesVigentes(repositorio, finanzas, BETO_RELACION, "2026-02-15") as unknown as Record<string, unknown>;
+    expect(antes[dato]).toBe(esperadoPrimero);
+    expect(despues[dato]).toBe(esperadoSegundo);
   });
 });

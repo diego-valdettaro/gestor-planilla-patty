@@ -6,7 +6,7 @@ export type { Actor, Rol } from "@/autenticacion/permisos";
 export interface Colaborador {
   dni: string;
   nombre: string;
-  sede: string;
+  sede: string | null;
   grupo: string;
   activo: boolean;
 }

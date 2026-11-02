@@ -15,6 +15,8 @@ const columnas = {
   relacionId: condicionesLaborales.relacionLaboralId,
   dato: condicionesLaborales.dato,
   sueldoCentimos: condicionesLaborales.sueldoCentimos,
+  bancoDePago: condicionesLaborales.bancoDePago,
+  movilidadFijaCentimos: condicionesLaborales.movilidadFijaCentimos,
   jornadaMinutos: condicionesLaborales.jornadaMinutos,
   regimen: condicionesLaborales.regimen,
   afiliacionPensionaria: condicionesLaborales.afiliacionPensionaria,
@@ -31,7 +33,8 @@ const columnas = {
 
 type Fila = {
   id: string; relacionId: string; dato: DatoLaboral;
-  sueldoCentimos: number | null; jornadaMinutos: number | null; regimen: string | null; afiliacionPensionaria: string | null;
+  sueldoCentimos: number | null; bancoDePago: string | null; movilidadFijaCentimos: number | null;
+  jornadaMinutos: number | null; regimen: string | null; afiliacionPensionaria: string | null;
   comisionAfp: string | null; elegible: boolean | null; sede: string | null;
   vigenteDesde: string; registradaPorId: string; registradaPor: string; registradaEn: Date; reemplazadaEn: Date | null; motivoDeReemplazo: string | null;
 };
@@ -40,6 +43,8 @@ type Fila = {
 function valorDe(fila: Fila): ValorLaboral {
   const valor = {
     sueldo: fila.sueldoCentimos,
+    banco_de_pago: fila.bancoDePago,
+    movilidad_fija: fila.movilidadFijaCentimos,
     jornada_ordinaria_diaria: fila.jornadaMinutos,
     regimen_laboral: fila.regimen,
     afiliacion_pensionaria: fila.afiliacionPensionaria,
@@ -62,6 +67,8 @@ function aCondicion(fila: Fila): CondicionLaboral {
 function columnasDelValor(dato: DatoLaboral, valor: ValorLaboral) {
   switch (dato) {
     case "sueldo": return { sueldoCentimos: Number(valor) };
+    case "banco_de_pago": return { bancoDePago: String(valor) };
+    case "movilidad_fija": return { movilidadFijaCentimos: Number(valor) };
     case "jornada_ordinaria_diaria": return { jornadaMinutos: Number(valor) };
     case "regimen_laboral": return { regimen: String(valor) as "general" | "remype_pequena_empresa" };
     case "afiliacion_pensionaria": return { afiliacionPensionaria: String(valor) as "onp" | "afp_habitat" | "afp_integra" | "afp_prima" | "afp_profuturo" };
