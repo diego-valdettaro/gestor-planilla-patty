@@ -15,12 +15,12 @@ export type EnlaceDeNavegacion = { href: string; etiqueta: string; icono: string
 
 // Cada enlace usa el mismo permiso que comprueba la ruta: el menú muestra exactamente lo que el rol puede abrir.
 const enlacesDeLaAplicacion: (EnlaceDeNavegacion & { permitido: (actor: Actor) => boolean })[] = [
-  { href: "/configuracion", etiqueta: "Configuración", icono: "♧", rutas: ["/cuentas"], permitido: puedeAbrirConfiguracion },
-  { href: "/personal", etiqueta: "Personal", icono: "☰", rutas: ["/relaciones-laborales"], permitido: puedeConsultarPersonal },
-  { href: "/turnos", etiqueta: "Planificación de horarios", icono: "▣", permitido: puedeConsultarHorarios },
-  { href: "/asistencias", etiqueta: "Registro de asistencias", icono: "◷", permitido: (actor) => puedeConsultarAsistencias(actor) || puedeRegistrarIncidenciasDeGrupo(actor) },
-  { href: "/periodos", etiqueta: "Revisión de asistencia para planilla", icono: "▤", permitido: puedeConsultarPeriodos },
-  { href: "/pagos", etiqueta: "Pagos", icono: "¤", permitido: puedeGestionarPagos },
+  { href: "/configuracion", etiqueta: "Configuración", icono: "configuracion", rutas: ["/cuentas"], permitido: puedeAbrirConfiguracion },
+  { href: "/personal", etiqueta: "Personal", icono: "personal", rutas: ["/relaciones-laborales"], permitido: puedeConsultarPersonal },
+  { href: "/turnos", etiqueta: "Planificación de horarios", icono: "horarios", permitido: puedeConsultarHorarios },
+  { href: "/asistencias", etiqueta: "Registro de asistencias", icono: "asistencias", permitido: (actor) => puedeConsultarAsistencias(actor) || puedeRegistrarIncidenciasDeGrupo(actor) },
+  { href: "/periodos", etiqueta: "Revisión de asistencia para planilla", icono: "revision", permitido: puedeConsultarPeriodos },
+  { href: "/pagos", etiqueta: "Pagos", icono: "pagos", permitido: puedeGestionarPagos },
 ];
 
 const RUTAS_DE_INICIO_EN_ORDEN = ["/turnos", "/asistencias", "/periodos", "/configuracion", "/personal", "/pagos"];
