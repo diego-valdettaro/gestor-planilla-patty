@@ -788,7 +788,8 @@ test("las tablas de /periodos se desplazan dentro de su región a 375 px sin tru
 
   const regiones = page.locator(".panel-tabla");
   const cantidad = await regiones.count();
-  expect(cantidad).toBeGreaterThanOrEqual(5);
+  // Totales y horas extra son cuadrículas de cifras (regiones rotuladas, sin tabla); quedan como tablas la aprobación por grupo y el detalle diario.
+  expect(cantidad).toBeGreaterThanOrEqual(2);
   await expect(page.getByRole("region", { name: "Totales del período completo" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Horas extra del período completo" })).toBeVisible();
   await expect(page.getByRole("region", { name: /^Detalle diario de / }).first()).toBeVisible();

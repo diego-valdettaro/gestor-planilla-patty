@@ -408,46 +408,50 @@ describe("página de Períodos de planilla (/periodos)", () => {
       return [...tabla.matchAll(new RegExp(`<${etiqueta}((?:\\s[^>]*)?)>([\\s\\S]*?)</${etiqueta}>`, "g"))].map(([, atributos, contenido]) => ({ atributos, contenido }));
     }
 
-    it("nombra cada tabla como región desplazable por teclado con un título que identifica su objeto", async () => {
+    function cifras(html: string, titulo: string) {
+      const region = html.match(new RegExp(`<div aria-label="${titulo.replace(/[()]/g, "\\$&")}" role="region">([\\s\\S]*?)</dl></div>`));
+      expect(region, titulo).not.toBeNull();
+      return [...region![1].matchAll(/<div class="(cifra[^"]*)"><dt>([^<]*)<\/dt><dd>([^<]*)<\/dd><\/div>/g)].map(([, clase, nombre, valor]) => ({ clase, nombre, valor }));
+    }
+
+    it("presenta totales y horas extra como cifras rotuladas en regiones con el título de su objeto y deja solo el detalle diario como tabla desplazable", async () => {
       const html = await renderConDetalle();
 
-      const [totalesGlobales, extraGlobal, totalesDeAna, extraDeAna, detalle] = tablas(html);
-      expect(tablas(html)).toHaveLength(5);
-      expect(totalesGlobales).toContain('role="region" aria-label="Totales del período completo" tabindex="0"');
-      expect(totalesGlobales).toContain("<caption class=\"sr-only\">Totales del período completo</caption>");
-      expect(extraGlobal).toContain('aria-label="Horas extra del período completo"');
-      expect(totalesDeAna).toContain('aria-label="Totales de Ana (00000001)"');
-      expect(extraDeAna).toContain('aria-label="Horas extra de Ana (00000001)"');
-      expect(detalle).toContain('aria-label="Detalle diario de Ana (00000001)"');
+      expect(tablas(html)).toHaveLength(1);
+      expect(tablas(html)[0]).toContain('role="region" aria-label="Detalle diario de Ana (00000001)" tabindex="0"');
+      expect(tablas(html)[0]).toContain("<caption class=\"sr-only\">Detalle diario de Ana (00000001)</caption>");
+      for (const titulo of ["Totales del período completo", "Horas extra del período completo", "Totales de Ana (00000001)", "Horas extra de Ana (00000001)"]) expect(html).toContain(`aria-label="${titulo}" role="region"`);
+    });
+
+    it("conserva cada cifra de totales y horas extra con su rótulo y unidad, y resalta solo las pendientes con tiempo por decidir", async () => {
+      const html = await renderConDetalle();
+
+      for (const titulo of ["Totales del período completo", "Totales de Ana (00000001)"]) {
+        expect(cifras(html, titulo).map(({ nombre, valor }) => [nombre, valor])).toEqual([
+          ["Jornadas trabajadas", "2"], ["Horas trabajadas", "16 h"], ["Faltas", "1"], ["Descansos", "0"], ["Feriados", "0"], ["Vacaciones", "0"], ["Permisos", "0"], ["Suspensiones", "0"], ["Tardanzas", "1"], ["Horas penalizadas", "1 h"],
+        ]);
+      }
+      for (const titulo of ["Horas extra del período completo", "Horas extra de Ana (00000001)"]) {
+        const extra = cifras(html, titulo);
+        expect(extra.map(({ nombre, valor }) => [nombre, valor])).toEqual([["Pendientes 25%", "30 min"], ["Pendientes 35%", "0 min"], ["Aprobadas 25%", "0 min"], ["Aprobadas 35%", "0 min"], ["Descartadas 25%", "0 min"], ["Descartadas 35%", "0 min"]]);
+        expect(extra.filter(({ clase }) => clase.includes("cifra-alerta")).map(({ nombre }) => nombre)).toEqual(["Pendientes 25%"]);
+      }
     });
 
     it("declara las cabeceras de columna y la fecha como cabecera de fila del detalle diario", async () => {
       const html = await renderConDetalle();
 
-      for (const tabla of tablas(html)) {
-        for (const cabecera of celdas(tabla, "th").filter(({ atributos }) => !atributos.includes('scope="row"'))) expect(cabecera.atributos).toContain('scope="col"');
-      }
-      const detalle = tablas(html)[4];
+      const detalle = tablas(html)[0];
+      for (const cabecera of celdas(detalle, "th").filter(({ atributos }) => !atributos.includes('scope="row"'))) expect(cabecera.atributos).toContain('scope="col"');
       expect(celdas(detalle, "th").filter(({ atributos }) => atributos.includes('scope="col"')).map(({ contenido }) => contenido)).toEqual(["Fecha", "Sede de la jornada", "Resultado real", "Horario real", "Tiempo trabajado", "Tardanza", "Penalización", "Hora extra"]);
       expect(detalle).toMatch(/<th[^>]*scope="row"[^>]*>2026-01-02<\/th>/);
       expect(detalle).toContain('id="jornada-00000001-2026-01-02"');
     });
 
-    it("alinea a la derecha las cifras de totales y horas extra conservando sus valores", async () => {
-      const html = await renderConDetalle();
-
-      const [totalesGlobales, extraGlobal] = tablas(html);
-      expect(celdas(totalesGlobales, "th").map(({ atributos }) => atributos)).toSatisfy((lista: string[]) => lista.every((atributos) => atributos.includes('class="numerico"')));
-      expect(celdas(totalesGlobales, "td").map(({ atributos }) => atributos)).toSatisfy((lista: string[]) => lista.every((atributos) => atributos.includes('class="numerico"')));
-      expect(celdas(totalesGlobales, "td").map(({ contenido }) => contenido)).toEqual(["2", "16 h", "1", "0", "0", "0", "0", "0", "1", "1 h"]);
-      expect(celdas(extraGlobal, "td").every(({ atributos }) => atributos.includes('class="numerico"'))).toBe(true);
-      expect(celdas(extraGlobal, "td").map(({ contenido }) => contenido)).toEqual(["30 min", "0 min", "0 min", "0 min", "0 min", "0 min"]);
-    });
-
     it("alinea a la derecha solo las cifras del detalle diario y deja fecha, sede, resultado, horario y descripción a la izquierda", async () => {
       const html = await renderConDetalle();
 
-      const detalle = tablas(html)[4];
+      const detalle = tablas(html)[0];
       const porNombre = new Map(celdas(detalle, "th").filter(({ atributos }) => atributos.includes('scope="col"')).map(({ atributos, contenido }) => [contenido, atributos]));
       for (const numerica of ["Tiempo trabajado", "Tardanza", "Penalización"]) expect(porNombre.get(numerica)).toContain('class="numerico"');
       for (const textual of ["Fecha", "Sede de la jornada", "Resultado real", "Horario real", "Hora extra"]) expect(porNombre.get(textual)).not.toContain("numerico");
