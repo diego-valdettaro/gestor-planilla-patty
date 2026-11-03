@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { NOMBRE_DE_ROL, puedeGestionarPagos } from "@/autenticacion/permisos";
+import { puedeGestionarPagos } from "@/autenticacion/permisos";
 import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
 import { fechaDeHoyEnLima } from "@/condiciones-laborales/vigencia";
 import { formatearFechaDeRelacion } from "@/relaciones-laborales/vigencia";
@@ -29,7 +29,7 @@ export default async function PaginaDeUnaReglaLegal({ params, searchParams }: { 
   const casosDeUso = crearCasosDeUsoDeReglasLegales(repositorioDeReglasLegales, { obtenerActorActual });
   const hoy = fechaDeHoyEnLima();
   const detalle = await casosDeUso.historial(codigo, hoy);
-  if (!detalle) return <main className="contenido pagina">
+  if (!detalle) return <main className="contenido pagina pagina-ajustes">
     <NavegacionDePagos actual="reglas-legales" />
     <section className="estado-vacio"><h1>No existe ese valor legal</h1><p>Elija uno de la lista de reglas legales. <Link href="/pagos/reglas-legales">Volver a reglas legales</Link></p></section>
   </main>;
@@ -38,10 +38,9 @@ export default async function PaginaDeUnaReglaLegal({ params, searchParams }: { 
   // Una fecha de consulta inválida se dice junto al campo; no reemplaza la pantalla.
   const consulta = fecha ? await casosDeUso.vigenteEn(definicion.codigo, fecha).then((resultado) => ({ resultado }), (causa: unknown) => ({ error: causa instanceof Error ? causa.message : "No se pudo consultar esa fecha." })) : undefined;
 
-  return <main className="contenido pagina">
+  return <main className="contenido pagina pagina-ajustes">
     <header className="encabezado encabezado-pagina">
       <div>
-        <p className="eyebrow">{NOMBRE_DE_ROL[actor.rol]}</p>
         <h1>{definicion.nombre}</h1>
         <p>Vigente hoy ({formatearFechaDeRelacion(hoy)}): {vigente ? <strong>{formatearValorLegal(definicion.unidad, vigente.valor)}</strong> : <><span className="insignia advertencia">Pendiente</span> Sin regla vigente</>}</p>
         <p><Link href="/pagos/reglas-legales">Volver a reglas legales</Link></p>
@@ -50,7 +49,7 @@ export default async function PaginaDeUnaReglaLegal({ params, searchParams }: { 
     </header>
     <NavegacionDePagos actual="reglas-legales" />
 
-    <section aria-labelledby="titulo-consulta" className="tarjeta panel">
+    <section aria-labelledby="titulo-consulta" className="tile panel">
       <header className="panel-cabecera"><div><h2 id="titulo-consulta">Consultar una fecha</h2><p>Qué versión rige en el día elegido.</p></div></header>
       <form className="filtros panel-filtros" method="get">
         <label>Fecha<input defaultValue={fecha ?? hoy} name="fecha" required type="date" /></label>
@@ -59,7 +58,7 @@ export default async function PaginaDeUnaReglaLegal({ params, searchParams }: { 
       {consulta && <ResultadoDeConsulta consulta={consulta} definicion={definicion} fecha={fecha ?? ""} />}
     </section>
 
-    <section aria-labelledby="titulo-historial" className="tarjeta panel">
+    <section aria-labelledby="titulo-historial" className="tile panel">
       <header className="panel-cabecera"><div><h2 id="titulo-historial">Historial</h2><p>Una fila por versión. Un valor nuevo no reescribe las anteriores.</p></div></header>
       {historial.length
         ? <>

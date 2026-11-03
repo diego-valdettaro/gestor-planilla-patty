@@ -26,7 +26,7 @@ export interface OtraVersionDelMes {
 }
 
 export interface EstadoDelMes {
-  insignia: { texto: string; clase: "advertencia" | "ok" };
+  insignia: { texto: string; clase: "borrador" | "ok" };
   accion: AccionPrincipalDelMes;
   otraVersion?: OtraVersionDelMes;
 }
@@ -36,7 +36,7 @@ export function estadoDelMes({ personas, bloqueos, ultimaVersion, pagoConfirmado
   const causaDeshabilitado = personas === 0 ? "Este mes no incluye personas"
     : bloqueos > 0 ? (bloqueos === 1 ? "Resuelva el bloqueo para finalizar" : `Resuelva los ${bloqueos} bloqueos para finalizar`) : undefined;
   if (ultimaVersion === undefined) {
-    return { insignia: { texto: "Borrador", clase: "advertencia" }, accion: { tipo: "finalizar", etiqueta: "Finalizar mes", causaDeshabilitado, nota: MENSAJE_SIN_VERSION_FINALIZADA } };
+    return { insignia: { texto: "Borrador", clase: "borrador" }, accion: { tipo: "finalizar", etiqueta: "Finalizar mes", causaDeshabilitado, nota: MENSAJE_SIN_VERSION_FINALIZADA } };
   }
   return { insignia: { texto: `Finalizada, versión ${ultimaVersion}`, clase: "ok" }, accion: { tipo: "confirmar_pago", etiqueta: "Confirmar pago realizado" }, otraVersion: { etiqueta: "Crear otra versión", causaDeshabilitado } };
 }

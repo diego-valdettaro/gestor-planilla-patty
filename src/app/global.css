@@ -342,8 +342,6 @@ th, td { border: 1px solid #e2e8f0; padding: 0.6rem; text-align: left; }
 .formulario-dialogo label { color: #526174; display: grid; font-size: .8rem; font-weight: 700; gap: .35rem; }
 .formulario-dialogo input, .formulario-dialogo select { background: #fff; border: 1px solid #cfd8e4; border-radius: .35rem; color: #1d2733; min-height: 2.3rem; padding: .45rem .55rem; width: 100%; }
 /* Los botones del diálogo no heredan el estilo compacto de `.panel-tabla button` cuando el diálogo vive dentro de una fila. */
-.dialogo-de-pagos .boton-principal { background: #079557; border: 0; border-radius: .4rem; color: #fff; font-size: .9rem; font-weight: 700; padding: .68rem 1rem; }
-.dialogo-de-pagos .boton-secundario { background: #fff; border: 1px solid #d0d7e1; border-radius: .4rem; color: #1c3152; font-size: .9rem; padding: .68rem 1rem; }
 @media (max-width: 900px) { .dialogo-de-pagos .acciones-dialogo { flex-direction: column-reverse; } .dialogo-de-pagos .acciones-dialogo button { width: 100%; } }
 /* Importación de fuentes externas de Pagos (issue #119): conteos de la validación del archivo, uno por rótulo, sin tabla. */
 .resumen-de-validacion { display: grid; gap: .5rem; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); margin: .5rem 0; }
@@ -475,3 +473,79 @@ th, td { border: 1px solid #e2e8f0; padding: 0.6rem; text-align: left; }
 .pagina-ajustes .tabla-personal td:last-child { white-space: normal; }
 .pagina-ajustes .tabla-personal td:first-child { white-space: normal; }
 .pagina-ajustes .tabla-personal td .insignia { white-space: normal; }
+/* Pagos: mismas tiles que Configuración y Personal. Aquí vive UNA vez la paleta de estados compartida (wireframes estados.css): un estado = un color + una forma. */
+.pagina-ajustes { --accion-fondo: #e2f5ea; --accion-texto: #0b6b3a; --neutro-fondo: #e8ecf2; --neutro-texto: #44546a; --t-apoyo: .8125rem; }
+.pagina-ajustes .est { --est-fondo: #fff; --est-borde: var(--linea-control); --est-texto: var(--tinta); background-color: var(--est-fondo); border: 1.5px solid var(--est-borde); border-radius: .7rem; color: var(--est-texto); }
+.pagina-ajustes .est-borrador { --est-fondo: #f3f5f9; --est-borde: #8fa0b8; border-style: dashed; }
+.pagina-ajustes .est-publicado, .pagina-ajustes .est-registrada { --est-fondo: var(--accion-fondo); --est-borde: #b9e3c9; --est-texto: var(--accion-texto); }
+.pagina-ajustes .est-cambios, .pagina-ajustes .est-pendiente { --est-fondo: var(--aviso-fondo); --est-borde: #ecd48a; --est-texto: var(--aviso-texto); }
+.pagina-ajustes .est-fuera, .pagina-ajustes .est-sinplan { --est-borde: var(--linea); --est-texto: var(--suave); background-image: repeating-linear-gradient(135deg, #f3f5f9 0 6px, #e8ecf2 6px 12px); cursor: default; }
+.pagina-ajustes .est-vacio { --est-borde: var(--linea-control); --est-texto: var(--suave); border-style: dashed; font-weight: 500; }
+.pagina-ajustes .est-esperada { --est-fondo: #e7f0fb; --est-borde: #b4cdee; --est-texto: #1d4a85; }
+.pagina-ajustes .est-liquidado { --est-fondo: #e3e7ee; --est-borde: #b9c3d3; --est-texto: var(--neutro-texto); }
+.pagina-ajustes .est-etiqueta { align-items: center; display: inline-flex; font-size: var(--t-apoyo); font-weight: 500; justify-self: start; line-height: 1.3; padding: .15rem .6rem; white-space: nowrap; }
+/* En Pagos «Borrador» es el estado gris de rayas y «Pendiente» el ámbar. */
+.pagina-ajustes .insignia.advertencia { background: var(--aviso-fondo); color: var(--aviso-texto); }
+.pagina-ajustes .insignia.borrador { background: #f3f5f9; border: 1.5px dashed #8fa0b8; color: var(--tinta); }
+.pagina-ajustes .insignia.error { background: var(--peligro-fondo); color: var(--peligro); }
+.pagina-ajustes .pestanas-de-pagos { flex-wrap: nowrap; overflow-x: auto; }
+.pagina-ajustes .pestanas-de-pagos a { white-space: nowrap; }
+.pagina-ajustes .aviso-desplazamiento { color: var(--suave); display: none; font-size: var(--texto-chico); margin: 0 0 .5rem; }
+@media (max-width: 900px) { .pagina-ajustes .aviso-desplazamiento { display: block; } }
+.pagina-ajustes .linea-de-relacion { color: var(--suave); display: block; font-size: var(--texto-chico); font-weight: 400; line-height: 1.4; }
+.pagina-ajustes .panel a:not(.boton-principal):not(.boton-secundario):not(.enlace-discreto) { color: var(--tinta); text-decoration-color: #aeb9cb; text-underline-offset: .2em; }
+.pagina-ajustes .panel a:not(.boton-principal):not(.boton-secundario):hover { text-decoration-color: currentColor; }
+.pagina-ajustes .enlace-discreto, .pagina-ajustes a.boton-secundario, .pagina-ajustes a.boton-principal { align-items: center; border: 1px solid transparent; border-radius: 999px; color: var(--suave); display: inline-flex; font-size: var(--texto); font-weight: 500; justify-content: center; min-height: var(--altura); padding: 0 1.2rem; text-decoration: none; white-space: nowrap; }
+.pagina-ajustes .enlace-discreto:hover { background: #e9edf3; color: var(--tinta); }
+.pagina-ajustes a.boton-secundario { background: #fff; border-color: var(--linea-control); color: var(--tinta); }
+.pagina-ajustes a.boton-secundario[aria-disabled="true"] { opacity: .6; pointer-events: none; }
+.pagina-ajustes .panel-tabla.primera-columna-fija th:first-child, .pagina-ajustes .panel-tabla.primera-columna-fija td:first-child { background: #fff; }
+.pagina-ajustes .panel-tabla.primera-columna-fija thead th:first-child { background: var(--campo); }
+.pagina-ajustes .panel-tabla.primera-columna-fija table { font-size: var(--texto); }
+.pagina-ajustes .panel-tabla.primera-columna-fija th, .pagina-ajustes .panel-tabla.primera-columna-fija td { padding: .65rem .75rem; }
+.pagina-ajustes .panel-tabla th { white-space: nowrap; }
+.pagina-ajustes .panel-tabla td { white-space: nowrap; }
+.pagina-ajustes .panel-tabla td.celda-estado, .pagina-ajustes .panel-tabla td:has(details), .pagina-ajustes .panel-tabla th:has(details) { white-space: normal; }
+.pagina-ajustes .panel-tabla .numerico { text-align: right; }
+.pagina-ajustes .panel-tabla thead .numerico { text-align: right; }
+.pagina-ajustes .panel-tabla tbody tr:hover th, .pagina-ajustes .panel-tabla tbody tr:hover td { background-color: #fafbfd; }
+.pagina-ajustes .panel-tabla details { margin-top: .25rem; }
+.pagina-ajustes .panel-tabla details > summary { background: none; border: 1px solid transparent; color: var(--suave); display: inline-flex; font-size: var(--texto-chico); min-height: 1.75rem; padding: 0 .6rem; }
+.pagina-ajustes .panel-tabla details > summary:hover { background: #e9edf3; color: var(--tinta); }
+.pagina-ajustes .panel-tabla details[open] > summary { background: #e9edf3; color: var(--tinta); }
+.pagina-ajustes .panel-tabla details > :not(summary) { background: var(--campo); border-radius: .7rem; color: var(--tinta); font-size: var(--texto-chico); font-weight: 400; margin: .4rem 0 0; max-width: 34rem; padding: .6rem .8rem; white-space: normal; }
+.pagina-ajustes .panel-cabecera > div > .insignia { margin-top: .25rem; }
+.pagina-ajustes .panel-cabecera > div > p + p, .pagina-ajustes .panel-cabecera > div > p + .insignia { margin-top: .35rem; }
+.pagina-ajustes .acciones-del-mes { align-items: center; flex: none; flex-wrap: wrap; gap: .5rem .75rem; justify-content: flex-end; max-width: 32rem; }
+.pagina-ajustes .acciones-del-mes .linea-de-relacion { flex-basis: 100%; text-align: right; }
+.pagina-ajustes .acciones-del-mes .mensaje-operacion { flex-basis: 100%; }
+.pagina-ajustes .acciones-configuracion .boton-secundario { background: #fff; border: 1px solid var(--linea-control); color: var(--tinta); }
+.pagina-ajustes .acciones-configuracion .boton-principal { background: var(--accion); border: 1px solid var(--accion); color: #fff; }
+.pagina-ajustes .mensaje-operacion { border-radius: .7rem; font-size: var(--texto); padding: .6rem .9rem; }
+.pagina-ajustes .mensaje-operacion.listo { background: var(--accion-fondo); color: var(--accion-texto); }
+.pagina-ajustes .mensaje-operacion.advertencia { background: var(--campo); border-left: 4px solid #ecd48a; border-radius: .9rem; color: var(--tinta); line-height: 1.5; margin: 0 0 .5rem; padding: .75rem 1rem; }
+.pagina-ajustes .mensaje-operacion.advertencia a { color: var(--tinta); font-weight: 500; }
+.pagina-ajustes .panel > div > div > a { color: var(--tinta); display: inline-block; font-weight: 600; margin: .75rem 0 .35rem .1rem; }
+.pagina-ajustes .panel > p { margin: 0 0 .6rem; }
+.pagina-ajustes .panel ul { margin: .4rem 0 .6rem; padding-left: 1.2rem; }
+.pagina-ajustes .panel h3 { color: var(--tinta); font-size: var(--texto); font-weight: 600; margin: 1.1rem 0 .5rem; }
+.pagina-ajustes .panel > h2 { font-size: 1.0625rem; font-weight: 600; margin: 0 0 .6rem; }
+.pagina-ajustes .dialogo-confirmacion { border-radius: 1.25rem; box-shadow: 0 1rem 3rem #10254b40; }
+.pagina-ajustes .dialogo-confirmacion h2 { color: var(--tinta); font-size: 1.0625rem; font-weight: 600; }
+.pagina-ajustes .dialogo-confirmacion p, .pagina-ajustes .dialogo-confirmacion li { color: var(--suave); font-size: var(--texto); }
+.pagina-ajustes .dialogo-confirmacion > section, .pagina-ajustes .dialogo-confirmacion > form { padding: 1.5rem; }
+.pagina-ajustes .formulario-dialogo label { color: var(--suave); font-size: var(--texto-chico); font-weight: 500; }
+.pagina-ajustes .formulario-dialogo input, .pagina-ajustes .formulario-dialogo select, .pagina-ajustes .formulario-dialogo textarea { background: #fff; border: 1px solid var(--linea-control); border-radius: .7rem; color: var(--tinta); font-size: var(--texto); font-weight: 400; min-height: var(--altura); padding: 0 .8rem; width: 100%; }
+.pagina-ajustes .formulario-dialogo textarea { padding: .6rem .8rem; }
+@media (max-width: 900px) { .pagina-ajustes .acciones-del-mes { justify-content: flex-start; max-width: none; } .pagina-ajustes .acciones-del-mes .linea-de-relacion { text-align: left; } .pagina-ajustes .dialogo-de-pagos .acciones-dialogo { flex-direction: column-reverse; } .pagina-ajustes .dialogo-de-pagos .acciones-dialogo button { width: 100%; } }
+.pagina-ajustes .encabezado-pagina p { color: var(--suave); font-size: var(--texto); margin: 0 0 .15rem; }
+.pagina-ajustes .tile-estado-del-mes .panel-cabecera { align-items: flex-start; margin-bottom: 0; }
+.pagina-ajustes .panel-tabla.primera-columna-fija thead th { vertical-align: bottom; white-space: normal; }
+.pagina-ajustes .panel-tabla.primera-columna-fija thead th:first-child { white-space: nowrap; }
+.pagina-ajustes .enlace-de-regreso { margin: .75rem 0 0 !important; }
+.pagina-ajustes .encabezado-pagina .insignia { margin-top: .35rem; }
+.pagina-ajustes .panel p, .pagina-ajustes .panel li { font-size: var(--texto); line-height: 1.5; }
+.pagina-ajustes .panel .panel-cabecera p { max-width: 52rem; }
+.pagina-ajustes .nota-de-persona { color: var(--suave); font-size: var(--texto); margin: 0 0 1rem .25rem; }
+.pagina-ajustes .panel-tabla.primera-columna-fija tbody th:first-child { min-width: 12rem; white-space: normal; }
+.pagina-ajustes .panel-tabla details > summary { white-space: nowrap; }

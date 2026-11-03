@@ -57,7 +57,7 @@ describe("página de Reglas legales (/pagos/reglas-legales)", () => {
     expect(html).toContain("usuario-fin-1");
     expect(html).toContain('href="/pagos/reglas-legales/essalud_tasa"');
     expect(html).toContain("Programado: 13,00 % desde el 01/12/2026");
-    expect(html).toContain("(sección actual)");
+    expect(html).toMatch(/aria-current="page"[^>]*>(Reglas legales|Fuentes externas|Condiciones laborales)<\/a>/);
     expect(html).toContain("Activar nuevo valor");
   });
 

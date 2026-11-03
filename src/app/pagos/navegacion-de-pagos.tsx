@@ -12,10 +12,10 @@ const SECCIONES = [
 export type SeccionDePagos = (typeof SECCIONES)[number]["clave"];
 
 export function NavegacionDePagos({ actual }: { actual: SeccionDePagos }) {
-  return <nav aria-label="Secciones de Pagos" className="navegacion-secundaria">
+  return <nav aria-label="Secciones de Pagos" className="pestanas-personal pestanas-de-pagos">
     {SECCIONES.map((seccion) => {
       const activa = seccion.clave === actual;
-      return <Link aria-current={activa ? "page" : undefined} className={activa ? "activo" : ""} href={seccion.href} key={seccion.clave}>{seccion.etiqueta}{activa && <small className="texto-activo"> (sección actual)</small>}</Link>;
+      return <Link aria-current={activa ? "page" : undefined} className={activa ? "activo" : ""} href={seccion.href} key={seccion.clave}>{seccion.etiqueta}</Link>;
     })}
   </nav>;
 }
