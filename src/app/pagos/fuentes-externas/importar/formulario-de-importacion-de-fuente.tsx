@@ -88,6 +88,7 @@ export function FormularioDeImportacionDeFuente({ tipos, tipoInicial, mes }: { t
       {vista && <VistaPrevia vista={vista} />}
 
       <div className="acciones-dialogo">
+        <Link className="boton-secundario" href={`/pagos/fuentes-externas?mes=${mes}`}>Cancelar</Link>
         <button className={sinErrores ? "boton-secundario" : "boton-principal"} disabled={pendiente} name="accion" onClick={() => setAccionEnCurso("validar")} type="submit" value="validar">
           {pendiente && accionEnCurso === "validar" ? "Validando archivo…" : "Validar archivo"}
         </button>

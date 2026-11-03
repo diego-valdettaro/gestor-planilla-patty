@@ -1045,6 +1045,8 @@ test("Finanzas distingue una fuente pendiente de un cero confirmado, carga un im
   // Cargar un importe en una fuente confirmada la devuelve a Pendiente; el mismo importe dos veces se rechaza.
   const formulario = page.locator("form.formulario-de-importe");
   const registrar = async (dni: string) => {
+    // El formulario de carga manual va plegado detrás de «+ Registrar un importe» cuando la fuente ya tiene filas.
+    if (!(await formulario.isVisible())) await page.getByText("+ Registrar un importe").click();
     await formulario.getByLabel("DNI de la persona").fill(dni);
     await formulario.getByLabel("Fecha del hecho").fill(await fechaDelMesDePago(page));
     await formulario.getByLabel("Importe (S/)").fill("40");

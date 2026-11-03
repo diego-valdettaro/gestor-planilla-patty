@@ -51,7 +51,7 @@ export default async function PaginaDeFuentesExternas({ searchParams }: { search
       {errorDeMes && <p className="mensaje-operacion error" role="alert">{errorDeMes} Se muestra el mes {formatearMes(mes)}.</p>}
     </section>
 
-    {soloConsulta && <p className="mensaje-operacion" role="status">{MENSAJE_SOLO_CONSULTA(mes)}</p>}
+    {soloConsulta && <p className="mensaje-operacion informativo" role="status">{MENSAJE_SOLO_CONSULTA(mes)}</p>}
 
     <section aria-labelledby="titulo-fuentes" className="tile panel">
       <header className="panel-cabecera"><div><h2 id="titulo-fuentes">Tipos de fuente</h2><p>Confirme cada tipo para el mes completo, incluso si no tiene importes.</p></div><span className={pendientes ? "insignia advertencia" : "insignia ok"}>{pendientes ? `${pendientes} ${pendientes === 1 ? "pendiente" : "pendientes"}` : "Todas confirmadas"}</span></header>
