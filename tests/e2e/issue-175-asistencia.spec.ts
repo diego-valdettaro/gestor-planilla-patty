@@ -310,6 +310,7 @@ test("G28 el gerente de grupo sin gestión de asistencia registra incidencias si
   test.setTimeout(60_000);
   await iniciarSesion(page);
   await page.goto("/personal");
+  await page.getByText("+ Nuevo colaborador").click();
   const dni = String(99000000 + Date.now() % 999999).slice(-8);
   const formulario = page.locator("form").filter({ has: page.getByLabel("DNI", { exact: true }) });
   await formulario.getByLabel("DNI").fill(dni);
@@ -349,6 +350,7 @@ test("G28 el recorrido desde el menú persiste incidencias de grupos propios y e
 
   async function crearPersona(dni: string, nombre: string, grupo: string) {
     await page.goto("/personal");
+    await page.getByText("+ Nuevo colaborador").click();
     const formularioPersona = page.locator("form").filter({ has: page.getByLabel("DNI", { exact: true }) });
     await formularioPersona.getByLabel("DNI", { exact: true }).fill(dni);
     await formularioPersona.getByLabel("Nombre", { exact: true }).fill(nombre);

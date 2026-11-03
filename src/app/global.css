@@ -438,3 +438,34 @@ th, td { border: 1px solid #e2e8f0; padding: 0.6rem; text-align: left; }
 .pagina-ajustes .formulario-edicion .boton-secundario { background: #fff; border: 1px solid var(--linea-control); color: var(--tinta); }
 .pagina-ajustes .nuevo-configuracion .panel-filtros > .acciones-formulario { flex-wrap: nowrap; grid-column: 1 / -1; }
 .pagina-ajustes .formulario-de-sede label { grid-column: 1 / -1; max-width: 26rem; }
+/* Personal (colaboradores y relaciones laborales): mismas tiles que Configuración. Pestañas con subrayado azul marino, acciones de fila discretas, fechas con su estado en insignia (ámbar = pendiente de confirmar). */
+.pagina-ajustes { --aviso-fondo: #fdf3d8; --aviso-texto: #7a5200; }
+.pagina-ajustes .insignia.aviso { background: var(--aviso-fondo); color: var(--aviso-texto); }
+.pagina-ajustes .pestanas-personal { border-bottom: 1px solid var(--linea-control); flex-wrap: wrap; margin: 0 0 1.25rem; max-width: none; }
+.pagina-ajustes .pestanas-personal a { border-bottom: 2px solid transparent; color: var(--suave); font-size: var(--texto); font-weight: 500; padding: .6rem .9rem; }
+.pagina-ajustes .pestanas-personal a:hover { color: var(--tinta); }
+.pagina-ajustes .pestanas-personal a.activo { border-bottom-color: var(--tinta); color: var(--tinta); font-weight: 600; }
+.pagina-ajustes .panel > .panel-filtros { margin-bottom: 1rem; }
+.pagina-ajustes .panel > .nuevo-configuracion { margin: 0 0 1rem; }
+.pagina-ajustes .bloque-nuevo { margin: 0 0 1rem; }
+.pagina-ajustes .bloque-nuevo .nuevo-configuracion { margin: 0; }
+.pagina-ajustes .bloque-nuevo .mensaje-operacion.listo { background: #e2f5ea; border-radius: .7rem; color: #0b6b3a; font-size: var(--texto); margin: .5rem 0 0; padding: .6rem .9rem; }
+.pagina-ajustes .pista-formulario { grid-column: 1 / -1; }
+.pagina-ajustes .nuevo-configuracion .panel-filtros .pista-configuracion { grid-column: 1 / -1; }
+.pagina-ajustes .tabla-personal td { white-space: nowrap; }
+.pagina-ajustes .tabla-personal td .acciones-configuracion { flex-wrap: wrap; }
+.pagina-ajustes .tabla-personal .fecha-con-estado { display: grid; gap: .2rem; justify-items: start; }
+.pagina-ajustes .tabla-personal .linea-de-relacion { display: block; }
+.pagina-ajustes .tabla-personal .acciones-configuracion .edicion-configuracion summary, .pagina-ajustes .tabla-personal td form > button:not(.peligro) { background: none; border: 1px solid transparent; color: var(--suave); }
+.pagina-ajustes .tabla-personal .acciones-configuracion .edicion-configuracion summary:hover, .pagina-ajustes .tabla-personal td form > button:not(.peligro):hover { background: #e9edf3; color: var(--tinta); }
+.pagina-ajustes .tabla-personal .edicion-configuracion[open] { flex-basis: 100%; }
+.pagina-ajustes .tabla-personal .edicion-configuracion[open] > summary { background: #e9edf3; color: var(--tinta); }
+.pagina-ajustes .tabla-personal .formulario-edicion { box-shadow: none; margin-top: .5rem; position: static; text-align: left; white-space: normal; width: min(26rem, 100%); }
+.pagina-ajustes .tabla-personal .formulario-edicion label { grid-column: 1 / -1; }
+.pagina-ajustes .tabla-personal .formulario-edicion button { grid-column: auto; }
+.pagina-ajustes .tabla-personal .formulario-edicion-corto { grid-template-columns: 1fr; }
+.pagina-ajustes .dialogo-confirmacion .acciones-dialogo { gap: .5rem; }
+.pagina-ajustes .tabla-personal td .acciones-configuracion { flex-wrap: nowrap; }
+.pagina-ajustes .tabla-personal td .acciones-configuracion:has(details[open]) { flex-wrap: wrap; }
+.pagina-ajustes .tabla-personal .formulario-edicion { width: 18rem; }
+.pagina-ajustes .tabla-personal .formulario-edicion input { min-width: 0; }
