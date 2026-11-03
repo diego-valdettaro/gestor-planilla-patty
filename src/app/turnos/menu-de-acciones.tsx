@@ -15,7 +15,7 @@ const ANCHO_DEL_MENU = 272;
 
 // Un solo botón «Acciones» que reúne las acciones por persona. El menú se dibuja en `position: fixed` para que la
 // tabla con desplazamiento propio no lo recorte, se cierra con Escape, al salir con Tab, al hacer clic fuera o al
-// desplazar, y devuelve el foco al botón (también al abrir un diálogo desde una acción).
+// desplazar la página, y devuelve el foco al botón (también al abrir un diálogo desde una acción).
 export function MenuDeAcciones({ nombre, acciones }: { nombre: string; acciones: AccionDeMenu[] }) {
   const id = useId();
   const boton = useRef<HTMLButtonElement>(null);
@@ -38,16 +38,23 @@ export function MenuDeAcciones({ nombre, acciones }: { nombre: string; acciones:
   useEffect(() => {
     if (!abierto) return;
     const cerrar = () => setAbierto(false);
+    // Un evento de scroll puede llegar después de abrir (p. ej. el que dejó el desplazamiento previo al clic): solo
+    // cierra si el botón se movió, porque el menú está fijo y quedaría desalineado.
+    const origen = boton.current?.getBoundingClientRect();
+    const alDesplazar = () => {
+      const actual = boton.current?.getBoundingClientRect();
+      if (!origen || !actual || Math.abs(actual.top - origen.top) > 1 || Math.abs(actual.left - origen.left) > 1) cerrar();
+    };
     const alHacerClic = (evento: MouseEvent) => {
       if (!(evento.target instanceof Node)) return;
       if (menu.current?.contains(evento.target) || boton.current?.contains(evento.target)) return;
       cerrar();
     };
-    window.addEventListener("scroll", cerrar, true);
+    window.addEventListener("scroll", alDesplazar, true);
     window.addEventListener("resize", cerrar);
     document.addEventListener("mousedown", alHacerClic);
     return () => {
-      window.removeEventListener("scroll", cerrar, true);
+      window.removeEventListener("scroll", alDesplazar, true);
       window.removeEventListener("resize", cerrar);
       document.removeEventListener("mousedown", alHacerClic);
     };

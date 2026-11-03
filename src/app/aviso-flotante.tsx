@@ -17,12 +17,18 @@ export function ConAviso({ aviso, children }: { aviso?: ContenidoDeAviso; childr
   useEffect(() => {
     if (!posicion) return;
     const cerrar = () => setPosicion(undefined);
+    // Un scroll pendiente (p. ej. el que enfocó el elemento) puede llegar tras abrir: solo se cierra si el ancla se movió.
+    const origen = raiz.current?.getBoundingClientRect();
+    const alDesplazar = () => {
+      const actual = raiz.current?.getBoundingClientRect();
+      if (!origen || !actual || Math.abs(actual.top - origen.top) > 1 || Math.abs(actual.left - origen.left) > 1) cerrar();
+    };
     const alTeclear = (evento: KeyboardEvent) => { if (evento.key === "Escape") cerrar(); };
-    window.addEventListener("scroll", cerrar, true);
+    window.addEventListener("scroll", alDesplazar, true);
     window.addEventListener("resize", cerrar);
     window.addEventListener("keydown", alTeclear);
     return () => {
-      window.removeEventListener("scroll", cerrar, true);
+      window.removeEventListener("scroll", alDesplazar, true);
       window.removeEventListener("resize", cerrar);
       window.removeEventListener("keydown", alTeclear);
     };
