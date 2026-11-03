@@ -549,3 +549,67 @@ th, td { border: 1px solid #e2e8f0; padding: 0.6rem; text-align: left; }
 .pagina-ajustes .nota-de-persona { color: var(--suave); font-size: var(--texto); margin: 0 0 1rem .25rem; }
 .pagina-ajustes .panel-tabla.primera-columna-fija tbody th:first-child { min-width: 12rem; white-space: normal; }
 .pagina-ajustes .panel-tabla details > summary { white-space: nowrap; }
+/* Pagos · condiciones laborales: filtros dentro del tile, aviso ámbar y acciones de fila discretas («Corregir»). */
+.pagina-ajustes .caja-aviso { background: var(--aviso-fondo); border-radius: .9rem; color: var(--aviso-texto); margin-top: .6rem !important; padding: .7rem 1rem; }
+.pagina-ajustes .panel > .panel-filtros { margin-bottom: 1rem; }
+.pagina-ajustes .panel-filtros .checkbox { align-items: center; align-self: end; display: flex; gap: .5rem; min-height: var(--altura); }
+.pagina-ajustes .panel-filtros .checkbox input { min-height: 0; width: auto; }
+.pagina-ajustes .panel-tabla td .acciones-configuracion { align-items: flex-start; flex-wrap: wrap; justify-content: flex-start; }
+.pagina-ajustes .panel-tabla td .acciones-configuracion .boton-secundario { background: none; border: 1px solid transparent; color: var(--suave); }
+.pagina-ajustes .panel-tabla td .acciones-configuracion .boton-secundario:hover:not(:disabled) { background: #e9edf3; color: var(--tinta); }
+.pagina-ajustes .panel-tabla td .acciones-configuracion .boton-secundario:disabled { background: none; border-color: transparent; color: #8a97ab; }
+.pagina-ajustes .panel-tabla td .acciones-configuracion .linea-de-relacion { flex-basis: 100%; max-width: 16rem; white-space: normal; }
+.pagina-ajustes .panel-tabla td.celda-estado .insignia { white-space: normal; }
+@media (max-width: 900px) { .pagina-ajustes .panel-filtros { grid-template-columns: 1fr; } }
+.pagina-ajustes .encabezado > .boton-principal, .pagina-ajustes .encabezado > button { flex: none; white-space: nowrap; }
+.pagina-ajustes .panel-tabla.primera-columna-fija .celda-estado { min-width: 22rem; }
+.pagina-ajustes .panel-tabla.primera-columna-fija .celda-estado .insignia { border-radius: .9rem; text-align: left; }
+/* Pagos · fuentes externas: acciones de fila, avisos informativos, cargas manuales plegadas y resumen de validación en sub-tiles. */
+.pagina-ajustes .mensaje-operacion.informativo { background: var(--campo); color: var(--tinta); margin: 0 0 1rem; padding: .8rem 1.1rem; }
+.pagina-ajustes .panel button.peligro[aria-haspopup] { background: none; border: 1px solid transparent; color: var(--peligro); }
+.pagina-ajustes .panel button.peligro[aria-haspopup]:hover { background: var(--peligro-fondo); }
+.pagina-ajustes .tabla-de-fuentes td .acciones-configuracion .boton-secundario { background: #fff; border: 1px solid var(--linea-control); color: var(--tinta); }
+.pagina-ajustes .tabla-de-fuentes td .acciones-configuracion a[href*="/importar"] { background: none; border-color: transparent; color: var(--suave); }
+.pagina-ajustes .tabla-de-fuentes td .acciones-configuracion .boton-secundario:hover:not(:disabled) { background: #f3f5f9; }
+.pagina-ajustes .tabla-de-fuentes td .acciones-configuracion { flex-wrap: nowrap; justify-content: flex-end; }
+.pagina-ajustes .tabla-de-fuentes td:last-child { text-align: right; }
+.pagina-ajustes .registro-plegable { margin-top: .5rem; }
+.pagina-ajustes .registro-plegable-cuerpo { background: var(--campo); border-radius: 1rem; display: grid; gap: .75rem; padding: 1rem; }
+.pagina-ajustes .registro-plegable-cuerpo .formulario-de-importe { align-items: end; display: grid; gap: .75rem; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); }
+.pagina-ajustes .registro-plegable-cuerpo .formulario-de-importe > p, .pagina-ajustes .registro-plegable-cuerpo .formulario-de-importe > small, .pagina-ajustes .registro-plegable-cuerpo .formulario-de-importe > .mensaje-operacion, .pagina-ajustes .registro-plegable-cuerpo .formulario-de-importe > div, .pagina-ajustes .registro-plegable-cuerpo .formulario-de-importe > button { grid-column: 1 / -1; }
+.pagina-ajustes .registro-plegable-cuerpo .formulario-de-importe > button, .pagina-ajustes .registro-plegable-cuerpo .formulario-de-importe > div > button { justify-self: start; }
+.pagina-ajustes .registro-plegable-cuerpo textarea { background: #fff; border: 1px solid var(--linea-control); border-radius: .7rem; font: inherit; font-size: var(--texto); padding: .5rem .8rem; width: 100%; }
+.pagina-ajustes .formulario-de-importe label, .pagina-ajustes .formulario-de-importacion-de-fuente label { display: grid; gap: .35rem; }
+.pagina-ajustes .decidir-incidencia > summary { background: none; border: 1px solid transparent; color: var(--suave); }
+.pagina-ajustes .decidir-incidencia > summary:hover, .pagina-ajustes .decidir-incidencia[open] > summary { background: #e9edf3; color: var(--tinta); }
+.pagina-ajustes .decidir-incidencia { position: relative; }
+.pagina-ajustes .decidir-incidencia > div { background: #fff; border: 1px solid var(--linea); border-radius: 1rem; box-shadow: 0 .5rem 1.5rem #10254b1f; margin-top: .4rem; padding: 1rem; white-space: normal; width: 20rem; }
+.pagina-ajustes .formulario-de-importacion-de-fuente { max-width: 40rem; }
+.pagina-ajustes .formulario-de-importacion-de-fuente .acciones-dialogo { flex-direction: row-reverse; justify-content: flex-end; }
+.pagina-ajustes .formulario-de-importacion-de-fuente .acciones-dialogo > .boton-secundario, .pagina-ajustes .formulario-de-importacion-de-fuente .acciones-dialogo > button { flex: none; }
+.pagina-ajustes .resumen-de-validacion { gap: .75rem; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); margin: .75rem 0 1rem; }
+.pagina-ajustes .resumen-de-validacion div { background: var(--campo); border: 0; border-radius: .9rem; padding: .8rem 1rem; }
+.pagina-ajustes .resumen-de-validacion dt { color: var(--suave); font-size: var(--texto-chico); font-weight: 400; }
+.pagina-ajustes .resumen-de-validacion dd { color: var(--tinta); font-size: 1.25rem; font-variant-numeric: tabular-nums; font-weight: 600; margin: .1rem 0 0; }
+.pagina-ajustes .resultado-de-validacion h2, .pagina-ajustes .resultado-de-importacion h2 { color: var(--tinta); font-size: 1.0625rem; font-weight: 600; letter-spacing: 0; }
+.pagina-ajustes .resultado-de-validacion { margin-top: .5rem; }
+.pagina-ajustes .errores-importacion { margin: .5rem 0 0; padding-left: 1.2rem; }
+.pagina-ajustes .mensaje-operacion.resultado-de-importacion { margin-top: 1rem; }
+.pagina-ajustes .formulario-de-importacion-de-fuente a[download] { color: var(--tinta); }
+@media (max-width: 900px) { .pagina-ajustes .tabla-de-fuentes td .acciones-configuracion { flex-wrap: wrap; justify-content: flex-start; } .pagina-ajustes .decidir-incidencia > div { width: min(20rem, 80vw); } }
+.pagina-ajustes .tabla-de-fuentes .celda-estado { min-width: 0; }
+.pagina-ajustes .tabla-de-fuentes td .acciones-configuracion { flex-wrap: wrap; justify-content: flex-start; min-width: 11rem; }
+.pagina-ajustes .tabla-de-fuentes td:last-child { text-align: left; }
+.pagina-ajustes .formulario-dialogo input[type="file"] { padding: .45rem .8rem; }
+.pagina-ajustes dialog { text-align: left; white-space: normal; }
+.pagina-ajustes dialog .acciones-dialogo button { white-space: nowrap; }
+.pagina-ajustes dialog.dialogo-confirmacion.dialogo-de-pagos .acciones-dialogo .boton-secundario { background: #fff; border: 1px solid var(--linea-control); color: var(--tinta); }
+.pagina-ajustes dialog.dialogo-confirmacion.dialogo-de-pagos .acciones-dialogo .boton-secundario:hover:not(:disabled) { background: #f3f5f9; color: var(--tinta); }
+.pagina-ajustes .tabla-de-fuentes td { white-space: normal; }
+.pagina-ajustes .tabla-de-fuentes td.numerico { white-space: nowrap; }
+.pagina-ajustes .tabla-de-fuentes td.celda-estado { max-width: 13rem; }
+.pagina-ajustes .tabla-de-fuentes td .acciones-configuracion { min-width: 15.5rem; }
+.pagina-ajustes .tabla-de-fuentes th, .pagina-ajustes .tabla-de-fuentes td { padding-left: .6rem; padding-right: .6rem; }
+.pagina-ajustes .tabla-de-fuentes td .acciones-configuracion .boton-secundario, .pagina-ajustes .tabla-de-fuentes td .acciones-configuracion a { min-height: 2.25rem; padding: 0 .9rem; }
+.pagina-ajustes .panel-tabla.primera-columna-fija.tabla-de-fuentes .celda-estado { max-width: 13rem; min-width: 0; }
+.pagina-ajustes .panel-tabla.primera-columna-fija.tabla-de-fuentes .celda-estado .insignia { white-space: nowrap; }

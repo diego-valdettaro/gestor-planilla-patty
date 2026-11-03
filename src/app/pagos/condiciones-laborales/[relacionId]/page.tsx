@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { NOMBRE_DE_ROL, puedeGestionarPagos } from "@/autenticacion/permisos";
+import { puedeGestionarPagos } from "@/autenticacion/permisos";
 import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
 import { NOMBRE_DE_DATO, enMinuscula, type DatoLaboral } from "@/condiciones-laborales/catalogo";
 import { crearCasosDeUsoDeCondicionesLaborales } from "@/condiciones-laborales/casos-de-uso-servidor";
@@ -30,19 +30,18 @@ export default async function PaginaDeDetalleDeCondiciones({ params }: { params:
   const casosDeUso = crearCasosDeUsoDeCondicionesLaborales(repositorioDeCondicionesLaborales, { obtenerActorActual });
   const hoy = fechaDeHoyEnLima();
   const [detalle, sedes] = await Promise.all([casosDeUso.detalle(relacionId, hoy), casosDeUso.sedesDeAdscripcion()]);
-  if (!detalle) return <main className="contenido pagina">
+  if (!detalle) return <main className="contenido pagina pagina-ajustes">
     <NavegacionDePagos actual="condiciones-laborales" />
-    <section className="estado-vacio"><h1>No existe esa relación laboral confirmada</h1><p>Solo hay condiciones laborales para relaciones con ingreso confirmado por Recursos Humanos. <Link href="/pagos/condiciones-laborales">Volver a condiciones laborales</Link></p></section>
+    <section className="tile panel"><div className="estado-vacio"><h1>No existe esa relación laboral confirmada</h1><p>Solo hay condiciones laborales para relaciones con ingreso confirmado por Recursos Humanos. <Link href="/pagos/condiciones-laborales">Volver a condiciones laborales</Link></p></div></section>
   </main>;
 
   const { relacion } = detalle;
-  return <main className="contenido pagina">
+  return <main className="contenido pagina pagina-ajustes">
     <header className="encabezado encabezado-pagina">
       <div>
-        <p className="eyebrow">{NOMBRE_DE_ROL[actor.rol]}</p>
         <h1>Condiciones laborales de {relacion.nombre}</h1>
         <p>DNI {relacion.dni} · Grupo {relacion.grupo} · Ingreso {formatearFechaDeRelacion(relacion.ingreso)} – {relacion.cese ? `cese ${formatearFechaDeRelacion(relacion.cese)}` : "vigente"}</p>
-        <p><Link href="/pagos/condiciones-laborales">Volver a condiciones laborales</Link></p>
+        <p className="enlace-de-regreso"><Link className="boton-secundario" href="/pagos/condiciones-laborales">Volver a condiciones laborales</Link></p>
       </div>
       <RegistroDeCondicion cese={relacion.cese} limites={limitesDeFecha(detalle)} nombreDeLaPersona={relacion.nombre} relacionId={relacion.id} sedes={sedes} />
     </header>
@@ -61,8 +60,8 @@ function limitesDeFecha({ relacion, datos }: DetalleDeRelacion): Record<DatoLabo
 
 function PanelDeDato({ dato, detalle, hoy, sedes }: { dato: HistorialDeDato; detalle: DetalleDeRelacion; hoy: string; sedes: string[] }) {
   const titulo = `titulo-${dato.dato}`;
-  return <section aria-labelledby={titulo} className="tarjeta panel">
-    <header className="panel-cabecera"><div><h2 id={titulo}>{NOMBRE_DE_DATO[dato.dato]}</h2><p>Vigente hoy ({formatearFechaDeRelacion(hoy)}): {dato.vigente === undefined ? <span className="insignia advertencia">Pendiente</span> : <strong>{formatearValor(dato.dato, dato.vigente)}</strong>}</p>{dato.dato === "movilidad_fija" && Number(dato.vigente) > 0 && <p role="status"><strong>Clasificación contable pendiente.</strong> La finalización del pago queda bloqueada hasta que se confirme su tratamiento.</p>}</div></header>
+  return <section aria-labelledby={titulo} className="tile panel">
+    <header className="panel-cabecera"><div><h2 id={titulo}>{NOMBRE_DE_DATO[dato.dato]}</h2><p>Vigente hoy ({formatearFechaDeRelacion(hoy)}): {dato.vigente === undefined ? <span className="insignia advertencia">Pendiente</span> : <strong>{formatearValor(dato.dato, dato.vigente)}</strong>}</p>{dato.dato === "movilidad_fija" && Number(dato.vigente) > 0 && <p className="caja-aviso" role="status"><strong>Clasificación contable pendiente.</strong> La finalización del pago queda bloqueada hasta que se confirme su tratamiento.</p>}</div></header>
     {dato.historial.length
       ? <div className="panel-tabla primera-columna-fija" role="region" aria-label={`Historial de ${enMinuscula(NOMBRE_DE_DATO[dato.dato])}`} tabIndex={0}><table><thead><tr><th>Valor</th><th>Vigente desde</th><th>Vigente hasta</th><th>Registrado por</th><th>Estado</th><th><span className="sr-only">Acciones</span></th></tr></thead>
         <tbody>{dato.historial.map((entrada) => <FilaDeHistorial dato={dato} detalle={detalle} entrada={entrada} key={entrada.id} sedes={sedes} />)}</tbody></table></div>

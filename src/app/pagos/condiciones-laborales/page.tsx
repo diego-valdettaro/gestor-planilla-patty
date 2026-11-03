@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { NOMBRE_DE_ROL, puedeGestionarPagos } from "@/autenticacion/permisos";
+import { puedeGestionarPagos } from "@/autenticacion/permisos";
 import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
 import { NOMBRE_DE_AFILIACION, NOMBRE_DE_DATO, NOMBRE_DE_ESQUEMA, enMinuscula, esAfp, type Afiliacion, type EsquemaDeComision } from "@/condiciones-laborales/catalogo";
 import { crearCasosDeUsoDeCondicionesLaborales } from "@/condiciones-laborales/casos-de-uso-servidor";
@@ -31,21 +31,20 @@ export default async function PaginaDeCondicionesLaborales({ searchParams }: { s
   const { filas, total, grupos, sedes } = await casosDeUso.listar(hoy, filtros);
   const incompletas = filas.filter(({ faltantes }) => faltantes.length).length;
 
-  return <main className="contenido pagina">
-    <header className="encabezado encabezado-pagina"><div><p className="eyebrow">{NOMBRE_DE_ROL[actor.rol]}</p><h1>Condiciones laborales</h1><p>Mantenga por relación laboral, y con fecha de vigencia, el sueldo, la jornada, el régimen, la afiliación pensionaria, la asignación familiar otorgada y la sede de adscripción. Un valor nuevo no reescribe la historia.</p></div></header>
+  return <main className="contenido pagina pagina-ajustes">
+    <header className="encabezado encabezado-pagina"><div><h1>Condiciones laborales</h1><p>Mantenga por relación laboral, y con fecha de vigencia, el sueldo, la jornada, el régimen, la afiliación pensionaria, la asignación familiar otorgada y la sede de adscripción. Un valor nuevo no reescribe la historia.</p></div></header>
     <NavegacionDePagos actual="condiciones-laborales" />
 
     {total ? <>
-      <form className="filtros panel-filtros" method="get">
-        <label>Grupo operativo<select defaultValue={filtros.grupo ?? ""} name="grupo"><option value="">Todos los grupos</option>{grupos.map((grupo) => <option key={grupo} value={grupo}>{grupo}</option>)}</select></label>
-        <label>Sede de adscripción<select defaultValue={filtros.sede ?? ""} name="sede"><option value="">Todas las sedes</option>{sedes.map((sede) => <option key={sede} value={sede}>{sede}</option>)}</select></label>
-        <label>Persona (nombre o DNI)<input defaultValue={filtros.persona ?? ""} name="persona" type="search" /></label>
-        <label className="checkbox"><input defaultChecked={filtros.soloFaltantes} name="faltantes" type="checkbox" value="1" />Solo con datos faltantes</label>
-        <button className="boton-secundario" type="submit">Filtrar</button>
-      </form>
-
-      <section className="tarjeta panel">
+      <section className="tile panel">
         <header className="panel-cabecera"><div><h2>Relaciones laborales confirmadas</h2><p>Valores vigentes hoy ({formatearFechaDeRelacion(hoy)}). Solo entran las relaciones con ingreso confirmado por Recursos Humanos.</p></div><span className="insignia neutro">{hayFiltros ? `${filas.length} de ${total} relaciones` : `${total} ${total === 1 ? "relación" : "relaciones"}`} · {incompletas} con datos faltantes</span></header>
+        <form className="filtros panel-filtros" method="get">
+          <label>Grupo operativo<select defaultValue={filtros.grupo ?? ""} name="grupo"><option value="">Todos los grupos</option>{grupos.map((grupo) => <option key={grupo} value={grupo}>{grupo}</option>)}</select></label>
+          <label>Sede de adscripción<select defaultValue={filtros.sede ?? ""} name="sede"><option value="">Todas las sedes</option>{sedes.map((sede) => <option key={sede} value={sede}>{sede}</option>)}</select></label>
+          <label>Persona (nombre o DNI)<input defaultValue={filtros.persona ?? ""} name="persona" type="search" /></label>
+          <label className="checkbox"><input defaultChecked={filtros.soloFaltantes} name="faltantes" type="checkbox" value="1" />Solo con datos faltantes</label>
+          <button className="boton-secundario" type="submit">Filtrar</button>
+        </form>
         {filas.length ? <>
           <p className="aviso-desplazamiento">Desplácese horizontalmente para ver todas las columnas.</p>
           <div className="panel-tabla primera-columna-fija" role="region" aria-label="Condiciones laborales vigentes hoy" tabIndex={0}><table><thead><tr><th>Persona</th><th>Relación laboral</th><th className="numerico">Sueldo vigente hoy</th><th className="numerico">Jornada diaria</th><th>Régimen</th><th>Afiliación pensionaria</th><th>Sede de adscripción</th><th>Estado</th></tr></thead>
@@ -61,7 +60,7 @@ export default async function PaginaDeCondicionesLaborales({ searchParams }: { s
             </tr>)}</tbody></table></div>
         </> : <section className="estado-vacio"><h3>Ninguna relación coincide con los filtros</h3><p>Cambie los criterios o <Link href="/pagos/condiciones-laborales">quite los filtros</Link> para ver las {total} relaciones confirmadas.</p></section>}
       </section>
-    </> : <section className="estado-vacio"><h2>Todavía no hay relaciones laborales confirmadas</h2><p>Recursos Humanos las registra y confirma.</p></section>}
+    </> : <section className="tile panel"><section className="estado-vacio"><h3>Todavía no hay relaciones laborales confirmadas</h3><p>Recursos Humanos las registra y confirma.</p></section></section>}
   </main>;
 }
 
