@@ -150,7 +150,8 @@ test("completar semana reemplaza los siete días con el modelo por defecto y los
   await expect(page.getByText("Sin guardar", { exact: true })).toBeVisible();
 
   const textosAntesDeCancelar = await celdas.allTextContents();
-  await botonCompletar.click();
+  await filaAna.getByRole("button", { name: "Acciones de Ana Borrador" }).click();
+  await filaAna.getByRole("menuitem", { name: /Completar semana/ }).click();
   await dialogo.getByRole("button", { name: "Cancelar" }).click();
   await expect(dialogo).toBeHidden();
   await expect(celdas.first()).toBeVisible();
@@ -309,7 +310,7 @@ test("revisa asistencias semanales por grupo sin agrupar colaboradores por sede 
   const semana = fechaDeLaSemanaDeDemo(0);
   await page.goto(`/asistencias?grupo=Tiendas&semana=${semana}`);
 
-  const matriz = page.locator(".tabla-plan-semanal");
+  const matriz = page.locator(".tabla-asistencias");
   await expect(matriz).toBeVisible();
   await expect(matriz.getByRole("columnheader")).toHaveCount(8);
   const filaBeto = matriz.getByRole("row", { name: /Beto Publicado/ });
@@ -321,7 +322,7 @@ test("revisa asistencias semanales por grupo sin agrupar colaboradores por sede 
 
   const semanaAnterior = fechaDeLaSemanaAnteriorDeDemo(0);
   await page.goto(`/asistencias?grupo=Tiendas&semana=${semanaAnterior}`);
-  const filaElena = page.locator(".tabla-plan-semanal").getByRole("row", { name: /Elena Sotelo/ });
+  const filaElena = page.locator(".tabla-asistencias").getByRole("row", { name: /Elena Sotelo/ });
   await expect(filaElena).toContainText("Liquidado");
   await expect(filaElena.locator(".icono-candado")).toHaveCount(6);
   expect(errores).toEqual([]);
@@ -375,7 +376,7 @@ test("confirma colaboradores por un rango que corta la semana desde las vistas m
   await dialogo.getByRole("button", { name: "Confirmar 1 colaborador" }).click();
   await expect(dialogo).toBeHidden();
 
-  const filaEva = page.locator(".tabla-plan-semanal").getByRole("row", { name: /Eva Confirmable/ });
+  const filaEva = page.locator(".tabla-asistencias").getByRole("row", { name: /Eva Confirmable/ });
   await expect(filaEva).toContainText("Registrada");
   expect(errores).toEqual([]);
 });
@@ -437,7 +438,7 @@ test("cada rol ve en el menú exactamente las rutas que puede abrir", async ({ p
     await page.context().clearCookies();
     await iniciarSesion(page, usuario);
     const menu = page.getByRole("navigation", { name: "Navegación principal" });
-    const etiquetas = (await menu.locator(".enlaces-navegacion a").allInnerTexts()).map((texto) => texto.replace(/\s+/g, " ").replace("(sección actual)", "").replace(/^\S+\s/, "").trim());
+    const etiquetas = (await menu.locator(".enlaces-navegacion a").allInnerTexts()).map((texto) => texto.replace(/\s+/g, " ").replace("(sección actual)", "").trim());
     expect(etiquetas.map((etiqueta) => etiqueta.replace(/^[^\p{L}]+/u, "")), `menú de ${usuario}`).toEqual(enlaces);
   }
   expect(errores).toEqual([]);
@@ -762,7 +763,7 @@ test("en ancho estrecho el menú se opera con teclado e identifica la sección p
   await page.goto("/asistencias");
 
   const navegacion = page.getByRole("navigation", { name: "Navegación principal" });
-  await expect(navegacion.getByText("Registro de asistencias", { exact: true })).toBeVisible();
+  await expect(navegacion.locator(".seccion-navegacion")).toHaveText("Registro de asistencias");
   const menu = navegacion.getByRole("button", { name: "Menú" });
   await expect(menu).toHaveAttribute("aria-expanded", "false");
   await expect(navegacion.getByRole("link", { name: /Configuración/ })).toBeHidden();

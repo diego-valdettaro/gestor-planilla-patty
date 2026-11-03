@@ -384,6 +384,9 @@ test("G28 el recorrido desde el menú persiste incidencias de grupos propios y e
   await expect(page.getByText(/Sueldo|AFP|Banco de pago/)).toHaveCount(0);
 
   async function registrarIncidencia(dni: string, motivo: string) {
+    // Con la matriz o el calendario a la vista, el formulario queda plegado detrás de «+ Registrar incidencia de tienda».
+    const plegable = page.getByText("+ Registrar incidencia de tienda", { exact: true });
+    if (await plegable.isVisible() && !(await page.locator('select[name="dni"]').isVisible())) await plegable.click();
     await page.locator('select[name="dni"]').selectOption(dni);
     await page.getByLabel("Fecha del hecho").fill("2026-10-20");
     await page.getByLabel("Monto (S/)").fill("80,50");
@@ -421,7 +424,7 @@ test("G29 el selector semanal y la matriz comparten lunes al cruzar de mes", asy
 
   const selector = page.locator(".selector-semanal .boton-fecha-semanal");
   await expect(selector).toContainText(/26\s+oct.*1\s+nov/s);
-  const fechasDeLaMatriz = page.locator(".tabla-plan-semanal thead time");
+  const fechasDeLaMatriz = page.locator(".tabla-asistencias thead time");
   await expect(fechasDeLaMatriz).toHaveCount(7);
   await expect(fechasDeLaMatriz.nth(0)).toHaveAttribute("datetime", "2026-10-26");
   await expect(fechasDeLaMatriz.nth(6)).toHaveAttribute("datetime", "2026-11-01");
