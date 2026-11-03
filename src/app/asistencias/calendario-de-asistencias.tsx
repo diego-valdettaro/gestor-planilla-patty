@@ -2,11 +2,13 @@
 
 import React, { useActionState, useEffect, useRef, useState } from "react";
 
-import { IconoCandado } from "@/app/icono-candado";
+import { ConAviso } from "@/app/aviso-flotante";
 import { TIPOS_DE_ESTADO_MANUAL_REGISTRABLE, type TipoDeEstadoManualRegistrable } from "@/asistencias/estado-manual";
 
 import { registrarAsistenciaManual, type EstadoDeRegistroManual } from "./actions";
+import { avisoDeDia, CLASE_DE_ESTADO_DE_ASISTENCIA, detalleDeDia } from "./aviso-de-dia";
 import { useCambiosPendientes } from "./cambios-pendientes";
+import { GlifoDeEstado } from "./glifo-de-estado";
 import { crearResumenDeAjuste, type ResumenDeAjuste } from "./resumen-de-ajuste";
 import {
   celdaDeAsistenciaEsEditable,
@@ -105,33 +107,42 @@ export function CalendarioDeAsistencias({
   }
 
   const confirmada = asistencia?.estado === "confirmada";
+  const detalleDelDia = detalleDeDia(estadoSeleccionado, "abrir-el-dia");
 
   return <>
     <div className="calendario"><div className="dias-semana">{["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"].map((dia) => <span key={dia}>{dia}</span>)}</div><div className="celdas-calendario">{Array.from({ length: desfase }).map((_, indice) => <span className="celda-vacia" key={`vacia-${indice}`} />)}{dias.map((fecha) => {
       const item = porFecha.get(fecha);
       const estadoDelDia = estadoDeCeldaAsistencia(item);
       const etiqueta = etiquetaDeCeldaAsistencia(estadoDelDia, item?.estadoManual ?? null);
-      return <button aria-label={`Asistencia del ${fecha}: ${etiqueta}`} className={`dia-calendario estado-color-${estadoDelDia}`} key={fecha} onClick={(evento) => { celdaActiva.current = evento.currentTarget; abrir(fecha); }} type="button"><time>{Number(fecha.slice(-2))}</time><strong>{estadoDelDia === "liquidado" && <IconoCandado />}{etiqueta}</strong>{item ? item.estadoManual ? null : <><span>{item.sedeProgramada ?? "sin sede"}</span><span>{hora(item.entrada) ?? "sin entrada"}</span><span>{hora(item.salida) ?? "sin salida"}</span></> : <span>Sin planificación</span>}</button>;
+      const entrada = hora(item?.entrada ?? null)?.slice(0, 5);
+      const salida = hora(item?.salida ?? null)?.slice(0, 5);
+      return <ConAviso aviso={avisoDeDia(estadoDelDia, "abrir-el-dia")} key={fecha}>{(descripcion) => <button aria-describedby={descripcion} aria-label={`Asistencia del ${fecha}: ${etiqueta}`} className={`dia-calendario est ${CLASE_DE_ESTADO_DE_ASISTENCIA[estadoDelDia]}`} onClick={(evento) => { celdaActiva.current = evento.currentTarget; abrir(fecha); }} type="button">
+        <span className="dia-cabecera"><time dateTime={fecha}>{Number(fecha.slice(-2))}</time><span className="dia-nombre">{nombreCortoDelDia(fecha)}</span></span>
+        <em className="dia-estado"><GlifoDeEstado estado={estadoDelDia} />{etiqueta}</em>
+        {item && !item.estadoManual && <span className="dia-datos">{item.sedeProgramada && <b>{item.sedeProgramada}</b>}{entrada && salida && <small>{entrada}–{salida}</small>}</span>}
+      </button>}</ConAviso>;
     })}</div></div>
     <dialog aria-labelledby="titulo-asistencia" className="dialogo-confirmacion" onCancel={(evento) => {
       evento.preventDefault();
       if (edicionModificada) confirmarDescarte();
       else cancelarEdicion();
     }} ref={dialogo}>
-      {fechaSeleccionada && editable && asistencia ? <form action={accion} key={fechaSeleccionada} onInput={() => { setEdicionModificada(true); marcarPendiente(cancelarEdicion); }} ref={formulario}>
+      {fechaSeleccionada && editable && asistencia ? <form action={accion} className="formulario-dialogo" key={fechaSeleccionada} onInput={() => { setEdicionModificada(true); marcarPendiente(cancelarEdicion); }} ref={formulario}>
         <h2 id="titulo-asistencia" ref={titulo} tabIndex={-1}>{resumen ? "¿Confirmar el ajuste de asistencia?" : confirmada ? "Ajustar asistencia" : "Registrar asistencia"}</h2>
-        {resumen ? <section aria-label="Resumen del ajuste">
+        {!resumen && <p className="subtitulo-dialogo">{nombreColaborador} · {fechaLarga(fechaSeleccionada)}</p>}
+        {resumen ? <section aria-label="Resumen del ajuste" className="resumen-de-ajuste">
           <p>Colaborador: {resumen.colaborador}. Fecha: {resumen.fecha}.</p>
           <ul>{resumen.cambios.map((linea) => <li key={linea}>{linea}</li>)}</ul>
           <p>Motivo: {resumen.motivo}</p>
           <p>{resumen.consecuencia}</p>
         </section> : null}
-        <div hidden={Boolean(resumen)}>
+        <div className="campos-de-asistencia" hidden={Boolean(resumen)}>
         <input name="dni" type="hidden" value={dni} />
         <input name="fecha" type="hidden" value={fechaSeleccionada} />
         <input name="estadoActual" type="hidden" value={asistencia.estado} />
+        <p className="linea-de-estado">Estado <span className={`est est-etiqueta ${CLASE_DE_ESTADO_DE_ASISTENCIA[estadoSeleccionado]}`}><GlifoDeEstado estado={estadoSeleccionado} />{etiquetaDeCeldaAsistencia(estadoSeleccionado, asistencia.estadoManual)}</span>{detalleDelDia && <span className="texto-suave">{detalleDelDia.detalle[0].toUpperCase() + detalleDelDia.detalle.slice(1)}</span>}</p>
         {asistencia.estado === "confirmada" ? <><input name="tipoDeAsistencia" type="hidden" value="trabajo" /><p>Asistencia confirmada: Jornada laboral</p></> : <label>Tipo de asistencia<select name="tipoDeAsistencia" onChange={(evento) => setTipoDeAsistencia(evento.target.value as TipoDeAsistencia)} value={tipoDeAsistencia}>{TIPOS_DE_ASISTENCIA.map((opcion) => <option key={opcion} value={opcion}>{etiquetaTipoDeAsistencia(opcion)}</option>)}</select></label>}
-        {tipoDeAsistencia === "trabajo" ? <>{asistencia.estado === "confirmada" ? <p>Sede planificada: {asistencia.sedeProgramada}</p> : <><label>Sede<input defaultValue={asistencia.sedeProgramada ?? ""} name="sede" required /></label><p className="ayuda-campo">Debe coincidir con la sede planificada.</p></>}<label>Hora de ingreso<input defaultValue={hora(asistencia.entrada) ?? ""} name="entrada" required step="1" type="time" /></label><label>Hora de salida<input defaultValue={hora(asistencia.salida) ?? ""} name="salida" required step="1" type="time" /></label>{asistencia.estado === "confirmada" ? <label>Motivo del ajuste<input name="motivo" required /></label> : null}</> : <label>Comentario<input name="comentario" required /></label>}</div>
+        {tipoDeAsistencia === "trabajo" ? <>{asistencia.estado === "confirmada" ? <p>Sede planificada: {asistencia.sedeProgramada}</p> : <><label>Sede<input defaultValue={asistencia.sedeProgramada ?? ""} name="sede" required /></label><p className="ayuda-campo">Debe coincidir con la sede planificada.</p></>}<div className="fila-de-campos"><label>Hora de ingreso<input defaultValue={hora(asistencia.entrada) ?? ""} name="entrada" required step="1" type="time" /></label><label>Hora de salida<input defaultValue={hora(asistencia.salida) ?? ""} name="salida" required step="1" type="time" /></label></div>{asistencia.estado === "confirmada" ? <label>Motivo del ajuste<input name="motivo" required /></label> : null}</> : <label>Comentario<input name="comentario" required /></label>}</div>
         <div className="acciones-dialogo">
           <button className="boton-secundario" onClick={cancelarEdicion} type="button">Cancelar</button>
           {resumen ? <><button className="boton-secundario" onClick={volverAlFormulario} type="button">Volver al formulario</button><button className="boton-principal" disabled={pendiente} type="submit">{pendiente ? "Guardando…" : "Confirmar ajuste"}</button></>
@@ -153,7 +164,7 @@ function FormularioSoloLectura({ estado, estadoManual, fecha, soloConsulta = fal
   const { titulo, descripcion } = soloConsulta
     ? { titulo: "Solo consulta", descripcion: `Estado del día: ${etiquetaDeCeldaAsistencia(estado, estadoManual)}. Su rol no registra ni confirma asistencias: lo hace el gerente de área del grupo.` }
     : textoSoloLectura(estado, estadoManual);
-  return <form method="dialog">
+  return <form className="formulario-dialogo" method="dialog">
     <h2 id="titulo-asistencia">{titulo}</h2>
     <p>{fecha}. {descripcion}</p>
     <div className="acciones-dialogo"><button className="boton-secundario">Cerrar</button></div>
@@ -177,6 +188,14 @@ function textoSoloLectura(
           : "Esta jornada ya está registrada.",
       };
   }
+}
+
+function fechaLarga(fecha: string): string {
+  return new Intl.DateTimeFormat("es-PE", { day: "numeric", month: "long", timeZone: "UTC", weekday: "long", year: "numeric" }).format(new Date(`${fecha}T00:00:00Z`));
+}
+
+function nombreCortoDelDia(fecha: string): string {
+  return ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"][(new Date(`${fecha}T00:00:00Z`).getUTCDay() + 6) % 7];
 }
 
 function hora(valor: string | null): string | undefined { return valor ? /T(\d{2}:\d{2}(?::\d{2})?)/.exec(valor)?.[1] : undefined; }

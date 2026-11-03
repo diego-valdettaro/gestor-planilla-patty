@@ -84,7 +84,7 @@ export function DialogoConfirmacionPorRango({
     <dialog aria-labelledby="titulo-confirmacion-rango" className="dialogo-confirmacion dialogo-confirmacion-rango" ref={dialogo}>
       <section>
         <header><h2 id="titulo-confirmacion-rango">Confirmar asistencias por rango</h2><p>Las jornadas resueltas se guardarán juntas. Si alguna cambió, no se confirmará ninguna.</p></header>
-        <div className="campos-rango-confirmacion">
+        <div className="campos-rango-confirmacion formulario-dialogo">
           <label>Desde<input disabled={evaluando || confirmando} onChange={(evento) => setInicio(evento.target.value)} type="date" value={inicio} /></label>
           <label>Hasta<input disabled={evaluando || confirmando} onChange={(evento) => setFin(evento.target.value)} type="date" value={fin} /></label>
           <button className="boton-secundario" disabled={evaluando || confirmando} onClick={() => evaluar()} type="button">{evaluando ? "Revisando…" : "Revisar rango"}</button>

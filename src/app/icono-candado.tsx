@@ -1,3 +1,5 @@
+import React from "react";
+
 // Candado que acompaña (nunca reemplaza) la etiqueta de un estado "Liquidado",
 // tanto en la grilla de Horarios como en el calendario de Asistencias.
 export function IconoCandado() {

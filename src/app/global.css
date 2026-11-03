@@ -668,3 +668,143 @@ th, td { border: 1px solid #e2e8f0; padding: 0.6rem; text-align: left; }
 .pagina-periodos .detalle-colaborador details, .pagina-periodos .detalle-colaborador .panel-tabla { max-width: 100%; min-width: 0; }
 .pagina-periodos .acciones-del-mes > form > button.peligro { background: none; border: 1px solid transparent; color: var(--peligro); }
 .pagina-periodos .acciones-del-mes > form > button.peligro:hover { background: var(--peligro-fondo); }
+/* Registro de asistencias e Importar asistencias: mismos tiles que Pagos. Los estados del día usan la paleta compartida (`.est-*`, más arriba), la misma que Horarios. El detalle de cada día va en un tooltip, no repetido en la celda. */
+.pagina-asistencias .tile { display: grid; gap: 1rem; }
+.pagina-asistencias .tile > * { min-width: 0; }
+.pagina-asistencias .tile > .panel-cabecera { margin-bottom: 0; }
+.pagina-asistencias .tile > .mensaje-operacion, .pagina-asistencias .tile > .estado-vacio { margin: 0; }
+.pagina-asistencias .pestanas-personal { margin-bottom: 1rem; }
+.pagina-asistencias .pestanas-personal a[aria-disabled="true"] { opacity: .6; }
+.pagina-asistencias .acciones-de-asistencias { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; justify-content: flex-end; }
+.pagina-asistencias .filtros-asistencias { align-items: end; display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); margin: 0; }
+.pagina-asistencias .filtros-asistencias > * { min-width: 0; }
+.pagina-asistencias .filtros-asistencias:has(.selector-semanal) { grid-template-columns: minmax(19rem, 1.6fr) minmax(0, 1fr) minmax(0, 1fr); }
+.pagina-asistencias .filtros-asistencias label { display: grid; gap: .35rem; }
+.pagina-asistencias .filtros-asistencias input[type="date"], .pagina-asistencias .filtros-asistencias select { width: 100%; }
+.pagina-asistencias .selector-semanal { align-items: flex-end; gap: .4rem; }
+.pagina-asistencias .selector-semanal > .boton-secundario { font-size: 1.25rem; line-height: 1; min-height: var(--altura); padding: 0; width: 2.5rem; }
+.pagina-asistencias .selector-fecha-semanal { color: var(--suave); flex: 1; font-size: var(--texto-chico); font-weight: 500; gap: .35rem; min-width: 0; }
+.pagina-asistencias .boton-fecha-semanal { background: #fff; border: 1px solid var(--linea-control); border-radius: .7rem; color: var(--tinta); font-weight: 600; justify-content: flex-start; min-height: var(--altura); min-width: 0; padding: 0 .9rem; text-align: left; width: 100%; }
+.pagina-asistencias .boton-fecha-semanal strong { font-size: var(--texto-chico); font-weight: 600; }
+.pagina-asistencias .calendario-semanal { border: 1px solid var(--linea); border-radius: 1rem; box-shadow: 0 .5rem 1.5rem #10254b33; left: 2.9rem; max-width: calc(100vw - 3rem); }
+.pagina-asistencias .calendario-semanal button { min-height: 0; }
+.pagina-asistencias .calendario-semanal .dias-calendario-semanal button { border-radius: .5rem; min-height: 2rem; padding: 0; }
+.pagina-asistencias .calendario-semanal .acciones-calendario-semanal button, .pagina-asistencias .calendario-semanal .encabezado-calendario-semanal button { min-height: 2rem; padding: 0 .8rem; }
+.pagina-asistencias .est-leyenda { align-items: center; display: flex; flex-wrap: wrap; gap: .4rem .5rem; list-style: none; margin: 0; padding: 0; }
+.pagina-asistencias .est-leyenda > .est-titulo { color: var(--suave); font-size: var(--t-apoyo); font-weight: 500; margin-right: .25rem; }
+.pagina-asistencias .est-leyenda > .est { align-items: center; display: inline-flex; font-size: var(--t-apoyo); font-weight: 500; gap: .3rem; line-height: 1.3; padding: .2rem .65rem; white-space: nowrap; }
+.pagina-asistencias .glifo-de-estado { font-weight: 700; }
+.pagina-asistencias .icono-candado { height: .85em; width: .85em; }
+/* Matriz semanal */
+.pagina-asistencias .tabla-asistencias { border: 1px solid var(--linea); border-radius: 1rem; max-width: 100%; overflow-x: auto; }
+.pagina-asistencias .tabla-asistencias table { background: #fff; border-collapse: separate; border-spacing: 0; font-size: var(--texto); min-width: 74rem; table-layout: fixed; }
+.pagina-asistencias .tabla-asistencias th, .pagina-asistencias .tabla-asistencias td { border: 0; border-bottom: 1px solid var(--linea); padding: .4rem .3rem; vertical-align: top; }
+.pagina-asistencias .tabla-asistencias tbody tr:last-child th, .pagina-asistencias .tabla-asistencias tbody tr:last-child td { border-bottom: 0; }
+.pagina-asistencias .tabla-asistencias thead th { background: var(--campo); color: var(--suave); font-size: var(--texto-chico); font-weight: 600; padding: .65rem .3rem; text-align: center; white-space: nowrap; }
+.pagina-asistencias .tabla-asistencias th:first-child { background: #fff; left: 0; min-width: 12rem; padding: .7rem 1rem; position: sticky; text-align: left; vertical-align: middle; width: 12rem; z-index: 1; }
+.pagina-asistencias .tabla-asistencias thead th:first-child { background: var(--campo); }
+.pagina-asistencias .tabla-asistencias tbody th strong { color: var(--tinta); display: block; font-weight: 600; }
+.pagina-asistencias .tabla-asistencias tbody th small { color: var(--suave); display: block; font-size: var(--t-apoyo); font-weight: 400; }
+.pagina-asistencias .tabla-asistencias time { color: inherit; font-size: inherit; }
+.pagina-asistencias .aviso-dia { display: grid; }
+.pagina-asistencias .celda-asistencia, .pagina-asistencias .dia-calendario.est { align-content: start; display: grid; font-size: var(--t-apoyo); font-weight: 400; gap: .1rem; line-height: 1.35; padding: .5rem .6rem; text-align: left; width: 100%; }
+.pagina-asistencias .celda-asistencia { min-height: 5.2rem; }
+.pagina-asistencias .celda-asistencia em, .pagina-asistencias .dia-estado { align-items: center; display: inline-flex; font-style: normal; font-weight: 600; gap: .3rem; }
+.pagina-asistencias .celda-asistencia b, .pagina-asistencias .dia-datos b { color: var(--tinta); font-weight: 500; }
+.pagina-asistencias .celda-asistencia small, .pagina-asistencias .dia-datos small { color: var(--tinta); font-size: var(--t-apoyo); opacity: .8; }
+.pagina-asistencias .celda-asistencia[tabindex]:hover, .pagina-asistencias .dia-calendario.est:hover { box-shadow: inset 0 0 0 2px var(--tinta); outline: none; }
+.pagina-asistencias .celda-asistencia[tabindex]:focus-visible, .pagina-asistencias .dia-calendario.est:focus-visible { outline: 3px solid #0369a1; outline-offset: 2px; }
+/* Tooltip de detalle del día */
+.aviso-tip { background: #10254b; border-radius: .8rem; box-shadow: 0 .5rem 1.5rem #10254b4d; color: #fff; display: grid; font-size: .8125rem; font-weight: 400; gap: .45rem; left: 0; line-height: 1.45; padding: .7rem .85rem; pointer-events: none; position: fixed; text-align: left; top: 0; visibility: hidden; white-space: normal; width: min(21rem, calc(100vw - 1rem)); z-index: 60; }
+.aviso-tip.abierto { visibility: visible; }
+.aviso-tip .tip-titulo { font-size: .8125rem; font-weight: 600; }
+.aviso-tip .tip-fila { display: block; }
+.aviso-tip .tip-fila b { color: #cfe0ff; font-weight: 600; }
+/* Calendario mensual */
+.pagina-asistencias .calendario { border: 1px solid var(--linea); border-radius: 1rem; max-width: 100%; overflow-x: auto; padding: .75rem; }
+.pagina-asistencias .dias-semana, .pagina-asistencias .celdas-calendario { gap: .4rem; grid-template-columns: repeat(7, minmax(0, 1fr)); min-width: 44rem; }
+.pagina-asistencias .dias-semana span { color: var(--suave); font-size: var(--t-apoyo); font-weight: 600; padding: .2rem .4rem; text-align: left; }
+.pagina-asistencias .celda-vacia { background: transparent; border: 0; min-height: 0; }
+.pagina-asistencias .dia-calendario.est { border-radius: .7rem; height: 100%; justify-content: stretch; min-height: 6.3rem; }
+.pagina-asistencias .dia-cabecera { align-items: baseline; display: flex; gap: .4rem; grid-area: cab; }
+.pagina-asistencias .dia-calendario time { color: var(--tinta); font-size: var(--t-apoyo); font-weight: 600; }
+.pagina-asistencias .dia-nombre { display: none; }
+.pagina-asistencias .dia-estado { grid-area: estado; }
+.pagina-asistencias .dia-calendario.est { grid-template-areas: "cab" "estado" "datos"; }
+.pagina-asistencias .dia-datos { display: grid; grid-area: datos; }
+/* Diálogos de la pantalla */
+.pagina-asistencias .formulario-dialogo { display: grid; gap: .75rem; margin: 0; }
+.pagina-asistencias .formulario-dialogo label { display: grid; gap: .35rem; }
+.pagina-asistencias .formulario-dialogo p { margin: 0; }
+.pagina-asistencias .subtitulo-dialogo { color: var(--suave); }
+.pagina-asistencias .campos-de-asistencia { display: grid; gap: .75rem; }
+.pagina-asistencias .campos-de-asistencia[hidden] { display: none; }
+.pagina-asistencias .fila-de-campos { display: grid; gap: .75rem; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); }
+.pagina-asistencias .linea-de-estado { align-items: center; background: var(--campo); border-radius: .9rem; color: var(--tinta); display: flex; flex-wrap: wrap; gap: .4rem .6rem; padding: .7rem 1rem; }
+.pagina-asistencias .linea-de-estado .texto-suave { font-size: var(--texto-chico); }
+.pagina-asistencias .ayuda-campo { color: var(--suave); font-size: var(--texto-chico); }
+.pagina-asistencias .resumen-de-ajuste { background: var(--campo); border-radius: .9rem; display: grid; gap: .4rem; padding: .8rem 1rem; }
+.pagina-asistencias dialog .resumen-de-ajuste p, .pagina-asistencias dialog .resumen-de-ajuste ul { margin: 0; }
+.pagina-asistencias .est-etiqueta { gap: .3rem; }
+.pagina-asistencias dialog .acciones-dialogo { display: flex; flex-wrap: wrap; gap: .5rem; justify-content: flex-end; }
+.pagina-asistencias .dialogo-confirmacion-rango { max-width: 36rem; }
+.pagina-asistencias .dialogo-confirmacion-rango > section { max-height: calc(100vh - 3rem); overflow-y: auto; }
+.pagina-asistencias .campos-rango-confirmacion { align-items: end; grid-template-columns: 1fr 1fr auto; }
+.pagina-asistencias dialog .opciones-confirmacion-rango { border: 0; display: grid; gap: .5rem; list-style: none; margin: 0; padding: 0; }
+.pagina-asistencias .opciones-confirmacion-rango li + li { border-top: 0; }
+.pagina-asistencias .opciones-confirmacion-rango label { align-items: flex-start; background: var(--campo); border-radius: .9rem; color: var(--suave); display: flex; gap: .7rem; padding: .7rem .9rem; }
+.pagina-asistencias .opciones-confirmacion-rango input[type="checkbox"] { flex: none; margin-top: .2rem; min-height: 0; padding: 0; width: auto; }
+.pagina-asistencias .opciones-confirmacion-rango strong { color: var(--tinta); font-size: var(--texto); font-weight: 600; }
+.pagina-asistencias .opciones-confirmacion-rango small { color: var(--suave); font-size: var(--texto-chico); }
+.pagina-asistencias .opciones-confirmacion-rango .causa-bloqueo-rango { color: var(--peligro); }
+.dialogo-cambios-sin-guardar[open] { border-radius: 1.25rem; box-shadow: 0 1rem 3rem #10254b40; display: grid; gap: 1rem; padding: 1.5rem; }
+.dialogo-cambios-sin-guardar h2 { color: #10254b; font-size: 1.0625rem; font-weight: 600; }
+.dialogo-cambios-sin-guardar p { color: #5b6b82; font-size: .875rem; }
+.dialogo-cambios-sin-guardar .acciones-dialogo { flex-wrap: wrap; gap: .5rem; }
+.dialogo-cambios-sin-guardar button { border: 1px solid transparent; border-radius: 999px; font-size: .875rem; font-weight: 500; min-height: 2.5rem; padding: 0 1.2rem; }
+.dialogo-cambios-sin-guardar .boton-secundario { background: #fff; border-color: #c3cddb; color: #10254b; }
+.dialogo-cambios-sin-guardar .peligro { background: #b42318; color: #fff; font-weight: 600; }
+/* Incidencia de tienda */
+.pagina-asistencias .formulario-de-incidencia { align-items: end; display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); margin: 0; }
+.pagina-asistencias .formulario-de-incidencia label { display: grid; gap: .35rem; }
+.pagina-asistencias .formulario-de-incidencia .campo-completo, .pagina-asistencias .formulario-de-incidencia .mensaje-operacion, .pagina-asistencias .formulario-de-incidencia .acciones-formulario { grid-column: 1 / -1; }
+.pagina-asistencias .formulario-de-incidencia textarea { background: #fff; border: 1px solid var(--linea-control); border-radius: .7rem; color: var(--tinta); font: inherit; font-size: var(--texto); padding: .5rem .8rem; width: 100%; }
+.pagina-asistencias .acciones-formulario { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; }
+.pagina-asistencias details.nuevo-configuracion { margin: 0; }
+.pagina-asistencias details.nuevo-configuracion[open] > summary { margin-bottom: .75rem; }
+/* Importar asistencias */
+.pagina-asistencias .formulario-de-importacion { max-width: 40rem; }
+.pagina-asistencias .formulario-de-importacion input[type="file"] { padding: .45rem .8rem; }
+.pagina-asistencias .tabla-de-importacion { max-height: 26rem; overflow: auto; }
+.pagina-asistencias .tabla-de-importacion table { min-width: 28rem; }
+.pagina-asistencias .tabla-de-importacion th { position: sticky; top: 0; z-index: 1; }
+.pagina-asistencias .tabla-de-importacion td { white-space: normal; }
+.pagina-asistencias .tabla-de-importacion td.numerico { white-space: nowrap; }
+.pagina-asistencias .dialogo-de-importacion { max-width: 40rem; }
+.pagina-asistencias .dialogo-de-importacion > section { max-height: calc(100vh - 3rem); overflow-y: auto; }
+.pagina-asistencias .dialogo-de-importacion > section > header { display: grid; gap: .35rem; }
+.pagina-asistencias .dialogo-de-importacion .resumen-de-validacion { margin: 0; }
+@media (max-width: 900px) {
+  .pagina-asistencias .acciones-de-asistencias { justify-content: flex-start; }
+  .pagina-asistencias .filtros-asistencias:has(.selector-semanal) { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 700px) {
+  .pagina-asistencias .campos-rango-confirmacion { grid-template-columns: 1fr; }
+  .pagina-asistencias dialog .acciones-dialogo, .dialogo-cambios-sin-guardar .acciones-dialogo { flex-direction: column-reverse; }
+  .pagina-asistencias dialog .acciones-dialogo button, .dialogo-cambios-sin-guardar .acciones-dialogo button { width: 100%; }
+  .pagina-asistencias .calendario { border: 0; overflow: visible; padding: 0; }
+  .pagina-asistencias .dias-semana, .pagina-asistencias .celda-vacia { display: none; }
+  .pagina-asistencias .celdas-calendario { grid-template-columns: minmax(0, 1fr); min-width: 0; }
+  .pagina-asistencias .dia-calendario.est { grid-template-areas: "cab estado" "datos datos"; grid-template-columns: auto minmax(0, 1fr); min-height: 0; }
+  .pagina-asistencias .dia-estado { justify-self: end; text-align: right; }
+  .pagina-asistencias .dia-nombre { display: inline; }
+  .pagina-asistencias .dia-calendario time { font-size: var(--texto); }
+  .pagina-asistencias .dia-datos { grid-auto-flow: column; justify-content: start; gap: .6rem; }
+  .pagina-asistencias .dia-datos:empty { display: none; }
+}
+.pagina-asistencias .panel ul.est-leyenda { margin: 0; padding: 0; }
+@media (max-width: 700px) {
+  .pagina-asistencias .boton-fecha-semanal { padding: 0 .6rem; }
+  .pagina-asistencias .boton-fecha-semanal strong { font-size: .75rem; }
+  .pagina-asistencias .selector-semanal { gap: .25rem; }
+}
