@@ -469,3 +469,9 @@ th, td { border: 1px solid #e2e8f0; padding: 0.6rem; text-align: left; }
 .pagina-ajustes .tabla-personal td .acciones-configuracion:has(details[open]) { flex-wrap: wrap; }
 .pagina-ajustes .tabla-personal .formulario-edicion { width: 18rem; }
 .pagina-ajustes .tabla-personal .formulario-edicion input { min-width: 0; }
+/* Personal · relaciones laborales: a 1280 px las acciones de la última columna caben completas (pasan a una segunda línea si hace falta); en pantallas estrechas sigue el desplazamiento propio de la tabla. */
+.pagina-ajustes .tabla-personal th, .pagina-ajustes .tabla-personal td { padding: .65rem .5rem; }
+.pagina-ajustes .tabla-personal td:last-child .acciones-configuracion { flex-wrap: wrap; min-width: 9rem; }
+.pagina-ajustes .tabla-personal td:last-child { white-space: normal; }
+.pagina-ajustes .tabla-personal td:first-child { white-space: normal; }
+.pagina-ajustes .tabla-personal td .insignia { white-space: normal; }
