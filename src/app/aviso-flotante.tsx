@@ -45,7 +45,7 @@ export function ConAviso({ aviso, children }: { aviso?: ContenidoDeAviso; childr
     {children(id)}
     <span className={posicion ? "aviso-tip abierto" : "aviso-tip"} id={id} ref={globo} role="tooltip" style={posicion ? { left: posicion.left, top: posicion.top } : undefined}>
       <strong className="tip-titulo">{aviso.titulo}</strong>
-      {aviso.filas.map(({ rotulo, texto }) => <span className="tip-fila" key={rotulo}><b>{rotulo}:</b> {texto}</span>)}
+      {aviso.filas.map(({ rotulo, texto }, indice) => <span className="tip-fila" key={`${indice}-${rotulo}`}><b>{rotulo}:</b> {texto}</span>)}
     </span>
   </span>;
 }

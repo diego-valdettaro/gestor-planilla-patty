@@ -120,14 +120,20 @@ test("completar semana reemplaza los siete días con el modelo por defecto y los
   await page.goto(`/turnos?semana=${semana}&equipo=Tiendas`);
 
   const filaLiquidada = page.locator("tr", { hasText: "Darío Liquidado" });
-  await expect(filaLiquidada.getByRole("button", { name: "Completar semana" })).toHaveCount(0);
+  // La semana liquidada conserva el menú «Acciones», con las dos acciones desactivadas y su motivo.
+  await filaLiquidada.getByRole("button", { name: /^Acciones de Darío Liquidado/ }).click();
+  await expect(filaLiquidada.getByRole("menuitem", { name: /Completar semana/ })).toHaveAttribute("aria-disabled", "true");
+  await expect(filaLiquidada.getByRole("menuitem", { name: /Republicar cambios/ })).toHaveAttribute("aria-disabled", "true");
+  await expect(filaLiquidada.getByRole("menuitem", { name: /Completar semana/ })).toContainText("La semana está liquidada y ya no admite cambios.");
+  await page.keyboard.press("Escape");
+  await expect(filaLiquidada.getByRole("menuitem")).toHaveCount(0);
 
   const filaAna = page.locator("tr", { hasText: "Ana Borrador" });
   const celdas = filaAna.locator("td.celda-plan-semanal");
-  const botonCompletar = filaAna.getByRole("button", { name: "Completar semana" });
   const dialogo = page.getByRole("dialog", { name: "Completar semana de Ana Borrador" });
 
-  await botonCompletar.click();
+  await filaAna.getByRole("button", { name: "Acciones de Ana Borrador" }).click();
+  await filaAna.getByRole("menuitem", { name: /Completar semana/ }).click();
   await dialogo.getByLabel("Sede por defecto").selectOption("Tienda San Isidro");
   await dialogo.getByLabel("Modelo por defecto").selectOption({ label: "Apertura · 08:00 a 16:00" });
   const selectsDeDia = dialogo.locator(".dias-completar-semana select");
@@ -179,7 +185,8 @@ test("completar semana no exige un modelo por defecto cuando todos los días que
   const celdas = filaElena.locator("td.celda-plan-semanal");
   const dialogo = page.getByRole("dialog", { name: "Completar semana de Elena Sotelo" });
 
-  await filaElena.getByRole("button", { name: "Completar semana" }).click();
+  await filaElena.getByRole("button", { name: "Acciones de Elena Sotelo" }).click();
+  await filaElena.getByRole("menuitem", { name: /Completar semana/ }).click();
   for (const select of await dialogo.locator(".dias-completar-semana select").all()) await select.selectOption("descanso");
   await dialogo.getByRole("button", { name: "Completar semana" }).click();
   await expect(dialogo).toBeHidden();
@@ -202,19 +209,26 @@ test("completar semana sobre una fila publicada deja cambios sin publicar en vez
   await page.goto(`/turnos?semana=${semana}&equipo=Tiendas`);
 
   const filaBeto = page.locator("tr", { hasText: "Beto Publicado" });
-  const estadoDeLaFila = filaBeto.locator(".persona small");
+  const estadoDeLaFila = filaBeto.locator("th .est-etiqueta");
   await expect(estadoDeLaFila).toHaveText("Publicado");
-  await expect(filaBeto.getByRole("button", { name: "Republicar cambios" })).toHaveCount(0);
+  // Sin cambios pendientes, «Republicar cambios» sigue en el menú pero desactivada y con su motivo.
+  const accionesDeBeto = filaBeto.getByRole("button", { name: "Acciones de Beto Publicado" });
+  await accionesDeBeto.click();
+  await expect(filaBeto.getByRole("menuitem", { name: /Republicar cambios/ })).toHaveAttribute("aria-disabled", "true");
+  await expect(filaBeto.getByRole("menuitem", { name: /Republicar cambios/ })).toContainText("No hay cambios sin publicar en esta semana.");
+  await page.keyboard.press("Escape");
 
   const dialogo = page.getByRole("dialog", { name: "Completar semana de Beto Publicado" });
-  await filaBeto.getByRole("button", { name: "Completar semana" }).click();
+  await accionesDeBeto.click();
+  await filaBeto.getByRole("menuitem", { name: /Completar semana/ }).click();
   await dialogo.locator(".dias-completar-semana select").first().selectOption("permiso");
   await dialogo.getByRole("button", { name: "Completar semana" }).click();
   await expect(dialogo).toBeHidden();
 
   // El cambio queda pendiente de republicación: no se sobrescribe el horario semanal publicado en silencio.
   await expect(estadoDeLaFila).toHaveText("Cambios sin publicar");
-  await expect(filaBeto.getByRole("button", { name: "Republicar cambios" })).toBeVisible();
+  await accionesDeBeto.click();
+  await expect(filaBeto.getByRole("menuitem", { name: /Republicar cambios/ })).not.toHaveAttribute("aria-disabled", "true");
   expect(errores).toEqual([]);
 });
 
@@ -275,10 +289,10 @@ test("publicar selección solo publica la fila marcada y respeta una deselecció
   await botonPublicar.click();
   await page.getByRole("dialog", { name: "¿Publicar la selección?" }).getByRole("button", { name: "Publicar planificación" }).click();
 
-  await expect(filaAna.locator(".persona small")).toHaveText("Publicado", { timeout: 15_000 });
+  await expect(filaAna.locator("th .est-etiqueta")).toHaveText("Publicado", { timeout: 15_000 });
   await expect(checkboxAna).toHaveCount(0);
   // La publicación selectiva no afecta a otras filas, como los cambios sin publicar de Carla.
-  await expect(filaCarla.locator(".persona small")).toHaveText("Cambios sin publicar");
+  await expect(filaCarla.locator("th .est-etiqueta")).toHaveText("Cambios sin publicar");
 
   expect(errores).toEqual([]);
 });
@@ -486,7 +500,13 @@ test("Recursos Humanos confirma un ingreso y el gerente ve su efecto en Horarios
   await iniciarSesion(page, "gerente-tiendas");
   await page.goto(`/turnos?semana=${semana}&equipo=Tiendas`);
   const filaLuis = page.locator("tr", { hasText: "Luis Pendiente" });
-  await expect(filaLuis.getByText("No se puede publicar: no tiene una relación laboral confirmada en esta semana.")).toBeVisible();
+  // El motivo ya no es texto de la fila: es un icono enfocable con tooltip (causa y siguiente paso).
+  const avisoDeLuis = filaLuis.getByRole("button", { name: /No se puede publicar a Luis Pendiente/ });
+  await avisoDeLuis.focus();
+  const tooltipDeLuis = page.getByRole("tooltip").filter({ hasText: "No se puede publicar" });
+  await expect(tooltipDeLuis).toBeVisible();
+  await expect(tooltipDeLuis).toContainText("no tiene una relación laboral confirmada en esta semana.");
+  await expect(tooltipDeLuis).toContainText("Recursos Humanos debe registrar y confirmar su ingreso.");
   await expect(filaLuis.getByRole("checkbox", { name: "Publicar" })).toHaveCount(0);
   const filaJulia = page.locator("tr", { hasText: "Julia Ingreso" });
   await expect(filaJulia.locator("td.celda-plan-semanal.fuera-de-relacion")).toHaveCount(2);
@@ -510,7 +530,7 @@ test("Recursos Humanos confirma un ingreso y el gerente ve su efecto en Horarios
   await page.context().clearCookies();
   await iniciarSesion(page, "gerente-tiendas");
   await page.goto(`/turnos?semana=${semana}&equipo=Tiendas`);
-  await expect(page.locator("tr", { hasText: "Luis Pendiente" }).getByText("No se puede publicar")).toHaveCount(0);
+  await expect(page.locator("tr", { hasText: "Luis Pendiente" }).getByRole("button", { name: /No se puede publicar a Luis Pendiente/ })).toHaveCount(0);
   expect(errores, "Relaciones laborales y Horarios no deben registrar errores de navegador").toEqual([]);
 });
 
@@ -547,7 +567,9 @@ test("el gerente de área conserva la acción principal de Horarios y ve por qu�
   await expect(guardar).toBeDisabled();
   await expect(guardar).toHaveAccessibleDescription(/no hay cambios sin guardar/);
   await expect(page.getByRole("button", { name: "Publicar planificación" }).first()).toHaveClass(/boton-principal/);
-  await expect(page.getByRole("button", { name: "Completar semana" }).first()).toHaveClass(/boton-secundario/);
+  // Las acciones por persona van en un solo botón «Acciones» secundario (menú), no como botones sueltos en la fila.
+  await expect(page.getByRole("button", { name: /^Acciones de / }).first()).toHaveClass(/boton-secundario/);
+  await expect(page.getByRole("button", { name: "Completar semana" })).toHaveCount(0);
   expect(errores, "Horarios no debe registrar errores de navegador").toEqual([]);
 });
 
