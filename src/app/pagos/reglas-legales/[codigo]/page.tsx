@@ -31,7 +31,7 @@ export default async function PaginaDeUnaReglaLegal({ params, searchParams }: { 
   const detalle = await casosDeUso.historial(codigo, hoy);
   if (!detalle) return <main className="contenido pagina pagina-ajustes">
     <NavegacionDePagos actual="reglas-legales" />
-    <section className="estado-vacio"><h1>No existe ese valor legal</h1><p>Elija uno de la lista de reglas legales. <Link href="/pagos/reglas-legales">Volver a reglas legales</Link></p></section>
+    <section className="tile panel"><div className="estado-vacio"><h1>No existe ese valor legal</h1><p>Elija uno de la lista de reglas legales. <Link href="/pagos/reglas-legales">Volver a reglas legales</Link></p></div></section>
   </main>;
 
   const { definicion, historial, vigente } = detalle;
@@ -43,7 +43,7 @@ export default async function PaginaDeUnaReglaLegal({ params, searchParams }: { 
       <div>
         <h1>{definicion.nombre}</h1>
         <p>Vigente hoy ({formatearFechaDeRelacion(hoy)}): {vigente ? <strong>{formatearValorLegal(definicion.unidad, vigente.valor)}</strong> : <><span className="insignia advertencia">Pendiente</span> Sin regla vigente</>}</p>
-        <p><Link href="/pagos/reglas-legales">Volver a reglas legales</Link></p>
+        <p className="enlace-de-regreso"><Link className="boton-secundario" href="/pagos/reglas-legales">Volver a reglas legales</Link></p>
       </div>
       <ActivacionDeRegla codigoInicial={definicion.codigo} definiciones={[definicion]} usuario={actor.nombreUsuario ?? "su usuario"} />
     </header>
