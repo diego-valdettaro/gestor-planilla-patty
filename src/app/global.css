@@ -678,14 +678,14 @@ th, td { border: 1px solid #e2e8f0; padding: 0.6rem; text-align: left; }
 .pagina-asistencias .acciones-de-asistencias { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem; justify-content: flex-end; }
 .pagina-asistencias .filtros-asistencias { align-items: end; display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); margin: 0; }
 .pagina-asistencias .filtros-asistencias > * { min-width: 0; }
-.pagina-asistencias .filtros-asistencias:has(.selector-semanal) { grid-template-columns: minmax(19rem, 1.6fr) minmax(0, 1fr) minmax(0, 1fr); }
+.pagina-asistencias .filtros-asistencias:has(.selector-semanal) { grid-template-columns: minmax(23rem, 1.6fr) minmax(0, 1fr) minmax(0, 1fr); }
 .pagina-asistencias .filtros-asistencias label { display: grid; gap: .35rem; }
 .pagina-asistencias .filtros-asistencias input[type="date"], .pagina-asistencias .filtros-asistencias select { width: 100%; }
 .pagina-asistencias .selector-semanal { align-items: flex-end; gap: .4rem; }
 .pagina-asistencias .selector-semanal > .boton-secundario { font-size: 1.25rem; line-height: 1; min-height: var(--altura); padding: 0; width: 2.5rem; }
 .pagina-asistencias .selector-fecha-semanal { color: var(--suave); flex: 1; font-size: var(--texto-chico); font-weight: 500; gap: .35rem; min-width: 0; }
 .pagina-asistencias .boton-fecha-semanal { background: #fff; border: 1px solid var(--linea-control); border-radius: .7rem; color: var(--tinta); font-weight: 600; justify-content: flex-start; min-height: var(--altura); min-width: 0; padding: 0 .9rem; text-align: left; width: 100%; }
-.pagina-asistencias .boton-fecha-semanal strong { font-size: var(--texto-chico); font-weight: 600; }
+.pagina-asistencias .boton-fecha-semanal strong { font-size: var(--texto-chico); font-weight: 600; white-space: nowrap; }
 .pagina-asistencias .calendario-semanal { border: 1px solid var(--linea); border-radius: 1rem; box-shadow: 0 .5rem 1.5rem #10254b33; left: 2.9rem; max-width: calc(100vw - 3rem); }
 .pagina-asistencias .calendario-semanal button { min-height: 0; }
 .pagina-asistencias .calendario-semanal .dias-calendario-semanal button { border-radius: .5rem; min-height: 2rem; padding: 0; }
@@ -784,6 +784,10 @@ th, td { border: 1px solid #e2e8f0; padding: 0.6rem; text-align: left; }
 .pagina-asistencias .dialogo-de-importacion > section { max-height: calc(100vh - 3rem); overflow-y: auto; }
 .pagina-asistencias .dialogo-de-importacion > section > header { display: grid; gap: .35rem; }
 .pagina-asistencias .dialogo-de-importacion .resumen-de-validacion { margin: 0; }
+@media (max-width: 1180px) {
+  .pagina-asistencias .filtros-asistencias:has(.selector-semanal) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pagina-asistencias .filtros-asistencias .selector-semanal { grid-column: 1 / -1; }
+}
 @media (max-width: 900px) {
   .pagina-asistencias .acciones-de-asistencias { justify-content: flex-start; }
   .pagina-asistencias .filtros-asistencias:has(.selector-semanal) { grid-template-columns: minmax(0, 1fr); }
