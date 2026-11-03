@@ -13,13 +13,14 @@ import { EditorDeGrupo } from "../configuracion/editor-de-grupo";
 import { FiltrosDeColaboradores } from "./filtros-de-colaboradores";
 import { PestanasDePersonal } from "./pestanas-de-personal";
 import { filtrarColaboradores } from "./visibilidad-de-colaboradores";
+import { SinPermiso } from "../sin-permiso";
 
 export const dynamic = "force-dynamic";
 
 export default async function PaginaDePersonal({ searchParams }: { searchParams: Promise<{ grupo?: string; inactivos?: string }> }) {
   const actor = await obtenerActorActual().catch(() => undefined);
   if (!actor) redirect("/iniciar-sesion");
-  if (!puedeConsultarPersonal(actor)) return <main className="centrado"><section className="estado-vacio"><h1>Sin permiso</h1><p>Su rol no permite consultar al personal. Los gerentes de área necesitan tener al menos un grupo asignado.</p></section></main>;
+  if (!puedeConsultarPersonal(actor)) return <SinPermiso>Su rol no permite consultar al personal. Los gerentes de área necesitan tener al menos un grupo asignado.</SinPermiso>;
   // Recursos Humanos y Finanzas solo consultan relaciones laborales: su pestaña es la única.
   if (!puedeConsultarColaboradores(actor)) redirect("/relaciones-laborales");
 

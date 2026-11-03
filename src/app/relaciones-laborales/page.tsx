@@ -10,6 +10,7 @@ import { estaVigenteEn, formatearFechaDeRelacion, vigenciasConfirmadas } from "@
 
 import { PestanasDePersonal } from "../personal/pestanas-de-personal";
 import { ConfirmacionDeFecha, FormularioDeFecha, FormularioDeIngreso } from "./formularios";
+import { SinPermiso } from "../sin-permiso";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,7 @@ type Parametros = { desde?: string; hasta?: string };
 export default async function PaginaDeRelacionesLaborales({ searchParams }: { searchParams: Promise<Parametros> }) {
   const actor = await obtenerActorActual().catch(() => undefined);
   if (!actor) redirect("/iniciar-sesion");
-  if (!puedeConsultarRelacionesLaborales(actor)) return <main className="centrado"><section className="estado-vacio"><h1>Sin permiso</h1><p>Su rol no permite consultar relaciones laborales. Pida al Administrador del sistema que revise su rol.</p></section></main>;
+  if (!puedeConsultarRelacionesLaborales(actor)) return <SinPermiso>Su rol no permite consultar relaciones laborales. Pida al Administrador del sistema que revise su rol.</SinPermiso>;
 
   const puedeGestionar = puedeGestionarRelacionesLaborales(actor);
   const casosDeUso = crearCasosDeUsoDeRelacionesLaborales(repositorioDeRelacionesLaborales, { obtenerActorActual });

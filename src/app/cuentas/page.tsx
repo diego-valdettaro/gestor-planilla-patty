@@ -9,13 +9,14 @@ import { MenuDeConfiguracion } from "../configuracion/menu-de-configuracion";
 import { quitarGerenteDesdeFormulario } from "./actions";
 import { AsignadorDeGerente } from "./asignador-de-gerente";
 import { FormularioDeCuenta } from "./formulario-de-cuenta";
+import { SinPermiso } from "../sin-permiso";
 
 export const dynamic = "force-dynamic";
 
 export default async function PaginaDeCuentas() {
   const actor = await obtenerActorActual().catch(() => undefined);
   if (!actor) redirect("/iniciar-sesion");
-  if (!puedeAdministrarCuentas(actor)) return <main className="centrado"><section className="estado-vacio"><h1>Sin permiso</h1><p>Su rol no permite administrar cuentas. Solo Finanzas y el Administrador del sistema pueden hacerlo.</p></section></main>;
+  if (!puedeAdministrarCuentas(actor)) return <SinPermiso>Su rol no permite administrar cuentas. Solo Finanzas y el Administrador del sistema pueden hacerlo.</SinPermiso>;
 
   const [cuentas, grupos] = await Promise.all([repositorioDeCuentas.listarCuentas(), repositorioDeCuentas.listarGruposConGerente()]);
   const gerentes = cuentas.filter((cuenta) => cuenta.rol === "gerente_de_area");

@@ -7,13 +7,14 @@ import { diasDeLaSemana, inicioDeSemana } from "@/turnos/semana";
 import { repositorioDeGrupos, repositorioDeModelosDeHorario, repositorioDeTurnos } from "@/turnos/servicio";
 
 import { PlanificadorSemanal } from "./planificador-semanal";
+import { SinPermiso } from "../sin-permiso";
 
 export const dynamic = "force-dynamic";
 
 export default async function PaginaDeTurnos({ searchParams }: { searchParams: Promise<{ semana?: string; equipo?: string; copiar?: string }> }) {
   const actor = await obtenerActorActual().catch(() => undefined);
   if (!actor) redirect("/iniciar-sesion");
-  if (!puedeConsultarHorarios(actor)) return <main className="centrado"><section className="estado-vacio"><h1>Sin permiso</h1><p>Su rol no permite consultar Horarios. Pida al Administrador del sistema que revise su rol o los grupos que tiene asignados.</p></section></main>;
+  if (!puedeConsultarHorarios(actor)) return <SinPermiso>Su rol no permite consultar Horarios. Pida al Administrador del sistema que revise su rol o los grupos que tiene asignados.</SinPermiso>;
   const parametros = await searchParams;
   const semana = inicioDeSemana(parametros.semana ?? new Date().toISOString().slice(0, 10));
   const grupos = await repositorioDeGrupos.listarOperablesPor(actor);

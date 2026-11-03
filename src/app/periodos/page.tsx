@@ -14,13 +14,14 @@ import { repositorioDePeriodos } from "@/periodos/servicio";
 import { cerrarPeriodoDesdeFormulario, decidirHorasExtraDesdeFormulario, reabrirPeriodoDesdeFormulario } from "./actions";
 import { AprobadorDeAsistencia } from "./aprobador-de-asistencia";
 import { CreadorDePeriodo } from "./creador-de-periodo";
+import { SinPermiso } from "../sin-permiso";
 
 export const dynamic = "force-dynamic";
 
 export default async function PaginaDePeriodos({ searchParams }: { searchParams: Promise<{ periodoId?: string; sede?: string; dni?: string }> }) {
   const actor = await obtenerActorActual().catch(() => undefined);
   if (!actor) redirect("/iniciar-sesion");
-  if (!puedeConsultarPeriodos(actor)) return <main className="centrado"><section className="estado-vacio"><h1>Sin permiso</h1><p>Su rol no permite consultar períodos de planilla.</p></section></main>;
+  if (!puedeConsultarPeriodos(actor)) return <SinPermiso>Su rol no permite consultar períodos de planilla.</SinPermiso>;
   // Finanzas y el Administrador ven y operan todo; un gerente de área solo ve y aprueba la asistencia de sus grupos.
   const completo = puedeGestionarPeriodos(actor);
 

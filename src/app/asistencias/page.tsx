@@ -15,6 +15,7 @@ import { FiltrosDeAsistencia } from "./filtros-de-asistencia";
 import { GlifoDeEstado } from "./glifo-de-estado";
 import { MatrizSemanalDeAsistencias } from "./matriz-semanal-de-asistencias";
 import { FormularioDeIncidenciaDeTienda } from "./formulario-de-incidencia-de-tienda";
+import { SinPermiso } from "../sin-permiso";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +28,7 @@ export default async function PaginaDeAsistencias({ searchParams }: PropiedadesD
   if (!actor) redirect("/iniciar-sesion");
   const gruposDeIncidencias = actor.rol === "gerente_de_area" ? [...new Set((actor.grupos ?? []).map(({ nombre }) => nombre))] : [];
   const puedeRegistrarIncidencias = puedeRegistrarIncidenciasDeGrupo(actor);
-  if (!puedeConsultarAsistencias(actor) && !puedeRegistrarIncidencias) return <main className="centrado"><section className="estado-vacio"><h1>Sin permiso</h1><p>Su rol no permite consultar asistencias. Pueden hacerlo los gerentes de área de grupos que gestionan asistencia, Finanzas y el Administrador del sistema. Pida al Administrador del sistema que revise su rol o sus grupos.</p></section></main>;
+  if (!puedeConsultarAsistencias(actor) && !puedeRegistrarIncidencias) return <SinPermiso>Su rol no permite consultar asistencias. Pueden hacerlo los gerentes de área de grupos que gestionan asistencia, Finanzas y el Administrador del sistema. Pida al Administrador del sistema que revise su rol o sus grupos.</SinPermiso>;
   const soloLectura = !puedeRevisarAsistencias(actor);
   const parametros = await searchParams;
   const gruposOperables = await repositorioDeGrupos.listarOperablesPor(actor);

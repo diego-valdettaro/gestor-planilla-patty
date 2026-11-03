@@ -16,13 +16,14 @@ import { BotonCancelar } from "./boton-cancelar";
 import { FormularioDeSede } from "./formulario-de-sede";
 import { InterruptorDeGestion } from "./interruptor-de-gestion";
 import { MenuDeConfiguracion } from "./menu-de-configuracion";
+import { SinPermiso } from "../sin-permiso";
 
 export const dynamic = "force-dynamic";
 
 export default async function PaginaDeConfiguracion({ searchParams }: { searchParams: Promise<{ grupo?: string }> }) {
   const actor = await obtenerActorActual().catch(() => undefined);
   if (!actor) redirect("/iniciar-sesion");
-  if (!puedeAbrirConfiguracion(actor)) return <main className="centrado"><section className="estado-vacio"><h1>Sin permiso</h1><p>Su rol no permite cambiar la configuración. Los gerentes de área necesitan tener al menos un grupo asignado.</p></section></main>;
+  if (!puedeAbrirConfiguracion(actor)) return <SinPermiso>Su rol no permite cambiar la configuración. Los gerentes de área necesitan tener al menos un grupo asignado.</SinPermiso>;
 
   if (!puedeConsultarConfiguracion(actor)) redirect("/cuentas");
 
