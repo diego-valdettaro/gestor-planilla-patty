@@ -1,6 +1,19 @@
 import { expect, test, type Page } from "@playwright/test";
 import { crearFixtureConflictoPolitica } from "./fixture-conflicto-politica";
 
+// El seed publica la primera semana del mes UTC actual, no una fecha fija de octubre.
+function fechaDeLaSemanaDeDemo(indiceDelDia: number): string {
+  const hoy = new Date();
+  const primero = new Date(Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth(), 1));
+  const diaDeLaSemana = primero.getUTCDay() || 7;
+  primero.setUTCDate(1 + ((8 - diaDeLaSemana) % 7) + indiceDelDia);
+  return primero.toISOString().slice(0, 10);
+}
+
+const lunesDeDemo = fechaDeLaSemanaDeDemo(0);
+const martesDeDemo = fechaDeLaSemanaDeDemo(1);
+const lunesDosSemanasDespues = fechaDeLaSemanaDeDemo(14);
+
 async function iniciarSesion(page: Page) {
   await page.goto("/iniciar-sesion");
   await page.getByLabel("Usuario").fill("admin");
@@ -89,12 +102,12 @@ test("S-01 protege saltos reales de varias entradas y conserva la navegación SP
   await expect.poll(cargarDocumento).toBe(loaderInicial);
   await page.getByLabel("Grupo operativo").selectOption("Tiendas");
   await expect(page).toHaveURL(/grupo=Tiendas/);
-  await page.getByLabel("Fecha de referencia").fill("2026-10-05");
-  await expect(page).toHaveURL(/fecha=2026-10-05/);
+  await page.getByLabel("Fecha de referencia").fill(lunesDeDemo);
+  await expect(page).toHaveURL(new RegExp(`fecha=${lunesDeDemo}`));
   await page.getByLabel("Colaborador", { exact: true }).selectOption("99900002");
   await expect(page).toHaveURL(/colaborador=99900002/);
   await expect.poll(cargarDocumento).toBe(loaderInicial);
-  await page.getByRole("button", { name: /Asistencia del 2026-10-06:/ }).click();
+  await page.getByRole("button", { name: new RegExp(`Asistencia del ${martesDeDemo}:`) }).click();
   const editor = page.getByRole("dialog", { name: "Ajustar asistencia", exact: true });
   const motivo = editor.getByLabel("Motivo del ajuste");
   await motivo.fill("Edición sintética para salto múltiple");
@@ -125,8 +138,8 @@ test("S-01 protege saltos reales de varias entradas y conserva la navegación SP
 test("G22 Escape advierte antes de abandonar el editor y cancelar conserva la edición", async ({ page }) => {
   test.setTimeout(60_000);
   await iniciarSesion(page);
-  await page.goto("/asistencias?vista=mensual&grupo=Tiendas&colaborador=99900002&fecha=2026-10-05");
-  const celda = page.getByRole("button", { name: /Asistencia del 2026-10-06:/ });
+  await page.goto(`/asistencias?vista=mensual&grupo=Tiendas&colaborador=99900002&fecha=${lunesDeDemo}`);
+  const celda = page.getByRole("button", { name: new RegExp(`Asistencia del ${martesDeDemo}:`) });
   await celda.click();
   const dialogo = page.getByRole("dialog", { name: "Ajustar asistencia" });
   await expect(dialogo).toBeVisible();
@@ -148,16 +161,16 @@ test("G22 Escape advierte antes de abandonar el editor y cancelar conserva la ed
 
 test("G22 cambia filtros de asistencia sin confirmación cuando no hay edición", async ({ page }) => {
   await iniciarSesion(page);
-  await page.goto("/asistencias?vista=mensual&grupo=Tiendas&colaborador=99900002&fecha=2026-10-05");
-  await page.getByLabel("Fecha de referencia").fill("2026-10-19");
-  await expect(page).toHaveURL(/fecha=2026-10-19/);
+  await page.goto(`/asistencias?vista=mensual&grupo=Tiendas&colaborador=99900002&fecha=${lunesDeDemo}`);
+  await page.getByLabel("Fecha de referencia").fill(lunesDosSemanasDespues);
+  await expect(page).toHaveURL(new RegExp(`fecha=${lunesDosSemanasDespues}`));
   await expect(page.getByRole("dialog", { name: "Cambios sin guardar" })).toHaveCount(0);
 });
 
 test("S-01 Escape y recarga advierten antes de perder una edición y permiten cancelarla", async ({ page }) => {
   await iniciarSesion(page);
-  await page.goto("/asistencias?vista=mensual&grupo=Tiendas&colaborador=99900002&fecha=2026-10-05");
-  const celda = page.getByRole("button", { name: /Asistencia del 2026-10-06:/ });
+  await page.goto(`/asistencias?vista=mensual&grupo=Tiendas&colaborador=99900002&fecha=${lunesDeDemo}`);
+  const celda = page.getByRole("button", { name: new RegExp(`Asistencia del ${martesDeDemo}:`) });
   await celda.click();
   const editor = page.getByRole("dialog", { name: "Ajustar asistencia" });
   const motivo = editor.getByLabel("Motivo del ajuste");
@@ -195,12 +208,12 @@ test("S-01 Escape y recarga advierten antes de perder una edición y permiten ca
 test("S-01 Atrás SPA advierte, cancelar conserva la edición y descartar permite Atrás y Adelante", async ({ page }) => {
   test.setTimeout(60_000);
   await iniciarSesion(page);
-  await page.goto("/asistencias?vista=semanal&grupo=Tiendas&colaborador=99900002&fecha=2026-10-05");
+  await page.goto(`/asistencias?vista=semanal&grupo=Tiendas&colaborador=99900002&fecha=${lunesDeDemo}`);
 
   // El enlace visible crea una entrada SPA mensual donde existen las celdas editables.
   await page.getByRole("link", { name: "Vista mensual" }).click();
   await expect(page).toHaveURL(/vista=mensual/);
-  const celda = page.getByRole("button", { name: /Asistencia del 2026-10-06:/ });
+  const celda = page.getByRole("button", { name: new RegExp(`Asistencia del ${martesDeDemo}:`) });
   await celda.click();
   const editor = page.getByRole("dialog", { name: "Ajustar asistencia" });
   await expect(editor).toBeVisible();
@@ -246,14 +259,14 @@ test("S-01 Atrás SPA advierte, cancelar conserva la edición y descartar permit
 test("S-01 Adelante SPA con edición conserva el historial de fechas mensuales", async ({ page }) => {
   test.setTimeout(60_000);
   await iniciarSesion(page);
-  await page.goto("/asistencias?vista=mensual&grupo=Tiendas&colaborador=99900002&fecha=2026-10-05");
+  await page.goto(`/asistencias?vista=mensual&grupo=Tiendas&colaborador=99900002&fecha=${lunesDeDemo}`);
 
-  await page.getByLabel("Fecha de referencia").fill("2026-10-19");
-  await expect(page).toHaveURL(/fecha=2026-10-19/);
+  await page.getByLabel("Fecha de referencia").fill(lunesDosSemanasDespues);
+  await expect(page).toHaveURL(new RegExp(`fecha=${lunesDosSemanasDespues}`));
   await page.goBack({ timeout: 5_000 });
-  await expect(page).toHaveURL(/fecha=2026-10-05/);
+  await expect(page).toHaveURL(new RegExp(`fecha=${lunesDeDemo}`));
 
-  const celda = page.getByRole("button", { name: /Asistencia del 2026-10-06:/ });
+  const celda = page.getByRole("button", { name: new RegExp(`Asistencia del ${martesDeDemo}:`) });
   await celda.click();
   const editor = page.getByRole("dialog", { name: "Ajustar asistencia" });
   await expect(editor).toBeVisible();
@@ -267,11 +280,11 @@ test("S-01 Adelante SPA con edición conserva el historial de fechas mensuales",
   }
   const advertencia = page.getByRole("dialog", { name: "Cambios sin guardar" });
   await expect(advertencia).toBeVisible({ timeout: 5_000 });
-  await expect(page).toHaveURL(/fecha=2026-10-05/);
+  await expect(page).toHaveURL(new RegExp(`fecha=${lunesDeDemo}`));
   await advertencia.getByRole("button", { name: "Cancelar" }).click();
   await expect(editor).toBeVisible();
   await expect(motivo).toHaveValue("Edición mensual antes de Adelante SPA");
-  await expect(page).toHaveURL(/fecha=2026-10-05/);
+  await expect(page).toHaveURL(new RegExp(`fecha=${lunesDeDemo}`));
 
   try {
     await page.goForward({ timeout: 5_000 });
@@ -281,20 +294,20 @@ test("S-01 Adelante SPA con edición conserva el historial de fechas mensuales",
   await expect(page.getByRole("dialog", { name: "Cambios sin guardar" })).toBeVisible({ timeout: 5_000 });
   await page.getByRole("dialog", { name: "Cambios sin guardar" }).getByRole("button", { name: "Descartar cambios" }).click();
   await expect(editor).toBeHidden();
-  await expect(page).toHaveURL(/fecha=2026-10-19/);
+  await expect(page).toHaveURL(new RegExp(`fecha=${lunesDosSemanasDespues}`));
 
   await page.goBack({ timeout: 5_000 });
-  await expect(page).toHaveURL(/fecha=2026-10-05/);
+  await expect(page).toHaveURL(new RegExp(`fecha=${lunesDeDemo}`));
   await expect(page.getByRole("dialog", { name: "Cambios sin guardar" })).toHaveCount(0);
   await page.goForward({ timeout: 5_000 });
-  await expect(page).toHaveURL(/fecha=2026-10-19/);
+  await expect(page).toHaveURL(new RegExp(`fecha=${lunesDosSemanasDespues}`));
   await expect(page.getByRole("dialog", { name: "Cambios sin guardar" })).toHaveCount(0);
 });
 
 test("S-01 Atrás y Adelante SPA no atrapan navegación sin una edición pendiente", async ({ page }) => {
   test.setTimeout(60_000);
   await iniciarSesion(page);
-  await page.goto("/asistencias?vista=mensual&grupo=Tiendas&colaborador=99900002&fecha=2026-10-05");
+  await page.goto(`/asistencias?vista=mensual&grupo=Tiendas&colaborador=99900002&fecha=${lunesDeDemo}`);
   await page.getByRole("link", { name: "Vista semanal" }).click();
   await expect(page).toHaveURL(/vista=semanal/);
 
@@ -432,8 +445,8 @@ test("G29 el selector semanal y la matriz comparten lunes al cruzar de mes", asy
 
 test("G30 cancelar el editor permite cambiar de vista sin confirmación obsoleta", async ({ page }) => {
   await iniciarSesion(page);
-  await page.goto("/asistencias?vista=mensual&grupo=Tiendas&colaborador=99900002&fecha=2026-10-05");
-  await page.getByRole("button", { name: /Asistencia del 2026-10-06:/ }).click();
+  await page.goto(`/asistencias?vista=mensual&grupo=Tiendas&colaborador=99900002&fecha=${lunesDeDemo}`);
+  await page.getByRole("button", { name: new RegExp(`Asistencia del ${martesDeDemo}:`) }).click();
   const editor = page.getByRole("dialog", { name: "Ajustar asistencia" });
   await expect(editor).toBeVisible();
   const motivo = editor.getByLabel("Motivo del ajuste");
@@ -449,8 +462,8 @@ test("G30 cancelar el editor permite cambiar de vista sin confirmación obsoleta
 
 test("G30 Escape cierra el editor sin cambios pendientes antes de cambiar de vista", async ({ page }) => {
   await iniciarSesion(page);
-  await page.goto("/asistencias?vista=mensual&grupo=Tiendas&colaborador=99900002&fecha=2026-10-05");
-  const celda = page.getByRole("button", { name: /Asistencia del 2026-10-06:/ });
+  await page.goto(`/asistencias?vista=mensual&grupo=Tiendas&colaborador=99900002&fecha=${lunesDeDemo}`);
+  const celda = page.getByRole("button", { name: new RegExp(`Asistencia del ${martesDeDemo}:`) });
   await celda.click();
   const editor = page.getByRole("dialog", { name: "Ajustar asistencia" });
   await page.keyboard.press("Escape");
@@ -464,8 +477,8 @@ test("G30 Escape cierra el editor sin cambios pendientes antes de cambiar de vis
 
 test("G30 cancelar y reabrir la misma fecha limpia el motivo descartado", async ({ page }) => {
   await iniciarSesion(page);
-  await page.goto("/asistencias?vista=mensual&grupo=Tiendas&colaborador=99900002&fecha=2026-10-05");
-  const celda = page.getByRole("button", { name: /Asistencia del 2026-10-06:/ });
+  await page.goto(`/asistencias?vista=mensual&grupo=Tiendas&colaborador=99900002&fecha=${lunesDeDemo}`);
+  const celda = page.getByRole("button", { name: new RegExp(`Asistencia del ${martesDeDemo}:`) });
   await celda.click();
   const editor = page.getByRole("dialog", { name: "Ajustar asistencia" });
   const motivo = editor.getByLabel("Motivo del ajuste");
