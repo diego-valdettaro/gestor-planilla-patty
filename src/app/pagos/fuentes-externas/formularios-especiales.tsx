@@ -34,7 +34,9 @@ export function DecisionDeIncidencia({ id, estadoActual }: { id: string; estadoA
   const [estadoDeAutorizacion, autorizar, autorizando] = useActionState(decidirIncidenciaDesdeFormulario, inicial);
   const [estadoDeInvestigacion, noDescontar, investigando] = useActionState(decidirIncidenciaDesdeFormulario, inicial);
   if (!estadoActual || estadoActual === "descuento_autorizado") return null;
-  return <div className="formulario-dialogo">
+  return <details className="decidir-incidencia">
+    <summary>Decidir<span className="sr-only"> la incidencia</span></summary>
+    <div className="formulario-dialogo">
     <form action={autorizar} className="formulario-dialogo">
       <input name="id" type="hidden" value={id} />
       <input name="decision" type="hidden" value="autorizar" />
@@ -50,7 +52,13 @@ export function DecisionDeIncidencia({ id, estadoActual }: { id: string; estadoA
       <Resultado estado={estadoDeInvestigacion} />
       <button className="boton-secundario" disabled={autorizando || investigando} type="submit">No descontar en este pago</button>
     </form>
-  </div>;
+    <button className="boton-secundario" onClick={(evento) => {
+      const desplegable = evento.currentTarget.closest("details");
+      desplegable?.querySelectorAll("form").forEach((formulario) => formulario.reset());
+      if (desplegable) desplegable.open = false;
+    }} type="button">Cancelar</button>
+    </div>
+  </details>;
 }
 
 export function RegistroDeAjuste({ mes }: { mes: string }) {

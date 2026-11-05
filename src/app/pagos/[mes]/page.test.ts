@@ -124,7 +124,7 @@ const versionDelPlan = (anaCentimos: number, fecha: string, actor = "finanzas"):
 });
 
 /** La cabecera del objeto (primer `<header>`), sin el diálogo: lo que ve Finanzas antes de abrir nada. */
-const cabecera = (html: string) => html.slice(html.indexOf("<header"), html.indexOf("</header>")).replace(/<dialog[\s\S]*?<\/dialog>/g, "");
+const cabecera = (html: string) => html.slice(html.indexOf("<header"), html.indexOf('id="bloqueos-del-mes"')).replace(/<dialog[\s\S]*?<\/dialog>/g, "");
 const dialogosDe = (html: string) => html.match(/<dialog[\s\S]*?<\/dialog>/g) ?? [];
 const dialogoDe = (html: string) => dialogosDe(html)[0] ?? "";
 const seccionDelHistorial = (html: string) => html.split("<section").find((seccion) => seccion.includes('id="titulo-historial"')) ?? "";
@@ -156,7 +156,7 @@ describe("finalización del mes en la pantalla", () => {
 
     expect(html).toContain("Bloqueos del mes (0)");
     expect(html).toContain("El mes no tiene bloqueos. Puede finalizarlo.");
-    expect(cabecera(html)).toContain('<span class="insignia advertencia">Borrador</span>');
+    expect(cabecera(html)).toContain('<span class="insignia borrador">Borrador</span>');
     expect(cabecera(html)).toMatch(/<button[^>]*>Finalizar mes<\/button>/);
     expect(cabecera(html)).not.toMatch(/<button[^>]*disabled/);
     expect(contar(cabecera(html), /boton-principal/g)).toBe(1);

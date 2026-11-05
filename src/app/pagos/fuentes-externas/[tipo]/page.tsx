@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { NOMBRE_DE_ROL, puedeGestionarPagos } from "@/autenticacion/permisos";
+import { puedeGestionarPagos } from "@/autenticacion/permisos";
 import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
 import { buscarConcepto } from "@/conceptos-de-preliquidacion/catalogo";
 import { formatearSoles } from "@/condiciones-laborales/valores";
@@ -17,6 +17,7 @@ import { NavegacionDePagos } from "../../navegacion-de-pagos";
 import { SinPermisoDePagos } from "../../sin-permiso";
 import { InsigniaDeEstado } from "../insignia-de-estado";
 import { AnuncioDelResultado } from "../anuncio";
+import { RegistroPlegable } from "../registro-plegable";
 import { AnulacionDeImporte, ConfirmacionDeListado, RegistroDeImporte, VolverAPendiente } from "../formularios";
 import { DecisionDeIncidencia, RegistroDeAbonoVacacional, RegistroDeAjuste, RegistroDeConciliacionDeCese, RegistroDeIncidencia } from "../formularios-especiales";
 import { mesDePagoDeLaConsulta } from "../mes-de-pago";
@@ -34,9 +35,9 @@ export default async function PaginaDeUnaFuenteExterna({ params, searchParams }:
   const { tipo: codigo } = await params;
   const { mes: mesPedido } = await searchParams;
   const tipo = buscarTipoDeFuente(codigo);
-  if (!tipo) return <main className="contenido pagina">
+  if (!tipo) return <main className="contenido pagina pagina-ajustes">
     <NavegacionDePagos actual="fuentes-externas" />
-    <section className="estado-vacio"><h1>No existe ese tipo de fuente</h1><p>Elija uno de la lista de fuentes externas. <Link href="/pagos/fuentes-externas">Volver a fuentes externas</Link></p></section>
+    <section className="tile panel"><div className="estado-vacio"><h1>No existe ese tipo de fuente</h1><p>Elija uno de la lista de fuentes externas. <Link href="/pagos/fuentes-externas">Volver a fuentes externas</Link></p></div></section>
   </main>;
 
   const { mes, error: errorDeMes } = mesDePagoDeLaConsulta(mesPedido);
@@ -48,13 +49,12 @@ export default async function PaginaDeUnaFuenteExterna({ params, searchParams }:
   const confirmada = detalle.estado !== "pendiente";
   const soloConsulta = await repositorioDeFuentesExternas.mesConPagoConfirmado(mes);
 
-  return <main className="contenido pagina">
+  return <main className="contenido pagina pagina-ajustes">
     <header className="encabezado encabezado-pagina">
       <div>
-        <p className="eyebrow">{NOMBRE_DE_ROL[actor.rol]}</p>
         <h1>{tipo.nombre} · mes de pago {formatearMes(mes)}</h1>
         <p>Estado: <InsigniaDeEstado estado={detalle.estado} />{detalle.confirmacion && <> Confirmada por {detalle.confirmacion.confirmadaPor} el {formatearFechaDeRelacion(fechaDeHoyEnLima(detalle.confirmacion.confirmadaEn))}.</>}</p>
-        <p><Link href={`/pagos/fuentes-externas?mes=${mes}`}>Volver a fuentes externas</Link></p>
+        <p className="enlace-de-regreso"><Link className="boton-secundario" href={`/pagos/fuentes-externas?mes=${mes}`}>Volver a fuentes externas</Link></p>
       </div>
       {!soloConsulta && <span className="acciones-configuracion">
         {!tipo.flujoPropio && <Link className="boton-secundario" href={`/pagos/fuentes-externas/importar?mes=${mes}&tipo=${tipo.codigo}`}>Importar XLSX<span className="sr-only"> de {tipo.nombre}</span></Link>}
@@ -65,10 +65,10 @@ export default async function PaginaDeUnaFuenteExterna({ params, searchParams }:
     </header>
     <NavegacionDePagos actual="fuentes-externas" />
     <AnuncioDelResultado />
-    {soloConsulta && <p className="mensaje-operacion" role="status">{MENSAJE_SOLO_CONSULTA(mes)}</p>}
+    {soloConsulta && <p className="mensaje-operacion informativo" role="status">{MENSAJE_SOLO_CONSULTA(mes)}</p>}
     {errorDeMes && <p className="mensaje-operacion error" role="alert">{errorDeMes} Se muestra el mes {formatearMes(mes)}.</p>}
 
-    <section aria-labelledby="titulo-filas" className="tarjeta panel">
+    <section aria-labelledby="titulo-filas" className="tile panel">
       <header className="panel-cabecera"><div><h2 id="titulo-filas">Filas cargadas</h2><p>{detalle.filas} {detalle.filas === 1 ? "fila" : "filas"}, {formatearSoles(detalle.total)} en total para el mes de pago completo.</p></div></header>
       {detalle.importes.length
         ? <>
@@ -79,9 +79,11 @@ export default async function PaginaDeUnaFuenteExterna({ params, searchParams }:
         : <section className="estado-vacio"><h3>No hay filas de {tipo.nombre} para este mes</h3>{soloConsulta ? <p>El mes está pagado: no se cargan importes.</p> : <p>Cargue un importe abajo o confirme el listado sin importes.</p>}</section>}
     </section>
 
-    {!soloConsulta && <section aria-labelledby="titulo-registro" className="tarjeta panel">
+    {!soloConsulta && <section aria-labelledby="titulo-registro" className="tile panel">
       <header className="panel-cabecera"><div><h2 id="titulo-registro">Registrar un importe</h2><p>Carga manual. Un importe no se edita: si está mal, anúlelo con motivo y regístrelo de nuevo. Las líneas calculadas se corrigen en su fuente o con un ajuste de preliquidación.</p></div></header>
-      {tipo.codigo === "incidencias_de_tienda" ? <RegistroDeIncidencia mes={mes} /> : tipo.codigo === "ajustes_de_preliquidacion" ? <RegistroDeAjuste mes={mes} /> : tipo.codigo === "abonos_vacacionales" ? <RegistroDeAbonoVacacional mes={mes} /> : tipo.codigo === "conciliacion_de_liquidacion_por_cese" ? <RegistroDeConciliacionDeCese conceptos={conceptos} mes={mes} /> : <RegistroDeImporte conceptos={conceptos} mes={mes} tipoDeFuente={tipo.codigo} />}
+      <RegistroPlegable abierto={detalle.importes.length === 0} etiqueta="+ Registrar un importe">
+          {tipo.codigo === "incidencias_de_tienda" ? <RegistroDeIncidencia mes={mes} /> : tipo.codigo === "ajustes_de_preliquidacion" ? <RegistroDeAjuste mes={mes} /> : tipo.codigo === "abonos_vacacionales" ? <RegistroDeAbonoVacacional mes={mes} /> : tipo.codigo === "conciliacion_de_liquidacion_por_cese" ? <RegistroDeConciliacionDeCese conceptos={conceptos} mes={mes} /> : <RegistroDeImporte conceptos={conceptos} mes={mes} tipoDeFuente={tipo.codigo} />}
+      </RegistroPlegable>
     </section>}
   </main>;
 }

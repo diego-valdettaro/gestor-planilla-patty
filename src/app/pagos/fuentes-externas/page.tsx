@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { NOMBRE_DE_ROL, puedeGestionarPagos } from "@/autenticacion/permisos";
+import { puedeGestionarPagos } from "@/autenticacion/permisos";
 import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
 import { formatearSoles } from "@/condiciones-laborales/valores";
 import { fechaDeHoyEnLima } from "@/condiciones-laborales/vigencia";
@@ -35,14 +35,14 @@ export default async function PaginaDeFuentesExternas({ searchParams }: { search
   const soloConsulta = await repositorioDeFuentesExternas.mesConPagoConfirmado(mes);
   const pendientes = filas.filter((fila) => fila.estado === "pendiente").length;
 
-  return <main className="contenido pagina">
+  return <main className="contenido pagina pagina-ajustes">
     <header className="encabezado encabezado-pagina">
-      <div><p className="eyebrow">{NOMBRE_DE_ROL[actor.rol]}</p><h1>Fuentes externas del mes de pago {formatearMes(mes)}</h1><p>Una persona sin fila cuenta como cero solo cuando confirma el tipo de fuente.</p></div>
+      <div><h1>Fuentes externas del mes de pago {formatearMes(mes)}</h1><p>Una persona sin fila cuenta como cero solo cuando confirma el tipo de fuente.</p></div>
     </header>
     <NavegacionDePagos actual="fuentes-externas" />
     <AnuncioDelResultado />
 
-    <section aria-labelledby="titulo-mes" className="tarjeta panel">
+    <section aria-labelledby="titulo-mes" className="tile panel">
       <header className="panel-cabecera"><div><h2 id="titulo-mes">Mes de pago</h2><p>Las fuentes se confirman para el mes de pago completo. El mes de devengue de cada importe puede ser anterior.</p></div></header>
       <form className="filtros panel-filtros" method="get">
         <label>Mes de pago<input defaultValue={mes} name="mes" required type="month" /></label>
@@ -51,9 +51,9 @@ export default async function PaginaDeFuentesExternas({ searchParams }: { search
       {errorDeMes && <p className="mensaje-operacion error" role="alert">{errorDeMes} Se muestra el mes {formatearMes(mes)}.</p>}
     </section>
 
-    {soloConsulta && <p className="mensaje-operacion" role="status">{MENSAJE_SOLO_CONSULTA(mes)}</p>}
+    {soloConsulta && <p className="mensaje-operacion informativo" role="status">{MENSAJE_SOLO_CONSULTA(mes)}</p>}
 
-    <section aria-labelledby="titulo-fuentes" className="tarjeta panel">
+    <section aria-labelledby="titulo-fuentes" className="tile panel">
       <header className="panel-cabecera"><div><h2 id="titulo-fuentes">Tipos de fuente</h2><p>Confirme cada tipo para el mes completo, incluso si no tiene importes.</p></div><span className={pendientes ? "insignia advertencia" : "insignia ok"}>{pendientes ? `${pendientes} ${pendientes === 1 ? "pendiente" : "pendientes"}` : "Todas confirmadas"}</span></header>
       <p className="aviso-desplazamiento">Desplácese horizontalmente para ver todas las columnas.</p>
       <div className="panel-tabla primera-columna-fija tabla-de-fuentes" role="region" aria-label={`Tipos de fuente de ${formatearMes(mes)}`} tabIndex={0}><table><thead><tr><th>Tipo de fuente</th><th>Estado</th><th className="numerico">Filas (n.º)</th><th className="numerico">Importe total (S/)</th><th>Último origen</th><th><span className="sr-only">Acciones</span></th></tr></thead>

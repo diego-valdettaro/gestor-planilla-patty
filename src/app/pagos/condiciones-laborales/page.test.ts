@@ -65,7 +65,7 @@ describe("página de Condiciones laborales (/pagos/condiciones-laborales)", () =
     expect(html).toContain("AFP Integra · ");
     expect(html).toContain("Esquema pendiente");
     expect(html).toContain("Completa");
-    expect(html).toContain("(sección actual)");
+    expect(html).toMatch(/aria-current="page"[^>]*>(Reglas legales|Fuentes externas|Condiciones laborales)<\/a>/);
     expect(html).toContain('href="/pagos/condiciones-laborales/' + BETO_RELACION + '"');
     expect(html).toContain("3 relaciones · 2 con datos faltantes");
   });

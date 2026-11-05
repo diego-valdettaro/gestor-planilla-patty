@@ -47,7 +47,8 @@ test("una contraseña incorrecta muestra un error recuperable", async ({ page })
 // agotaban juntos los 30 segundos de una sola prueba.
 for (const recorrido of [
   { ruta: "/configuracion", titulo: "Configuración" },
-  { ruta: "/cuentas", titulo: "Cuentas" },
+  { ruta: "/cuentas", titulo: "Configuración" },
+  { ruta: "/personal", titulo: "Personal" },
   { ruta: "/turnos", titulo: "Planificación de horarios" },
   { ruta: "/asistencias", titulo: "Asistencias" },
   { ruta: "/periodos", titulo: "Períodos de planilla" },
@@ -119,14 +120,20 @@ test("completar semana reemplaza los siete días con el modelo por defecto y los
   await page.goto(`/turnos?semana=${semana}&equipo=Tiendas`);
 
   const filaLiquidada = page.locator("tr", { hasText: "Darío Liquidado" });
-  await expect(filaLiquidada.getByRole("button", { name: "Completar semana" })).toHaveCount(0);
+  // La semana liquidada conserva el menú «Acciones», con las dos acciones desactivadas y su motivo.
+  await filaLiquidada.getByRole("button", { name: /^Acciones de Darío Liquidado/ }).click();
+  await expect(filaLiquidada.getByRole("menuitem", { name: /Completar semana/ })).toHaveAttribute("aria-disabled", "true");
+  await expect(filaLiquidada.getByRole("menuitem", { name: /Republicar cambios/ })).toHaveAttribute("aria-disabled", "true");
+  await expect(filaLiquidada.getByRole("menuitem", { name: /Completar semana/ })).toContainText("La semana está liquidada y ya no admite cambios.");
+  await page.keyboard.press("Escape");
+  await expect(filaLiquidada.getByRole("menuitem")).toHaveCount(0);
 
   const filaAna = page.locator("tr", { hasText: "Ana Borrador" });
   const celdas = filaAna.locator("td.celda-plan-semanal");
-  const botonCompletar = filaAna.getByRole("button", { name: "Completar semana" });
   const dialogo = page.getByRole("dialog", { name: "Completar semana de Ana Borrador" });
 
-  await botonCompletar.click();
+  await filaAna.getByRole("button", { name: "Acciones de Ana Borrador" }).click();
+  await filaAna.getByRole("menuitem", { name: /Completar semana/ }).click();
   await dialogo.getByLabel("Sede por defecto").selectOption("Tienda San Isidro");
   await dialogo.getByLabel("Modelo por defecto").selectOption({ label: "Apertura · 08:00 a 16:00" });
   const selectsDeDia = dialogo.locator(".dias-completar-semana select");
@@ -143,7 +150,8 @@ test("completar semana reemplaza los siete días con el modelo por defecto y los
   await expect(page.getByText("Sin guardar", { exact: true })).toBeVisible();
 
   const textosAntesDeCancelar = await celdas.allTextContents();
-  await botonCompletar.click();
+  await filaAna.getByRole("button", { name: "Acciones de Ana Borrador" }).click();
+  await filaAna.getByRole("menuitem", { name: /Completar semana/ }).click();
   await dialogo.getByRole("button", { name: "Cancelar" }).click();
   await expect(dialogo).toBeHidden();
   await expect(celdas.first()).toBeVisible();
@@ -178,7 +186,8 @@ test("completar semana no exige un modelo por defecto cuando todos los días que
   const celdas = filaElena.locator("td.celda-plan-semanal");
   const dialogo = page.getByRole("dialog", { name: "Completar semana de Elena Sotelo" });
 
-  await filaElena.getByRole("button", { name: "Completar semana" }).click();
+  await filaElena.getByRole("button", { name: "Acciones de Elena Sotelo" }).click();
+  await filaElena.getByRole("menuitem", { name: /Completar semana/ }).click();
   for (const select of await dialogo.locator(".dias-completar-semana select").all()) await select.selectOption("descanso");
   await dialogo.getByRole("button", { name: "Completar semana" }).click();
   await expect(dialogo).toBeHidden();
@@ -201,19 +210,26 @@ test("completar semana sobre una fila publicada deja cambios sin publicar en vez
   await page.goto(`/turnos?semana=${semana}&equipo=Tiendas`);
 
   const filaBeto = page.locator("tr", { hasText: "Beto Publicado" });
-  const estadoDeLaFila = filaBeto.locator(".persona small");
+  const estadoDeLaFila = filaBeto.locator("th .est-etiqueta");
   await expect(estadoDeLaFila).toHaveText("Publicado");
-  await expect(filaBeto.getByRole("button", { name: "Republicar cambios" })).toHaveCount(0);
+  // Sin cambios pendientes, «Republicar cambios» sigue en el menú pero desactivada y con su motivo.
+  const accionesDeBeto = filaBeto.getByRole("button", { name: "Acciones de Beto Publicado" });
+  await accionesDeBeto.click();
+  await expect(filaBeto.getByRole("menuitem", { name: /Republicar cambios/ })).toHaveAttribute("aria-disabled", "true");
+  await expect(filaBeto.getByRole("menuitem", { name: /Republicar cambios/ })).toContainText("No hay cambios sin publicar en esta semana.");
+  await page.keyboard.press("Escape");
 
   const dialogo = page.getByRole("dialog", { name: "Completar semana de Beto Publicado" });
-  await filaBeto.getByRole("button", { name: "Completar semana" }).click();
+  await accionesDeBeto.click();
+  await filaBeto.getByRole("menuitem", { name: /Completar semana/ }).click();
   await dialogo.locator(".dias-completar-semana select").first().selectOption("permiso");
   await dialogo.getByRole("button", { name: "Completar semana" }).click();
   await expect(dialogo).toBeHidden();
 
   // El cambio queda pendiente de republicación: no se sobrescribe el horario semanal publicado en silencio.
   await expect(estadoDeLaFila).toHaveText("Cambios sin publicar");
-  await expect(filaBeto.getByRole("button", { name: "Republicar cambios" })).toBeVisible();
+  await accionesDeBeto.click();
+  await expect(filaBeto.getByRole("menuitem", { name: /Republicar cambios/ })).not.toHaveAttribute("aria-disabled", "true");
   expect(errores).toEqual([]);
 });
 
@@ -274,10 +290,10 @@ test("publicar selección solo publica la fila marcada y respeta una deselecció
   await botonPublicar.click();
   await page.getByRole("dialog", { name: "¿Publicar la selección?" }).getByRole("button", { name: "Publicar planificación" }).click();
 
-  await expect(filaAna.locator(".persona small")).toHaveText("Publicado", { timeout: 15_000 });
+  await expect(filaAna.locator("th .est-etiqueta")).toHaveText("Publicado", { timeout: 15_000 });
   await expect(checkboxAna).toHaveCount(0);
   // La publicación selectiva no afecta a otras filas, como los cambios sin publicar de Carla.
-  await expect(filaCarla.locator(".persona small")).toHaveText("Cambios sin publicar");
+  await expect(filaCarla.locator("th .est-etiqueta")).toHaveText("Cambios sin publicar");
 
   expect(errores).toEqual([]);
 });
@@ -294,7 +310,7 @@ test("revisa asistencias semanales por grupo sin agrupar colaboradores por sede 
   const semana = fechaDeLaSemanaDeDemo(0);
   await page.goto(`/asistencias?grupo=Tiendas&semana=${semana}`);
 
-  const matriz = page.locator(".tabla-plan-semanal");
+  const matriz = page.locator(".tabla-asistencias");
   await expect(matriz).toBeVisible();
   await expect(matriz.getByRole("columnheader")).toHaveCount(8);
   const filaBeto = matriz.getByRole("row", { name: /Beto Publicado/ });
@@ -306,7 +322,7 @@ test("revisa asistencias semanales por grupo sin agrupar colaboradores por sede 
 
   const semanaAnterior = fechaDeLaSemanaAnteriorDeDemo(0);
   await page.goto(`/asistencias?grupo=Tiendas&semana=${semanaAnterior}`);
-  const filaElena = page.locator(".tabla-plan-semanal").getByRole("row", { name: /Elena Sotelo/ });
+  const filaElena = page.locator(".tabla-asistencias").getByRole("row", { name: /Elena Sotelo/ });
   await expect(filaElena).toContainText("Liquidado");
   await expect(filaElena.locator(".icono-candado")).toHaveCount(6);
   expect(errores).toEqual([]);
@@ -323,7 +339,7 @@ test("confirma colaboradores por un rango que corta la semana desde las vistas m
 
   // La base de validate parte de un seed limpio; esta acción pública configura
   // el requisito de dominio que la confirmación necesita para calcular tardanzas.
-  await page.goto("/configuracion");
+  await page.goto("/configuracion?grupo=Tiendas");
   const politicaTiendas = page.locator("form.formulario-politica").filter({ hasText: "Tiendas" });
   await politicaTiendas.locator('input[name="toleranciaEnMinutos"]').fill("10");
   await politicaTiendas.locator('input[name="tardanzasAcumuladas"]').fill("3");
@@ -360,7 +376,7 @@ test("confirma colaboradores por un rango que corta la semana desde las vistas m
   await dialogo.getByRole("button", { name: "Confirmar 1 colaborador" }).click();
   await expect(dialogo).toBeHidden();
 
-  const filaEva = page.locator(".tabla-plan-semanal").getByRole("row", { name: /Eva Confirmable/ });
+  const filaEva = page.locator(".tabla-asistencias").getByRole("row", { name: /Eva Confirmable/ });
   await expect(filaEva).toContainText("Registrada");
   expect(errores).toEqual([]);
 });
@@ -394,8 +410,8 @@ test("Finanzas no ve Horarios y consulta Asistencias en solo lectura", async ({ 
   await iniciarSesion(page, "finanzas");
   const menu = page.getByRole("navigation", { name: "Navegación principal" });
   await expect(menu.getByRole("link", { name: /Horarios/ })).toHaveCount(0);
-  await expect(menu.getByRole("link", { name: /Configuración/ })).toHaveCount(0);
-  await expect(menu.getByRole("link", { name: /Cuentas/ })).toBeVisible();
+  await expect(menu.getByRole("link", { name: /Configuración/ })).toBeVisible();
+  await expect(menu.getByRole("link", { name: /Cuentas/ })).toHaveCount(0);
 
   await page.goto("/turnos");
   await expect(page.getByRole("heading", { name: "Sin permiso", level: 1 })).toBeVisible();
@@ -410,19 +426,19 @@ test("Finanzas no ve Horarios y consulta Asistencias en solo lectura", async ({ 
 test("cada rol ve en el menú exactamente las rutas que puede abrir", async ({ page }) => {
   const errores = observarErroresDelNavegador(page);
   const casos: Array<[string, string[]]> = [
-    ["admin", ["Configuración", "Cuentas", "Relaciones laborales", "Planificación de horarios", "Registro de asistencias", "Revisión de asistencia para planilla"]],
-    ["finanzas", ["Cuentas", "Relaciones laborales", "Registro de asistencias", "Revisión de asistencia para planilla", "Pagos"]],
-    ["gerente-tiendas", ["Configuración", "Planificación de horarios", "Registro de asistencias", "Revisión de asistencia para planilla"]],
-    ["gerente-administracion", ["Configuración", "Registro de asistencias"]],
+    ["admin", ["Configuración", "Personal", "Planificación de horarios", "Registro de asistencias", "Revisión de asistencia para planilla"]],
+    ["finanzas", ["Configuración", "Personal", "Registro de asistencias", "Revisión de asistencia para planilla", "Pagos"]],
+    ["gerente-tiendas", ["Configuración", "Personal", "Planificación de horarios", "Registro de asistencias", "Revisión de asistencia para planilla"]],
+    ["gerente-administracion", ["Configuración", "Personal", "Registro de asistencias"]],
     ["gerente-sin-grupos", []],
-    ["rrhh", ["Relaciones laborales"]],
+    ["rrhh", ["Personal"]],
   ];
 
   for (const [usuario, enlaces] of casos) {
     await page.context().clearCookies();
     await iniciarSesion(page, usuario);
     const menu = page.getByRole("navigation", { name: "Navegación principal" });
-    const etiquetas = (await menu.locator(".enlaces-navegacion a").allInnerTexts()).map((texto) => texto.replace(/\s+/g, " ").replace("(sección actual)", "").replace(/^\S+\s/, "").trim());
+    const etiquetas = (await menu.locator(".enlaces-navegacion a").allInnerTexts()).map((texto) => texto.replace(/\s+/g, " ").replace("(sección actual)", "").trim());
     expect(etiquetas.map((etiqueta) => etiqueta.replace(/^[^\p{L}]+/u, "")), `menú de ${usuario}`).toEqual(enlaces);
   }
   expect(errores).toEqual([]);
@@ -485,7 +501,13 @@ test("Recursos Humanos confirma un ingreso y el gerente ve su efecto en Horarios
   await iniciarSesion(page, "gerente-tiendas");
   await page.goto(`/turnos?semana=${semana}&equipo=Tiendas`);
   const filaLuis = page.locator("tr", { hasText: "Luis Pendiente" });
-  await expect(filaLuis.getByText("No se puede publicar: no tiene una relación laboral confirmada en esta semana.")).toBeVisible();
+  // El motivo ya no es texto de la fila: es un icono enfocable con tooltip (causa y siguiente paso).
+  const avisoDeLuis = filaLuis.getByRole("button", { name: /No se puede publicar a Luis Pendiente/ });
+  await avisoDeLuis.focus();
+  const tooltipDeLuis = page.getByRole("tooltip").filter({ hasText: "No se puede publicar" });
+  await expect(tooltipDeLuis).toBeVisible();
+  await expect(tooltipDeLuis).toContainText("no tiene una relación laboral confirmada en esta semana.");
+  await expect(tooltipDeLuis).toContainText("Recursos Humanos debe registrar y confirmar su ingreso.");
   await expect(filaLuis.getByRole("checkbox", { name: "Publicar" })).toHaveCount(0);
   const filaJulia = page.locator("tr", { hasText: "Julia Ingreso" });
   await expect(filaJulia.locator("td.celda-plan-semanal.fuera-de-relacion")).toHaveCount(2);
@@ -497,7 +519,7 @@ test("Recursos Humanos confirma un ingreso y el gerente ve su efecto en Horarios
   await page.context().clearCookies();
   await iniciarSesion(page, "rrhh");
   await expect(page).toHaveURL(/\/relaciones-laborales$/);
-  await expect(page.getByRole("heading", { name: "Relaciones laborales", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Personal", level: 1 })).toBeVisible();
   // Tras confirmar, Luis también aparece en la consulta de vigencia: la fila de la tabla de relaciones es la primera.
   const relacionDeLuis = page.locator("tr", { hasText: "Luis Pendiente" }).first();
   await expect(relacionDeLuis).toContainText("Ingreso por confirmar");
@@ -509,7 +531,7 @@ test("Recursos Humanos confirma un ingreso y el gerente ve su efecto en Horarios
   await page.context().clearCookies();
   await iniciarSesion(page, "gerente-tiendas");
   await page.goto(`/turnos?semana=${semana}&equipo=Tiendas`);
-  await expect(page.locator("tr", { hasText: "Luis Pendiente" }).getByText("No se puede publicar")).toHaveCount(0);
+  await expect(page.locator("tr", { hasText: "Luis Pendiente" }).getByRole("button", { name: /No se puede publicar a Luis Pendiente/ })).toHaveCount(0);
   expect(errores, "Relaciones laborales y Horarios no deben registrar errores de navegador").toEqual([]);
 });
 
@@ -520,7 +542,7 @@ test("Finanzas crea una cuenta de gerente de área y la ve con su rol y sin grup
 
   await iniciarSesion(page, "finanzas");
   await page.goto("/cuentas");
-  await expect(page.getByRole("heading", { name: "Cuentas", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Configuración", level: 1 })).toBeVisible();
   const rol = page.getByLabel("Rol");
   await expect(rol.locator("option")).toHaveText(["Rol…", "Gerente de área", "Recursos Humanos"]);
 
@@ -546,7 +568,9 @@ test("el gerente de área conserva la acción principal de Horarios y ve por qu�
   await expect(guardar).toBeDisabled();
   await expect(guardar).toHaveAccessibleDescription(/no hay cambios sin guardar/);
   await expect(page.getByRole("button", { name: "Publicar planificación" }).first()).toHaveClass(/boton-principal/);
-  await expect(page.getByRole("button", { name: "Completar semana" }).first()).toHaveClass(/boton-secundario/);
+  // Las acciones por persona van en un solo botón «Acciones» secundario (menú), no como botones sueltos en la fila.
+  await expect(page.getByRole("button", { name: /^Acciones de / }).first()).toHaveClass(/boton-secundario/);
+  await expect(page.getByRole("button", { name: "Completar semana" })).toHaveCount(0);
   expect(errores, "Horarios no debe registrar errores de navegador").toEqual([]);
 });
 
@@ -706,7 +730,7 @@ async function elementosQueDesbordan(page: Page): Promise<string> {
   });
 }
 
-const rutasAutenticadas = ["/configuracion", "/cuentas", "/turnos", "/asistencias", "/asistencias/importar", "/periodos", "/relaciones-laborales"];
+const rutasAutenticadas = ["/configuracion", "/cuentas", "/turnos", "/asistencias", "/asistencias/importar", "/periodos", "/personal", "/relaciones-laborales"];
 
 for (const [nombre, ancho, alto] of [["375 px", 375, 812], ["escritorio", 1280, 800]] as const) {
   test(`las rutas autenticadas caben en ${nombre} sin errores de consola`, async ({ page }) => {
@@ -739,7 +763,7 @@ test("en ancho estrecho el menú se opera con teclado e identifica la sección p
   await page.goto("/asistencias");
 
   const navegacion = page.getByRole("navigation", { name: "Navegación principal" });
-  await expect(navegacion.getByText("Registro de asistencias", { exact: true })).toBeVisible();
+  await expect(navegacion.locator(".seccion-navegacion")).toHaveText("Registro de asistencias");
   const menu = navegacion.getByRole("button", { name: "Menú" });
   await expect(menu).toHaveAttribute("aria-expanded", "false");
   await expect(navegacion.getByRole("link", { name: /Configuración/ })).toBeHidden();
@@ -747,7 +771,7 @@ test("en ancho estrecho el menú se opera con teclado e identifica la sección p
   await menu.focus();
   await page.keyboard.press("Enter");
   await expect(navegacion.getByRole("button", { name: "Cerrar menú" })).toHaveAttribute("aria-expanded", "true");
-  await expect(navegacion.getByRole("link", { name: /Registro de asistencias.*sección actual/ })).toHaveAttribute("aria-current", "page");
+  await expect(navegacion.getByRole("link", { name: /Registro de asistencias/ })).toHaveAttribute("aria-current", "page");
   await expect(navegacion.getByRole("button", { name: "Cerrar sesión" })).toBeVisible();
 
   await page.keyboard.press("Escape");
@@ -787,7 +811,8 @@ test("las tablas de /periodos se desplazan dentro de su región a 375 px sin tru
 
   const regiones = page.locator(".panel-tabla");
   const cantidad = await regiones.count();
-  expect(cantidad).toBeGreaterThanOrEqual(5);
+  // Totales y horas extra son cuadrículas de cifras (regiones rotuladas, sin tabla); quedan como tablas la aprobación por grupo y el detalle diario.
+  expect(cantidad).toBeGreaterThanOrEqual(2);
   await expect(page.getByRole("region", { name: "Totales del período completo" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Horas extra del período completo" })).toBeVisible();
   await expect(page.getByRole("region", { name: /^Detalle diario de / }).first()).toBeVisible();
@@ -1044,6 +1069,8 @@ test("Finanzas distingue una fuente pendiente de un cero confirmado, carga un im
   // Cargar un importe en una fuente confirmada la devuelve a Pendiente; el mismo importe dos veces se rechaza.
   const formulario = page.locator("form.formulario-de-importe");
   const registrar = async (dni: string) => {
+    // El formulario de carga manual va plegado detrás de «+ Registrar un importe» cuando la fuente ya tiene filas.
+    if (!(await formulario.isVisible())) await page.getByText("+ Registrar un importe").click();
     await formulario.getByLabel("DNI de la persona").fill(dni);
     await formulario.getByLabel("Fecha del hecho").fill(await fechaDelMesDePago(page));
     await formulario.getByLabel("Importe (S/)").fill("40");

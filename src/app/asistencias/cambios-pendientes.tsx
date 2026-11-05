@@ -158,10 +158,10 @@ export function ProveedorCambiosPendientes({ children }: { children: React.React
 
   return <ContextoCambiosPendientes.Provider value={{ marcarPendiente, limpiarPendiente, confirmarDescarte, navegar }}>
     {children}
-    <dialog aria-labelledby="titulo-cambios-sin-guardar" className="dialogo-confirmacion" onCancel={cancelar} ref={dialogo}>
+    <dialog aria-labelledby="titulo-cambios-sin-guardar" className="dialogo-confirmacion dialogo-cambios-sin-guardar" onCancel={cancelar} ref={dialogo}>
       <h2 id="titulo-cambios-sin-guardar">Cambios sin guardar</h2>
       <p>Hay una edición de asistencia que todavía no se guardó. ¿Desea conservarla o descartarla antes de salir?</p>
-      <div className="acciones-dialogo"><button className="boton-secundario" onClick={cancelar} type="button">Cancelar</button><button className="boton-principal" onClick={descartar} type="button">Descartar cambios</button></div>
+      <div className="acciones-dialogo"><button className="boton-secundario" onClick={cancelar} type="button">Cancelar</button><button className="peligro" onClick={descartar} type="button">Descartar cambios</button></div>
     </dialog>
   </ContextoCambiosPendientes.Provider>;
 }

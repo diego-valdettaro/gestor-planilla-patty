@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { NOMBRE_DE_ROL, type Actor } from "@/autenticacion/permisos";
 
 import { cerrarSesionDesdeFormulario } from "./cerrar-sesion/actions";
-import { enlacesPermitidos, esEnlaceActivo, seccionActiva } from "./enlaces-navegacion";
+import { enlacesPermitidos, esSeccionActiva, seccionActiva } from "./enlaces-navegacion";
 
 export function Navegacion({ actor }: { actor?: Actor }) {
   const ruta = usePathname();
@@ -36,11 +36,11 @@ export function Navegacion({ actor }: { actor?: Actor }) {
       <div className="menu-navegacion" id="menu-navegacion">
         <div className="enlaces-navegacion">
           {enlaces.map((enlace) => {
-            const activo = esEnlaceActivo(ruta, enlace.href);
-            return <Link aria-current={activo ? "page" : undefined} className={activo ? "activo" : ""} href={enlace.href} key={enlace.href}><span aria-hidden="true">{enlace.icono}</span>{enlace.etiqueta}{activo && <small className="texto-activo"> (sección actual)</small>}</Link>;
+            const activo = esSeccionActiva(ruta, enlace);
+            return <Link aria-current={activo ? "page" : undefined} className={activo ? "activo" : ""} href={enlace.href} key={enlace.href}><span aria-hidden="true" className={`ico ico-${enlace.icono}`} />{enlace.etiqueta}</Link>;
           })}
         </div>
-        <div className="cuenta-navegacion"><span className="avatar-navegacion">{iniciales(actor.nombreUsuario ?? NOMBRE_DE_ROL[actor.rol])}</span><span><strong>{actor.nombreUsuario ?? "Sesión activa"}</strong><small>{NOMBRE_DE_ROL[actor.rol]}</small></span><form action={cerrarSesionDesdeFormulario}><button aria-label="Cerrar sesión" title="Cerrar sesión" type="submit">⌄</button></form></div>
+        <div className="cuenta-navegacion"><span className="avatar-navegacion">{iniciales(actor.nombreUsuario ?? NOMBRE_DE_ROL[actor.rol])}</span><span><strong>{actor.nombreUsuario ?? "Sesión activa"}</strong><small>{NOMBRE_DE_ROL[actor.rol]}</small></span><form action={cerrarSesionDesdeFormulario}><button aria-label="Cerrar sesión" className="boton-cerrar-sesion" title="Cerrar sesión" type="submit"><span aria-hidden="true" className="ico ico-salir" /></button></form></div>
       </div>
     </nav>
   );

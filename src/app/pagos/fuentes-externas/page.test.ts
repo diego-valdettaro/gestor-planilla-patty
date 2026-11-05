@@ -50,7 +50,7 @@ describe("página de Fuentes externas (/pagos/fuentes-externas)", () => {
 
     expect(html).toContain("Fuentes externas del mes de pago 10/2026");
     expect(html).toContain("Una persona sin fila cuenta como cero solo cuando confirma el tipo de fuente.");
-    expect(html).toContain("(sección actual)");
+    expect(html).toMatch(/aria-current="page"[^>]*>(Reglas legales|Fuentes externas|Condiciones laborales)<\/a>/);
     for (const nombre of ["Comisiones de ventas", "Movilidad supeditada a asistencia", "Adelantos", "Préstamos (cuotas)", "Retención de quinta categoría", "Gratificación legal y bonificación extraordinaria"]) {
       expect(html).toContain(nombre);
     }

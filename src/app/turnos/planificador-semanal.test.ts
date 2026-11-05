@@ -72,8 +72,12 @@ describe("planificador semanal", () => {
     expect(html).not.toContain("Turno de");
     expect(html).toContain('aria-labelledby="titulo-dialogo-personalizado"');
     expect(html).toContain('aria-labelledby="titulo-dialogo-completar-semana"');
-    // El botón de la fila, más el título y el botón de confirmar del modal.
+    // La opción del menú «Acciones» de la fila, más el título y el botón de confirmar del modal.
     expect(html.match(/Completar semana/g)).toHaveLength(3);
+    expect(html).toContain('aria-label="Acciones de Ana Pérez"');
+    expect(html).toContain('aria-haspopup="menu"');
+    // Un solo botón de acciones por persona: «Completar semana» ya no es un botón suelto de la fila.
+    expect(html).not.toContain('class="boton-secundario" type="button">Completar semana</button>');
   });
 
   it("no ofrece completar semana para un colaborador con la semana liquidada", () => {
@@ -91,8 +95,10 @@ describe("planificador semanal", () => {
       sedes: ["Tienda Norte", "Tienda Sur"],
     }));
 
-    // Sin el botón de la fila; el modal sigue en el DOM (oculto) con su título y botón de confirmar.
-    expect(html.match(/Completar semana/g)).toHaveLength(2);
+    // La semana liquidada no admite cambios: las dos opciones del menú siguen visibles, desactivadas y con su motivo.
+    expect(html.match(/La semana está liquidada y ya no admite cambios\./g)).toHaveLength(2);
+    expect(html).toContain('<button aria-disabled="true" class="menu-item" role="menuitem" tabindex="-1" type="button">Completar semana<small>');
+    expect(html).toContain('<button aria-disabled="true" class="menu-item" role="menuitem" tabindex="-1" type="button">Republicar cambios<small>');
   });
 
   it("reconoce un horario sin modelo como personalizado al reabrir la celda", () => {
@@ -269,7 +275,9 @@ describe("selección de publicación", () => {
       colaboradores: [colaboradores[0]], dias, celdasIniciales: [], publicados: [], procesados: [], modelos: [modeloApertura], sedes: ["Tienda Norte"],
     }));
 
-    expect(html).toContain('class="boton-secundario" type="button">Completar semana</button>');
+    // Con la semana sin publicar, «Completar semana» está activa y «Republicar cambios» desactivada con su motivo.
+    expect(html).toContain('<button class="menu-item" role="menuitem" tabindex="-1" type="button">Completar semana</button>');
+    expect(html).toContain('<button aria-disabled="true" class="menu-item" role="menuitem" tabindex="-1" type="button">Republicar cambios<small>La semana todavía no se publicó. Use «Publicar planificación».</small></button>');
   });
 
   it("en solo lectura conserva la consulta y omite todo control de edición y publicación", () => {
@@ -322,7 +330,10 @@ describe("relación laboral confirmada en el planificador", () => {
       celdasIniciales: [],
     }));
 
-    expect(html).toContain("No se puede publicar: no tiene una relación laboral confirmada en esta semana. Recursos Humanos debe registrar y confirmar su ingreso.");
+    // El motivo no es texto de la fila: es un icono enfocable cuyo tooltip dice la causa y el siguiente paso.
+    expect(html).toContain('aria-label="No se puede publicar a Ana Pérez: ver causa y siguiente paso"');
+    expect(html).toContain('<strong class="tip-titulo">No se puede publicar</strong><span class="tip-fila"><b>Causa:</b> no tiene una relación laboral confirmada en esta semana.</span><span class="tip-fila"><b>Siguiente paso:</b> Recursos Humanos debe registrar y confirmar su ingreso.</span>');
+    expect(html).not.toContain("aviso-sin-relacion");
     expect(html).not.toContain("checkbox-publicar-fila");
     expect(html).toContain('class="boton-principal" disabled=""');
     expect(html).toContain("Recursos Humanos debe confirmar la relación laboral de quienes no la tienen en esta semana.");

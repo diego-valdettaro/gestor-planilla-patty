@@ -4,13 +4,15 @@ import React, { useId, useRef, useState } from "react";
 
 type AccionDeFormulario = (formData: FormData) => void | Promise<void>;
 
-export function BotonDeAccionConfirmada({ accion, etiqueta, titulo, descripcion, confirmar, peligro = false, requiereSeleccion, children }: {
+export function BotonDeAccionConfirmada({ accion, etiqueta, titulo, descripcion, confirmar, peligro = false, principal = false, requiereSeleccion, children }: {
   accion: AccionDeFormulario;
   etiqueta: string;
   titulo: string;
   descripcion: string;
   confirmar: string;
   peligro?: boolean;
+  /** El botón que abre el diálogo es la acción principal verde del contexto (p. ej. «Cerrar período»). */
+  principal?: boolean;
   requiereSeleccion?: string;
   children?: React.ReactNode;
 }) {
@@ -21,7 +23,7 @@ export function BotonDeAccionConfirmada({ accion, etiqueta, titulo, descripcion,
   return <form action={accion} onChange={(evento) => {
     if (requiereSeleccion) setSeleccionValida(new FormData(evento.currentTarget).getAll(requiereSeleccion).length > 0);
   }}>
-    <button className={peligro ? "peligro" : "boton-secundario"} onClick={() => dialogo.current?.showModal()} type="button">{etiqueta}</button>
+    <button className={peligro ? "peligro" : principal ? "boton-principal" : "boton-secundario"} onClick={() => dialogo.current?.showModal()} type="button">{etiqueta}</button>
     <dialog aria-labelledby={tituloId} className="dialogo-confirmacion" ref={dialogo}>
       <section>
         <h2 id={tituloId}>{titulo}</h2>

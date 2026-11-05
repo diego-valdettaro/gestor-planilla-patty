@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { NOMBRE_DE_ROL, puedeGestionarPagos } from "@/autenticacion/permisos";
+import { puedeGestionarPagos } from "@/autenticacion/permisos";
 import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
 import { formatearFechaDeRelacion } from "@/relaciones-laborales/vigencia";
 import { fechaDeHoyEnLima } from "@/condiciones-laborales/vigencia";
@@ -30,17 +30,16 @@ export default async function PaginaDeReglasLegales() {
   const pendientes = filas.filter(({ vigente }) => !vigente).length;
   const activacion = <ActivacionDeRegla definiciones={REGLAS_LEGALES} usuario={actor.nombreUsuario ?? "su usuario"} />;
 
-  return <main className="contenido pagina">
+  return <main className="contenido pagina pagina-ajustes">
     <header className="encabezado encabezado-pagina">
-      <div><p className="eyebrow">{NOMBRE_DE_ROL[actor.rol]}</p><h1>Reglas legales</h1><p>Registre y active tasas, topes, la remuneración mínima vital y demás valores legales con su fecha de vigencia y su fuente oficial. Un valor nuevo no reescribe la historia y el cálculo no consulta servicios externos.</p></div>
-      {!sinReglas && activacion}
+      <div><h1>Reglas legales</h1><p>Registre y active tasas, topes, la remuneración mínima vital y demás valores legales con su fecha de vigencia y su fuente oficial. Un valor nuevo no reescribe la historia y el cálculo no consulta servicios externos.</p></div>
     </header>
     <NavegacionDePagos actual="reglas-legales" />
 
     {sinReglas
-      ? <section className="estado-vacio"><h2>No hay reglas legales activas</h2><p>Sin ellas el cálculo de aportes queda bloqueado.</p>{activacion}</section>
-      : <section className="tarjeta panel">
-        <header className="panel-cabecera"><div><h2>Valores legales</h2><p>Valor vigente hoy ({formatearFechaDeRelacion(hoy)}). Abra un valor para ver su historial y consultar otra fecha.</p></div><span className={pendientes ? "insignia advertencia" : "insignia ok"}>{pendientes ? `${pendientes} sin regla vigente` : "Todos con regla vigente"}</span></header>
+      ? <section className="tile panel"><div className="estado-vacio"><h3>No hay reglas legales activas</h3><p>Sin ellas el cálculo de aportes queda bloqueado.</p>{activacion}</div></section>
+      : <section className="tile panel">
+        <header className="panel-cabecera"><div><h2>Valores legales</h2><p>Valor vigente hoy ({formatearFechaDeRelacion(hoy)}). Abra un valor para ver su historial y consultar otra fecha.</p></div><span className="acciones-configuracion"><span className={pendientes ? "insignia advertencia" : "insignia ok"}>{pendientes ? `${pendientes} sin regla vigente` : "Todos con regla vigente"}</span>{activacion}</span></header>
         <p className="aviso-desplazamiento">Desplácese horizontalmente para ver todas las columnas.</p>
         <div className="panel-tabla primera-columna-fija" role="region" aria-label="Reglas legales vigentes hoy" tabIndex={0}><table><thead><tr><th>Valor legal</th><th className="numerico">Valor vigente hoy</th><th>Vigente desde</th><th>Fuente oficial</th><th>Activado por</th></tr></thead>
           <tbody>{filas.map((fila) => <FilaDeRegla fila={fila} key={fila.definicion.codigo} />)}</tbody></table></div>

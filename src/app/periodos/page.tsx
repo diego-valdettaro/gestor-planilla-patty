@@ -14,13 +14,14 @@ import { repositorioDePeriodos } from "@/periodos/servicio";
 import { cerrarPeriodoDesdeFormulario, decidirHorasExtraDesdeFormulario, reabrirPeriodoDesdeFormulario } from "./actions";
 import { AprobadorDeAsistencia } from "./aprobador-de-asistencia";
 import { CreadorDePeriodo } from "./creador-de-periodo";
+import { SinPermiso } from "../sin-permiso";
 
 export const dynamic = "force-dynamic";
 
 export default async function PaginaDePeriodos({ searchParams }: { searchParams: Promise<{ periodoId?: string; sede?: string; dni?: string }> }) {
   const actor = await obtenerActorActual().catch(() => undefined);
   if (!actor) redirect("/iniciar-sesion");
-  if (!puedeConsultarPeriodos(actor)) return <main className="centrado"><section className="estado-vacio"><h1>Sin permiso</h1><p>Su rol no permite consultar períodos de planilla.</p></section></main>;
+  if (!puedeConsultarPeriodos(actor)) return <SinPermiso>Su rol no permite consultar períodos de planilla.</SinPermiso>;
   // Finanzas y el Administrador ven y operan todo; un gerente de área solo ve y aprueba la asistencia de sus grupos.
   const completo = puedeGestionarPeriodos(actor);
 
@@ -38,28 +39,43 @@ export default async function PaginaDePeriodos({ searchParams }: { searchParams:
   const sugerencia = calcularSugerenciaDePeriodo(periodos, new Date());
   const sinAprobar = aprobaciones.filter(({ estado }) => estado !== "aprobada").map(({ grupo }) => grupo);
 
-  return <main className="contenido pagina">
+  return <main className="contenido pagina pagina-ajustes pagina-periodos">
     <header className="encabezado encabezado-pagina"><div><p className="eyebrow">{NOMBRE_DE_ROL[actor.rol]}</p><h1>Períodos de planilla</h1><p>Filtre, revise y exporte los totales de asistencia antes de cerrar el período de planilla.</p></div></header>
-    <section className="tarjeta panel">
-      <header className="panel-cabecera"><div><h2>Nuevo período</h2><p>Se sugiere continuar del día 26 al 25, pero puede indicar otras fechas.</p></div></header>
-      <CreadorDePeriodo sugerencia={sugerencia} />
+    <section className="panel bloque-nuevo">
+      <details className="nuevo-configuracion" open={!periodo || undefined}><summary>+ Nuevo período</summary>
+        <CreadorDePeriodo sugerencia={sugerencia} />
+      </details>
     </section>
     {periodo ? <>
-      <form className="filtros panel-filtros periodos-filtros" method="get">
-        <label>Período<select name="periodoId" defaultValue={periodo.id}>{periodos.map((item) => <option key={item.id} value={item.id}>{item.inicio} a {item.fin} ({item.estado})</option>)}</select></label>
-        <label>Sede<select name="sede" defaultValue={query.sede ?? ""}><option value="">Todas las sedes</option>{sedes.map((sede) => <option key={sede} value={sede}>{sede}</option>)}</select></label>
-        <label>Colaborador<select name="dni" defaultValue={query.dni ?? ""}><option value="">Todos los colaboradores</option>{colaboradores.map((item) => <option key={item.dni} value={item.dni}>{item.nombre} · {item.dni}</option>)}</select></label>
-        <button type="submit">Filtrar</button>
-        <a className="boton-secundario" href={`/api/periodos/${periodo.id}/exportar`}>Exportar XLSX completo</a>
-      </form>
-      <section className="tarjeta panel">
-        <header className="panel-cabecera"><div><h2>Período {periodo.inicio} a {periodo.fin}</h2><p>Estado actual: {periodo.estado === "abierto" ? <span className="insignia ok">Abierto</span> : <span className="insignia neutro">Cerrado</span>}</p></div>{periodo.estado === "abierto" ? <CierreDelPeriodo periodoId={periodo.id} sinAprobar={sinAprobar} /> : null}</header>
-        {periodo.estado === "cerrado" && mesPagado ? <div><button aria-describedby="causa-de-reapertura" className="boton-secundario" disabled type="button">Reabrir período</button><small className="linea-de-relacion" id="causa-de-reapertura">{causaDeReaperturaBloqueada(mesPagado)}</small></div> : null}
-        {periodo.estado === "cerrado" && !mesPagado ? <BotonDeAccionConfirmada accion={reabrirPeriodoDesdeFormulario} confirmar="Reabrir período" descripcion={`El período de planilla del ${periodo.inicio} al ${periodo.fin} volverá a estar abierto: se podrán importar y modificar asistencias de esas fechas hasta que se cierre de nuevo. La reapertura queda registrada con el motivo indicado. Las aprobaciones de asistencia siguen vigentes salvo que una corrección invalide la de su grupo.`} etiqueta="Reabrir período" titulo="¿Reabrir este período de planilla?"><input type="hidden" name="periodoId" value={periodo.id} /><label>Motivo de reapertura<input name="motivo" required /></label></BotonDeAccionConfirmada> : null}
-        <AprobacionDeAsistencia actor={actor} periodo={periodo} aprobaciones={aprobaciones} />
-        {periodo.estado === "abierto" ? <DecisionesDeHorasExtra periodoId={periodo.id} filas={resumen.filas} /> : null}
+      <section className="panel">
+        <header className="panel-cabecera"><div><h2>Criterios de consulta</h2><p>Afectan solo el detalle por colaborador; los totales y bloqueos cubren siempre el período completo.</p></div></header>
+        <form className="filtros panel-filtros periodos-filtros" method="get">
+          <label>Período<select name="periodoId" defaultValue={periodo.id}>{periodos.map((item) => <option key={item.id} value={item.id}>{item.inicio} a {item.fin} ({item.estado})</option>)}</select></label>
+          <label>Sede<select name="sede" defaultValue={query.sede ?? ""}><option value="">Todas las sedes</option>{sedes.map((sede) => <option key={sede} value={sede}>{sede}</option>)}</select></label>
+          <label>Colaborador<select name="dni" defaultValue={query.dni ?? ""}><option value="">Todos los colaboradores</option>{colaboradores.map((item) => <option key={item.dni} value={item.dni}>{item.nombre} · {item.dni}</option>)}</select></label>
+          <button className="boton-secundario" type="submit">Filtrar</button>
+        </form>
+      </section>
+      <section className="panel">
+        <header className="panel-cabecera"><div><h2>Período {periodo.inicio} a {periodo.fin}</h2><p>Estado actual: {periodo.estado === "abierto" ? <span className="insignia ok">Abierto</span> : <span className="insignia neutro">Cerrado</span>}</p></div>
+          <div className="acciones-del-mes">
+            <a className="boton-secundario" href={`/api/periodos/${periodo.id}/exportar`}>Exportar XLSX completo</a>
+            {periodo.estado === "abierto" ? <CierreDelPeriodo periodoId={periodo.id} sinAprobar={sinAprobar} /> : null}
+            {periodo.estado === "cerrado" && mesPagado ? <div className="accion-bloqueada"><button aria-describedby="causa-de-reapertura" className="boton-secundario" disabled type="button">Reabrir período</button><small className="linea-de-relacion" id="causa-de-reapertura">{causaDeReaperturaBloqueada(mesPagado)}</small></div> : null}
+            {periodo.estado === "cerrado" && !mesPagado ? <BotonDeAccionConfirmada accion={reabrirPeriodoDesdeFormulario} confirmar="Reabrir período" descripcion={`El período de planilla del ${periodo.inicio} al ${periodo.fin} volverá a estar abierto: se podrán importar y modificar asistencias de esas fechas hasta que se cierre de nuevo. La reapertura queda registrada con el motivo indicado. Las aprobaciones de asistencia siguen vigentes salvo que una corrección invalide la de su grupo.`} etiqueta="Reabrir período" titulo="¿Reabrir este período de planilla?"><div className="formulario-dialogo"><input type="hidden" name="periodoId" value={periodo.id} /><label>Motivo de reapertura<input name="motivo" required /></label></div></BotonDeAccionConfirmada> : null}
+          </div>
+        </header>
+        {periodo.estado === "abierto" ? <AvisoDeCierre sinAprobar={sinAprobar} /> : null}
+      </section>
+      <section className="panel">
+        <header className="panel-cabecera"><div><h2>Resumen</h2><p>Cifras del período completo, sin importar los criterios de consulta.</p></div></header>
         <TotalesGenerales resumen={resumen} />
         <Bloqueos bloqueos={resumen.bloqueos} />
+      </section>
+      <AprobacionDeAsistencia actor={actor} periodo={periodo} aprobaciones={aprobaciones} />
+      {periodo.estado === "abierto" ? <DecisionesDeHorasExtra periodoId={periodo.id} filas={resumen.filas} /> : null}
+      <section className="panel">
+        <header className="panel-cabecera"><div><h2>Detalle por colaborador</h2><p>Agrupado por grupo. Respeta los criterios de consulta.</p></div></header>
         {resumen.filas.length ? <ResumenPorGrupos filas={resumen.filas} /> : <section className="estado-vacio"><h3>Sin resultados</h3><p>No hay colaboradores que coincidan con los filtros elegidos. Los totales y bloqueos siguen cubriendo el período completo.</p></section>}
       </section>
     </> : <section className="estado-vacio"><h2>No hay períodos de planilla</h2><p>Cree un período con el formulario «Nuevo período» de arriba para revisar y exportar sus totales.</p></section>}
@@ -68,38 +84,40 @@ export default async function PaginaDePeriodos({ searchParams }: { searchParams:
 
 /** Un gerente de área solo ve y aprueba la asistencia de sus grupos: sin totales, exportación, cierre, reapertura ni horas extra. */
 function VistaDeGerente({ actor, periodos, periodo, aprobaciones }: { actor: Actor; periodos: PeriodoPlanilla[]; periodo: PeriodoPlanilla | undefined; aprobaciones: AprobacionDeGrupo[] }) {
-  return <main className="contenido pagina">
+  return <main className="contenido pagina pagina-ajustes pagina-periodos">
     <header className="encabezado encabezado-pagina"><div><p className="eyebrow">{NOMBRE_DE_ROL[actor.rol]}</p><h1>Períodos de planilla</h1><p>Apruebe la asistencia de sus grupos para que Finanzas pueda cerrar el período.</p></div></header>
     {periodo ? <>
-      <form className="filtros panel-filtros periodos-filtros" method="get">
-        <label>Período<select name="periodoId" defaultValue={periodo.id}>{periodos.map((item) => <option key={item.id} value={item.id}>{item.inicio} a {item.fin} ({item.estado})</option>)}</select></label>
-        <button type="submit">Filtrar</button>
-      </form>
-      <section className="tarjeta panel">
-        <header className="panel-cabecera"><div><h2>Período {periodo.inicio} a {periodo.fin}</h2><p>Estado actual: {periodo.estado === "abierto" ? <span className="insignia ok">Abierto</span> : <span className="insignia neutro">Cerrado</span>}</p></div></header>
-        <AprobacionDeAsistencia actor={actor} periodo={periodo} aprobaciones={aprobaciones} />
+      <section className="panel">
+        <header className="panel-cabecera"><div><h2>Criterios de consulta</h2></div></header>
+        <form className="filtros panel-filtros periodos-filtros" method="get">
+          <label>Período<select name="periodoId" defaultValue={periodo.id}>{periodos.map((item) => <option key={item.id} value={item.id}>{item.inicio} a {item.fin} ({item.estado})</option>)}</select></label>
+          <button className="boton-secundario" type="submit">Filtrar</button>
+        </form>
       </section>
+      <section className="panel">
+        <header className="panel-cabecera"><div><h2>Período {periodo.inicio} a {periodo.fin}</h2><p>Estado actual: {periodo.estado === "abierto" ? <span className="insignia ok">Abierto</span> : <span className="insignia neutro">Cerrado</span>}</p></div></header>
+      </section>
+      <AprobacionDeAsistencia actor={actor} periodo={periodo} aprobaciones={aprobaciones} />
     </> : <section className="estado-vacio"><h2>No hay períodos de planilla</h2><p>Finanzas crea los períodos. Cuando exista uno podrá aprobar aquí la asistencia de sus grupos.</p></section>}
   </main>;
 }
 
-/** Finanzas cierra solo con todos los grupos aprobados y no aprueba en nombre del gerente: sin aprobación, explica el siguiente paso. */
 function CierreDelPeriodo({ periodoId, sinAprobar }: { periodoId: string; sinAprobar: string[] }) {
-  if (sinAprobar.length) {
-    return <div>
-      <button className="boton-principal" disabled type="button">Cerrar período</button>
-      <p className="mensaje-operacion advertencia" role="status">No se puede cerrar: falta la aprobación de asistencia {sinAprobar.length === 1 ? "del grupo" : "de los grupos"} {sinAprobar.join(", ")}. Pida al gerente de área {sinAprobar.length === 1 ? "del grupo" : "de cada grupo"} que apruebe; Finanzas no aprueba en su nombre.</p>
-    </div>;
-  }
-  return <BotonDeAccionConfirmada accion={cerrarPeriodoDesdeFormulario} confirmar="Cerrar período" descripcion="Ya no se podrán importar ni modificar asistencias de este período hasta que lo reabra con un motivo." etiqueta="Cerrar período" titulo="¿Cerrar este período de planilla?"><input type="hidden" name="periodoId" value={periodoId} /></BotonDeAccionConfirmada>;
+  if (sinAprobar.length) return <button aria-describedby="causa-de-cierre" className="boton-principal" disabled type="button">Cerrar período</button>;
+  return <BotonDeAccionConfirmada accion={cerrarPeriodoDesdeFormulario} confirmar="Cerrar período" descripcion="Ya no se podrán importar ni modificar asistencias de este período hasta que lo reabra con un motivo." etiqueta="Cerrar período" principal titulo="¿Cerrar este período de planilla?"><input type="hidden" name="periodoId" value={periodoId} /></BotonDeAccionConfirmada>;
+}
+
+/** Sin aprobación de todos los grupos el cierre queda bloqueado: el aviso dice la causa y el siguiente paso permitido. */
+function AvisoDeCierre({ sinAprobar }: { sinAprobar: string[] }) {
+  if (!sinAprobar.length) return null;
+  return <p className="mensaje-operacion advertencia" id="causa-de-cierre" role="status">No se puede cerrar: falta la aprobación de asistencia {sinAprobar.length === 1 ? "del grupo" : "de los grupos"} {sinAprobar.join(", ")}. Pida al gerente de área {sinAprobar.length === 1 ? "del grupo" : "de cada grupo"} que apruebe; Finanzas no aprueba en su nombre.</p>;
 }
 
 function AprobacionDeAsistencia({ actor, periodo, aprobaciones }: { actor: Actor; periodo: PeriodoPlanilla; aprobaciones: AprobacionDeGrupo[] }) {
-  if (!aprobaciones.length) return <section className="estado-vacio"><h3>Sin grupos que aprobar</h3><p>No hay grupos que gestionen asistencia: el período no requiere la aprobación de ningún gerente.</p></section>;
+  if (!aprobaciones.length) return <section className="panel"><section className="estado-vacio"><h3>Sin grupos que aprobar</h3><p>No hay grupos que gestionen asistencia: el período no requiere la aprobación de ningún gerente.</p></section></section>;
   const conBloqueos = aprobaciones.filter(({ bloqueos }) => bloqueos.length);
-  return <section>
-    <h3>Aprobación de asistencia</h3>
-    <p>Cada gerente de área aprueba la situación de todas las personas de su grupo con relación laboral vigente en el período, incluidas las que no tienen marcas. Una corrección posterior invalida la aprobación del grupo. Los grupos que no gestionan asistencia no requieren aprobación.</p>
+  return <section className="panel">
+    <header className="panel-cabecera"><div><h2>Aprobación de asistencia</h2><p>Cada gerente de área aprueba la situación de todas las personas de su grupo con relación laboral vigente en el período, incluidas las que no tienen marcas. Una corrección posterior invalida la aprobación del grupo. Los grupos que no gestionan asistencia no requieren aprobación.</p></div></header>
     <TablaComparable titulo="Aprobación de asistencia por grupo">
       <Cabecera columnas={[{ nombre: "Grupo" }, { nombre: "Gerente de área" }, { nombre: "Estado" }, { nombre: "Personas que bloquean", numerica: true }, { nombre: "Detalle" }, { nombre: "Acción" }]} />
       <tbody>{aprobaciones.map((aprobacion) => <tr key={aprobacion.grupo}>
@@ -114,7 +132,7 @@ function AprobacionDeAsistencia({ actor, periodo, aprobaciones }: { actor: Actor
       </tr>)}</tbody>
     </TablaComparable>
     {conBloqueos.map((aprobacion) => <section className="mensaje-operacion advertencia" key={aprobacion.grupo} role="status">
-      <h4>Personas que bloquean la aprobación de {aprobacion.grupo}</h4>
+      <h3>Personas que bloquean la aprobación de {aprobacion.grupo}</h3>
       <ul>{aprobacion.bloqueos.map((bloqueo) => <li key={`${bloqueo.dni}-${bloqueo.causa}`}><a href={enlaceDeBloqueoDeAprobacion(aprobacion.grupo, bloqueo.dni, bloqueo.fechas[0])}>{bloqueo.nombre} ({bloqueo.dni}): {TEXTO_DE_CAUSA_DE_BLOQUEO[bloqueo.causa]}, {textoDeFechas(bloqueo.fechas)}</a></li>)}</ul>
     </section>)}
   </section>;
@@ -122,8 +140,8 @@ function AprobacionDeAsistencia({ actor, periodo, aprobaciones }: { actor: Actor
 
 function insigniaDeAprobacion({ estado }: AprobacionDeGrupo) {
   if (estado === "aprobada") return <span className="insignia ok">Aprobada</span>;
-  if (estado === "invalidada") return <span className="insignia advertencia">Invalidada por una corrección</span>;
-  return <span className="insignia neutro">Pendiente de aprobación</span>;
+  if (estado === "invalidada") return <span className="insignia aviso">Invalidada por una corrección</span>;
+  return <span className="est est-pendiente est-etiqueta">Pendiente de aprobación</span>;
 }
 
 function detalleDeAprobacion(aprobacion: AprobacionDeGrupo): string {
@@ -151,32 +169,34 @@ function DecisionesDeHorasExtra({ periodoId, filas }: { periodoId: string; filas
   if (!pendientes.length) return null;
   const campos = <>
     <input name="periodoId" type="hidden" value={periodoId} />
-    <fieldset>
+    <fieldset className="horas-extra-pendientes">
       <legend>Seleccione una o más horas extra pendientes</legend>
       {pendientes.map((horaExtra) => <label className="checkbox" key={horaExtra.id}>
         <input name="horaExtraId" type="checkbox" value={horaExtra.id} />
-        {horaExtra.nombre}, {horaExtra.fecha}: 25% {formatearDuracion(horaExtra.minutosAl25)}, 35% {formatearDuracion(horaExtra.minutosAl35)}
+        <span>{horaExtra.nombre}, {horaExtra.fecha}: 25% {formatearDuracion(horaExtra.minutosAl25)}, 35% {formatearDuracion(horaExtra.minutosAl35)}</span>
       </label>)}
     </fieldset>
   </>;
-  return <section>
-    <h3>Decidir horas extra pendientes</h3>
-    <div className="acciones">
-      <BotonDeAccionConfirmada accion={decidirHorasExtraDesdeFormulario} confirmar="Aprobar selección" descripcion="Seleccione al menos una hora extra. La selección quedará aprobada en una sola operación." etiqueta="Aprobar horas extra" requiereSeleccion="horaExtraId" titulo="¿Aprobar estas horas extra?">
-        <input name="decision" type="hidden" value="aprobada" />{campos}
-      </BotonDeAccionConfirmada>
-      <BotonDeAccionConfirmada accion={decidirHorasExtraDesdeFormulario} confirmar="Descartar selección" descripcion="Seleccione al menos una hora extra. Solo se descarta tiempo que fue una marca errónea o una permanencia sin trabajo efectivo, con su evidencia y motivo. No se descarta por falta de autorización previa: el trabajo acreditado se paga." etiqueta="Descartar horas extra" requiereSeleccion="horaExtraId" titulo="¿Descartar estas horas extra?" peligro>
-        <input name="decision" type="hidden" value="descartada" />{campos}
-        <label>Evidencia<select name="causa" required defaultValue=""><option value="" disabled>Elija la evidencia</option>{CAUSAS_DE_DESCARTE.map((causa) => <option key={causa} value={causa}>{NOMBRE_DE_CAUSA_DE_DESCARTE[causa]}</option>)}</select></label>
-        <label>Motivo del descarte<input name="motivo" required /></label>
-      </BotonDeAccionConfirmada>
-    </div>
+  return <section className="panel">
+    <header className="panel-cabecera"><div><h2>Decidir horas extra pendientes</h2><p>{pendientes.length === 1 ? "Hay 1 hora extra pendiente" : `Hay ${pendientes.length} horas extra pendientes`}. Al aprobar o descartar se elige cuáles en la ventana de confirmación; la decisión se aplica a toda la selección en una sola operación.</p></div>
+      <div className="acciones-del-mes">
+        <BotonDeAccionConfirmada accion={decidirHorasExtraDesdeFormulario} confirmar="Descartar selección" descripcion="Seleccione al menos una hora extra. Solo se descarta tiempo que fue una marca errónea o una permanencia sin trabajo efectivo, con su evidencia y motivo. No se descarta por falta de autorización previa: el trabajo acreditado se paga." etiqueta="Descartar horas extra" requiereSeleccion="horaExtraId" titulo="¿Descartar estas horas extra?" peligro>
+          <div className="formulario-dialogo">
+            <input name="decision" type="hidden" value="descartada" />{campos}
+            <label>Evidencia<select name="causa" required defaultValue=""><option value="" disabled>Elija la evidencia</option>{CAUSAS_DE_DESCARTE.map((causa) => <option key={causa} value={causa}>{NOMBRE_DE_CAUSA_DE_DESCARTE[causa]}</option>)}</select></label>
+            <label>Motivo del descarte<input name="motivo" required /></label>
+          </div>
+        </BotonDeAccionConfirmada>
+        <BotonDeAccionConfirmada accion={decidirHorasExtraDesdeFormulario} confirmar="Aprobar selección" descripcion="Seleccione al menos una hora extra. La selección quedará aprobada en una sola operación." etiqueta="Aprobar horas extra" principal requiereSeleccion="horaExtraId" titulo="¿Aprobar estas horas extra?">
+          <div className="formulario-dialogo"><input name="decision" type="hidden" value="aprobada" />{campos}</div>
+        </BotonDeAccionConfirmada>
+      </div>
+    </header>
   </section>;
 }
 
 function TotalesGenerales({ resumen }: { resumen: ResumenDePeriodo }) {
-  const totales = resumen.totales;
-  return <section><h3>Totales del período completo</h3><TablaDeTotales totales={totales} titulo="Totales del período completo" /><TablaDeHorasExtra horasExtra={totales.horasExtra} titulo="Horas extra del período completo" /></section>;
+  return <section className="bloque-cifras"><h3>Totales del período completo</h3><CifrasDeTotales totales={resumen.totales} titulo="Totales del período completo" /><h3>Horas extra del período completo</h3><CifrasDeHorasExtra horasExtra={resumen.totales.horasExtra} titulo="Horas extra del período completo" /></section>;
 }
 
 function Bloqueos({ bloqueos }: { bloqueos: BloqueoDePeriodo[] }) {
@@ -187,7 +207,7 @@ function Bloqueos({ bloqueos }: { bloqueos: BloqueoDePeriodo[] }) {
 function ResumenPorGrupos({ filas }: { filas: FilaDeResumen[] }) {
   const grupos = new Map<string, FilaDeResumen[]>();
   for (const fila of filas) grupos.set(fila.grupo, [...(grupos.get(fila.grupo) ?? []), fila]);
-  return <>{[...grupos].map(([grupo, colaboradores]) => <section key={grupo}><h3>{grupo}</h3>{colaboradores.map((fila) => <article className="tarjeta" key={`${grupo}-${fila.dni}`}><h4>{fila.nombre} ({fila.dni})</h4><TablaDeTotales totales={fila} titulo={`Totales de ${fila.nombre} (${fila.dni})`} /><TablaDeHorasExtra horasExtra={fila.horasExtra} titulo={`Horas extra de ${fila.nombre} (${fila.dni})`} /><DetalleDiario fila={fila} /></article>)}</section>)}</>;
+  return <>{[...grupos].map(([grupo, colaboradores]) => <section key={grupo}><h3 className="titulo-grupo">{grupo}</h3>{colaboradores.map((fila) => <article className="detalle-colaborador" key={`${grupo}-${fila.dni}`}><h4>{fila.nombre} ({fila.dni})</h4><p className="rotulo-cifras">Totales de {fila.nombre} ({fila.dni})</p><CifrasDeTotales totales={fila} titulo={`Totales de ${fila.nombre} (${fila.dni})`} /><p className="rotulo-cifras">Horas extra de {fila.nombre} ({fila.dni})</p><CifrasDeHorasExtra horasExtra={fila.horasExtra} titulo={`Horas extra de ${fila.nombre} (${fila.dni})`} /><DetalleDiario fila={fila} /></article>)}</section>)}</>;
 }
 
 function TablaComparable({ titulo, children }: { titulo: string; children: React.ReactNode }) {
@@ -198,23 +218,27 @@ function Cabecera({ columnas }: { columnas: Array<{ nombre: string; numerica?: b
   return <thead><tr>{columnas.map(({ nombre, numerica }) => <th key={nombre} scope="col" className={numerica ? "numerico" : undefined}>{nombre}</th>)}</tr></thead>;
 }
 
-function TablaDeTotales({ totales, titulo }: { totales: ResumenDePeriodo["totales"]; titulo: string }) {
-  const cifras = [
-    ["Jornadas trabajadas", totales.jornadasTrabajadas], ["Horas trabajadas", formatearDuracion(totales.minutosTrabajados)], ["Faltas", totales.noAsistencias.falta],
-    ["Descansos", totales.noAsistencias.descanso], ["Feriados", totales.noAsistencias.feriado], ["Vacaciones", totales.noAsistencias.vacaciones],
-    ["Permisos", totales.noAsistencias.permiso], ["Suspensiones", totales.noAsistencias.suspension], ["Tardanzas", totales.cantidadTardanzas],
-    ["Horas penalizadas", formatearDuracion(totales.minutosPenalizados)],
-  ] as const;
-  return <TablaComparable titulo={titulo}><Cabecera columnas={cifras.map(([nombre]) => ({ nombre, numerica: true }))} /><tbody><tr>{cifras.map(([nombre, valor]) => <td key={nombre} className="numerico">{valor}</td>)}</tr></tbody></TablaComparable>;
+/** Cuadrícula de cifras rotuladas: cada cifra lleva su nombre y unidad, y apila a una columna en pantallas estrechas. */
+function Cifras({ titulo, cifras }: { titulo: string; cifras: Array<{ nombre: string; valor: string | number; alerta?: boolean }> }) {
+  return <div aria-label={titulo} role="region"><dl className="cifras">{cifras.map(({ nombre, valor, alerta }) => <div className={alerta ? "cifra cifra-alerta" : "cifra"} key={nombre}><dt>{nombre}</dt><dd>{valor}</dd></div>)}</dl></div>;
 }
 
-function TablaDeHorasExtra({ horasExtra, titulo }: { horasExtra: FilaDeResumen["horasExtra"]; titulo: string }) {
-  const cifras = [
-    ["Pendientes 25%", horasExtra.pendiente.minutosAl25], ["Pendientes 35%", horasExtra.pendiente.minutosAl35],
-    ["Aprobadas 25%", horasExtra.aprobada.minutosAl25], ["Aprobadas 35%", horasExtra.aprobada.minutosAl35],
-    ["Descartadas 25%", horasExtra.descartada.minutosAl25], ["Descartadas 35%", horasExtra.descartada.minutosAl35],
-  ] as const;
-  return <TablaComparable titulo={titulo}><Cabecera columnas={cifras.map(([nombre]) => ({ nombre, numerica: true }))} /><tbody><tr>{cifras.map(([nombre, minutos]) => <td key={nombre} className="numerico">{formatearDuracion(minutos)}</td>)}</tr></tbody></TablaComparable>;
+function CifrasDeTotales({ totales, titulo }: { totales: ResumenDePeriodo["totales"]; titulo: string }) {
+  return <Cifras titulo={titulo} cifras={[
+    { nombre: "Jornadas trabajadas", valor: totales.jornadasTrabajadas }, { nombre: "Horas trabajadas", valor: formatearDuracion(totales.minutosTrabajados) }, { nombre: "Faltas", valor: totales.noAsistencias.falta },
+    { nombre: "Descansos", valor: totales.noAsistencias.descanso }, { nombre: "Feriados", valor: totales.noAsistencias.feriado }, { nombre: "Vacaciones", valor: totales.noAsistencias.vacaciones },
+    { nombre: "Permisos", valor: totales.noAsistencias.permiso }, { nombre: "Suspensiones", valor: totales.noAsistencias.suspension }, { nombre: "Tardanzas", valor: totales.cantidadTardanzas },
+    { nombre: "Horas penalizadas", valor: formatearDuracion(totales.minutosPenalizados) },
+  ]} />;
+}
+
+function CifrasDeHorasExtra({ horasExtra, titulo }: { horasExtra: FilaDeResumen["horasExtra"]; titulo: string }) {
+  // Las pendientes se resaltan solo cuando hay tiempo por decidir; el rótulo «Pendientes» ya lo dice con texto.
+  return <Cifras titulo={titulo} cifras={[
+    { nombre: "Pendientes 25%", valor: formatearDuracion(horasExtra.pendiente.minutosAl25), alerta: horasExtra.pendiente.minutosAl25 > 0 }, { nombre: "Pendientes 35%", valor: formatearDuracion(horasExtra.pendiente.minutosAl35), alerta: horasExtra.pendiente.minutosAl35 > 0 },
+    { nombre: "Aprobadas 25%", valor: formatearDuracion(horasExtra.aprobada.minutosAl25) }, { nombre: "Aprobadas 35%", valor: formatearDuracion(horasExtra.aprobada.minutosAl35) },
+    { nombre: "Descartadas 25%", valor: formatearDuracion(horasExtra.descartada.minutosAl25) }, { nombre: "Descartadas 35%", valor: formatearDuracion(horasExtra.descartada.minutosAl35) },
+  ]} />;
 }
 
 function DetalleDiario({ fila }: { fila: FilaDeResumen }) {

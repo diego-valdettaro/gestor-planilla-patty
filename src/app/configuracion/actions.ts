@@ -16,13 +16,35 @@ import { configurarGestionDeAsistenciaDelGrupo, crearGrupo } from "@/turnos/gest
 import { crearModeloDeHorario, eliminarModeloDeHorario, guardarModeloDeHorario } from "@/turnos/gestionar-modelos-de-horario";
 import { repositorioDeGrupos, repositorioDeModelosDeHorario, repositorioDeTurnos } from "@/turnos/servicio";
 
-export async function guardarSede(formData: FormData): Promise<void> {
+export interface EstadoDeCreacionDeSede {
+  error?: string;
+  listo?: number;
+  // El formulario se limpia tras cada envío; si hubo error se devuelve lo escrito para no perderlo.
+  nombre?: string;
+}
+
+// El nombre de una sede es único en todo el sistema, también entre grupos. Si ya existe, se explica dónde
+// está en lugar de ignorar el alta.
+function mensajeDeSedeExistente(nombre: string, grupoExistente: string | null, grupoActual: string): string {
+  if (grupoExistente === grupoActual) return `Ya existe la sede «${nombre}» en este grupo.`;
+  if (grupoExistente) return `Ya existe una sede llamada «${nombre}» en el grupo ${grupoExistente}. El nombre de una sede no se puede repetir.`;
+  return `Ya existe una sede llamada «${nombre}» sin grupo asignado, de datos anteriores. Use otro nombre.`;
+}
+
+export async function guardarSede(estadoAnterior: EstadoDeCreacionDeSede, formData: FormData): Promise<EstadoDeCreacionDeSede> {
   await exigirConfiguracionGlobal();
+  const nombre = textoOpcional(formData, "nombre");
   const grupo = texto(formData, "grupo");
-  await db.insert(sedes).values({ nombre: texto(formData, "nombre"), grupo }).onConflictDoNothing();
+  if (!nombre) return { error: "Escriba el nombre de la sede.", nombre: "" };
+  const creada = await db.insert(sedes).values({ nombre, grupo }).onConflictDoNothing().returning({ id: sedes.id });
+  if (!creada.length) {
+    const [existente] = await db.select({ grupo: sedes.grupo }).from(sedes).where(eq(sedes.nombre, nombre));
+    return { error: mensajeDeSedeExistente(nombre, existente?.grupo ?? null, grupo), nombre };
+  }
   revalidatePath("/configuracion");
   revalidatePath("/turnos");
   revalidatePath("/asistencias");
+  return { listo: (estadoAnterior.listo ?? 0) + 1 };
 }
 
 export async function crearGrupoDeConfiguracion(_estadoAnterior: EstadoDeCreacionDeGrupo, formData: FormData): Promise<EstadoDeCreacionDeGrupo> {
@@ -92,6 +114,7 @@ export async function guardarColaborador(formData: FormData): Promise<void> {
     activo: true,
   });
   revalidatePath("/configuracion");
+  revalidatePath("/personal");
   revalidatePath("/turnos");
   revalidatePath("/asistencias");
 }
@@ -109,6 +132,7 @@ export async function cambiarGrupoDeColaboradorDeConfiguracion(
     const casos = crearCasosDeUsoDeColaboradores(repositorioDeColaboradores, { obtenerActorActual });
     await casos.cambiarGrupo(texto(formData, "dni"), texto(formData, "grupo"));
     revalidatePath("/configuracion");
+    revalidatePath("/personal");
     revalidatePath("/turnos");
     revalidatePath("/asistencias");
     return { listo: (_estadoAnterior.listo ?? 0) + 1 };
@@ -125,6 +149,7 @@ export async function desactivarColaborador(formData: FormData): Promise<void> {
   if (!colaborador) throw new Error("No existe un colaborador con ese DNI.");
   await casos.actualizar({ ...colaborador, activo: false });
   revalidatePath("/configuracion");
+  revalidatePath("/personal");
   revalidatePath("/turnos");
   revalidatePath("/asistencias");
 }
@@ -137,6 +162,7 @@ export async function reactivarColaborador(formData: FormData): Promise<void> {
   if (!colaborador) throw new Error("No existe un colaborador con ese DNI.");
   await casos.actualizar({ ...colaborador, activo: true });
   revalidatePath("/configuracion");
+  revalidatePath("/personal");
   revalidatePath("/turnos");
   revalidatePath("/asistencias");
 }
