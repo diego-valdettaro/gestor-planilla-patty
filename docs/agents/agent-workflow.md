@@ -34,8 +34,13 @@ y pedirla.
    `pnpm revisar` muestra esos pasos; si falta la sección, toma los criterios de
    aceptación que puedan comprobarse manualmente.
 2. Añadir pruebas de comportamiento en las costuras existentes.
-3. Ejecutar `pnpm validate` antes de crear un commit. No usar la base local
-   `planilla` para las pruebas.
+3. Cada commit ejecuta `pnpm validate:commit` mediante el hook: PostgreSQL
+   temporal, migraciones, pruebas de código/integración y revisión de tipos,
+   sin build ni Chromium. Antes de publicar el candidato final, ejecutar una vez
+   `pnpm validate` sobre su contenido final; repetir si cambia código, pruebas,
+   configuración o dependencias. La validación completa agrega build y Chromium
+   sobre `next start`, reutilizando ese build. CI mantiene la validación completa
+   en PR y al integrar en master. No usar la base local `planilla` para las pruebas.
 4. Para cambios de interfaz, levantar la app con `pnpm revisar` (ver más abajo)
    y hacer humo de cada ruta afectada en navegador: carga sin error, consola
    limpia y recorrido breve del criterio modificado.
@@ -84,3 +89,15 @@ falla con un mensaje que explica cómo instalarlo o iniciarlo.
   incluir el resultado de `pnpm validate`, capturas de las rutas modificadas y
   riesgos o comprobaciones pendientes.
 - No fusionar pull requests salvo instrucción expresa del usuario.
+
+## Next y validación del build
+
+Next está fijado a `16.4.5` para completar los formularios después de guardar en
+el build de producción. Los recorridos de condiciones laborales, reglas legales,
+fuentes externas y clasificaciones de goce cubren esta regresión. El build usa
+`--webpack` para conservar el compilador del proyecto al actualizar Next.
+
+Las instalaciones usan el lockfile congelado. Las futuras actualizaciones de
+Next deben comprobar estos recorridos con `next start`, además de código,
+integración y tipos. Referencia del bloqueo de transiciones observado en el
+motor anterior: https://github.com/vercel/next.js/issues/86055.

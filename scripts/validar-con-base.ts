@@ -8,6 +8,7 @@ async function main(): Promise<void> {
     await ejecutarPnpm(["db:check", "--", "--url", url], entorno);
     await ejecutarPnpm(["test"], entorno);
     await ejecutarPnpm(["typecheck"], entorno);
+    if (process.argv.includes("--solo-codigo")) return;
     await ejecutarPnpm(["build"], entorno);
     await ejecutarPnpm(["exec", "tsx", "scripts/sembrar-base.ts", "--url", url], entorno);
     await ejecutarPruebasEnNavegador(entorno);
