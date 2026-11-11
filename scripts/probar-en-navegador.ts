@@ -19,6 +19,7 @@ async function main(): Promise<void> {
   await conPostgresTemporal(async ({ entorno, url }) => {
     await ejecutarPnpm(["db:migrate", "--", "--url", url], entorno);
     await ejecutarPnpm(["db:check", "--", "--url", url], entorno);
+    await ejecutarPnpm(["build"], entorno);
     await ejecutarPnpm(["exec", "tsx", "scripts/sembrar-base.ts", "--url", url], entorno);
     await ejecutarPruebasEnNavegador(entorno);
   });

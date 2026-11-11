@@ -1,2 +1,2 @@
 #!/bin/sh
-corepack pnpm validate
+corepack pnpm validate:commit

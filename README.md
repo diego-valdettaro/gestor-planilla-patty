@@ -5,9 +5,11 @@ períodos de planilla.
 
 ## Requisitos
 
+El proyecto fija Next.js 16.4.5; el build usa Webpack.
+
 - Node.js 22
 - Corepack y pnpm 10
-- Docker, para `pnpm validate` y `pnpm revisar`
+- Docker, para las validaciones, `pnpm test:e2e` y `pnpm revisar`
 - Chromium para Playwright (`pnpm exec playwright install chromium`)
 - PostgreSQL, solo para ejecutar la aplicación localmente con `pnpm dev`
 
@@ -36,17 +38,31 @@ migraciones se encuentran en [docs/despliegue.md](docs/despliegue.md).
 
 ## Validación
 
+Cada commit ejecuta el hook con controles de código e integración y revisión de
+tipos, usando PostgreSQL temporal, sin build ni Chromium. También se pueden
+ejecutar directamente:
+
+```powershell
+pnpm validate:commit
+```
+
+Antes de publicar el candidato final, ejecutar una vez la validación completa;
+repetir si cambia código, pruebas, configuración o dependencias:
+
 ```powershell
 pnpm validate
 ```
 
 El comando crea una base PostgreSQL temporal, aplica las migraciones, ejecuta
-pruebas unitarias, de integración y de navegador, typecheck y build. No usa la
-base local `planilla`.
+pruebas unitarias y de integración, revisión de tipos y build. Después siembra
+los datos de prueba y ejecuta Chromium con `next start`, sobre ese mismo build.
+No usa la base local `planilla`. GitHub ejecuta la validación completa al abrir
+o actualizar un PR y al integrar en `master`.
 
 Las pruebas de navegador también pueden ejecutarse por separado. El comando
-crea y siembra su propia base PostgreSQL desechable; no requiere iniciar sesión
-ni levantar la aplicación manualmente:
+crea su propia base PostgreSQL desechable, aplica migraciones, genera un build
+y siembra los datos de prueba antes de arrancar `next start`. No requiere un
+build previo, iniciar sesión ni levantar la aplicación manualmente:
 
 ```powershell
 pnpm test:e2e
