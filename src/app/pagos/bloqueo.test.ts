@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { BloqueoDePagos } from "./bloqueo";
 
-// Bloqueos de la conciliación por cese (#128). Textos y siguiente paso: docs/diseno-interaccion-pagos.md 5.1/5.2; mensajes: ejemplos-sinteticos.md C-E1 y C-E5.
+// Bloqueos de la conciliación por cese (#128). Textos y siguiente paso: docs/diseno-visual.md 5.1/5.2; mensajes: ejemplos-sinteticos.md C-E1 y C-E5.
 const FUENTE = 'href="/pagos/fuentes-externas/conciliacion_de_liquidacion_por_cese?mes=2026-10"';
 const CESE = "El cese de Ana no tiene su liquidación conciliada.";
 const DUPLICACION = "Duplicación: vacaciones truncas ya incluidas en el pago mensual.";

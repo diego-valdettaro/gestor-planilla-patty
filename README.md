@@ -1,7 +1,44 @@
 # Planilla Patty
 
-Aplicación web para administrar colaboradores, horarios, asistencias y
-períodos de planilla.
+Aplicación web para administrar el personal, los horarios, la asistencia y la
+preliquidación mensual de Patty.
+
+## Producto
+
+**Problema.** La asistencia se exportaba del huellero y se copiaba a mano a la
+planilla mensual en Excel. Marcas, correcciones, horarios, horas extra y
+cálculos de pago quedaban mezclados y era difícil auditar qué cambió y por qué.
+
+**Objetivo.** Que cada importe de la preliquidación pueda rastrearse hasta sus
+hechos, fuentes y reglas: relaciones laborales confirmadas, horarios
+publicados, marcas importadas, jornadas revisadas, períodos cerrados y fuentes
+externas confirmadas.
+
+**Usuarios.**
+
+| Rol | Qué hace |
+| --- | --- |
+| Administrador del sistema | Configuración global y cuentas |
+| Gerente de área | Personas, horarios y confirmación de jornadas de sus grupos |
+| Recursos Humanos | Ingresos y ceses |
+| Finanzas | Períodos, cierre, datos monetarios, Pagos y constancia del pago |
+
+**Alcance.** Personal y relaciones laborales, horarios semanales, importación
+de marcas, registro y revisión de asistencia, períodos de planilla y Pagos
+(borrador, finalización, exportación y constancia de pago). La aplicación no
+ejecuta transferencias ni genera PLAME.
+
+## Documentación
+
+- [Diseño de software](docs/diseno-software.md): reglas de producto,
+  responsabilidades y contratos de toda la app.
+- [Diseño visual](docs/diseno-visual.md): patrones, pantallas, textos y estados.
+- [CONTEXT.md](CONTEXT.md): glosario del dominio.
+- [ADR](docs/adr): decisiones y sus motivos.
+- [Desarrollo y validación](docs/desarrollo.md): cómo se trabaja una issue.
+- [Despliegue](docs/despliegue.md): instalación existente, variables y migraciones.
+- [PRD del MVP](PRD-gestor-planillas-mvp.md): borrador inicial, histórico. Sus
+  roles y alcance fueron reemplazados por los diseños y los ADR.
 
 ## Requisitos
 
@@ -80,9 +117,9 @@ PostgreSQL desechable en Docker, con migraciones y datos de demostración, y
 `next dev` en el puerto `3000 + <n>` (`<n>` es el número de issue). Requiere
 Docker, pero no un `.env` ni un PostgreSQL local. `pnpm revisar:limpiar` elimina
 el servidor, el contenedor y el `.env` del worktree. Los detalles están en
-[docs/agents/agent-workflow.md](docs/agents/agent-workflow.md).
+[docs/desarrollo.md](docs/desarrollo.md).
 
 ## Cambios
 
-Las issues están en GitHub. Antes de cambiar la aplicación, leer `AGENTS.md` y
-seguir [docs/agents/agent-workflow.md](docs/agents/agent-workflow.md).
+Las issues están en GitHub. Antes de cambiar la aplicación, leer
+[AGENTS.md](AGENTS.md) y seguir [docs/desarrollo.md](docs/desarrollo.md).

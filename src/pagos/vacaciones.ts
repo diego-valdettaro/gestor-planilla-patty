@@ -1,6 +1,6 @@
 // Descansos vacacionales para Pagos. Los días salen de las jornadas «vacaciones» que el gerente aprobó en Asistencia;
 // aquí solo se agrupan, se reparten por mes calendario (el abono, según la remuneración de cada mes) y se asocian a los abonos anticipados que Finanzas registra.
-// Un descanso vacacional es una racha de días consecutivos de la misma persona (docs/diseno-software-pagos.md).
+// Un descanso vacacional es una racha de días consecutivos de la misma persona (docs/diseno-software.md).
 
 import { desplazarFecha } from "@/turnos/semana";
 

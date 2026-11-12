@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 
-// PostgreSQL desechable en Docker para `pnpm revisar` (ver docs/agents/agent-workflow.md).
+// PostgreSQL desechable en Docker para `pnpm revisar` (ver docs/desarrollo.md).
 // Docker es la única fuente de base de datos de la revisión: no se lee ningún `.env` ni
 // `DATABASE_URL` externo.
 
