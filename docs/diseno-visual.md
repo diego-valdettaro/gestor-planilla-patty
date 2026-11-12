@@ -1,8 +1,71 @@
-# Diseño de interacción de Pagos
+# Diseño visual y de interacción de Planilla Patty
 
-Estado: aprobado por Diego el 2026-10-05, con las decisiones de producto de la sección 9. Las secciones 4.9 y 4.10 (condiciones laborales y reglas legales), 6.6, 6.7 y V7 se añadieron después de esa aprobación y esperan su revisión. Fuente de alcance: [issue #96](https://github.com/diego-valdettaro/gestor-planilla-patty/issues/96). Ticket que lo produce: [issue #106](https://github.com/diego-valdettaro/gestor-planilla-patty/issues/106).
+Consolidación revisada y aprobada por Diego el 11 de noviembre de 2026. Reúne patrones compartidos, recorridos operativos y detalle de Pagos en un documento para toda la app. Las reglas de negocio se definen en [Diseño de software](diseno-software.md).
 
-Este documento describe cómo se usan las pantallas de Pagos antes de construirlas. No añade roles ni capacidades por su cuenta: lo que no está en #96, en [`diseno-software-pagos.md`](diseno-software-pagos.md) o en los ADR 0007, 0009, 0012, 0013 y 0014 se preguntó a Diego y consta como decisión en la sección 9; lo que obliga a actualizar la especificación se lista allí como consecuencia abierta. Usa el vocabulario de [`CONTEXT.md`](../CONTEXT.md) y el contrato visual de [`agents/diseno.md`](agents/diseno.md).
+## Patrones compartidos
+
+La issue y los ADR definen qué se construye; este contrato define cómo se presenta. No autoriza rutas, roles, flujos ni capacidades nuevas. Conserva el vocabulario del dominio y usa la interfaz actual como referencia para los patrones existentes.
+
+### Identidad visual
+
+Mantener la tipografía Inter con respaldo del sistema y la paleta de `src/app/global.css`: fondo blanco, texto azul marino y verde para la acción principal y los estados positivos. Reutilizar sus espaciados, bordes y sombras discretas. Son el punto de partida para nuevas vistas; la auditoría de la interfaz puede justificar un ajuste compartido.
+
+### Estructura
+
+En escritorio, las vistas autenticadas usan navegación lateral y dejan el contenido en `.contenido`. Hasta 900 px, la navegación pasa a una barra superior con el nombre de la sección y un botón de menú; el contenido recibe el ancho disponible. El menú muestra las rutas permitidas y el acceso a cerrar sesión. La pantalla de inicio de sesión conserva su composición centrada.
+
+### Jerarquía y datos
+
+En una vista de revisión, mostrar primero qué objeto se revisa y su estado. Después, criterios de consulta, resumen con totales y bloqueos, y detalle por colaborador. Rotular el alcance de cada cifra: en `/periodos`, «Totales del período completo» indica que el total incluye a todos los colaboradores aunque el filtro muestre solo a Beto.
+
+Usar tablas para registros comparables. Cada columna lleva encabezado y las magnitudes indican su unidad, como `45 min` o `S/ 120,00`. Alinear las cifras a la derecha para poder compararlas por columna. Si la tabla no cabe, permitir desplazamiento horizontal dentro de ella sin estrechar el resto de la vista.
+
+### Patrones compartidos
+
+Usar `.panel` para formularios o resultados, `.panel-filtros` para criterios de consulta y `.panel-tabla` para registros comparables. Los controles tienen etiquetas visibles; preferir `input`, `select` y `button` nativos. Si estos patrones no cubren una necesidad, explicar por qué y añadir la variante al estilo compartido.
+
+### Acciones y estados
+
+Dar a cada contexto una sola acción principal con `.boton-principal`; usar `.boton-secundario` para alternativas y `.peligro` para acciones destructivas. En listas de configuración, mostrar una acción discreta «Editar» por fila y reunir allí cambios poco frecuentes, como desactivar o eliminar. Separar las acciones destructivas de las ordinarias y confirmar su alcance y consecuencia. Las acciones operativas frecuentes, como revisar una asistencia pendiente, pueden estar visibles donde se usan.
+
+Expresar cada estado con texto además de color. Un bloqueo indica la causa y el siguiente paso permitido. Usar `.estado-vacio` para explicar qué falta cuando no hay datos. Los errores y éxitos usan los mensajes compartidos y se sitúan cerca de la acción que los produjo.
+
+### Teclado y errores
+
+Todo control tiene un nombre claro, funciona con teclado y conserva el foco visible. Los diálogos tienen título, ofrecen Cancelar y Confirmar, y devuelven el foco al control que los abrió. Mostrar los errores junto al campo o la acción correspondiente y anunciarlos con `role="alert"` cuando aparezcan.
+
+
+### Evolución del contrato
+
+Cambiar este contrato cuando la auditoría de una vista existente o una necesidad aprobada revele un patrón reutilizable. Explicar la razón y las vistas a las que aplica. Registrar las discrepancias con el código en la issue o el PR que las resolverá; no convertir una excepción local en patrón general. Las comprobaciones de cada ticket pertenecen a [Desarrollo y validación](desarrollo.md).
+
+## Navegación y pantallas operativas
+
+La navegación muestra las secciones permitidas por los mismos permisos que consulta el servidor. Las agrupaciones existentes son Configuración con Cuentas, Personal con Relaciones laborales, Planificación de horarios, Registro de asistencias, Revisión de asistencia para planilla y Pagos.
+
+| Ruta | Objeto y comportamiento esperado |
+|---|---|
+| /iniciar-sesion | Composición centrada, campos con etiqueta y error junto a la acción |
+| /configuracion y /cuentas | Grupos, sedes, modelos y cuentas según permisos; acciones de edición por objeto, alcance visible y confirmación para cambios destructivos |
+| /personal | Persona identificada por nombre y DNI, grupo y estado pertinente |
+| /relaciones-laborales | Ingreso/cese, confirmación y vigencia; corrección con motivo, antes/después e historial; Finanzas consulta |
+| /turnos | Semana y grupo; borrador correcto al navegar, foco conservado y aviso de edición pendiente. Consulta mensual por persona y acceso a su semana |
+| /asistencias | Semana o mes, persona/fecha, marcas y horas propuestas; editor compartido y confirmación diaria con sustento desde 30 minutos extra |
+| /asistencias/importar | Selección de archivo, validación y resultado identificando incidencias y procedencia |
+| /periodos | Período y estado, totales con alcance, jornadas pendientes y sustentos, cierre y reapertura por Finanzas |
+| /pagos | Meses, detalle por persona, fuentes, condiciones y reglas monetarias según las secciones siguientes |
+
+Las decisiones nuevas de publicación sin período, corrección de relaciones laborales y confirmación diaria del sobretiempo están aprobadas y disponibles en el ensayo; su incorporación a master sigue pendiente en #184–#187. La consulta mensual conserva la publicación semanal. Las futuras acciones de editar el día desde el mes y cargar un patrón mensual corresponden a #182 y #183.
+
+En asistencia, distinguir Sin planificación, Sin registro, Pendiente de revisión y las situaciones registradas mediante texto y el patrón de estados vigente. Mostrar las propuestas importadas con sus horas y permitir su revisión explícita. Una alerta semanal indica el exceso ordinario a revisar. Los selectores usan Semana para la vista semanal y mes/año para la mensual. Las tablas conservan tamaño legible y desplazamiento interno.
+
+En una corrección de relación laboral, el diálogo presenta persona, valores anteriores y nuevos, motivo y alcance. Cancelar conserva los datos. Tras guardar, el historial muestra autor, fecha y cambio. Una edición obsoleta o fecha protegida presenta una causa accionable.
+
+En Horarios, republicar cambios requiere sustento y muestra qué persona/semana se modifica. Tras Completar semana, confirmar la republicación guarda el borrador y el historial; al recargar se conserva el resultado. Las fechas cerradas identifican la necesidad de reapertura.
+
+## Detalle de Pagos
+
+Se conserva la numeración local 1–10 del diseño anterior para poder rastrear referencias y decisiones D/V. Las condiciones laborales (4.9), reglas legales (4.10), sus diálogos (6.6–6.7) y navegación V7 figuraban pendientes de revisión en la fuente; Diego las aprobó el 11 de noviembre de 2026. Las demás decisiones registradas del 5 de octubre se mantienen con las actualizaciones aprobadas posteriores.
 
 ## 1. Punto de partida
 
@@ -12,7 +75,7 @@ Se revisó el código de las pantallas existentes (`/periodos`, `/asistencias`, 
 
 | Elemento | Dónde existe hoy | Uso en Pagos |
 | --- | --- | --- |
-| Navegación lateral y, hasta 900 px, barra superior con botón de menú | `navegacion.tsx`, `.navegacion` | Un acceso nuevo, visible solo para Finanzas. |
+| Navegación lateral y, hasta 900 px, barra superior con botón de menú | `navegacion.tsx`, `.navegacion` | Un acceso nuevo, visible para Finanzas y el Administrador. |
 | Cabecera de página: `.eyebrow`, `h1`, párrafo de ayuda | `/periodos` | Todas las pantallas de Pagos. |
 | `.panel`, `.panel-cabecera`, `.panel-filtros`, `.panel-tabla` | `/periodos`, `/configuracion` | Contenedores de resumen, criterios y tablas. |
 | `.insignia ok` / `.insignia neutro` | `/periodos` (Abierto / Cerrado) | Estados del mes y de cada fuente. Se añaden variantes (ver 8). |
@@ -31,7 +94,7 @@ Se revisó el código de las pantallas existentes (`/periodos`, `/asistencias`, 
 
 ## 2. Principios transversales
 
-1. **Solo Finanzas.** Importes, bases, fuentes, finalización y exportación son visibles únicamente para Finanzas (#96, historia 2). Los demás roles no ven el acceso en la navegación y, si llegan por URL, ven «Sin permiso» (sección 3). Los permisos se comprueban en el servidor, nunca por filtros de interfaz.
+1. **Solo Finanzas y Administrador.** Importes, bases, fuentes, finalización y exportación son visibles para Finanzas (#96, historia 2) y para el Administrador, que opera igual que Finanzas (decisión de Diego del 11 de noviembre de 2026, pendiente de implementación: hoy solo entra Finanzas). Gerentes de área y Recursos Humanos no ven el acceso en la navegación y, si llegan por URL, ven «Sin permiso» (sección 3). Los permisos se comprueban en el servidor, nunca por filtros de interfaz.
 2. **Objeto, estado, resumen, detalle.** Cada pantalla abre con qué se revisa y en qué estado está; sigue con criterios de consulta, resumen con totales y bloqueos, y detalle (contrato visual, «Jerarquía y datos»).
 3. **Tres tiempos siempre separados.** Ninguna cifra se rotula solo como «mes». Las pantallas distinguen **mes de pago**, **corte de incidencias** (26 al 25) y **mes de devengue**. Un importe de otro mes de devengue lo dice con texto en su fila (por ejemplo «Devengue: 09/2026, se aplica en 10/2026»).
 4. **Alcance rotulado.** Cada cifra indica si cubre a todas las personas del mes o solo las filtradas («Totales del mes completo», «Totales de las 3 personas filtradas»), como ya hace `/periodos`.
@@ -223,8 +286,8 @@ La finalización no es una pantalla propia: se dispara desde 4.2 con «Finalizar
 - Con bloqueos: el botón está deshabilitado (sección 3) y el diálogo no se puede abrir.
 - Sin bloqueos y sin cambios desde el borrador mostrado: diálogo de confirmación normal (6.1).
 - Sin bloqueos pero con **cambios en los datos relevantes desde el borrador mostrado**: el diálogo no guarda nada y pasa a su modo «El cálculo cambió» (6.1.b), que lista qué cambió y obliga a revisar antes de volver a finalizar.
-- Con bloqueos nuevos aparecidos tras abrir la pantalla: el diálogo muestra los bloqueos y no finaliza.
-- Éxito: el diálogo se cierra, la cabecera muestra «Finalizada, versión N», aparece `.mensaje-operacion listo` «Versión N guardada. Ya no se puede editar.» y la acción principal pasa a «Confirmar pago realizado». «Finalizar mes» desaparece. Mientras el pago realizado no esté confirmado, la pantalla explica cómo corregir sin tocar la versión guardada: si la corrección es de asistencia, Finanzas reabre el período en Períodos, el gerente corrige y vuelve a aprobar, Finanzas lo cierra de nuevo y entonces se finaliza otra versión (diseño de software, «Recorrido de asistencia a Pagos»). Si el cambio es de una fuente externa o de una regla y la asistencia no cambió, Finanzas no reabre períodos: recalcula el borrador, lo revisa y finaliza otra versión (D19). La versión anterior nunca cambia.
+- Con bloqueos nuevos aparecidos tras abrir la pantalla: se actualiza el panel de bloqueos y se mueve el foco a él antes de abrir el diálogo, según la decisión del 18 de octubre de 2026.
+- Éxito: el diálogo se cierra, la cabecera muestra «Finalizada, versión N», aparece `.mensaje-operacion listo` «Versión N guardada. Ya no se puede editar.» y la acción principal pasa a «Confirmar pago realizado». «Finalizar mes» desaparece. Mientras el pago realizado no esté confirmado, la pantalla explica cómo corregir sin tocar la versión guardada: si la corrección es de asistencia, Finanzas reabre el período en Períodos, el gerente corrige y vuelve a confirmar las jornadas afectadas, Finanzas lo cierra de nuevo y entonces se finaliza otra versión (diseño de software, «Recorrido de asistencia a Pagos»). Si el cambio es de una fuente externa o de una regla y la asistencia no cambió, Finanzas no reabre períodos: recalcula el borrador, lo revisa y finaliza otra versión (D19). La versión anterior nunca cambia.
 - Error al guardar: el diálogo permanece abierto con `role="alert"` y «No se guardó ninguna versión»; la operación es atómica, no queda un mes parcialmente finalizado.
 
 **Estados específicos.** *Normal:* los de arriba. *Vacío:* no aplica; sin personas en el mes no hay nada que finalizar y «Finalizar mes» queda deshabilitado con «Este mes no incluye personas». *Cargando:* el botón Confirmar del diálogo dice «Guardando…» y queda deshabilitado. *Error:* ver arriba (el diálogo permanece abierto). *Sin permiso:* un usuario que no es Finanzas no ve el botón y la acción del servidor responde sin permiso. *Deshabilitado:* con bloqueos o en un mes con pago realizado confirmado. *Ancho estrecho:* V3.
@@ -327,7 +390,7 @@ Un bloqueo siempre tiene **causa**, **alcance** y **siguiente paso**, y un enlac
 | Cobertura del corte incompleta | «Falta cobertura del 12/10 al 14/10: ningún período cerrado la incluye.» | «Planifique un período de planilla que cubra esas fechas» (enlace a Períodos). |
 | Períodos solapados | «Los períodos del 26/09 al 05/10 y del 03/10 al 25/10 se solapan.» | Corregir las fechas en Períodos. |
 | Período que cruza el día 25 | «El período del 20/10 al 30/10 cruza el día 25.» | Dividirlo en Períodos. |
-| Período sin cerrar o grupo sin aprobar | «El período 26/09–25/10 no está cerrado: falta la aprobación del grupo Tiendas.» | «Pida al gerente de Tiendas que apruebe» (Finanzas no aprueba por el gerente). |
+| Período sin cerrar o jornadas pendientes | «El período 26/09–25/10 tiene jornadas pendientes de confirmación o sustento.» | Revisar las fechas y personas indicadas en Registro de asistencias con su gerente; Finanzas verifica y cierra el período. |
 | Fuente sin confirmar | «Comisiones sin confirmar.» | «Confirme el listado» (enlace a 4.4). |
 | Regla o valor legal sin vigencia | «No hay tasa de EsSalud vigente para 10/2026.» | «Activar nuevo valor» en Reglas legales (4.10). |
 | Cese sin conciliar | «El cese de [persona] no tiene su liquidación conciliada.» | Cargar la conciliación en la fuente correspondiente. |
@@ -438,14 +501,14 @@ La página no se desplaza horizontalmente; solo lo hace el contenedor de cada ta
 
 ## 8. Variantes nuevas del sistema compartido (decisiones explícitas)
 
-Cada una se justifica porque ningún patrón actual cubre la necesidad. Hasta que Diego las apruebe, ningún ticket debe añadirlas a `global.css`. El ticket #116, el primero con interfaz de Pagos, añadió a `global.css` solo lo que su pantalla necesita: V1 (carga y error de ruta), V2, V3 y V7; las demás las añade el ticket que las use. Las pendientes de revisión de Diego siguen siendo V7 y las secciones 4.9, 6.6.
+Las variantes siguientes proceden del diseño de Pagos. Están aprobadas junto con el diseño de Pagos (5 de octubre de 2026) y, en el caso de V7, el 11 de noviembre de 2026. El ticket #116, el primero con interfaz de Pagos, añadió a `global.css` solo lo que su pantalla necesita: V1 (carga y error de ruta), V2, V3 y V7; las demás las añade el ticket que las use. Las pendientes de revisión de Diego siguen siendo V7 y las secciones 4.9, 6.6.
 
 | Id | Variante | Por qué hace falta | Dónde se usa |
 | --- | --- | --- | --- |
-| V1 | Estados de **cargando** (esqueleto con texto «Calculando…», `role="status"`) y de **error de carga** (panel `.mensaje-operacion error` con «Reintentar»). | La app actual no tiene ninguno; el cálculo del borrador puede tardar y debe poder fallar sin dejar la pantalla en blanco. Es un patrón de ruta (carga y error), no solo CSS. | 4.2, 4.3, 4.5 y todas las pantallas. |
+| V1 | Estados de **cargando** (esqueleto con texto «Calculando…», `role="status"`) y de **error de carga** (panel `.mensaje-operacion error` con «Reintentar»). | El diseño de Pagos introdujo estos estados porque el cálculo puede tardar o fallar; el cálculo del borrador puede tardar y debe poder fallar sin dejar la pantalla en blanco. Es un patrón de ruta (carga y error), no solo CSS. | 4.2, 4.3, 4.5 y todas las pantallas. |
 | V2 | Primera columna fija en `.panel-tabla` (hoy solo existe en `.tabla-plan-semanal`). | Las tablas de Pagos tienen muchas columnas y la persona o el concepto deben seguir visibles al desplazarse. | Todas las tablas de la sección 7. |
 | V3 | Botones del diálogo apilados en ancho estrecho (Confirmar arriba, Cancelar abajo). | Los diálogos de Pagos tienen textos largos de consecuencia y alcance. | 6.1 a 6.4. |
-| V4 | Insignias de estado adicionales: «Borrador», «Finalizada», «Pago realizado confirmado», «Pendiente», «Confirmada», «Bloqueada», «Cambió». Se añaden a `.insignia ok` y `.insignia neutro`. | Hoy solo existen verde y gris, y los estados de Pagos se deben distinguir por texto y color a la vez. Reutiliza los colores de los estados de Asistencia (ámbar para pendiente, rojo para bloqueada). | 4.1, 4.2, 4.4, 6.1. |
+| V4 | Insignias de estado adicionales: «Borrador», «Finalizada», «Pago realizado confirmado», «Pendiente», «Confirmada», «Bloqueada», «Cambió». Se añaden a `.insignia ok` y `.insignia neutro`. | El diseño amplía las insignias verde y gris, y los estados de Pagos se deben distinguir por texto y color a la vez. Reutiliza los colores de los estados de Asistencia (ámbar para pendiente, rojo para bloqueada). | 4.1, 4.2, 4.4, 6.1. |
 | V5 | Modo «El cálculo cambió» en el diálogo de finalizar (6.1.b). | `BotonDeAccionConfirmada` solo muestra una descripción fija y envía un formulario; aquí el diálogo debe calcular un resumen y no enviar. Se resuelve como componente nuevo o extensión del existente, a decidir en el ticket. | 4.6. |
 
 | V6 | Filas desplegables `<details>` dentro de una tabla («Ver base», «Acciones»), encabezados de sección dentro de `.panel-tabla` (los cinco grupos de conceptos) y la tabla que pasa a lista rótulo/valor en ancho estrecho (las bases). | El detalle por persona debe poder explicar cada importe sin salir de la fila, y los conceptos tienen cinco naturalezas que no se deben mezclar. Hoy `/periodos` usa `<details>` solo fuera de las tablas. | 4.3, 4.4. |
@@ -454,7 +517,7 @@ Cada una se justifica porque ningún patrón actual cubre la necesidad. Hasta qu
 
 | V8 | Resumen de validación de un archivo fuente: conteos rótulo/valor en tarjetas pequeñas (`.resumen-de-validacion`), en una cuadrícula que pasa a una columna en ancho estrecho. | La vista previa de la importación (4.5) muestra cinco conteos comparables (válidas, con error, duplicadas, desconocidas, total) que no son registros de una tabla ni caben en `.insignia`. Lo añadió el ticket #119. | 4.5. |
 
-No se propone ninguna otra variante: no hay gráficos, no hay rutas anidadas nuevas y se mantiene la paleta de `global.css`.
+Las variantes reutilizan la paleta de global.css y se aplican al recorrido que las justifica.
 
 ## 9. Decisiones de producto (Diego, 2026-10-05)
 
@@ -474,7 +537,7 @@ Estas decisiones cierran las dudas que dejó el borrador. Las recomendaciones se
 | D10 | «Reabrir período» tras el pago | Se bloquea en el mismo ticket que registra el pago. | 4.7 |
 | D11 | Exportar | Se exporta el borrador, rotulado, y cualquier versión finalizada. | 4.8 |
 | D12 | Dónde se registran los datos base | Todo dentro de Pagos. Ajustes, abonos vacacionales y descansos sustitutorios previstos, como tipos de fuente (4.4). Condiciones laborales con vigencia y reglas legales, como secciones de Pagos solo para Finanzas (4.9 y 4.10). Primera decisión («pantalla aparte») cambiada el 2026-10-05 al ver que #116 y #117 ya los ubican en Pagos. | 4.4, 4.9, 4.10, 5 |
-| D13 | Horas extra candidatas | Se siguen decidiendo en Períodos; Pagos no las duplica. | 5.1 |
+| D13 | Horas extra candidatas | Actualizada (#187): el gerente confirma y sustenta el sobretiempo en Registro de asistencias; Finanzas consulta y cierra el período. Pagos consume el resultado confirmado. | 5.1 |
 | D14 | Fecha del pago realizado | Finanzas escribe la fecha del pago (no futura) y la app guarda la fecha de la confirmación. | 6.2 |
 | D15 | Versiones anteriores | Consultables completas, en solo lectura. | 4.2 |
 | D16 | Recursos Humanos y gerentes | Sin pantallas en Pagos; su trabajo se diseña en otro ticket. | 2 |
@@ -483,13 +546,15 @@ Estas decisiones cierran las dudas que dejó el borrador. Las recomendaciones se
 | D18 | Totales con bloqueos | Se suman las personas calculadas, rotulado «Incompleto» con el conteo excluido. | 4.2 |
 | D19 | Otra versión sin cambio de asistencia | Se permite desde un borrador recalculado y revisado, sin reabrir períodos. | 4.6 |
 
-### Consecuencias que quedan abiertas
-
-- **P1. Actualizar la especificación (hecho).** El diseño de software exige actualizar #96 si el diseño añade comportamiento. Afectaba a D4 y D5, D12, D15, D18, D19 y D20. Se incorporó en `diseno-software-pagos.md` y en #96 el 2026-10-05.
-- **P2. Tickets existentes.** No hacen falta tickets nuevos: #116 y #117 construyen 4.9 y 4.10, y los demás tickets de Pagos de #96 ya citan este documento.
 
 ## 10. Cómo se verifica este diseño
 
 - Cada pantalla de la sección 4 cubre los seis estados de la sección 3 y el comportamiento en ancho estrecho, y se traduce a la prueba de interfaz de su ticket (carga sin error, consola limpia, 375 px sin desplazamiento horizontal de la página).
 - Los textos de bloqueo, de diálogo y de estado son contrato: los tickets deben usarlos o proponer cambios aquí antes de implementarlos.
-- Los tickets de interfaz de Pagos ya existen en #96 y citan este documento; cada uno debe revisar su pantalla contra la sección que le corresponde.
+- Los tickets de interfaz de Pagos ya existen en #96 y citan este diseño; cada uno debe revisar su pantalla contra la sección que le corresponde.
+
+## Procedencia
+
+Patrones compartidos tomados del contrato visual integrado. Pantallas operativas contrastadas con navegación y los cambios del ensayo pendientes de integración (#181 y #184–#187). Detalle de Pagos conservado del diseño previo, con actualización de sobretiempo y comportamiento de bloqueos nuevos al finalizar.
+
+La lista de variantes conserva referencias históricas a los tickets que las introdujeron. La incorporación efectiva de cada patrón se comprueba en el ticket que lo use. Las consecuencias P1 y P2 del diseño de interacción anterior quedaron resueltas el 2026-10-05: #96 recoge los comportamientos añadidos y #116/#117 construyen 4.9 y 4.10. Los ejemplos monetarios ilustran presentación y conservan las reservas financieras del diseño de software.

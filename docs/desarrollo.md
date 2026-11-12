@@ -1,11 +1,15 @@
-# Flujo de trabajo de agentes
+# Desarrollo y validación
+
+Configuración de Planilla para trabajar una issue: aislamiento, validación, revisión local y entrega. El proceso general de una tarea (plan, pruebas, revisión independiente) pertenece a la skill que la ejecute; este documento fija lo propio del repo.
 
 ## Alcance de una tarea
 
-Cada cambio parte de una issue o especificación. Leer `AGENTS.md`, la issue,
-`docs/agents/domain.md` y, si toca interfaz, `docs/agents/diseno.md` antes de
-editar. Si falta una decisión de producto o el alcance no está claro, detenerse
-y pedirla.
+Cada cambio parte de una issue o especificación. Antes de editar, leer
+[AGENTS.md](../AGENTS.md), la issue, [CONTEXT.md](../CONTEXT.md), los
+[ADR](adr) pertinentes y las secciones aplicables del
+[diseño de software](diseno-software.md). Si toca interfaz, leer también el
+[diseño visual](diseno-visual.md). Si falta una decisión de producto o el
+alcance no está claro, detenerse y pedirla.
 
 ## Aislamiento
 

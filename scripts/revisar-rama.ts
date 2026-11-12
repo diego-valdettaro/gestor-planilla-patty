@@ -13,7 +13,7 @@ import {
 
 // `pnpm revisar` / `pnpm revisar:limpiar`: levanta (o baja) un entorno de revisión aislado
 // para la rama del worktree actual, con un PostgreSQL desechable en Docker.
-// Ver docs/agents/agent-workflow.md.
+// Ver docs/desarrollo.md.
 
 interface Opciones {
   limpiar: boolean;

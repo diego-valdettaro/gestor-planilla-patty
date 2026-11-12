@@ -1,4 +1,4 @@
-// Contrato lógico de Asistencia hacia Pagos (docs/diseno-software-pagos.md, ADR 0007 y 0010). Asistencia entrega,
+// Contrato lógico de Asistencia hacia Pagos (docs/diseno-software.md, ADR 0007 y 0010). Asistencia entrega,
 // por revisión de período, los hechos diarios resueltos de cada persona; Pagos los valora. Son casos de uso
 // internos del monolito, sin actor: Pagos aplica la autorización de Finanzas. El contrato no lleva importes ni
 // copia la aprobación de los gerentes o el cierre en cada jornada: son condiciones de aptitud de la revisión.
