@@ -2,7 +2,7 @@ import { NOMBRE_DE_ROL, type Actor } from "@/autenticacion/permisos";
 import { corteDeIncidencias } from "@/periodos/hechos-para-pagos";
 
 import { construirArchivoDePreliquidacion, sedeDeAdscripcionAlFinalizar, type ArchivoDePreliquidacion, type PreliquidacionParaExportar } from "./exportar-preliquidacion";
-import { consultarVersion, exigirFinanzas, type DependenciasDeFinalizacion } from "./finalizar-mes";
+import { consultarVersion, exigirPermisoDePagos, type DependenciasDeFinalizacion } from "./finalizar-mes";
 import { sueldoCalculadoDe } from "./fuentes-en-el-neto";
 import { prepararBorrador } from "./preparar-borrador";
 
@@ -16,7 +16,7 @@ export type ResultadoDeExportacion =
   | { estado: "sin_version" };
 
 export async function exportarPreliquidacion(dependencias: DependenciasDeFinalizacion, actor: Actor | undefined, solicitud: { mes: string; version?: number }): Promise<ResultadoDeExportacion> {
-  exigirFinanzas(actor);
+  exigirPermisoDePagos(actor);
   const { mes } = solicitud;
   const generadaPor = actor.nombreUsuario ?? NOMBRE_DE_ROL[actor.rol];
   const generadaEn = dependencias.ahora();

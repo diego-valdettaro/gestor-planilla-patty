@@ -61,8 +61,19 @@ describe("página de importación de fuentes externas (/pagos/fuentes-externas/i
     expect(html).toContain("Se muestra el mes 10/2026.");
   });
 
+  // Issue #189 · El Administrador opera Pagos igual que Finanzas (diseño visual §2, principio 1).
+  it("R6 el Administrador del sistema ve el formulario de importación con la plantilla y «Validar archivo»", async () => {
+    simulacro.actor.mockResolvedValue({ id: "a", rol: "administrador" });
+
+    const html = await render({ mes: "2026-10", tipo: "adelantos" });
+
+    expect(html).not.toContain("Sin permiso");
+    expect(html).toContain("Importar fuente externa · mes de pago 10/2026");
+    expect(html).toContain('href="/pagos/fuentes-externas/plantilla?tipo=adelantos"');
+    expect(html).toMatch(/<button class="boton-principal" type="submit"[^>]*>Validar archivo<\/button>/);
+  });
+
   it.each([
-    ["el Administrador del sistema", { id: "a", rol: "administrador" }],
     ["Recursos Humanos", { id: "r", rol: "recursos_humanos" }],
     ["un gerente de área", { id: "g", rol: "gerente_de_area", grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] }],
   ])("niega el acceso a %s", async (_nombre, actor) => {

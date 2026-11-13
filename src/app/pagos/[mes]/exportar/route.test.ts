@@ -18,8 +18,19 @@ beforeEach(() => {
 });
 
 describe("G7 permiso en el borde HTTP", () => {
+  // Issue #189 · El Administrador opera Pagos igual que Finanzas (diseño de software, «Identidad, permisos y población»).
+  it("A9 el Administrador del sistema descarga la preliquidación como XLSX", async () => {
+    const administrador = { id: "a", rol: "administrador", nombreUsuario: "admin" };
+    simulacro.actor.mockResolvedValue(administrador);
+
+    const respuesta = await pedir("2026-10");
+
+    expect(respuesta.status).toBe(200);
+    expect(respuesta.headers.get("content-disposition")).toBe('attachment; filename="preliquidacion-2026-10-borrador.xlsx"');
+    expect(simulacro.exportar).toHaveBeenCalledWith(expect.anything(), administrador, { mes: "2026-10" });
+  });
+
   it.each([
-    ["el Administrador", { id: "a", rol: "administrador" }],
     ["Recursos Humanos", { id: "r", rol: "recursos_humanos" }],
     ["un gerente de área", { id: "g", rol: "gerente_de_area", grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] }],
   ])("F-16 responde 403 a %s sin exportar nada", async (_quien, actor) => {

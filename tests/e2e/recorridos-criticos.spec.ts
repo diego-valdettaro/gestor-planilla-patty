@@ -52,6 +52,7 @@ for (const recorrido of [
   { ruta: "/turnos", titulo: "Planificación de horarios" },
   { ruta: "/asistencias", titulo: "Asistencias" },
   { ruta: "/periodos", titulo: "Períodos de planilla" },
+  { ruta: "/pagos", titulo: "Pagos" },
 ]) {
   test(`el Administrador del sistema abre ${recorrido.ruta} sin errores de navegador`, async ({ page }) => {
     const errores = observarErroresDelNavegador(page);
@@ -404,6 +405,27 @@ test("Finanzas abre los meses de pago con una revisión cerrada de demo", async 
   expect(errores).toEqual([]);
 });
 
+// Issue #189: el Administrador opera Pagos igual que Finanzas; gerente de área sigue sin acceso.
+test("el Administrador abre un mes de pago y un gerente de área ve «Sin permiso» en /pagos", async ({ page }) => {
+  const errores = observarErroresDelNavegador(page);
+  await iniciarSesion(page, "admin");
+  await page.getByRole("navigation", { name: "Navegación principal" }).getByRole("link", { name: /Pagos/ }).click();
+  await expect(page.getByRole("heading", { name: "Pagos", level: 1 })).toBeVisible({ timeout: 30_000 });
+  const meses = page.getByRole("region", { name: "Meses de pago" });
+  await meses.getByRole("link").first().click();
+  await expect(page.getByRole("heading", { name: /Mes de pago/, level: 1 })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: "Sin permiso" })).toHaveCount(0);
+
+  await page.context().clearCookies();
+  await iniciarSesion(page, "gerente-tiendas");
+  await expect(page.getByRole("navigation", { name: "Navegación principal" }).getByRole("link", { name: /Pagos/ })).toHaveCount(0);
+  await page.goto("/pagos");
+  await expect(page.getByRole("heading", { name: "Sin permiso", level: 1 })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("Su rol no permite consultar Pagos.")).toBeVisible();
+  await expect(page.getByText("S/ ")).toHaveCount(0);
+  expect(errores).toEqual([]);
+});
+
 test("Finanzas no ve Horarios y consulta Asistencias en solo lectura", async ({ page }) => {
   const errores = observarErroresDelNavegador(page);
 
@@ -426,7 +448,7 @@ test("Finanzas no ve Horarios y consulta Asistencias en solo lectura", async ({ 
 test("cada rol ve en el menú exactamente las rutas que puede abrir", async ({ page }) => {
   const errores = observarErroresDelNavegador(page);
   const casos: Array<[string, string[]]> = [
-    ["admin", ["Configuración", "Personal", "Planificación de horarios", "Registro de asistencias", "Revisión de asistencia para planilla"]],
+    ["admin", ["Configuración", "Personal", "Planificación de horarios", "Registro de asistencias", "Revisión de asistencia para planilla", "Pagos"]],
     ["finanzas", ["Configuración", "Personal", "Registro de asistencias", "Revisión de asistencia para planilla", "Pagos"]],
     ["gerente-tiendas", ["Configuración", "Personal", "Planificación de horarios", "Registro de asistencias", "Revisión de asistencia para planilla"]],
     ["gerente-administracion", ["Configuración", "Personal", "Registro de asistencias"]],
@@ -856,7 +878,7 @@ test("las tablas de /periodos se desplazan dentro de su región a 375 px sin tru
   expect(errores).toEqual([]);
 });
 
-test("Finanzas registra un segundo sueldo con vigencia en Condiciones laborales y el Administrador no entra", async ({ page }) => {
+test("Finanzas registra un segundo sueldo con vigencia en Condiciones laborales y el Administrador también entra", async ({ page }) => {
   test.setTimeout(90_000);
   const errores = observarErroresDelNavegador(page);
 
@@ -902,8 +924,9 @@ test("Finanzas registra un segundo sueldo con vigencia en Condiciones laborales 
   await page.context().clearCookies();
   await iniciarSesion(page, "admin");
   await page.goto("/pagos/condiciones-laborales");
-  await expect(page.getByRole("heading", { name: "Sin permiso" })).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText("S/ ")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Condiciones laborales", level: 1 })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: "Sin permiso" })).toHaveCount(0);
+  await expect(page.getByText("S/ ").first()).toBeVisible();
   expect(errores).toEqual([]);
 });
 
@@ -938,7 +961,7 @@ async function abrirDialogo(page: Page, boton: ReturnType<Page["getByRole"]>): P
   }).toPass({ timeout: 20_000 });
 }
 
-test("Finanzas activa una regla legal con su fuente, la corrige con motivo y consulta una fecha; el Administrador no entra", async ({ page }) => {
+test("Finanzas activa una regla legal con su fuente, la corrige con motivo y consulta una fecha; el Administrador también entra", async ({ page }) => {
   test.setTimeout(90_000);
   const errores = observarErroresDelNavegador(page);
 
@@ -1006,10 +1029,11 @@ test("Finanzas activa una regla legal con su fuente, la corrige con motivo y con
   await page.context().clearCookies();
   await iniciarSesion(page, "admin");
   await page.goto("/pagos/reglas-legales");
-  await expect(page.getByRole("heading", { name: "Sin permiso" })).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText("S/ ")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Reglas legales", level: 1 })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("button", { name: /Activar nuevo valor/ }).first()).toBeVisible();
   await page.goto("/pagos/reglas-legales/rmv");
-  await expect(page.getByRole("heading", { name: "Sin permiso" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: "Sin permiso" })).toHaveCount(0);
   expect(errores).toEqual([]);
 });
 
@@ -1036,7 +1060,7 @@ test("Reglas legales cabe en 375 px: la tabla se desplaza dentro de su región",
   expect(errores).toEqual([]);
 });
 
-test("Finanzas distingue una fuente pendiente de un cero confirmado, carga un importe, ve el duplicado rechazado, anula con motivo y deshace una confirmación; el Administrador no entra", async ({ page }) => {
+test("Finanzas distingue una fuente pendiente de un cero confirmado, carga un importe, ve el duplicado rechazado, anula con motivo y deshace una confirmación; el Administrador también opera", async ({ page }) => {
   test.setTimeout(120_000);
   const errores = observarErroresDelNavegador(page);
 
@@ -1124,11 +1148,21 @@ test("Finanzas distingue una fuente pendiente de un cero confirmado, carga un im
 
   await page.context().clearCookies();
   await iniciarSesion(page, "admin");
+  // El Administrador opera igual que Finanzas (#189): devuelve a pendiente el tipo recién confirmado y lo confirma de nuevo.
   await page.goto("/pagos/fuentes-externas");
-  await expect(page.getByRole("heading", { name: "Sin permiso" })).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText("S/ ")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: /^Fuentes externas del mes de pago \d{2}\/\d{4}$/, level: 1 })).toBeVisible({ timeout: 30_000 });
+  await expect(fila("Préstamos (cuotas)")).toContainText("Confirmada sin importes");
+  await abrirDialogo(page, fila("Préstamos (cuotas)").getByRole("button", { name: /Volver a pendiente/ }));
+  await dialogo.getByRole("button", { name: "Volver a pendiente" }).click();
+  await expect(dialogo).toBeHidden();
+  await expect(fila("Préstamos (cuotas)")).toContainText("Pendiente");
+  await abrirDialogo(page, fila("Préstamos (cuotas)").getByRole("button", { name: /Confirmar sin importes/ }));
+  await dialogo.getByRole("button", { name: "Confirmar listado completo" }).click();
+  await expect(dialogo).toBeHidden();
+  await expect(fila("Préstamos (cuotas)")).toContainText("Confirmada sin importes");
   await page.goto("/pagos/fuentes-externas/comisiones_de_ventas");
-  await expect(page.getByRole("heading", { name: "Sin permiso" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: /^Comisiones de ventas · mes de pago/, level: 1 })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: "Sin permiso" })).toHaveCount(0);
   expect(errores).toEqual([]);
 });
 
@@ -1252,12 +1286,13 @@ test("Finanzas valida un XLSX normalizado, ve los errores por fila, importa todo
   await expect(filas.locator("tbody tr")).toHaveCount(1, { timeout: 30_000 });
   await expect(filas.locator("tbody tr")).toContainText("Carla Cambios");
 
-  // El Administrador no ve la pantalla ni la plantilla.
+  // El Administrador ve la pantalla y descarga la plantilla igual que Finanzas (#189).
   await page.context().clearCookies();
   await iniciarSesion(page, "admin");
   await page.goto("/pagos/fuentes-externas/importar");
-  await expect(page.getByRole("heading", { name: "Sin permiso" })).toBeVisible({ timeout: 30_000 });
-  expect((await page.request.get("/pagos/fuentes-externas/plantilla?tipo=retencion_de_quinta")).status()).toBe(403);
+  await expect(page.getByRole("heading", { name: /^Importar fuente externa/, level: 1 })).toBeVisible({ timeout: 30_000 });
+  // Se pide desde la página: la cookie de sesión es `Secure` en el build y `page.request` no la envía por http.
+  expect(await page.evaluate(async () => (await fetch("/pagos/fuentes-externas/plantilla?tipo=retencion_de_quinta")).status)).toBe(200);
   expect(errores).toEqual([]);
 });
 

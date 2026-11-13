@@ -59,7 +59,7 @@ describe("matriz de permisos por rol", () => {
     ["administrar cuentas", puedeAdministrarCuentas, [administrador, finanzas], [gerenteDeTiendas, recursosHumanos]],
     ["gestionar períodos, horas extra y exportar", puedeGestionarPeriodos, [administrador, finanzas], [gerenteDeTiendas, gerenteDeAdministracion, recursosHumanos]],
     ["gestionar feriados, descansos semanales y sustitutorios", puedeGestionarCalendarioLaboral, [administrador, finanzas], [gerenteDeTiendas, gerenteDeAdministracion, recursosHumanos]],
-    ["consultar y editar Pagos (solo Finanzas, ni siquiera el Administrador)", puedeGestionarPagos, [finanzas], [administrador, gerenteDeTiendas, gerenteDeVariosGrupos, gerenteDeAdministracion, gerenteSinGrupos, recursosHumanos]],
+    ["consultar y editar Pagos (Finanzas y el Administrador)", puedeGestionarPagos, [finanzas, administrador], [gerenteDeTiendas, gerenteDeVariosGrupos, gerenteDeAdministracion, gerenteSinGrupos, recursosHumanos]],
     ["importar marcas", puedeImportarMarcas, [administrador, finanzas, gerenteDeTiendas, gerenteDeVariosGrupos], [recursosHumanos, gerenteSinGrupos, gerenteDeAdministracion]],
     ["consultar asistencias", puedeConsultarAsistencias, [administrador, finanzas, gerenteDeTiendas], [recursosHumanos, gerenteSinGrupos, gerenteDeAdministracion]],
     ["revisar y confirmar asistencias", puedeRevisarAsistencias, [administrador, gerenteDeTiendas], [finanzas, recursosHumanos, gerenteSinGrupos, gerenteDeAdministracion]],

@@ -42,8 +42,18 @@ describe("raíz de Pagos (/pagos)", () => {
     await expect(render()).rejects.toThrow("REDIRECT /iniciar-sesion");
   });
 
+  // Issue #189 · El Administrador opera Pagos igual que Finanzas (diseño visual §2, principio 1).
+  it("R1 muestra la lista de meses al Administrador del sistema", async () => {
+    simulacro.actor.mockResolvedValue({ id: "a", rol: "administrador" });
+
+    const html = await render();
+
+    expect(html).not.toContain("Sin permiso");
+    expect(html).toContain("Meses de pago");
+    expect(html).toContain('href="/pagos/2026-10"');
+  });
+
   it.each([
-    ["el Administrador del sistema", { id: "a", rol: "administrador" }],
     ["Recursos Humanos", { id: "r", rol: "recursos_humanos" }],
     ["un gerente de área", { id: "g", rol: "gerente_de_area", grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] }],
   ])("niega el acceso a %s con el estado vacío compartido", async (_nombre, actor) => {

@@ -21,6 +21,7 @@ describe("enlaces de navegación", () => {
     expect(enlacesPermitidos(administrador).map(({ href, etiqueta }) => [href, etiqueta])).toEqual([
       ["/configuracion", "Configuración"], ["/personal", "Personal"],
       ["/turnos", "Planificación de horarios"], ["/asistencias", "Registro de asistencias"], ["/periodos", "Revisión de asistencia para planilla"],
+      ["/pagos", "Pagos"],
     ]);
     expect(enlacesPermitidos(finanzas).map(({ href, etiqueta }) => [href, etiqueta])).toEqual([
       ["/configuracion", "Configuración"], ["/personal", "Personal"], ["/asistencias", "Registro de asistencias"],
@@ -28,7 +29,7 @@ describe("enlaces de navegación", () => {
     ]);
   });
   it("muestra a cada rol exactamente las rutas que puede abrir", () => {
-    expect(rutas(administrador)).toEqual(["/configuracion", "/personal", "/turnos", "/asistencias", "/periodos"]);
+    expect(rutas(administrador)).toEqual(["/configuracion", "/personal", "/turnos", "/asistencias", "/periodos", "/pagos"]);
     expect(rutas(gerenteDeTiendas)).toEqual(["/configuracion", "/personal", "/turnos", "/asistencias", "/periodos"]);
     expect(rutas(gerenteDeAdministracion)).toEqual(["/configuracion", "/personal", "/asistencias"]);
     expect(rutas(gerenteSinGrupos)).toEqual([]);

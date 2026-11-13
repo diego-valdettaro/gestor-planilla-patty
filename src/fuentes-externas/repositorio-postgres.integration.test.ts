@@ -159,10 +159,11 @@ describe.skipIf(!databaseUrl)("fuentes externas de Pagos (integración PostgreSQ
   it("no carga líneas calculadas ni personas inexistentes, y otros roles no tocan nada", async () => {
     await expect(registrar({ concepto: "horas_extra_25" })).rejects.toThrow(/línea calculada/);
     await expect(registrar({ dni: "00000000" })).rejects.toThrow(/No existe una persona/);
-    await expect(registrarImporte(repositorio, administrador, {
+    const gerente: Actor = { id: randomUUID(), rol: "gerente_de_area", grupos: [{ nombre: grupo, gestionaAsistencia: true }] };
+    await expect(registrarImporte(repositorio, gerente, {
       tipoDeFuente: "adelantos", dni: ana, concepto: "adelanto", fechaDelHecho: "1992-10-01", mesDeDevengue: "1992-10", mesDeAplicacion: MES, monto: "10",
     })).rejects.toThrow(/No tiene permiso/);
-    await expect(consultarEstadoDeFuentes(repositorio, administrador, MES)).rejects.toThrow(/No tiene permiso/);
+    await expect(consultarEstadoDeFuentes(repositorio, gerente, MES)).rejects.toThrow(/No tiene permiso/);
   });
 
   it("dos cargas simultáneas del mismo importe guardan una sola", async () => {
@@ -171,5 +172,16 @@ describe.skipIf(!databaseUrl)("fuentes externas de Pagos (integración PostgreSQ
     expect(resultados.filter((resultado) => resultado.status === "fulfilled")).toHaveLength(1);
     expect(resultados.filter((resultado) => resultado.status === "rejected")).toHaveLength(1);
     expect((await importesDeLaPrueba()).filter((fila) => fila.montoCentimos === 7700)).toHaveLength(1);
+  });
+
+  // Issue #189 · El Administrador opera Pagos igual que Finanzas; la base guarda su cuenta como autora (diseño de software, «Consistencia, auditoría y conservación»).
+  it("I3 el Administrador del sistema registra un importe externo, que se guarda con su cuenta, y consulta el estado de las fuentes", async () => {
+    const { importe } = await registrarImporte(repositorio, administrador, {
+      tipoDeFuente: "adelantos", dni: beto, concepto: "adelanto", fechaDelHecho: "1992-10-01", mesDeDevengue: "1992-10", mesDeAplicacion: MES, monto: "10",
+    });
+
+    const [guardado] = await db.select().from(schema.importesExternos).where(eq(schema.importesExternos.id, importe.id));
+    expect(guardado).toMatchObject({ dni: beto, concepto: "adelanto", tipoDeFuente: "adelantos", montoCentimos: 1000, registradoPorId: cuentaAdministrador });
+    expect((await consultarEstadoDeFuentes(repositorio, administrador, MES)).find((fila) => fila.tipo.codigo === "adelantos")).toMatchObject({ estado: "pendiente", filas: 1, total: 1000 });
   });
 });

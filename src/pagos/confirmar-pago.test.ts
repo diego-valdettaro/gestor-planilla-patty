@@ -14,6 +14,7 @@ import { crearRepositorioDeVersionesEnMemoria } from "./versiones-en-memoria";
 // 2019-12-02 con reloj 2019-12-02T15:00:00Z (hoy en Lima = 2019-12-02, UTC−5 sin horario de verano). Repositorios en memoria reales y reloj
 // inyectado; nada de mocks de módulos propios. Cada grupo es una prueba por tabla de casos: `-t "G5"`, `-t "G6"`…
 const finanzas: Actor = { id: "11111111-1111-4111-8111-111111111111", rol: "finanzas", nombreUsuario: "finanzas" };
+const administrador: Actor = { id: "22222222-2222-4222-8222-222222222222", rol: "administrador", nombreUsuario: "admin" };
 const AHORA = new Date("2019-12-02T15:00:00Z");
 const MES = "2019-11";
 
@@ -175,10 +176,21 @@ describe("confirmar el pago realizado del mes", () => {
   ];
   it.each(casosG8)("G8 $fila $descripcion", async ({ comprobar }) => comprobar());
 
-  // G9 · Solo Finanzas confirma y consulta la constancia: el servidor rechaza a cualquier otro rol y a la ausencia de sesión antes de leer o escribir (contrato C4, §2 principio 1).
+  // Issue #189 · El Administrador confirma el pago igual que Finanzas y queda como responsable (diseño de software, «Consistencia, auditoría y conservación»).
+  it("U8 el Administrador del sistema confirma el pago y consulta la constancia; el responsable es su cuenta", async () => {
+    const mundo = crearMundo();
+    await mundo.finalizarVersion();
+
+    const constancia = await confirmarPago(mundo.dependencias, administrador, { mes: MES, numeroDeVersion: 1, fechaDelPago: "2019-12-02" });
+
+    expect(constancia).toMatchObject({ mesDePago: MES, numeroDeVersion: 1, confirmadaPorId: administrador.id });
+    expect(await consultarConstancia(mundo.dependencias, administrador, MES)).toMatchObject({ numeroDeVersion: 1, confirmadaPorId: administrador.id });
+    expect(mundo.constancias.guardadas()).toHaveLength(1);
+  });
+
+  // G9 · Solo Finanzas y el Administrador confirman y consultan la constancia: el servidor rechaza a gerente de área, Recursos Humanos y a la ausencia de sesión antes de leer o escribir (§2 principio 1).
   const MOTIVO = "No tiene permiso para consultar ni editar Pagos.";
   const sinPermiso: Array<Actor | undefined> = [
-    { id: "22222222-2222-4222-8222-222222222222", rol: "administrador", nombreUsuario: "admin" },
     { id: "33333333-3333-4333-8333-333333333333", rol: "gerente_de_area", nombreUsuario: "gerente", grupos: [{ nombre: "Taller", gestionaAsistencia: true }] },
     { id: "44444444-4444-4444-8444-444444444444", rol: "recursos_humanos", nombreUsuario: "rrhh" },
     undefined,
@@ -193,13 +205,13 @@ describe("confirmar el pago realizado del mes", () => {
   };
   const casosG9: Array<{ fila: string; descripcion: string; comprobar: () => Promise<void> }> = [
     {
-      fila: "U11", descripcion: "administrador, gerente de área, Recursos Humanos y sin sesión no pueden confirmar el pago, sin leer versiones ni escribir",
+      fila: "U11", descripcion: "gerente de área, Recursos Humanos y sin sesión no pueden confirmar el pago, sin leer versiones ni escribir",
       comprobar: async () => {
         for (const actor of sinPermiso) await expect(confirmarPago(sinLecturas(), actor, { mes: MES, numeroDeVersion: 1, fechaDelPago: "2019-12-02" })).rejects.toThrow(MOTIVO);
       },
     },
     {
-      fila: "U12", descripcion: "los mismos cuatro casos no pueden consultar la constancia, sin leerla",
+      fila: "U12", descripcion: "los mismos tres casos no pueden consultar la constancia, sin leerla",
       comprobar: async () => {
         for (const actor of sinPermiso) await expect(consultarConstancia(sinLecturas(), actor, MES)).rejects.toThrow(MOTIVO);
       },

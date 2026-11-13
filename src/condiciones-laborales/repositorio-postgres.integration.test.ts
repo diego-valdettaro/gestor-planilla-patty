@@ -193,10 +193,23 @@ describe.skipIf(!databaseUrl)("condiciones laborales con vigencia (integración 
     await expect(consultarDetalleDeRelacion(repositorio, finanzas, sinConfirmar, "2026-09-30")).resolves.toBeUndefined();
   });
 
-  it("el Administrador del sistema recibe el rechazo del servidor y la base no cambia", async () => {
+  // Issue #189 · El Administrador opera Pagos igual que Finanzas; la base guarda su cuenta como autora (diseño de software, «Consistencia, auditoría y conservación»).
+  it("I1 el Administrador del sistema registra una condición laboral y la fila guarda su cuenta; también lista las condiciones", async () => {
     const antes = await db.select().from(schema.condicionesLaborales).where(inArray(schema.condicionesLaborales.relacionLaboralId, relaciones));
-    await expect(registrarCondicionLaboral(repositorio, administrador, { relacionId: relacionBeto, dato: "sueldo", valor: "9999", vigenteDesde: "2028-01-01" })).rejects.toThrow("No tiene permiso");
-    await expect(listarCondicionesLaborales(repositorio, administrador, { hoy: "2026-09-30" })).rejects.toThrow("No tiene permiso");
+
+    const registrada = await registrarCondicionLaboral(repositorio, administrador, { relacionId: relacionBeto, dato: "sueldo", valor: "9999", vigenteDesde: "2028-01-01" });
+
+    const despues = await db.select().from(schema.condicionesLaborales).where(inArray(schema.condicionesLaborales.relacionLaboralId, relaciones));
+    expect(despues).toHaveLength(antes.length + 1);
+    expect(despues.find(({ id }) => id === registrada.id)).toMatchObject({ relacionLaboralId: relacionBeto, dato: "sueldo", vigenteDesde: "2028-01-01", registradoPorId: cuentaAdministrador });
+    expect((await listarCondicionesLaborales(repositorio, administrador, { hoy: "2026-09-30" })).total).toBeGreaterThan(0);
+  });
+
+  it("un gerente de área recibe el rechazo del servidor y la base no cambia", async () => {
+    const gerente: Actor = { id: randomUUID(), rol: "gerente_de_area", grupos: [{ nombre: grupo, gestionaAsistencia: true }] };
+    const antes = await db.select().from(schema.condicionesLaborales).where(inArray(schema.condicionesLaborales.relacionLaboralId, relaciones));
+    await expect(registrarCondicionLaboral(repositorio, gerente, { relacionId: relacionBeto, dato: "sueldo", valor: "9999", vigenteDesde: "2029-01-01" })).rejects.toThrow("No tiene permiso");
+    await expect(listarCondicionesLaborales(repositorio, gerente, { hoy: "2026-09-30" })).rejects.toThrow("No tiene permiso");
     const despues = await db.select().from(schema.condicionesLaborales).where(inArray(schema.condicionesLaborales.relacionLaboralId, relaciones));
     expect(despues).toHaveLength(antes.length);
   });

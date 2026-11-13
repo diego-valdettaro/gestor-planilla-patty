@@ -21,6 +21,7 @@ import { crearRepositorioDeVersionesEnMemoria } from "./versiones-en-memoria";
 const MES = "2026-10";
 const AHORA = new Date("2026-10-26T15:00:00Z");
 const finanzas: Actor = { id: "11111111-1111-4111-8111-111111111111", rol: "finanzas", nombreUsuario: "finanzas" };
+const administrador: Actor = { id: "22222222-2222-4222-8222-222222222222", rol: "administrador", nombreUsuario: "admin" };
 
 const PERSONAS = [
   { id: "r-ana", dni: "10000001", nombre: "Ana", sueldo: 200000 },
@@ -368,7 +369,17 @@ describe("finalización del mes completo", () => {
     expect(escenario.almacenDeVersiones.guardadas()).toEqual([primera]);
   });
 
-  it("F-25 solo Finanzas evalúa o finaliza: el servidor rechaza a cualquier otro rol y a la ausencia de sesión sin leer importes ni guardar", async () => {
+  // Issue #189 · El Administrador opera Pagos igual que Finanzas (diseño de software, «Identidad, permisos y población»).
+  it("U5-U6 el Administrador del sistema evalúa y finaliza el mes, que queda finalizado por su cuenta, y consulta el historial y la versión", async () => {
+    const revision = await evaluarFinalizacion(dependencias, administrador, { mes: MES });
+    const resultado = await finalizarMes(dependencias, administrador, { mes: MES, huella: revision.huella });
+
+    expect(resultado).toMatchObject({ estado: "finalizada", version: { numero: 1, finalizadaPorId: administrador.id, finalizadaPor: "admin" } });
+    expect((await listarVersiones(dependencias, administrador, MES)).map(({ numero, finalizadaPorId }) => ({ numero, finalizadaPorId }))).toEqual([{ numero: 1, finalizadaPorId: administrador.id }]);
+    expect(await consultarVersion(dependencias, administrador, MES, 1)).toMatchObject({ numero: 1, finalizadaPorId: administrador.id });
+  });
+
+  it("F-25 solo Finanzas y el Administrador evalúan o finalizan: el servidor rechaza a gerente de área, Recursos Humanos y a la ausencia de sesión sin leer importes ni guardar", async () => {
     const prohibido = (): never => { throw new Error("se consultó una fuente sin permiso"); };
     const sinLecturas: DependenciasDeFinalizacion = {
       fuentes: { relaciones: { listarConPersona: prohibido }, condiciones: { listarTodas: prohibido }, reglas: { listarTodas: prohibido },
@@ -379,7 +390,6 @@ describe("finalización del mes completo", () => {
     };
     const huella = { entrada: "x", datos: {}, subtotalCentimos: 0, personas: [] };
     const sinPermiso: Array<Actor | undefined> = [
-      { id: "22222222-2222-4222-8222-222222222222", rol: "administrador", nombreUsuario: "admin" },
       { id: "33333333-3333-4333-8333-333333333333", rol: "gerente_de_area", nombreUsuario: "gerente", grupos: [{ nombre: "Taller", gestionaAsistencia: true }] },
       { id: "44444444-4444-4444-8444-444444444444", rol: "recursos_humanos", nombreUsuario: "rrhh" },
       undefined,

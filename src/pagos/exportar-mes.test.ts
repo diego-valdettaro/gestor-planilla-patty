@@ -50,8 +50,17 @@ const valorDe = (filas: unknown[][], rotulo: string) => filas.find(([r]) => r ==
 beforeEach(() => { simulacro.preparar.mockReset(); simulacro.preparar.mockResolvedValue(borradorCon(1)); });
 
 describe("G5 permiso", () => {
+  // Issue #189 · El Administrador exporta igual que Finanzas.
+  it("U7 el Administrador del sistema exporta la preliquidación, generada a su nombre", async () => {
+    const { dependencias } = crearDependencias();
+    const resultado = await exportarPreliquidacion(dependencias, { id: "a", rol: "administrador", nombreUsuario: "admin" }, { mes: "2026-10" });
+
+    expect(resultado.estado).toBe("lista");
+    if (resultado.estado !== "lista") return;
+    expect(valorDe(hojas(resultado.archivo)["Preliquidación"], "Generado por")).toBe("admin");
+  });
+
   it.each([
-    ["el Administrador", { id: "a", rol: "administrador" } as Actor],
     ["Recursos Humanos", { id: "r", rol: "recursos_humanos" } as Actor],
     ["un gerente de área", { id: "g", rol: "gerente_de_area", grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] } as Actor],
     ["nadie (sin sesión)", undefined],

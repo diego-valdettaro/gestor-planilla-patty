@@ -17,8 +17,8 @@ import { crearRepositorioEnMemoria } from "./repositorio-en-memoria";
 import { TIPOS_DE_FUENTE } from "./tipos-de-fuente";
 
 const finanzas: Actor = { id: "fin-1", rol: "finanzas" };
+const administrador: Actor = { id: "adm-1", rol: "administrador" };
 const otrosRoles: Array<[string, Actor]> = [
-  ["el Administrador del sistema", { id: "adm-1", rol: "administrador" }],
   ["un gerente de área", { id: "ger-1", rol: "gerente_de_area", grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] }],
   ["Recursos Humanos", { id: "rrhh-1", rol: "recursos_humanos" }],
 ];
@@ -266,7 +266,23 @@ describe("fuentes externas del mes de pago", () => {
     });
   });
 
-  describe("permisos: solo Finanzas", () => {
+  describe("permisos: solo Finanzas y el Administrador", () => {
+    // Issue #189 · El Administrador opera Pagos igual que Finanzas (diseño de software, «Identidad, permisos y población»).
+    it("U2 el Administrador del sistema registra un importe, confirma el tipo de fuente y lo devuelve a pendiente; todo queda a nombre de su cuenta", async () => {
+      const { importe } = await registrarImporte(repositorio, administrador, solicitud());
+      const confirmacion = await confirmarFuente(repositorio, administrador, { tipoDeFuente: "comisiones_de_ventas", mes: MES });
+      const confirmada = (await consultarEstadoDeFuentes(repositorio, administrador, MES)).find((fila) => fila.tipo.codigo === "comisiones_de_ventas");
+
+      expect(importe).toMatchObject({ monto: 25050, registradoPorId: "adm-1" });
+      expect(confirmacion).toMatchObject({ tipoDeFuente: "comisiones_de_ventas", mesDeAplicacion: MES, confirmadaPorId: "adm-1" });
+      expect(confirmada).toMatchObject({ estado: "confirmada_con_importes", filas: 1, total: 25050 });
+
+      await volverAPendiente(repositorio, administrador, { tipoDeFuente: "comisiones_de_ventas", mes: MES });
+
+      expect((await consultarImportesDePersona(repositorio, administrador, ANA, MES)).comisiones_de_ventas).toEqual({ estado: "pendiente" });
+      expect((await consultarFuente(repositorio, administrador, "comisiones_de_ventas", MES))?.importes).toEqual([importe]);
+    });
+
     it.each(otrosRoles)("%s no consulta ni edita las fuentes externas", async (_nombre, actor) => {
       const { importe } = await registrar();
 

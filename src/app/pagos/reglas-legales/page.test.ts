@@ -92,8 +92,21 @@ describe("página de Reglas legales (/pagos/reglas-legales)", () => {
     expect(html).toContain("Las versiones finalizadas conservan el valor que aplicaron.");
   });
 
+  // Issue #189 · El Administrador opera Pagos igual que Finanzas (diseño visual §2, principio 1).
+  it("R8 el Administrador del sistema ve una fila por valor legal con «Activar nuevo valor»", async () => {
+    await activar("rmv", "1130", "2026-02-01", "Decreto sintético 456");
+    simulacro.actor.mockResolvedValue({ id: "a", rol: "administrador" });
+
+    const html = await render();
+
+    expect(html).not.toContain("Sin permiso");
+    expect(html).toContain("<h1>Reglas legales</h1>");
+    expect(html).toContain("S/ 1.130,00");
+    expect(html).toContain("Decreto sintético 456");
+    expect(html).toContain("Activar nuevo valor");
+  });
+
   it.each([
-    ["el Administrador del sistema", { id: "a", rol: "administrador" }],
     ["Recursos Humanos", { id: "r", rol: "recursos_humanos" }],
     ["un gerente de área", { id: "g", rol: "gerente_de_area", grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] }],
   ])("niega el acceso a %s y no consulta ningún valor", async (_nombre, actor) => {

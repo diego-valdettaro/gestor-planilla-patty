@@ -46,8 +46,17 @@ describe("acciones especiales de Fuentes externas: conciliación de cese (borde 
     expect(simulacro.revalidar).toHaveBeenCalledWith("/pagos/fuentes-externas/[tipo]", "page");
   });
 
+  // Issue #189 · El Administrador opera Pagos igual que Finanzas (diseño de software, «Identidad, permisos y población»).
+  it("A5 con la sesión del Administrador del sistema la acción guarda un concepto de la liquidación a nombre de su cuenta y refresca las pantallas", async () => {
+    simulacro.actor.mockResolvedValue({ id: "adm-1", rol: "administrador" });
+
+    expect(await registrar()).toEqual({ listo: 1 });
+    expect(contexto.importes()).toMatchObject([{ dni: ANA, concepto: "vacaciones_truncas", monto: 40000, registradoPorId: "adm-1" }]);
+    expect(simulacro.revalidar).toHaveBeenCalledWith("/pagos/fuentes-externas");
+  });
+
   it.each([
-    ["el Administrador del sistema", { id: "adm-1", rol: "administrador" }],
+    ["Recursos Humanos", { id: "rrhh-1", rol: "recursos_humanos" }],
     ["un Gerente de área", { id: "ger-1", rol: "gerente_de_area" }],
   ])("AC-02 %s no guarda nada: sin acceso monetario", async (_nombre, actor) => {
     simulacro.actor.mockResolvedValue(actor);

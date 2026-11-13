@@ -39,7 +39,7 @@ Las autorizaciones se comprueban en el servidor y se reutilizan desde casos de u
 | Recursos Humanos | Ingresos y ceses, su confirmación y correcciones autorizadas |
 | Finanzas | Cuentas de gerente/RRHH y asignaciones, importación alternativa, revisión y cierre de períodos y funciones monetarias |
 
-Pagos y sus datos monetarios son accesibles para Finanzas y para el Administrador, también por URL y servidor; gerentes de área y Recursos Humanos no acceden. El acceso del Administrador fue decidido por Diego el 11 de noviembre de 2026 y está pendiente de implementación: el código actual todavía lo reserva a Finanzas. El Administrador opera igual que Finanzas: importa y confirma fuentes, edita condiciones y reglas, finaliza el mes y confirma el pago.
+Pagos y sus datos monetarios son accesibles para Finanzas y para el Administrador, también por URL y servidor; gerentes de área y Recursos Humanos no acceden. El acceso del Administrador fue decidido por Diego el 11 de noviembre de 2026 (ADR 0012, enmienda #189). El Administrador opera igual que Finanzas: importa y confirma fuentes, edita condiciones y reglas, finaliza el mes y confirma el pago.
 
 Un grupo con Gestiona asistencia y horarios desactivado integra la población de Pagos por sus relaciones laborales, sin exigirle horarios ni marcas para cerrar asistencia. La sede de adscripción contable y la sede de una jornada tienen significados distintos.
 
@@ -145,7 +145,6 @@ La confirmación del pago corresponde a una versión del mes completo y registra
 ## Estado de integración y decisiones pendientes
 
 - Base integrada revisada bd0878c. Hay reglas aprobadas con código de ensayo pendiente de integración: publicación semanal (#184), registro y cierre de asistencia (#185), corrección de relaciones laborales (#186), sobretiempo y modelos (#187) y vista mensual con republicación (#181).
-- El acceso del Administrador a Pagos está decidido y no tiene issue todavía.
 - Siguen pendientes las consultas a Finanzas sobre EsSalud en mes incompleto, devengues anteriores y cobertura incompleta.
 - #124 cerrado conserva explícita la validación de fórmula y sobretasas de descanso/feriado con Finanzas o contador. El cierre del issue acredita entrega técnica, no resuelve por sí mismo esa reserva.
 - #125 está cerrado. El diseño fuente conserva reserva sobre reparto del abono vacacional. La lectura del issue y sus comentarios no aportó una decisión posterior que permita retirar esa reserva.

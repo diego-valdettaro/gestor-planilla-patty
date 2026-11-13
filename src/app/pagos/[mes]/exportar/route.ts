@@ -8,7 +8,7 @@ import { dependenciasDeFinalizacion } from "@/pagos/servicio";
 // El número de versión es un entero de PostgreSQL (`versiones_de_pago.numero`): uno mayor no existe y no debe llegar a la consulta.
 const NUMERO_MAXIMO_DE_VERSION = 2_147_483_647;
 
-/** Descarga la preliquidación del mes: el borrador de hoy o, con `?version=N`, esa versión finalizada (interacción 4.8, D11). Solo Finanzas. */
+/** Descarga la preliquidación del mes: el borrador de hoy o, con `?version=N`, esa versión finalizada (interacción 4.8, D11). Solo Finanzas y el Administrador. */
 export async function GET(solicitud: NextRequest, { params }: { params: Promise<{ mes: string }> }) {
   const actor = await obtenerActorActual().catch(() => undefined);
   if (!actor || !puedeGestionarPagos(actor)) return new Response("No autorizado", { status: 403 });

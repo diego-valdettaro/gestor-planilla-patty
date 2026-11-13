@@ -121,8 +121,27 @@ describe("acción de importar un archivo fuente (borde del servidor)", () => {
     expect((await procesarArchivoDeFuente({}, formulario(xlsx(comision(ANA, 1)), {}, "datos.csv"))).error).toMatch(/extensión \.xlsx/);
   });
 
-  it("un rol sin permiso recibe el error y no se guarda nada", async () => {
+  // Issue #189 · El Administrador opera Pagos igual que Finanzas (diseño de software, «Identidad, permisos y población»).
+  it("A6 con la sesión del Administrador del sistema la acción valida e importa el archivo; el resultado y los importes nombran su cuenta", async () => {
     simulacro.actor.mockResolvedValue({ id: "adm-1", rol: "administrador" });
+    const contenido = xlsx(comision(ANA, 100));
+
+    const vista = await procesarArchivoDeFuente({}, formulario(contenido));
+    const estado = await procesarArchivoDeFuente({}, formulario(contenido, { accion: "importar" }));
+
+    expect(vista.error).toBeUndefined();
+    expect(vista.vista).toMatchObject({ resumen: { filasValidas: 1, filasConError: 0, total: 10000 } });
+    expect(estado.error).toBeUndefined();
+    expect(estado.resultado).toMatchObject({ filas: 1, total: 10000, responsable: "usuario-adm-1" });
+    expect(contexto.importes()).toMatchObject([{ dni: ANA, procedencia: "archivo:comisiones.xlsx", registradoPorId: "adm-1" }]);
+    expect(simulacro.revalidar).toHaveBeenCalledWith("/pagos/fuentes-externas");
+  });
+
+  it.each([
+    ["Recursos Humanos", { id: "rrhh-1", rol: "recursos_humanos" }],
+    ["un gerente de área", { id: "ger-1", rol: "gerente_de_area", grupos: [{ nombre: "Taller", gestionaAsistencia: true }] }],
+  ])("%s no tiene permiso: recibe el error y no se guarda nada", async (_nombre, actor) => {
+    simulacro.actor.mockResolvedValue(actor);
 
     const estado = await procesarArchivoDeFuente({}, formulario(xlsx(comision(ANA, 100)), { accion: "importar" }));
 

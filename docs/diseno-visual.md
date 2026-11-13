@@ -94,7 +94,7 @@ Se revisó el código de las pantallas existentes (`/periodos`, `/asistencias`, 
 
 ## 2. Principios transversales
 
-1. **Solo Finanzas y Administrador.** Importes, bases, fuentes, finalización y exportación son visibles para Finanzas (#96, historia 2) y para el Administrador, que opera igual que Finanzas (decisión de Diego del 11 de noviembre de 2026, pendiente de implementación: hoy solo entra Finanzas). Gerentes de área y Recursos Humanos no ven el acceso en la navegación y, si llegan por URL, ven «Sin permiso» (sección 3). Los permisos se comprueban en el servidor, nunca por filtros de interfaz.
+1. **Solo Finanzas y Administrador.** Importes, bases, fuentes, finalización y exportación son visibles para Finanzas (#96, historia 2) y para el Administrador, que opera igual que Finanzas (decisión de Diego del 11 de noviembre de 2026). Gerentes de área y Recursos Humanos no ven el acceso en la navegación y, si llegan por URL, ven «Sin permiso» (sección 3). Los permisos se comprueban en el servidor, nunca por filtros de interfaz.
 2. **Objeto, estado, resumen, detalle.** Cada pantalla abre con qué se revisa y en qué estado está; sigue con criterios de consulta, resumen con totales y bloqueos, y detalle (contrato visual, «Jerarquía y datos»).
 3. **Tres tiempos siempre separados.** Ninguna cifra se rotula solo como «mes». Las pantallas distinguen **mes de pago**, **corte de incidencias** (26 al 25) y **mes de devengue**. Un importe de otro mes de devengue lo dice con texto en su fila (por ejemplo «Devengue: 09/2026, se aplica en 10/2026»).
 4. **Alcance rotulado.** Cada cifra indica si cubre a todas las personas del mes o solo las filtradas («Totales del mes completo», «Totales de las 3 personas filtradas»), como ya hace `/periodos`.
@@ -111,7 +111,7 @@ Cada pantalla de la sección 4 hereda estos seis estados y solo detalla lo que c
 
 | Estado | Comportamiento |
 | --- | --- |
-| Normal | Contenido y acciones según el rol Finanzas y el estado del mes. |
+| Normal | Contenido y acciones para Finanzas y el Administrador, según el estado del mes. |
 | Vacío | `.estado-vacio` con título que dice qué falta y un único siguiente paso. Nunca una tabla sin filas. |
 | Cargando | Cabecera y criterios visibles, y en lugar del contenido un esqueleto con el texto «Calculando…» (`role="status"`). Si el cálculo tarda, el texto no cambia; no hay barra de progreso inventada (V1). |
 | Error | Panel `.mensaje-operacion error` con `role="alert"`, qué falló en una frase, y botón «Reintentar». Los datos mostrados antes no se conservan como válidos. Un error de una acción (importar, finalizar) se muestra junto a esa acción y no reemplaza la pantalla. |
@@ -344,12 +344,12 @@ Un cambio de sueldo dentro de un mes aparece como dos filas con vigencias contig
 **Acciones.**
 - Acción principal del detalle: **Registrar nuevo valor** (dato, valor, «Vigente desde»). Abre el diálogo 6.6.
 - Acción secundaria en una fila: **Corregir** (D20). Registra otro valor con la misma fecha de vigencia y un motivo obligatorio; el anterior queda «Reemplazado». Solo se permite si ningún mes finalizado usa ese valor; si lo usó, la pantalla lo dice («Lo usa la versión 2 de 09/2026; corríjalo con un ajuste de preliquidación») y enlaza a 4.4. Las versiones finalizadas no cambian nunca.
-- Los datos bancarios, si se guardan, son maestros protegidos: no aparecen en la lista ni en las exportaciones y solo Finanzas puede verlos en el detalle de la persona.
+- Los datos bancarios, si se guardan, son maestros protegidos: no aparecen en la lista ni en las exportaciones y solo Finanzas y el Administrador pueden verlos en el detalle de la persona.
 
 **Estados específicos.**
 - *Vacío:* `.estado-vacio` «Todavía no hay relaciones laborales confirmadas. Recursos Humanos las registra y confirma.» (sin acciones). Un dato sin ningún valor se muestra «Pendiente», nunca como `S/ 0,00`.
 - *Cargando / error:* según la sección 3. En error del registro, el mensaje queda en el diálogo con `role="alert"`.
-- *Sin permiso:* un rol distinto de Finanzas ve «Sin permiso», y el servidor rechaza cualquier registro o lectura.
+- *Sin permiso:* un rol distinto de Finanzas y del Administrador ve «Sin permiso», y el servidor rechaza cualquier registro o lectura.
 - *Deshabilitado:* «Corregir» deshabilitado con la causa visible cuando un mes finalizado ya usa el valor. «Registrar nuevo valor» queda deshabilitado mientras se guarda.
 - *Ancho estrecho:* la lista y el historial se desplazan horizontalmente con la primera columna fija (V2); el formulario de registro va en una columna.
 
@@ -376,7 +376,7 @@ Un cambio de sueldo dentro de un mes aparece como dos filas con vigencias contig
 
 **Estados específicos.**
 - *Vacío:* `.estado-vacio` «No hay reglas legales activas. Sin ellas el cálculo de aportes queda bloqueado.» con el botón «Activar nuevo valor».
-- *Cargando / error / sin permiso / ancho estrecho:* según la sección 3 y V2; el servidor rechaza a cualquier rol distinto de Finanzas.
+- *Cargando / error / sin permiso / ancho estrecho:* según la sección 3 y V2; el servidor rechaza a cualquier rol distinto de Finanzas y del Administrador.
 - *Deshabilitado:* «Corregir» con causa visible cuando un mes finalizado usa el valor.
 
 ## 5. Bloqueos por persona y por mes

@@ -14,8 +14,8 @@ import {
 import { ANA_REINGRESO, ANA_RELACION, BETO_RELACION, crearRepositorioEnMemoria } from "./repositorio-en-memoria";
 
 const finanzas: Actor = { id: "fin-1", rol: "finanzas" };
+const administrador: Actor = { id: "adm-1", rol: "administrador" };
 const otrosRoles: Array<[string, Actor]> = [
-  ["el Administrador del sistema", { id: "adm-1", rol: "administrador" }],
   ["un gerente de área", { id: "ger-1", rol: "gerente_de_area", grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] }],
   ["Recursos Humanos", { id: "rrhh-1", rol: "recursos_humanos" }],
 ];
@@ -202,7 +202,21 @@ describe("condiciones laborales con vigencia", () => {
     expect(textoDeUsoEnVersiones([{ mes: "2026-09", numero: 2 }, { mes: "2026-10", numero: 1 }])).toBe("Lo usa la versión 2 de 09/2026 y la versión 1 de 10/2026; corríjalo con un ajuste de preliquidación.");
   });
 
-  describe("solo Finanzas ve y edita", () => {
+  describe("solo Finanzas y el Administrador ven y editan", () => {
+    // Issue #189 · El Administrador opera Pagos igual que Finanzas (diseño de software, «Identidad, permisos y población»).
+    it("U3 el Administrador del sistema registra un valor con vigencia, lo corrige con motivo y lo consulta; queda registrado por su cuenta", async () => {
+      const errada = await registrarCondicionLaboral(repositorio, administrador, { relacionId: BETO_RELACION, dato: "sueldo", valor: "15000", vigenteDesde: "2026-09-01" });
+      await corregirCondicionLaboral(repositorio, administrador, { condicionId: errada.id, valor: "1500", motivo: "Error de digitación" });
+
+      expect(contexto.condiciones().map(({ valor, registradaPorId, reemplazadaEn }) => ({ valor, registradaPorId, reemplazada: reemplazadaEn !== null }))).toEqual([
+        { valor: 1500000, registradaPorId: "adm-1", reemplazada: true },
+        { valor: 150000, registradaPorId: "adm-1", reemplazada: false },
+      ]);
+      expect((await consultarCondicionesVigentes(repositorio, administrador, BETO_RELACION, "2026-10-07")).sueldo).toBe(150000);
+      expect((await listarCondicionesLaborales(repositorio, administrador, { hoy: "2026-10-07" })).filas.find(({ id }) => id === BETO_RELACION)?.vigentes.sueldo).toBe(150000);
+      expect(await consultarDetalleDeRelacion(repositorio, administrador, BETO_RELACION, "2026-10-07")).toBeDefined();
+    });
+
     it.each(otrosRoles)("%s recibe un rechazo del servidor en cada operación y no cambia nada", async (_nombre, actor) => {
       const existente = await registrar(BETO_RELACION, "sueldo", "1500", "2026-09-01");
       const rechazo = "No tiene permiso para consultar ni editar Pagos.";
