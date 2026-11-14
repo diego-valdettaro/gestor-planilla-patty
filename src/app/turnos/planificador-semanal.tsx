@@ -296,7 +296,7 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
   return <>
     <section className="tile panel tile-barra-plan">
       <div className="barra-plan">
-        <label className="campo-plan campo-grupo"><span>Grupo</span><select aria-label="Grupo" onChange={(evento) => router.push(`/turnos?semana=${semana}&equipo=${evento.target.value}`)} value={equipo}>{equipos.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+        <label className="campo-plan campo-grupo"><span>Grupo operativo</span><select aria-label="Grupo operativo" onChange={(evento) => router.push(`/turnos?semana=${semana}&equipo=${evento.target.value}`)} value={equipo}>{equipos.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
         <SelectorSemanal semana={semana} alSeleccionar={cambiarSemana} />
         {!soloLectura && <div className={`dato-plan ${cambios ? "sin-guardar" : ""}`}>
           <span>Borrador</span>

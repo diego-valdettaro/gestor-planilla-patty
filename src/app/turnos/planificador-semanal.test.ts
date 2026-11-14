@@ -288,7 +288,8 @@ describe("selección de publicación", () => {
       publicados: [], procesados: [], modelos: [modeloApertura], sedes: ["Tienda Norte"], soloLectura: true,
     }));
 
-    expect(html).toContain('aria-label="Grupo"');
+    expect(html).toContain("<span>Grupo operativo</span>");
+    expect(html).toContain('aria-label="Grupo operativo"');
     expect(html).toContain("Selector semanal");
     expect(html).toContain("Tienda Norte");
     for (const control of ["Guardar borrador", "Publicar planificación", "Completar semana", "Republicar cambios", "Borrador guardado", "Sin guardar"]) expect(html).not.toContain(control);
