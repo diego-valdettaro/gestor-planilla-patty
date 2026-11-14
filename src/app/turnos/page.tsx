@@ -6,12 +6,13 @@ import { crearCasosDeUsoDePlanesSemanales } from "@/turnos/casos-de-uso-planes-s
 import { diasDeLaSemana, inicioDeSemana } from "@/turnos/semana";
 import { repositorioDeGrupos, repositorioDeModelosDeHorario, repositorioDeTurnos } from "@/turnos/servicio";
 
+import { PlanificadorMensual } from "./planificador-mensual";
 import { PlanificadorSemanal } from "./planificador-semanal";
 import { SinPermiso } from "../sin-permiso";
 
 export const dynamic = "force-dynamic";
 
-export default async function PaginaDeTurnos({ searchParams }: { searchParams: Promise<{ semana?: string; equipo?: string; copiar?: string }> }) {
+export default async function PaginaDeTurnos({ searchParams }: { searchParams: Promise<{ semana?: string; equipo?: string; copiar?: string; vista?: string; mes?: string; colaborador?: string }> }) {
   const actor = await obtenerActorActual().catch(() => undefined);
   if (!actor) redirect("/iniciar-sesion");
   if (!puedeConsultarHorarios(actor)) return <SinPermiso>Su rol no permite consultar Horarios. Pida al Administrador del sistema que revise su rol o los grupos que tiene asignados.</SinPermiso>;
@@ -24,6 +25,20 @@ export default async function PaginaDeTurnos({ searchParams }: { searchParams: P
   if (!equipo) return <main className="contenido pagina pagina-ajustes pagina-turnos"><header className="encabezado encabezado-pagina"><div><p className="eyebrow">{NOMBRE_DE_ROL[actor.rol]}</p><h1>Planificación de horarios</h1><p>Asigna sede y modelo de horario en el horario semanal de cada persona del grupo.</p></div></header><section className="tile panel"><div className="estado-vacio"><h3>No hay grupos operativos</h3>{puedeConfigurarGlobalmente(actor)
     ? <p>Todavía no hay una sede activa asignada a un grupo, así que no hay horarios que planificar. Asígnela en <a href="/configuracion">Configuración</a>.</p>
     : <p>Todavía no hay una sede activa asignada a un grupo que usted gestione, así que no hay horarios que planificar. Pida al Administrador del sistema que la asigne en Configuración.</p>}</div></section></main>;
+  if (parametros.vista === "mensual") {
+    const mes = /^\d{4}-(0[1-9]|1[0-2])$/.test(parametros.mes ?? "") ? parametros.mes! : (parametros.semana ?? new Date().toISOString().slice(0, 10)).slice(0, 7);
+    const ultimoDia = new Date(Date.UTC(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)), 0)).getUTCDate();
+    const dias = Array.from({ length: ultimoDia }, (_, i) => `${mes}-${String(i + 1).padStart(2, "0")}`);
+    const colaboradores = await repositorioDeTurnos.listarColaboradoresActivosPorEquipo(equipo);
+    const persona = colaboradores.find(c => c.dni === parametros.colaborador) ?? colaboradores[0];
+    const [borradores, publicados, condiciones, vigencias] = await Promise.all([
+      repositorioDeTurnos.listarBorradoresDelEquipoEnRango(equipo, dias[0], dias.at(-1)!),
+      repositorioDeTurnos.listarPublicadosPorColaboradoresYSemana(persona ? [persona.dni] : [], dias[0], dias.at(-1)!),
+      repositorioDeTurnos.consultarEstadoDeFechas(dias[0], dias.at(-1)!),
+      persona ? repositorioDeTurnos.listarVigenciasConfirmadas(persona.dni) : Promise.resolve([]),
+    ]);
+    return <main className="contenido pagina pagina-ajustes pagina-turnos"><header className="encabezado encabezado-pagina"><div><h1>Planificación de horarios</h1><p>Consulte el mes y abra una semana para editar o publicar.</p></div></header><PlanificadorMensual mes={mes} equipo={equipo} equipos={equipos} colaboradores={colaboradores} dni={persona?.dni} dias={dias} borradores={borradores} publicados={publicados} vigencias={vigencias} fechasCerradas={condiciones.cerradas} /></main>;
+  }
   const dias = diasDeLaSemana(semana);
   const colaboradoresActivos = await repositorioDeTurnos.listarColaboradoresActivosPorEquipo(equipo);
   const colaboradoresProcesados = await repositorioDeTurnos.listarColaboradoresProcesadosPorSemanaYEquipo(semana, equipo);

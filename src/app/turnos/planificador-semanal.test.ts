@@ -359,3 +359,25 @@ describe("relación laboral confirmada en el planificador", () => {
     expect(html).not.toContain('<option value="sin_relacion_laboral">Sin relación laboral</option><option');
   });
 });
+
+describe("calendario mensual de horarios", () => {
+  it("muestra el estado del día según borrador, publicación, cierre y vigencia", async () => {
+    const { PlanificadorMensual } = await import("./planificador-mensual");
+    const jornada = (fecha: string, entradaProgramada = "09:00") => ({ dni: "00001024", fecha, sede: "Norte", modeloHorarioId: null, entradaProgramada, salidaProgramada: "18:00", descanso: false, motivoNoAsistencia: null });
+    const html = renderToStaticMarkup(createElement(PlanificadorMensual, {
+      mes: "2026-09", equipo: "Tiendas", equipos: ["Tiendas"], colaboradores: [{ dni: "00001024", nombre: "Ana" }], dni: "00001024",
+      dias: ["2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04", "2026-09-05"],
+      borradores: [jornada("2026-09-02"), jornada("2026-09-04", "10:00"), jornada("2026-09-05", "10:00")],
+      publicados: [jornada("2026-09-03"), jornada("2026-09-04"), jornada("2026-09-05")],
+      vigencias: [{ ingreso: "2026-09-02", cese: null }], fechasCerradas: ["2026-09-05"],
+    }));
+    const casos = [
+      ["2026-09-01", "Sin relación laboral"], ["2026-09-02", "Borrador editable"],
+      ["2026-09-03", "Publicado"], ["2026-09-04", "Cambios sin publicar"], ["2026-09-05", "Liquidado"],
+    ];
+    for (const [fecha, estado] of casos) expect(html).toContain(`Horario del ${fecha}: ${estado}. Abrir semana`);
+    const cerrado = html.match(/<a aria-label="Horario del 2026-09-05:[\s\S]*?<\/a>/)?.[0] ?? "";
+    expect(cerrado).toContain("09:00");
+    expect(cerrado).not.toContain("10:00");
+  });
+});

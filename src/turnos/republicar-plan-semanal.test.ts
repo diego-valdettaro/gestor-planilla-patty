@@ -48,6 +48,12 @@ function crearRepositorio(procesada = false, cambiaSoloMotivo = false, diasSinRe
 }
 
 describe("republicar plan semanal", () => {
+  it.each(["", "   "])("rechaza motivo vacío sin republicar", async (motivo) => {
+    const { reemplazos, repositorio } = crearRepositorio();
+    await expect(republicarPlanSemanal(repositorio, { id: "administrador", rol: "administrador" }, "plan-1", "00000011", motivo)).rejects.toThrow("El motivo de republicación es obligatorio");
+    expect(reemplazos).toEqual([]);
+  });
+
   it("reemplaza los siete días corregidos con un motivo auditado", async () => {
     const { reemplazos, repositorio } = crearRepositorio();
 
