@@ -79,8 +79,21 @@ describe("mes de pago", () => {
     expect(html).not.toContain("Horas extra S/ 100,00");
   });
 
-  it("rechaza otros roles antes de consultar importes", async () => {
+  // Issue #189 · El Administrador opera Pagos igual que Finanzas (diseño visual §2, principio 1).
+  it("R2 el Administrador del sistema ve el mes con su población, importes y bloqueos", async () => {
     simulacro.actor.mockResolvedValue({ id: "a", rol: "administrador" });
+
+    const html = await render();
+
+    expect(html).not.toContain("Sin permiso");
+    expect(html).toContain("Falta cobertura del corte");
+    expect(html).toContain("Ana");
+    expect(html).toContain("S/ 1.000,00");
+    expect(html).toContain("Totales del mes completo");
+  });
+
+  it("rechaza otros roles antes de consultar importes", async () => {
+    simulacro.actor.mockResolvedValue({ id: "g", rol: "gerente_de_area", grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] });
     expect(await render()).toContain("Sin permiso");
     expect(simulacro.preparar).not.toHaveBeenCalled();
   });
@@ -418,8 +431,23 @@ describe("finalización del mes en la pantalla", () => {
     expect(simulacro.leerVersiones).toHaveBeenCalledWith("2026-10");
   });
 
+  // Issue #189 · El Administrador opera Pagos igual que Finanzas (diseño visual §2, principio 1).
+  it("R2 el Administrador del sistema ve «Finalizar mes», el historial y una versión abierta con sus importes", async () => {
+    await versiones.guardarVersion(versionDelPlan(200000, "2026-10-20T15:00:00Z"));
+    simulacro.actor.mockResolvedValue({ id: "a", rol: "administrador", nombreUsuario: "admin" });
+
+    const mes = await render();
+    const version = await render("2026-10", { version: "1" });
+
+    expect(mes).not.toContain("Sin permiso");
+    expect(mes).toContain("Historial de versiones");
+    expect(mes).toContain("S/ ");
+    expect(version).not.toContain("Sin permiso");
+    expect(version).toContain("S/ ");
+  });
+
   it.each([
-    ["el Administrador del sistema", { id: "a", rol: "administrador" }],
+    ["Recursos Humanos", { id: "r", rol: "recursos_humanos" }],
     ["un gerente de área", { id: "g", rol: "gerente_de_area", grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] }],
   ])("F-57 %s ve «Sin permiso» en el mes y en una versión, sin acción, importes ni consulta de versiones", async (_nombre, actor) => {
     await versiones.guardarVersion(versionDelPlan(200000, "2026-10-20T15:00:00Z"));
@@ -654,8 +682,15 @@ describe("G10 exportar la preliquidación desde la pantalla (#131, interacción 
     expect(html).toContain("No es una planilla oficial ni sustituye PLAME.");
   });
 
-  it("F-24 quien no es Finanzas no ve ninguna acción de exportar (guarda de lo ya existente)", async () => {
+  // Issue #189 · El Administrador opera Pagos igual que Finanzas (diseño visual §2, principio 1).
+  it("R2 el Administrador del sistema ve «Exportar preliquidación (XLSX)» hacia la ruta de descarga del mes", async () => {
     simulacro.actor.mockResolvedValue({ id: "a", rol: "administrador" });
+
+    expect(cabecera(await render())).toMatch(/<a[^>]*href="\/pagos\/2026-10\/exportar"[^>]*>Exportar preliquidación \(XLSX\)<\/a>/);
+  });
+
+  it("F-24 quien no es Finanzas ni Administrador no ve ninguna acción de exportar (guarda de lo ya existente)", async () => {
+    simulacro.actor.mockResolvedValue({ id: "g", rol: "gerente_de_area", grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] });
 
     expect(await render()).not.toContain("exportar");
     expect(await render("2026-10", { version: "1" })).not.toContain("exportar");

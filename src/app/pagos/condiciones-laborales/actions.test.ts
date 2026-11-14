@@ -63,8 +63,22 @@ describe("acciones de Condiciones laborales (borde del servidor)", () => {
     expect(contexto.condiciones().map(({ valor, reemplazadaEn }) => ({ valor, reemplazada: reemplazadaEn !== null }))).toEqual([{ valor: 1800000, reemplazada: true }, { valor: 180000, reemplazada: false }]);
   });
 
+  // Issue #189 · El Administrador opera Pagos igual que Finanzas (diseño de software, «Identidad, permisos y población»).
+  it("A7 con la sesión del Administrador del sistema las acciones registran un valor y lo corrigen con motivo, a nombre de su cuenta", async () => {
+    simulacro.actor.mockResolvedValue({ id: "adm-1", rol: "administrador" });
+
+    expect(await registrar({ valor: "18000" })).toEqual({ listo: 1 });
+    const [errada] = contexto.condiciones();
+    expect(errada).toMatchObject({ relacionId: BETO_RELACION, dato: "sueldo", valor: 1800000, registradaPorId: "adm-1" });
+
+    expect(await corregirCondicionDesdeFormulario({}, formulario({ condicionId: errada.id, valor: "1800", motivo: "Error de digitación" }))).toEqual({ listo: 1 });
+    expect(contexto.condiciones().map(({ valor, registradaPorId, reemplazadaEn }) => ({ valor, registradaPorId, reemplazada: reemplazadaEn !== null }))).toEqual([
+      { valor: 1800000, registradaPorId: "adm-1", reemplazada: true }, { valor: 180000, registradaPorId: "adm-1", reemplazada: false },
+    ]);
+    expect(simulacro.revalidar).toHaveBeenCalledWith("/pagos/condiciones-laborales");
+  });
+
   it.each([
-    ["el Administrador del sistema", { id: "adm-1", rol: "administrador" }],
     ["Recursos Humanos", { id: "rrhh-1", rol: "recursos_humanos" }],
     ["un gerente de área", { id: "ger-1", rol: "gerente_de_area", grupos: [{ nombre: "Taller", gestionaAsistencia: true }] }],
   ])("%s no puede registrar ni corregir: el servidor responde sin permiso y no cambia nada", async (_nombre, actor) => {

@@ -106,8 +106,19 @@ describe("mes de pago con la conciliación de la liquidación por cese", () => {
     expect(fila(html, "Ana")).toContain("S/ 800,00");
   });
 
+  // Issue #189 · El Administrador opera Pagos igual que Finanzas (diseño visual §2, principio 1).
+  it("R2 el Administrador del sistema ve el mes con el bloqueo del cese sin conciliar y los importes", async () => {
+    simulacro.actor.mockResolvedValue({ id: "a", rol: "administrador" });
+
+    const html = await render();
+
+    expect(html).not.toContain("Sin permiso");
+    expect(panelDeBloqueos(html)).toContain("Bloqueos del mes (2)");
+    expect(fila(html, "Carla")).toContain("S/ 2.000,00");
+  });
+
   it.each([
-    ["el Administrador del sistema", { id: "a", rol: "administrador" }],
+    ["Recursos Humanos", { id: "r", rol: "recursos_humanos" }],
     ["un gerente de área", { id: "g", rol: "gerente_de_area", grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] }],
   ])("RG-02 niega el mes a %s sin preparar el borrador ni mostrar la conciliación", async (_nombre, actor) => {
     simulacro.actor.mockResolvedValue(actor);

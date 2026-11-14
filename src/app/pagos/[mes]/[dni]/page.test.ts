@@ -141,8 +141,24 @@ describe("desglose de una persona", () => {
     expect(html).toContain("Incompleto");
   });
 
-  it("niega el detalle monetario a Recursos Humanos", async () => {
-    simulacro.actor.mockResolvedValue({ id: "r", rol: "recursos_humanos" });
+  // Issue #189 · El Administrador opera Pagos igual que Finanzas (diseño visual §2, principio 1).
+  it("R3 el Administrador del sistema ve el detalle de la persona con sus importes, bases y procedencia", async () => {
+    simulacro.actor.mockResolvedValue({ id: "a", rol: "administrador" });
+
+    const html = await render();
+
+    expect(html).not.toContain("Sin permiso");
+    expect(html).toContain("Mes de devengue");
+    expect(html).toContain("divisor 30");
+    expect(html).toContain("Condición laboral");
+    expect(html).toContain("S/ ");
+  });
+
+  it.each([
+    ["Recursos Humanos", { id: "r", rol: "recursos_humanos" }],
+    ["un gerente de área", { id: "g", rol: "gerente_de_area", grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] }],
+  ])("niega el detalle monetario a %s", async (_nombre, actor) => {
+    simulacro.actor.mockResolvedValue(actor);
     expect(await render()).toContain("Sin permiso");
     expect(simulacro.preparar).not.toHaveBeenCalled();
   });

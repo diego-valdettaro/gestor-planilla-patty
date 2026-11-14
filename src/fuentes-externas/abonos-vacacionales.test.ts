@@ -17,7 +17,7 @@ describe("abono anticipado de remuneración vacacional", () => {
     expect(await repositorio.listarAbonosVacacionales()).toHaveLength(1);
   });
 
-  it("solo Finanzas lo registra, rechaza duplicados y mes con pago confirmado", async () => {
+  it("Finanzas lo registra y un gerente de área no; rechaza duplicados y mes con pago confirmado", async () => {
     const { repositorio, mesesConPagoConfirmado } = crearRepositorioEnMemoria({ [datos.dni]: "Ana" });
     await expect(registrarAbonoVacacional(repositorio, { ...finanzas, rol: "gerente_de_area" }, datos)).rejects.toThrow(/permiso/);
     await registrarAbonoVacacional(repositorio, finanzas, datos);

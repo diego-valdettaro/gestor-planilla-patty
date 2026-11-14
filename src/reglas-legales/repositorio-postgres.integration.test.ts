@@ -132,11 +132,23 @@ describe.skipIf(!databaseUrl)("reglas legales con vigencia (integración Postgre
     expect(filas.length).toBeGreaterThan(10);
   });
 
-  it("el Administrador del sistema recibe el rechazo del servidor y la base no cambia", async () => {
+  // Issue #189 · El Administrador opera Pagos igual que Finanzas; la base guarda su cuenta como autora (diseño de software, «Consistencia, auditoría y conservación»).
+  it("I2 el Administrador del sistema activa una regla legal y la fila guarda su cuenta; también la lista y la consulta", async () => {
     const antes = await guardadas();
-    await expect(activarReglaLegal(repositorio, administrador, { codigo: "rmv", valor: "9999", vigenteDesde: "1998-01-01", fuenteOficial: FUENTE })).rejects.toThrow("No tiene permiso");
-    await expect(listarReglasLegales(repositorio, administrador, { hoy: "1999-06-01" })).rejects.toThrow("No tiene permiso");
-    await expect(consultarReglaVigente(repositorio, administrador, "rmv", "1999-06-01")).rejects.toThrow("No tiene permiso");
+
+    await activarReglaLegal(repositorio, administrador, { codigo: "rmv", valor: "9999", vigenteDesde: "1998-01-01", fuenteOficial: FUENTE });
+
+    expect(await guardadas()).toHaveLength(antes.length + 1);
+    expect(await consultarReglaVigente(repositorio, administrador, "rmv", "1999-06-01")).toMatchObject({ estado: "vigente", regla: { valor: 999900, vigenteDesde: "1998-01-01", activadaPorId: cuentaAdministrador } });
+    expect((await listarReglasLegales(repositorio, administrador, { hoy: "1999-06-01" })).find(({ definicion }) => definicion.codigo === "rmv")?.vigente).toMatchObject({ valor: 999900 });
+  });
+
+  it("un gerente de área recibe el rechazo del servidor y la base no cambia", async () => {
+    const gerente: Actor = { id: randomUUID(), rol: "gerente_de_area", grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] };
+    const antes = await guardadas();
+    await expect(activarReglaLegal(repositorio, gerente, { codigo: "rmv", valor: "8888", vigenteDesde: "1999-01-01", fuenteOficial: FUENTE })).rejects.toThrow("No tiene permiso");
+    await expect(listarReglasLegales(repositorio, gerente, { hoy: "1999-06-01" })).rejects.toThrow("No tiene permiso");
+    await expect(consultarReglaVigente(repositorio, gerente, "rmv", "1999-06-01")).rejects.toThrow("No tiene permiso");
     expect(await guardadas()).toHaveLength(antes.length);
   });
 });

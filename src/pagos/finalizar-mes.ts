@@ -79,8 +79,8 @@ export interface DependenciasDeFinalizacion {
   ahora: () => Date;
 }
 
-/** Solo Finanzas opera Pagos; el servidor decide aquí, antes de leer importes (ADR 0007, #96 historia 2). Sin sesión tampoco hay permiso. */
-export function exigirFinanzas(actor: Actor | undefined): asserts actor is Actor {
+/** Solo Finanzas y el Administrador operan Pagos; el servidor decide aquí, antes de leer importes (ADR 0007, ADR 0012 enmienda #189). Sin sesión tampoco hay permiso. */
+export function exigirPermisoDePagos(actor: Actor | undefined): asserts actor is Actor {
   exigir(actor !== undefined && puedeGestionarPagos(actor), MENSAJE_SIN_PERMISO);
 }
 
@@ -203,7 +203,7 @@ export function evaluarBorradorPreparado(borrador: BorradorPreparado, guardadas:
 }
 
 export async function evaluarFinalizacion(dependencias: DependenciasDeFinalizacion, actor: Actor | undefined, solicitud: { mes: string }): Promise<ResultadoDeEvaluacion> {
-  exigirFinanzas(actor);
+  exigirPermisoDePagos(actor);
   return evaluarBorradorPreparado(await prepararBorrador(dependencias.fuentes, solicitud.mes), await dependencias.versiones.listarVersiones(solicitud.mes));
 }
 
@@ -214,7 +214,7 @@ function subtotalDe(nombre: string, netoCentimos: number | null): number {
 }
 
 export async function finalizarMes(dependencias: DependenciasDeFinalizacion, actor: Actor | undefined, solicitud: { mes: string; huella: HuellaDeRevision }): Promise<ResultadoDeFinalizacion> {
-  exigirFinanzas(actor);
+  exigirPermisoDePagos(actor);
   if (await dependencias.pago.mesConPagoConfirmado(solicitud.mes)) throw new Error(MENSAJE_DE_PAGO_CONFIRMADO);
   const borrador = await prepararBorrador(dependencias.fuentes, solicitud.mes);
   const impedimento = impedimentoDe(borrador);
@@ -249,7 +249,7 @@ export interface ResumenDeVersion {
 
 /** El historial del mes, de la versión más reciente a la más antigua. */
 export async function listarVersiones(dependencias: DependenciasDeFinalizacion, actor: Actor | undefined, mes: string): Promise<ResumenDeVersion[]> {
-  exigirFinanzas(actor);
+  exigirPermisoDePagos(actor);
   const versiones = [...await dependencias.versiones.listarVersiones(mes)].sort((a, b) => b.numero - a.numero);
   const constancia = await dependencias.pago.buscar(mes);
   return versiones.map((version, indice) => {
@@ -263,6 +263,6 @@ export async function listarVersiones(dependencias: DependenciasDeFinalizacion, 
 
 /** Una versión completa del mes, o undefined si no existe en ese mes. */
 export async function consultarVersion(dependencias: DependenciasDeFinalizacion, actor: Actor | undefined, mes: string, numero: number): Promise<VersionDePago | undefined> {
-  exigirFinanzas(actor);
+  exigirPermisoDePagos(actor);
   return dependencias.versiones.buscarVersion(mes, numero);
 }

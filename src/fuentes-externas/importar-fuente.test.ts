@@ -13,8 +13,8 @@ import { crearRepositorioEnMemoria } from "./repositorio-en-memoria";
 
 // Datos sintéticos: DNI inventados e importes pequeños; los XLSX se arman en memoria.
 const finanzas: Actor = { id: "fin-1", rol: "finanzas" };
+const administrador: Actor = { id: "adm-1", rol: "administrador" };
 const otrosRoles: Array<[string, Actor]> = [
-  ["el Administrador del sistema", { id: "adm-1", rol: "administrador" }],
   ["un gerente de área", { id: "ger-1", rol: "gerente_de_area", grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] }],
   ["Recursos Humanos", { id: "rrhh-1", rol: "recursos_humanos" }],
 ];
@@ -61,6 +61,18 @@ describe("importar un XLSX normalizado de una fuente externa", () => {
   };
 
   describe("un archivo válido", () => {
+    // Issue #189 · El Administrador opera Pagos igual que Finanzas (diseño de software, «Identidad, permisos y población»).
+    it("U1 el Administrador del sistema previsualiza e importa un archivo; la importación y sus importes quedan a nombre de su cuenta", async () => {
+      const contenido = libro(comision(ANA, "250,50"));
+
+      await expect(previsualizar(contenido, {}, administrador)).resolves.toBeDefined();
+      const resultado = await importar(contenido, {}, administrador);
+
+      expect(resultado).toMatchObject({ filas: 1, total: 25050 });
+      expect(contexto.importaciones()).toEqual([expect.objectContaining({ usuarioId: "adm-1", filas: 1, total: 25050 })]);
+      expect(contexto.importes()).toMatchObject([{ dni: ANA, monto: 25050, registradoPorId: "adm-1" }]);
+    });
+
     it("crea los importes externos con su procedencia, devengue y mes de aplicación, y conserva el archivo", async () => {
       const contenido = libro(comision(ANA, "250,50"), ["22222222", "Comisión de ventas", "2026-10-02", "2026-10", 100]);
 

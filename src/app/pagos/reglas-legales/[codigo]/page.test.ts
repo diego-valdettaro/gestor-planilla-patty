@@ -113,8 +113,19 @@ describe("página de un valor legal (/pagos/reglas-legales/[codigo])", () => {
     expect(html).not.toContain("S/ 0,00");
   });
 
+  // Issue #189 · El Administrador opera Pagos igual que Finanzas (diseño visual §2, principio 1).
+  it("R8 el Administrador del sistema ve el historial de un valor legal con «Activar nuevo valor»", async () => {
+    simulacro.actor.mockResolvedValue({ id: "a", rol: "administrador" });
+
+    const html = await render();
+
+    expect(html).not.toContain("Sin permiso");
+    expect(html).toContain("<h1>Tasa de EsSalud</h1>");
+    expect(html).toContain("Vigente hoy (07/10/2026): <strong>9,00 %</strong>");
+    expect(html).toContain("Activar nuevo valor");
+  });
+
   it.each([
-    ["el Administrador del sistema", { id: "a", rol: "administrador" }],
     ["Recursos Humanos", { id: "r", rol: "recursos_humanos" }],
     ["un gerente de área", { id: "g", rol: "gerente_de_area", grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] }],
   ])("niega el acceso a %s", async (_nombre, actor) => {

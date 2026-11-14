@@ -30,8 +30,9 @@ describe.skipIf(!databaseUrl)("casos de uso de clasificación de goce", () => {
   let periodoId = "";
 
   const finanzas: Actor = { id: finanzasId, rol: "finanzas" };
+  const administradorId = randomUUID();
+  const administrador: Actor = { id: administradorId, rol: "administrador" };
   const ajenos: Array<[string, Actor]> = [
-    ["el Administrador del sistema", { id: randomUUID(), rol: "administrador" }],
     ["Recursos Humanos", { id: randomUUID(), rol: "recursos_humanos" }],
     ["un gerente de área", { id: randomUUID(), rol: "gerente_de_area", grupos: [{ nombre: grupo, gestionaAsistencia: true }] }],
   ];
@@ -41,7 +42,10 @@ describe.skipIf(!databaseUrl)("casos de uso de clasificación de goce", () => {
   beforeAll(async () => {
     await db.insert(schema.grupos).values({ nombre: grupo, gestionaAsistencia: false });
     await db.insert(schema.sedes).values({ nombre: sede, grupo });
-    await db.insert(schema.cuentasLocales).values({ id: finanzasId, nombreUsuario: `finanzas-goce-${sufijo}`, hashContrasena: "prueba", rol: "finanzas" });
+    await db.insert(schema.cuentasLocales).values([
+      { id: finanzasId, nombreUsuario: `finanzas-goce-${sufijo}`, hashContrasena: "prueba", rol: "finanzas" },
+      { id: administradorId, nombreUsuario: `admin-goce-${sufijo}`, hashContrasena: "prueba", rol: "administrador" },
+    ]);
     await db.insert(schema.colaboradores).values({ dni, nombre: "Persona con permiso", grupo, sede });
     const [periodo] = await db.insert(schema.periodosPlanilla).values({ inicio: "2092-09-26", fin: "2092-10-25", estado: "abierto" }).returning({ id: schema.periodosPlanilla.id });
     periodoId = periodo.id;
@@ -59,7 +63,7 @@ describe.skipIf(!databaseUrl)("casos de uso de clasificación de goce", () => {
     await db.delete(schema.periodosPlanilla).where(eq(schema.periodosPlanilla.id, periodoId));
     await db.delete(schema.colaboradores).where(eq(schema.colaboradores.dni, dni));
     await db.delete(schema.sedes).where(eq(schema.sedes.nombre, sede));
-    await db.delete(schema.cuentasLocales).where(eq(schema.cuentasLocales.id, finanzasId));
+    await db.delete(schema.cuentasLocales).where(inArray(schema.cuentasLocales.id, [finanzasId, administradorId]));
     await db.delete(schema.grupos).where(eq(schema.grupos.nombre, grupo));
     await pool.end();
   });
@@ -92,5 +96,15 @@ describe.skipIf(!databaseUrl)("casos de uso de clasificación de goce", () => {
     expect(antes).toMatchObject([{ resultado: "permiso" }]);
     await clasificarGoce(repositorio, finanzas, { dni, fecha, conGoce: true });
     expect(await delDia()).toEqual(antes);
+  });
+
+  // Issue #189 · El Administrador opera Pagos igual que Finanzas; la base guarda su cuenta como autora (diseño de software, «Consistencia, auditoría y conservación»).
+  it("I4 el Administrador del sistema clasifica una jornada, que queda guardada con su cuenta, y consulta las clasificaciones", async () => {
+    const { clasificarGoce, consultarClasificaciones } = await casosDeUso();
+
+    await clasificarGoce(repositorio, administrador, { dni, fecha, conGoce: false });
+
+    const [clasificada] = (await consultarClasificaciones(repositorio, administrador, { desde: "2092-09-26", hasta: "2092-10-25" })).filter((fila) => fila.dni === dni);
+    expect(clasificada).toMatchObject({ dni, fecha, conGoce: false, clasificadoPorId: administradorId });
   });
 });

@@ -14,8 +14,8 @@ import {
 import { crearRepositorioEnMemoria } from "./repositorio-en-memoria";
 
 const finanzas: Actor = { id: "fin-1", rol: "finanzas" };
+const administrador: Actor = { id: "adm-1", rol: "administrador" };
 const otrosRoles: Array<[string, Actor]> = [
-  ["el Administrador del sistema", { id: "adm-1", rol: "administrador" }],
   ["un gerente de área", { id: "ger-1", rol: "gerente_de_area", grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] }],
   ["Recursos Humanos", { id: "rrhh-1", rol: "recursos_humanos" }],
 ];
@@ -61,7 +61,19 @@ describe("reglas legales con vigencia", () => {
     expect((await consultarReglaVigente(repositorio, finanzas, "onp_tasa", "2026-12-31")).estado).toBe("faltante");
   });
 
-  it("solo Finanzas activa, corrige o consulta reglas: el servidor rechaza a los demás roles", async () => {
+  // Issue #189 · El Administrador opera Pagos igual que Finanzas (diseño de software, «Identidad, permisos y población»).
+  it("U4 el Administrador del sistema activa una regla con su fuente oficial, la corrige con motivo y la consulta; queda activada por su cuenta", async () => {
+    const errada = await activarReglaLegal(repositorio, administrador, { codigo: "rmv", valor: "10000", vigenteDesde: "2024-01-01", fuenteOficial: FUENTE });
+    const corregida = await corregirReglaLegal(repositorio, administrador, { reglaId: errada.id, valor: "1000", motivo: "Error de digitación" });
+
+    expect(errada).toMatchObject({ codigo: "rmv", valor: 1000000, fuenteOficial: FUENTE, activadaPorId: "adm-1" });
+    expect(corregida).toMatchObject({ valor: 100000, activadaPorId: "adm-1" });
+    expect(await consultarReglaVigente(repositorio, administrador, "rmv", "2025-01-01")).toMatchObject({ estado: "vigente", regla: { valor: 100000 } });
+    expect(await listarReglasLegales(repositorio, administrador, { hoy: "2026-10-07" })).not.toHaveLength(0);
+    expect(await consultarHistorialDeRegla(repositorio, administrador, "rmv", "2026-10-07")).toBeDefined();
+  });
+
+  it("solo Finanzas y el Administrador activan, corrigen o consultan reglas: el servidor rechaza a gerente de área y Recursos Humanos", async () => {
     const existente = await activar("rmv", "1000", "2024-01-01");
     for (const [, actor] of otrosRoles) {
       await expect(activarReglaLegal(repositorio, actor, { codigo: "rmv", valor: "1100", vigenteDesde: "2025-01-01", fuenteOficial: FUENTE })).rejects.toThrow("No tiene permiso para consultar ni editar Pagos.");

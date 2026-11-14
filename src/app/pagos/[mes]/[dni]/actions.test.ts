@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -36,13 +36,18 @@ describe.skipIf(!databaseUrl)("acción de clasificar goce (borde del servidor)",
   const dni = dniDePrueba();
   const finanzasId = randomUUID();
   const finanzas = { id: finanzasId, rol: "finanzas" };
+  const administradorId = randomUUID();
+  const administrador = { id: administradorId, rol: "administrador" };
   const filas = () => db.select().from(schema.clasificacionesDeGoce).where(eq(schema.clasificacionesDeGoce.dni, dni));
   const accion = async () => (await import("./actions")).clasificarGoceDesdeFormulario;
   const enviar = async (campos: Record<string, string> = {}) =>
     (await accion())({}, formulario({ dni, fecha: "2094-10-06", goce: "sin_goce", ...campos }));
 
   beforeAll(async () => {
-    await db.insert(schema.cuentasLocales).values({ id: finanzasId, nombreUsuario: `finanzas-accion-${sufijo}`, hashContrasena: "prueba", rol: "finanzas" });
+    await db.insert(schema.cuentasLocales).values([
+      { id: finanzasId, nombreUsuario: `finanzas-accion-${sufijo}`, hashContrasena: "prueba", rol: "finanzas" },
+      { id: administradorId, nombreUsuario: `admin-accion-${sufijo}`, hashContrasena: "prueba", rol: "administrador" },
+    ]);
     await db.insert(schema.grupos).values({ nombre: grupo, gestionaAsistencia: false });
     await db.insert(schema.sedes).values({ nombre: sede, grupo });
     await db.insert(schema.colaboradores).values({ dni, nombre: "Persona con permiso", grupo, sede });
@@ -59,7 +64,7 @@ describe.skipIf(!databaseUrl)("acción de clasificar goce (borde del servidor)",
     await db.delete(schema.colaboradores).where(eq(schema.colaboradores.dni, dni));
     await db.delete(schema.sedes).where(eq(schema.sedes.nombre, sede));
     await db.delete(schema.grupos).where(eq(schema.grupos.nombre, grupo));
-    await db.delete(schema.cuentasLocales).where(eq(schema.cuentasLocales.id, finanzasId));
+    await db.delete(schema.cuentasLocales).where(inArray(schema.cuentasLocales.id, [finanzasId, administradorId]));
     await pool.end();
   });
 
@@ -68,6 +73,15 @@ describe.skipIf(!databaseUrl)("acción de clasificar goce (borde del servidor)",
 
     expect(await enviar()).toEqual({ listo: 1 });
     expect(await filas()).toMatchObject([{ dni, fecha: "2094-10-06", conGoce: false, clasificadoPorId: finanzasId }]);
+    expect(simulacro.revalidar).toHaveBeenCalledWith("/pagos/[mes]/[dni]", "page");
+  });
+
+  // Issue #189 · El Administrador opera Pagos igual que Finanzas (diseño de software, «Identidad, permisos y población»).
+  it("A3 el Administrador del sistema guarda la clasificación de una jornada, que queda a nombre de su cuenta, y se refresca el detalle", async () => {
+    simulacro.actor.mockResolvedValue(administrador);
+
+    expect(await enviar()).toEqual({ listo: 1 });
+    expect(await filas()).toMatchObject([{ dni, fecha: "2094-10-06", conGoce: false, clasificadoPorId: administradorId }]);
     expect(simulacro.revalidar).toHaveBeenCalledWith("/pagos/[mes]/[dni]", "page");
   });
 
@@ -81,7 +95,6 @@ describe.skipIf(!databaseUrl)("acción de clasificar goce (borde del servidor)",
   });
 
   it.each([
-    ["el Administrador del sistema", { id: "adm-1", rol: "administrador" }],
     ["Recursos Humanos", { id: "rrhh-1", rol: "recursos_humanos" }],
     ["un gerente de área", { id: "ger-1", rol: "gerente_de_area", grupos: [{ nombre: "Taller", gestionaAsistencia: true }] }],
   ])("AC-03 %s no puede clasificar: el servidor responde sin permiso y no cambia nada", async (_nombre, actor) => {

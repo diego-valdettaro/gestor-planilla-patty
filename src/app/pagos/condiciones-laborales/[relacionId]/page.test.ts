@@ -137,8 +137,20 @@ describe("página de detalle de Condiciones laborales (/pagos/condiciones-labora
     expect(html).toContain("Volver a condiciones laborales");
   });
 
+  // Issue #189 · El Administrador opera Pagos igual que Finanzas (diseño visual §2, principio 1).
+  it("R7 el Administrador del sistema ve el detalle de la relación con «Registrar nuevo valor»", async () => {
+    await registrar("sueldo", "1800", "2026-09-16");
+    simulacro.actor.mockResolvedValue({ id: "a", rol: "administrador" });
+
+    const html = await render(BETO_RELACION);
+
+    expect(html).not.toContain("Sin permiso");
+    expect(html).toContain("Condiciones laborales de Beto Ruiz");
+    expect(html).toContain("S/ 1.800,00");
+    expect([...html.matchAll(/<button[^>]*>Registrar nuevo valor/g)]).toHaveLength(1);
+  });
+
   it.each([
-    ["el Administrador del sistema", { id: "a", rol: "administrador" }],
     ["Recursos Humanos", { id: "r", rol: "recursos_humanos" }],
     ["un gerente de área", { id: "g", rol: "gerente_de_area", grupos: [{ nombre: "Taller", gestionaAsistencia: true }] }],
   ])("niega el acceso a %s", async (_nombre, actor) => {

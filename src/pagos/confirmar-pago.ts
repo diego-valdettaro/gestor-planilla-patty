@@ -3,7 +3,7 @@ import { fechaDeHoyEnLima } from "@/condiciones-laborales/vigencia";
 import { validarFechaDeRelacion } from "@/relaciones-laborales/gestionar-relaciones-laborales";
 
 import { ErrorDeMesYaConfirmado, type ConstanciaDePago } from "./constancias-de-pago";
-import { exigirFinanzas, type DependenciasDeFinalizacion } from "./finalizar-mes";
+import { exigirPermisoDePagos, type DependenciasDeFinalizacion } from "./finalizar-mes";
 
 // Confirmar el pago realizado del mes (#130, ADR 0013): Finanzas registra, una sola vez por mes, que pagó la versión finalizada vigente.
 
@@ -31,7 +31,7 @@ export async function confirmarPago(
   actor: Actor | undefined,
   solicitud: { mes: string; /** La versión que Finanzas vio en el diálogo. */ numeroDeVersion: number; fechaDelPago: string },
 ): Promise<ConstanciaDePago> {
-  exigirFinanzas(actor);
+  exigirPermisoDePagos(actor);
   validarFechaDelPago(solicitud.fechaDelPago, dependencias.ahora());
   if (await dependencias.pago.mesConPagoConfirmado(solicitud.mes)) throw new ErrorDeMesYaConfirmado();
   const versiones = await dependencias.versiones.listarVersiones(solicitud.mes);
@@ -44,6 +44,6 @@ export async function confirmarPago(
 }
 
 export async function consultarConstancia(dependencias: DependenciasDeConfirmacion, actor: Actor | undefined, mes: string): Promise<ConstanciaDePago | undefined> {
-  exigirFinanzas(actor);
+  exigirPermisoDePagos(actor);
   return dependencias.pago.buscar(mes);
 }

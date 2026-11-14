@@ -94,7 +94,7 @@ Se revisó el código de las pantallas existentes (`/periodos`, `/asistencias`, 
 
 ## 2. Principios transversales
 
-1. **Solo Finanzas y Administrador.** Importes, bases, fuentes, finalización y exportación son visibles para Finanzas (#96, historia 2) y para el Administrador, que opera igual que Finanzas (decisión de Diego del 11 de noviembre de 2026, pendiente de implementación: hoy solo entra Finanzas). Gerentes de área y Recursos Humanos no ven el acceso en la navegación y, si llegan por URL, ven «Sin permiso» (sección 3). Los permisos se comprueban en el servidor, nunca por filtros de interfaz.
+1. **Solo Finanzas y Administrador.** Importes, bases, fuentes, finalización y exportación son visibles para Finanzas (#96, historia 2) y para el Administrador, que opera igual que Finanzas (decisión de Diego del 11 de noviembre de 2026). Gerentes de área y Recursos Humanos no ven el acceso en la navegación y, si llegan por URL, ven «Sin permiso» (sección 3). Los permisos se comprueban en el servidor, nunca por filtros de interfaz.
 2. **Objeto, estado, resumen, detalle.** Cada pantalla abre con qué se revisa y en qué estado está; sigue con criterios de consulta, resumen con totales y bloqueos, y detalle (contrato visual, «Jerarquía y datos»).
 3. **Tres tiempos siempre separados.** Ninguna cifra se rotula solo como «mes». Las pantallas distinguen **mes de pago**, **corte de incidencias** (26 al 25) y **mes de devengue**. Un importe de otro mes de devengue lo dice con texto en su fila (por ejemplo «Devengue: 09/2026, se aplica en 10/2026»).
 4. **Alcance rotulado.** Cada cifra indica si cubre a todas las personas del mes o solo las filtradas («Totales del mes completo», «Totales de las 3 personas filtradas»), como ya hace `/periodos`.
@@ -111,7 +111,7 @@ Cada pantalla de la sección 4 hereda estos seis estados y solo detalla lo que c
 
 | Estado | Comportamiento |
 | --- | --- |
-| Normal | Contenido y acciones según el rol Finanzas y el estado del mes. |
+| Normal | Contenido y acciones para Finanzas y el Administrador, según el estado del mes. |
 | Vacío | `.estado-vacio` con título que dice qué falta y un único siguiente paso. Nunca una tabla sin filas. |
 | Cargando | Cabecera y criterios visibles, y en lugar del contenido un esqueleto con el texto «Calculando…» (`role="status"`). Si el cálculo tarda, el texto no cambia; no hay barra de progreso inventada (V1). |
 | Error | Panel `.mensaje-operacion error` con `role="alert"`, qué falló en una frase, y botón «Reintentar». Los datos mostrados antes no se conservan como válidos. Un error de una acción (importar, finalizar) se muestra junto a esa acción y no reemplaza la pantalla. |
@@ -124,7 +124,7 @@ Cada pantalla de la sección 4 hereda estos seis estados y solo detalla lo que c
 
 Las referencias «(Dn)» remiten a la decisión correspondiente de la sección 9.
 
-Estructura de páginas (D2): un acceso «Pagos» en la navegación abre la lista de meses (4.1); cada mes tiene su propia página (4.2) y el detalle por persona es otra página enlazable dentro de ese mes (4.3). Las fuentes externas, la importación, la finalización, la constancia de pago y la exportación se alcanzan desde la página del mes. Las condiciones laborales con vigencia (4.9) y las reglas legales (4.10) también son secciones de Pagos, visibles solo para Finanzas, y se alcanzan desde la navegación secundaria de Pagos (V7); si son un panel, una subpágina o un diálogo lo decide el ticket que las construya, respetando lo descrito aquí. Las URL exactas también las fija el primer ticket con interfaz: el ticket #116 fijó `/pagos` (redirige a la primera sección disponible), `/pagos/condiciones-laborales` y `/pagos/condiciones-laborales/[relacionId]`; el ticket #117 añadió `/pagos/reglas-legales` (lista de valores legales) y `/pagos/reglas-legales/[codigo]` (historial de un valor, consulta por fecha, activación y corrección); el ticket #118 añadió `/pagos/fuentes-externas?mes=AAAA-MM` (tipos de fuente del mes de pago con su estado) y `/pagos/fuentes-externas/[tipo]?mes=AAAA-MM` (filas, carga manual, anulación y confirmación de un tipo), mientras no exista la página del mes; el ticket #119 añadió `/pagos/fuentes-externas/importar?mes=AAAA-MM&tipo=<codigo>` (validar e importar un archivo fuente) y `/pagos/fuentes-externas/plantilla?tipo=<codigo>` (descarga de la plantilla normalizada, solo Finanzas); los tickets siguientes cuelgan sus pantallas de `/pagos`. Los enlaces entre pantallas se describen por nombre.
+Estructura de páginas (D2): un acceso «Pagos» en la navegación abre la lista de meses (4.1); cada mes tiene su propia página (4.2) y el detalle por persona es otra página enlazable dentro de ese mes (4.3). Las fuentes externas, la importación, la finalización, la constancia de pago y la exportación se alcanzan desde la página del mes. Las condiciones laborales con vigencia (4.9) y las reglas legales (4.10) también son secciones de Pagos, visibles solo para Finanzas y el Administrador, y se alcanzan desde la navegación secundaria de Pagos (V7); si son un panel, una subpágina o un diálogo lo decide el ticket que las construya, respetando lo descrito aquí. Las URL exactas también las fija el primer ticket con interfaz: el ticket #116 fijó `/pagos` (redirige a la primera sección disponible), `/pagos/condiciones-laborales` y `/pagos/condiciones-laborales/[relacionId]`; el ticket #117 añadió `/pagos/reglas-legales` (lista de valores legales) y `/pagos/reglas-legales/[codigo]` (historial de un valor, consulta por fecha, activación y corrección); el ticket #118 añadió `/pagos/fuentes-externas?mes=AAAA-MM` (tipos de fuente del mes de pago con su estado) y `/pagos/fuentes-externas/[tipo]?mes=AAAA-MM` (filas, carga manual, anulación y confirmación de un tipo), mientras no exista la página del mes; el ticket #119 añadió `/pagos/fuentes-externas/importar?mes=AAAA-MM&tipo=<codigo>` (validar e importar un archivo fuente) y `/pagos/fuentes-externas/plantilla?tipo=<codigo>` (descarga de la plantilla normalizada, solo Finanzas y el Administrador); los tickets siguientes cuelgan sus pantallas de `/pagos`. Los enlaces entre pantallas se describen por nombre.
 
 ```mermaid
 flowchart LR
@@ -290,7 +290,7 @@ La finalización no es una pantalla propia: se dispara desde 4.2 con «Finalizar
 - Éxito: el diálogo se cierra, la cabecera muestra «Finalizada, versión N», aparece `.mensaje-operacion listo` «Versión N guardada. Ya no se puede editar.» y la acción principal pasa a «Confirmar pago realizado». «Finalizar mes» desaparece. Mientras el pago realizado no esté confirmado, la pantalla explica cómo corregir sin tocar la versión guardada: si la corrección es de asistencia, Finanzas reabre el período en Períodos, el gerente corrige y vuelve a confirmar las jornadas afectadas, Finanzas lo cierra de nuevo y entonces se finaliza otra versión (diseño de software, «Recorrido de asistencia a Pagos»). Si el cambio es de una fuente externa o de una regla y la asistencia no cambió, Finanzas no reabre períodos: recalcula el borrador, lo revisa y finaliza otra versión (D19). La versión anterior nunca cambia.
 - Error al guardar: el diálogo permanece abierto con `role="alert"` y «No se guardó ninguna versión»; la operación es atómica, no queda un mes parcialmente finalizado.
 
-**Estados específicos.** *Normal:* los de arriba. *Vacío:* no aplica; sin personas en el mes no hay nada que finalizar y «Finalizar mes» queda deshabilitado con «Este mes no incluye personas». *Cargando:* el botón Confirmar del diálogo dice «Guardando…» y queda deshabilitado. *Error:* ver arriba (el diálogo permanece abierto). *Sin permiso:* un usuario que no es Finanzas no ve el botón y la acción del servidor responde sin permiso. *Deshabilitado:* con bloqueos o en un mes con pago realizado confirmado. *Ancho estrecho:* V3.
+**Estados específicos.** *Normal:* los de arriba. *Vacío:* no aplica; sin personas en el mes no hay nada que finalizar y «Finalizar mes» queda deshabilitado con «Este mes no incluye personas». *Cargando:* el botón Confirmar del diálogo dice «Guardando…» y queda deshabilitado. *Error:* ver arriba (el diálogo permanece abierto). *Sin permiso:* un usuario que no es Finanzas ni el Administrador no ve el botón y la acción del servidor responde sin permiso. *Deshabilitado:* con bloqueos o en un mes con pago realizado confirmado. *Ancho estrecho:* V3.
 
 ### 4.7 Constancia de pago realizado
 
@@ -300,7 +300,7 @@ La finalización no es una pantalla propia: se dispara desde 4.2 con «Finalizar
 - Abre el diálogo 6.2, que nombra la versión que se está declarando con pago realizado confirmado.
 - Tras confirmar: la insignia pasa a «Pago realizado confirmado», con fecha y responsable visibles en la cabecera y en el historial de versiones. Toda la pantalla pasa a solo consulta. «Crear otra versión» desaparece con la explicación «Este mes ya tiene su pago realizado confirmado; no admite una nueva versión.».
 - **Efecto en otra pantalla:** en el listado de períodos, «Reabrir período» de los períodos fuente de ese mes debe verse deshabilitado con la causa «Sustenta la preliquidación con pago realizado confirmado de 10/2026». Ese cambio toca `/periodos` y se hace en el mismo ticket que registra el pago, con su prueba (D10).
-- *Estados específicos.* *Normal:* los de arriba. *Vacío:* sin versión finalizada no hay nada que confirmar; se muestra el texto «Finalice el mes para poder confirmar el pago». *Cargando:* el botón del diálogo dice «Registrando…» y queda deshabilitado. *Error:* «No se registró el pago» junto al botón del diálogo, con `role="alert"`. *Sin permiso:* solo Finanzas ve la acción; el servidor rechaza a cualquier otro rol. *Deshabilitado:* tras el pago la acción no se muestra y la cabecera muestra la constancia. *Ancho estrecho:* V3.
+- *Estados específicos.* *Normal:* los de arriba. *Vacío:* sin versión finalizada no hay nada que confirmar; se muestra el texto «Finalice el mes para poder confirmar el pago». *Cargando:* el botón del diálogo dice «Registrando…» y queda deshabilitado. *Error:* «No se registró el pago» junto al botón del diálogo, con `role="alert"`. *Sin permiso:* solo Finanzas y el Administrador ven la acción; el servidor rechaza a cualquier otro rol. *Deshabilitado:* tras el pago la acción no se muestra y la cabecera muestra la constancia. *Ancho estrecho:* V3.
 
 ### 4.8 Exportación
 
@@ -313,7 +313,7 @@ La finalización no es una pantalla propia: se dispara desde 4.2 con «Finalizar
 
 ### 4.9 Condiciones laborales con vigencia
 
-**Para qué sirve.** Que Finanzas mantenga, por relación laboral y con fecha de vigencia, los datos de los que depende el cálculo: sueldo, jornada ordinaria diaria, régimen laboral (general o REMYPE pequeña empresa), afiliación pensionaria y esquema de comisión, asignación familiar otorgada y sede de adscripción (ticket #116; #96, historias 5, 6, 22 y 34; ADR 0008). «Otorgada» significa que Patty verificó el sustento fuera de la app y concedió el beneficio, también si la persona está en REMYPE pequeña empresa. La app no registra el DNI del menor. Un valor nuevo no reescribe la historia. Es una sección de Pagos, solo para Finanzas.
+**Para qué sirve.** Que Finanzas mantenga, por relación laboral y con fecha de vigencia, los datos de los que depende el cálculo: sueldo, jornada ordinaria diaria, régimen laboral (general o REMYPE pequeña empresa), afiliación pensionaria y esquema de comisión, asignación familiar otorgada y sede de adscripción (ticket #116; #96, historias 5, 6, 22 y 34; ADR 0008). «Otorgada» significa que Patty verificó el sustento fuera de la app y concedió el beneficio, también si la persona está en REMYPE pequeña empresa. La app no registra el DNI del menor. Un valor nuevo no reescribe la historia. Es una sección de Pagos, solo para Finanzas y el Administrador.
 
 **Orden del contenido.**
 1. **Lista.** Cabecera «Condiciones laborales» con la navegación secundaria de Pagos (V7). Criterios (`.panel-filtros`): Grupo operativo, Sede de adscripción, Persona (nombre o DNI) y «Solo con datos faltantes». `.panel-tabla` con una fila por relación laboral confirmada por Recursos Humanos:
@@ -344,18 +344,18 @@ Un cambio de sueldo dentro de un mes aparece como dos filas con vigencias contig
 **Acciones.**
 - Acción principal del detalle: **Registrar nuevo valor** (dato, valor, «Vigente desde»). Abre el diálogo 6.6.
 - Acción secundaria en una fila: **Corregir** (D20). Registra otro valor con la misma fecha de vigencia y un motivo obligatorio; el anterior queda «Reemplazado». Solo se permite si ningún mes finalizado usa ese valor; si lo usó, la pantalla lo dice («Lo usa la versión 2 de 09/2026; corríjalo con un ajuste de preliquidación») y enlaza a 4.4. Las versiones finalizadas no cambian nunca.
-- Los datos bancarios, si se guardan, son maestros protegidos: no aparecen en la lista ni en las exportaciones y solo Finanzas puede verlos en el detalle de la persona.
+- Los datos bancarios, si se guardan, son maestros protegidos: no aparecen en la lista ni en las exportaciones y solo Finanzas y el Administrador pueden verlos en el detalle de la persona.
 
 **Estados específicos.**
 - *Vacío:* `.estado-vacio` «Todavía no hay relaciones laborales confirmadas. Recursos Humanos las registra y confirma.» (sin acciones). Un dato sin ningún valor se muestra «Pendiente», nunca como `S/ 0,00`.
 - *Cargando / error:* según la sección 3. En error del registro, el mensaje queda en el diálogo con `role="alert"`.
-- *Sin permiso:* un rol distinto de Finanzas ve «Sin permiso», y el servidor rechaza cualquier registro o lectura.
+- *Sin permiso:* un rol distinto de Finanzas y del Administrador ve «Sin permiso», y el servidor rechaza cualquier registro o lectura.
 - *Deshabilitado:* «Corregir» deshabilitado con la causa visible cuando un mes finalizado ya usa el valor. «Registrar nuevo valor» queda deshabilitado mientras se guarda.
 - *Ancho estrecho:* la lista y el historial se desplazan horizontalmente con la primera columna fija (V2); el formulario de registro va en una columna.
 
 ### 4.10 Reglas legales versionadas
 
-**Para qué sirve.** Que Finanzas registre y active tasas, topes, remuneración mínima vital (RMV) y demás valores legales como configuración versionada, con vigencia, fuente oficial y responsable de activación (ticket #117; #96, historia 23; ADR 0008). Ninguna tasa monetaria vive en el código. Es una sección de Pagos, solo para Finanzas.
+**Para qué sirve.** Que Finanzas registre y active tasas, topes, remuneración mínima vital (RMV) y demás valores legales como configuración versionada, con vigencia, fuente oficial y responsable de activación (ticket #117; #96, historia 23; ADR 0008). Ninguna tasa monetaria vive en el código. Es una sección de Pagos, solo para Finanzas y el Administrador.
 
 **Orden del contenido.**
 1. **Lista.** Cabecera «Reglas legales» con la navegación secundaria de Pagos. `.panel-tabla` con una fila por valor legal:
@@ -376,7 +376,7 @@ Un cambio de sueldo dentro de un mes aparece como dos filas con vigencias contig
 
 **Estados específicos.**
 - *Vacío:* `.estado-vacio` «No hay reglas legales activas. Sin ellas el cálculo de aportes queda bloqueado.» con el botón «Activar nuevo valor».
-- *Cargando / error / sin permiso / ancho estrecho:* según la sección 3 y V2; el servidor rechaza a cualquier rol distinto de Finanzas.
+- *Cargando / error / sin permiso / ancho estrecho:* según la sección 3 y V2; el servidor rechaza a cualquier rol distinto de Finanzas y del Administrador.
 - *Deshabilitado:* «Corregir» con causa visible cuando un mes finalizado usa el valor.
 
 ## 5. Bloqueos por persona y por mes
@@ -536,7 +536,7 @@ Estas decisiones cierran las dudas que dejó el borrador. Las recomendaciones se
 | D9 | Errores en el archivo | Todo o nada. | 4.5 |
 | D10 | «Reabrir período» tras el pago | Se bloquea en el mismo ticket que registra el pago. | 4.7 |
 | D11 | Exportar | Se exporta el borrador, rotulado, y cualquier versión finalizada. | 4.8 |
-| D12 | Dónde se registran los datos base | Todo dentro de Pagos. Ajustes, abonos vacacionales y descansos sustitutorios previstos, como tipos de fuente (4.4). Condiciones laborales con vigencia y reglas legales, como secciones de Pagos solo para Finanzas (4.9 y 4.10). Primera decisión («pantalla aparte») cambiada el 2026-10-05 al ver que #116 y #117 ya los ubican en Pagos. | 4.4, 4.9, 4.10, 5 |
+| D12 | Dónde se registran los datos base | Todo dentro de Pagos. Ajustes, abonos vacacionales y descansos sustitutorios previstos, como tipos de fuente (4.4). Condiciones laborales con vigencia y reglas legales, como secciones de Pagos solo para Finanzas y, desde #189, el Administrador (4.9 y 4.10). Primera decisión («pantalla aparte») cambiada el 2026-10-05 al ver que #116 y #117 ya los ubican en Pagos. | 4.4, 4.9, 4.10, 5 |
 | D13 | Horas extra candidatas | Actualizada (#187): el gerente confirma y sustenta el sobretiempo en Registro de asistencias; Finanzas consulta y cierra el período. Pagos consume el resultado confirmado. | 5.1 |
 | D14 | Fecha del pago realizado | Finanzas escribe la fecha del pago (no futura) y la app guarda la fecha de la confirmación. | 6.2 |
 | D15 | Versiones anteriores | Consultables completas, en solo lectura. | 4.2 |

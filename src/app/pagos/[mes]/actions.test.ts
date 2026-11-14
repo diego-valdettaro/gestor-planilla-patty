@@ -29,6 +29,7 @@ import { confirmarPagoDesdeFormulario, finalizarMesDesdeFormulario, verificarFin
 const MES = "2026-10";
 const AHORA = new Date("2026-10-26T15:00:00Z");
 const finanzas: Actor = { id: "11111111-1111-4111-8111-111111111111", rol: "finanzas", nombreUsuario: "finanzas" };
+const administrador: Actor = { id: "22222222-2222-4222-8222-222222222222", rol: "administrador", nombreUsuario: "admin" };
 
 const PERSONAS = [
   { id: "r-ana", dni: "10000001", nombre: "Ana", sueldo: 200000 },
@@ -123,10 +124,21 @@ describe("acciones de finalización de /pagos/[mes] (borde del servidor)", () =>
     expect(escenario.almacenDeVersiones.guardadas()).toEqual([]);
   });
 
-  it("F-38 la acción rechaza a quien no es Finanzas (Administrador, gerente, RR. HH., sin sesión): no guarda ni refresca", async () => {
+  // Issue #189 · El Administrador opera Pagos igual que Finanzas (diseño de software, «Identidad, permisos y población»).
+  it("A1 con la sesión del Administrador del sistema la acción finaliza el mes: guarda la versión 1 a su nombre y refresca la página del mes", async () => {
+    const revisado = await formularioDeLoRevisado();
+    simulacro.actor.mockResolvedValue(administrador);
+
+    const estado = await finalizarMesDesdeFormulario({}, revisado);
+
+    expect(estado).toEqual({ listo: 1, version: 1, mensaje: "Versión 1 guardada. Ya no se puede editar." });
+    expect(escenario.almacenDeVersiones.guardadas()).toMatchObject([{ mesDePago: MES, numero: 1, subtotalCentimos: 450000, finalizadaPorId: administrador.id }]);
+    expect(simulacro.revalidar).toHaveBeenCalledWith("/pagos/2026-10");
+  });
+
+  it("F-38 la acción rechaza a quien no es Finanzas ni Administrador (gerente, RR. HH., sin sesión): no guarda ni refresca", async () => {
     const revisado = await formularioDeLoRevisado();
     const sinPermiso: Array<Actor | undefined> = [
-      { id: "22222222-2222-4222-8222-222222222222", rol: "administrador", nombreUsuario: "admin" },
       { id: "33333333-3333-4333-8333-333333333333", rol: "gerente_de_area", nombreUsuario: "gerente", grupos: [{ nombre: "Taller", gestionaAsistencia: true }] },
       { id: "44444444-4444-4444-8444-444444444444", rol: "recursos_humanos", nombreUsuario: "rrhh" },
       undefined,
@@ -270,15 +282,27 @@ describe("acción de confirmación del pago realizado de /pagos/[mes] (borde del
   ];
   it.each(casosG14)("G14 $fila $descripcion", async ({ comprobar }) => comprobar());
 
+  // Issue #189 · El Administrador confirma el pago igual que Finanzas y queda como responsable de la constancia.
+  it("A2 con la sesión del Administrador del sistema la acción confirma el pago: guarda la constancia a su nombre y refresca el mes y /periodos", async () => {
+    await finalizarVersion();
+    simulacro.actor.mockResolvedValue(administrador);
+
+    const estado = await confirmarPagoDesdeFormulario({}, formulario({ mes: MES_PAGADO, version: "1", fecha: "2019-12-02" }));
+
+    expect(estado).toEqual({ listo: 1, mensaje: "Pago realizado confirmado." });
+    expect(constancias.guardadas()).toMatchObject([{ mesDePago: MES_PAGADO, numeroDeVersion: 1, fechaDelPago: "2019-12-02", confirmadaPorId: administrador.id }]);
+    expect(simulacro.revalidar).toHaveBeenCalledWith("/pagos/2019-11");
+    expect(simulacro.revalidar).toHaveBeenCalledWith("/periodos");
+  });
+
   // G15 · Los rechazos del dominio vuelven como estado con el mensaje para Finanzas, sin escribir ni refrescar (contrato C1 y C4, §4.7).
   const confirmar = (campos: Record<string, string> = {}) => confirmarPagoDesdeFormulario({}, formulario({ mes: MES_PAGADO, version: "1", fecha: "2019-12-02", ...campos }));
   const casosG15: Array<{ fila: string; descripcion: string; comprobar: () => Promise<void> }> = [
     {
-      fila: "A2", descripcion: "administrador, gerente de área, Recursos Humanos y sin sesión reciben «No tiene permiso…», sin constancia ni refresco",
+      fila: "A2", descripcion: "gerente de área, Recursos Humanos y sin sesión reciben «No tiene permiso…», sin constancia ni refresco",
       comprobar: async () => {
         await finalizarVersion();
         const sinPermiso: Array<Actor | undefined> = [
-          { id: "22222222-2222-4222-8222-222222222222", rol: "administrador", nombreUsuario: "admin" },
           { id: "33333333-3333-4333-8333-333333333333", rol: "gerente_de_area", nombreUsuario: "gerente", grupos: [{ nombre: "Taller", gestionaAsistencia: true }] },
           { id: "44444444-4444-4444-8444-444444444444", rol: "recursos_humanos", nombreUsuario: "rrhh" },
           undefined,

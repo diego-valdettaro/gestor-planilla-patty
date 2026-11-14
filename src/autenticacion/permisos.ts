@@ -154,10 +154,10 @@ export function puedeGestionarCalendarioLaboral(actor: Actor): boolean {
 }
 
 /**
- * Consultar y editar Pagos (condiciones laborales con vigencia): solo Finanzas. A diferencia del resto de la matriz,
- * el Administrador del sistema no entra: el criterio de #116 y la historia 2 de #96 reservan los importes y datos
- * salariales a Finanzas, y los demás roles reciben un rechazo del servidor.
+ * Consultar y operar Pagos (importes, fuentes externas, condiciones laborales, reglas legales, finalización, exportación y
+ * constancia del pago): Finanzas y el Administrador del sistema, que opera igual que Finanzas (ADR 0012, enmienda #189).
+ * Gerentes de área y Recursos Humanos reciben un rechazo del servidor.
  */
 export function puedeGestionarPagos(actor: Actor): boolean {
-  return actor.rol === "finanzas";
+  return actor.rol === "administrador" || actor.rol === "finanzas";
 }

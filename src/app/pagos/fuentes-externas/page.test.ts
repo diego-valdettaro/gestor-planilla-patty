@@ -114,8 +114,22 @@ describe("página de Fuentes externas (/pagos/fuentes-externas)", () => {
     expect(html).toContain("Se muestra el mes 10/2026.");
   });
 
+  // Issue #189 · El Administrador opera Pagos igual que Finanzas (diseño visual §2, principio 1).
+  it("R4 el Administrador del sistema ve la lista de tipos de fuente del mes con sus acciones", async () => {
+    await registrar();
+    simulacro.actor.mockResolvedValue({ id: "a", rol: "administrador" });
+
+    const html = await render();
+
+    expect(html).not.toContain("Sin permiso");
+    expect(html).toContain("Fuentes externas del mes de pago 10/2026");
+    expect(html).toContain("Comisiones de ventas");
+    expect(html).toContain("S/ 250,50");
+    expect(html).toContain("Confirmar sin importes");
+    expect(html).toContain('href="/pagos/fuentes-externas/importar?mes=2026-10&amp;tipo=comisiones_de_ventas"');
+  });
+
   it.each([
-    ["el Administrador del sistema", { id: "a", rol: "administrador" }],
     ["Recursos Humanos", { id: "r", rol: "recursos_humanos" }],
     ["un gerente de área", { id: "g", rol: "gerente_de_area", grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] }],
   ])("niega el acceso a %s y no consulta ninguna fuente", async (_nombre, actor) => {

@@ -86,8 +86,22 @@ describe("acciones de Fuentes externas (borde del servidor)", () => {
     expect(contexto.importes()[0]).toMatchObject({ motivoDeAnulacion: "Monto mal digitado" });
   });
 
+  // Issue #189 · El Administrador opera Pagos igual que Finanzas (diseño de software, «Identidad, permisos y población»).
+  it("A4 con la sesión del Administrador del sistema las acciones registran un importe, confirman el tipo y lo devuelven a pendiente, a nombre de su cuenta", async () => {
+    simulacro.actor.mockResolvedValue({ id: "adm-1", rol: "administrador" });
+
+    expect(await registrar()).toEqual({ listo: 1, aviso: undefined });
+    expect(contexto.importes()).toMatchObject([{ dni: ANA, monto: 25000, registradoPorId: "adm-1" }]);
+
+    expect(await confirmarFuenteDesdeFormulario({}, formulario({ tipoDeFuente: "comisiones_de_ventas", mes: "2026-10" }))).toEqual({ listo: 1, aviso: undefined });
+    expect(contexto.confirmaciones()).toMatchObject([{ tipoDeFuente: "comisiones_de_ventas", confirmadaPorId: "adm-1" }]);
+
+    expect(await volverAPendienteDesdeFormulario({}, formulario({ tipoDeFuente: "comisiones_de_ventas", mes: "2026-10" }))).toEqual({ listo: 1, aviso: undefined });
+    expect(contexto.confirmaciones()).toHaveLength(0);
+    expect(simulacro.revalidar).toHaveBeenCalledWith("/pagos/fuentes-externas");
+  });
+
   it.each([
-    ["el Administrador del sistema", { id: "adm-1", rol: "administrador" }],
     ["Recursos Humanos", { id: "rrhh-1", rol: "recursos_humanos" }],
     ["un gerente de área", { id: "ger-1", rol: "gerente_de_area", grupos: [{ nombre: "Taller", gestionaAsistencia: true }] }],
   ])("%s no puede registrar, anular ni confirmar: el servidor responde sin permiso y no cambia nada", async (_nombre, actor) => {

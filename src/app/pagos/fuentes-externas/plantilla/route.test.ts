@@ -34,8 +34,17 @@ describe("plantilla normalizada de una fuente externa", () => {
     expect((await pedir("?tipo=otro")).status).toBe(400);
   });
 
+  // Issue #189 · El Administrador opera Pagos igual que Finanzas (diseño de software, «Identidad, permisos y población»).
+  it("A10 el Administrador del sistema descarga la plantilla del tipo", async () => {
+    obtenerActorActual.mockResolvedValue({ id: "a", rol: "administrador" });
+
+    const respuesta = await pedir("?tipo=prestamos");
+
+    expect(respuesta.status).toBe(200);
+    expect(respuesta.headers.get("content-disposition")).toContain('filename="plantilla-prestamos.xlsx"');
+  });
+
   it.each([
-    ["el Administrador del sistema", { id: "a", rol: "administrador" }],
     ["un gerente de área", { id: "g", rol: "gerente_de_area", grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] }],
     ["Recursos Humanos", { id: "r", rol: "recursos_humanos" }],
   ])("responde 403 a %s", async (_nombre, actor) => {

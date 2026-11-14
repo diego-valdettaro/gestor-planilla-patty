@@ -54,11 +54,22 @@ describe("conciliación de la liquidación por cese", () => {
     await expect(previsualizarImportacionDeFuente(repositorio, finanzas, { tipoDeFuente: TIPO, mes: MES, nombre: "liquidacion.xlsx", contenido: new Uint8Array() })).rejects.toThrow(/formulario propio/);
   });
 
-  it("UC-06 solo Finanzas carga la conciliación", async () => {
+  it("UC-06 solo Finanzas y el Administrador cargan la conciliación", async () => {
     const { repositorio, importes } = contexto();
     await expect(registrarConciliacionDeCese(repositorio, { ...finanzas, rol: "gerente_de_area" }, vacaciones)).rejects.toThrow(/permiso/);
-    await expect(registrarConciliacionDeCese(repositorio, { ...finanzas, rol: "administrador" }, vacaciones)).rejects.toThrow(/permiso/);
+    await expect(registrarConciliacionDeCese(repositorio, { ...finanzas, rol: "recursos_humanos" }, vacaciones)).rejects.toThrow(/permiso/);
     expect(importes()).toHaveLength(0);
+  });
+
+  // Issue #189 · El Administrador opera Pagos igual que Finanzas (diseño de software, «Identidad, permisos y población»).
+  it("U9 el Administrador del sistema carga un concepto de la liquidación por cese, registrado por su cuenta", async () => {
+    const { repositorio, importes } = contexto();
+    const administrador: Actor = { id: "22222222-2222-4222-8222-222222222222", rol: "administrador", nombreUsuario: "admin" };
+
+    const importe = await registrarConciliacionDeCese(repositorio, administrador, vacaciones);
+
+    expect(importe).toMatchObject({ dni: ANA, concepto: "vacaciones_truncas", monto: 40000, tipoDeFuente: TIPO, registradoPorId: administrador.id });
+    expect(importes()).toHaveLength(1);
   });
 
   it("UC-07 registrar dos veces la misma clave se rechaza y el total cuenta una sola fila", async () => {

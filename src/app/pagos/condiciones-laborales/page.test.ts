@@ -109,8 +109,20 @@ describe("página de Condiciones laborales (/pagos/condiciones-laborales)", () =
     expect(html).not.toContain("<table");
   });
 
+  // Issue #189 · El Administrador opera Pagos igual que Finanzas (diseño visual §2, principio 1).
+  it("R7 el Administrador del sistema ve una fila por relación laboral con los valores vigentes hoy", async () => {
+    simulacro.actor.mockResolvedValue({ id: "a", rol: "administrador" });
+
+    const html = await render();
+
+    expect(html).not.toContain("Sin permiso");
+    expect(html).toContain("<h1>Condiciones laborales</h1>");
+    expect(html).toContain("S/ 1.800,00");
+    expect(html).toContain('href="/pagos/condiciones-laborales/' + BETO_RELACION + '"');
+    expect(html).toContain("3 relaciones · 2 con datos faltantes");
+  });
+
   it.each([
-    ["el Administrador del sistema", { id: "a", rol: "administrador" }],
     ["Recursos Humanos", { id: "r", rol: "recursos_humanos" }],
     ["un gerente de área", { id: "g", rol: "gerente_de_area", grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] }],
   ])("niega el acceso a %s y no consulta ningún dato salarial", async (_nombre, actor) => {

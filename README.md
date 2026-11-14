@@ -18,7 +18,7 @@ externas confirmadas.
 
 | Rol | Qué hace |
 | --- | --- |
-| Administrador del sistema | Configuración global y cuentas |
+| Administrador del sistema | Configuración global y cuentas; opera Pagos igual que Finanzas |
 | Gerente de área | Personas, horarios y confirmación de jornadas de sus grupos |
 | Recursos Humanos | Ingresos y ceses |
 | Finanzas | Períodos, cierre, datos monetarios, Pagos y constancia del pago |

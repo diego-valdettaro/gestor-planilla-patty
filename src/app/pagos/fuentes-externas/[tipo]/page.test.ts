@@ -189,8 +189,26 @@ describe("página de un tipo de fuente (/pagos/fuentes-externas/[tipo])", () => 
     expect(fila).toContain("No cambia el neto");
   });
 
+  // Issue #189 · El Administrador opera Pagos igual que Finanzas (diseño visual §2, principio 1).
+  it("R5 el Administrador del sistema ve las filas de un tipo de fuente y de la conciliación por cese, con sus acciones", async () => {
+    await registrar();
+    await conciliar();
+    simulacro.actor.mockResolvedValue({ id: "a", rol: "administrador" });
+
+    const comisiones = await render();
+    const conciliacion = await render("conciliacion_de_liquidacion_por_cese", "2026-10");
+
+    expect(comisiones).not.toContain("Sin permiso");
+    expect(comisiones).toContain("<h1>Comisiones de ventas · mes de pago 10/2026</h1>");
+    expect(comisiones).toContain("Ana Sintética");
+    expect(comisiones).toContain("S/ 250,50");
+    expect(comisiones).toContain("Registrar importe");
+    expect(conciliacion).not.toContain("Sin permiso");
+    expect(conciliacion).toContain("S/ 400,00");
+  });
+
   it.each([
-    ["el Administrador del sistema", { id: "a", rol: "administrador" }],
+    ["Recursos Humanos", { id: "r", rol: "recursos_humanos" }],
     ["un gerente de área", { id: "g", rol: "gerente_de_area", grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] }],
   ])("RG-02 niega la conciliación por cese a %s y no muestra importes ni conceptos", async (_nombre, actor) => {
     await conciliar();
@@ -242,7 +260,6 @@ describe("página de un tipo de fuente (/pagos/fuentes-externas/[tipo])", () => 
   });
 
   it.each([
-    ["el Administrador del sistema", { id: "a", rol: "administrador" }],
     ["Recursos Humanos", { id: "r", rol: "recursos_humanos" }],
     ["un gerente de área", { id: "g", rol: "gerente_de_area", grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] }],
   ])("niega el acceso a %s", async (_nombre, actor) => {
