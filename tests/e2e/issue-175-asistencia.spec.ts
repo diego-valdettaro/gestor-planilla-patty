@@ -35,22 +35,81 @@ test("G21 cambia filtros semanales y mensuales al elegirlos, sin botón de actua
   await iniciarSesion(page);
   await page.goto("/asistencias?vista=semanal&grupo=Tiendas&fecha=2026-10-05");
 
-  await page.getByLabel("Grupo operativo").selectOption("Taller");
+  const grupo = page.getByRole("combobox", { name: "Grupo operativo" });
+  await expect(grupo).toBeEnabled();
+  await grupo.focus();
+  await expect(grupo).toBeFocused();
+  await grupo.selectOption("Taller");
   await expect(page).toHaveURL(/grupo=Taller/);
   await expect(page.getByRole("heading", { name: "Taller", level: 2 })).toBeVisible();
+  await expect(grupo).toBeFocused();
   await expect(page.getByRole("button", { name: "Actualizar vista" })).toHaveCount(0);
 
-  await page.getByLabel("Fecha de referencia").fill("2026-10-19");
-  await expect(page).toHaveURL(/fecha=2026-10-19/);
-  await expect(page.getByText("19 oct", { exact: false })).toBeVisible();
+  for (const [nombre, fecha, encabezado] of [
+    ["Semana siguiente", "2026-10-12", "Lun 12"],
+    ["Semana anterior", "2026-10-05", "Lun 5"],
+  ]) {
+    const flecha = page.getByRole("button", { name: nombre });
+    await flecha.press("Enter");
+    await expect(page).toHaveURL(new RegExp(`fecha=${fecha}`));
+    await expect(page.getByRole("columnheader", { name: encabezado, exact: true })).toBeVisible();
+    await expect(flecha).toBeFocused();
+  }
 
   await page.getByRole("link", { name: "Vista mensual" }).click();
   await expect(page).toHaveURL(/vista=mensual/);
-  const grupo = page.getByLabel("Grupo operativo");
+  await expect(grupo).toHaveValue("Taller");
+
+  await expect(grupo).toBeEnabled();
+  await grupo.focus();
+  await expect(grupo).toBeFocused();
   await grupo.selectOption("Tiendas");
   await expect(page).toHaveURL(/grupo=Tiendas/);
-  await page.getByLabel("Colaborador", { exact: true }).selectOption("99900002");
+  await expect(grupo).toBeFocused();
+
+  const colaborador = page.getByRole("combobox", { name: "Colaborador", exact: true });
+  await expect(colaborador).toBeEnabled();
+  await colaborador.focus();
+  await expect(colaborador).toBeFocused();
+  await colaborador.selectOption("99900002");
   await expect(page).toHaveURL(/colaborador=99900002/);
+  await expect(page.getByRole("heading", { name: "Beto Publicado", level: 2 })).toBeVisible();
+  await expect(colaborador).toBeFocused();
+  await expect(page.getByRole("button", { name: "Actualizar vista" })).toHaveCount(0);
+
+  const fecha = page.getByLabel("Fecha de referencia");
+  await expect(fecha).toBeEnabled();
+  await fecha.focus();
+  await expect(fecha).toBeFocused();
+  await fecha.fill("2026-11-02");
+  await expect(page).toHaveURL(/fecha=2026-11-02/);
+
+  const octubre = page.getByRole("button", { name: /^Asistencia del 2026-10-01:/ });
+  const noviembre = page.getByRole("button", { name: /^Asistencia del 2026-11-01:/ });
+  await expect(noviembre).toBeVisible();
+  await expect(octubre).toHaveCount(0);
+  await expect(fecha).toBeFocused();
+
+  await page.reload();
+  await expect(page.getByRole("link", { name: "Vista mensual" })).toHaveAttribute("aria-current", "page");
+  await expect(grupo).toHaveValue("Tiendas");
+  await expect(colaborador).toHaveValue("99900002");
+  await expect(fecha).toHaveValue("2026-11-02");
+  await expect(noviembre).toBeVisible();
+
+  await page.goBack();
+  await expect(page.getByRole("link", { name: "Vista mensual" })).toHaveAttribute("aria-current", "page");
+  await expect(grupo).toHaveValue("Tiendas");
+  await expect(colaborador).toHaveValue("99900002");
+  await expect(fecha).toHaveValue("2026-10-05");
+  await expect(octubre).toBeVisible();
+
+  await page.getByRole("link", { name: "Vista semanal" }).click();
+  await expect(page).toHaveURL(/vista=semanal/);
+  await expect(page).toHaveURL(/grupo=Tiendas/);
+  await expect(page).toHaveURL(/fecha=2026-10-05/);
+  await expect(page).toHaveURL(/colaborador=99900002/);
+  await expect(page.getByRole("columnheader", { name: "Lun 5", exact: true })).toBeVisible();
 });
 
 test("G21 ofrece el mismo selector semanal accesible en Asistencias y Horarios", async ({ page }) => {
@@ -59,7 +118,8 @@ test("G21 ofrece el mismo selector semanal accesible en Asistencias y Horarios",
 
   for (const ruta of ["/asistencias?grupo=Tiendas&fecha=2026-10-05", "/turnos?equipo=Tiendas&semana=2026-10-05"]) {
     await page.goto(ruta);
-    const abrir = page.locator(".selector-semanal .boton-fecha-semanal");
+    await expect(page.getByRole("combobox", { name: "Grupo operativo" })).toHaveValue("Tiendas");
+    const abrir = page.getByRole("region", { name: "Selector semanal" }).getByRole("button", { name: / al / });
     await expect(abrir).toBeVisible();
     await expect(abrir).toBeEnabled();
     await abrir.focus();
@@ -70,7 +130,11 @@ test("G21 ofrece el mismo selector semanal accesible en Asistencias y Horarios",
     await dia.focus();
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/(fecha|semana)=2026-10-19/);
-    await expect(page.locator(".selector-semanal .boton-fecha-semanal")).toBeFocused();
+    await expect(selector).toHaveCount(0);
+    await expect(abrir).toBeFocused();
+    if (ruta.startsWith("/asistencias")) {
+      await expect(page.getByRole("columnheader", { name: "Lun 19", exact: true })).toBeVisible();
+    }
   }
 });
 
