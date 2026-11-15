@@ -24,7 +24,7 @@ type Celda = Omit<CeldaDePlanSemanalEnBorrador, "planId">;
 type Colaborador = { dni: string; nombre: string; sede: string | null };
 type Modelo = ModeloDeHorario;
 type Publicado = HorarioSemanalParaCopiar;
-type Confirmacion = { tipo: "cambiar-semana"; destino: string } | { tipo: "publicar" } | { tipo: "republicar"; dni: string; nombre: string };
+type Confirmacion = { tipo: "cambiar-semana"; destino: string; vista?: "mensual" } | { tipo: "publicar" } | { tipo: "republicar"; dni: string; nombre: string };
 type ResultadoDeDia = "laboral" | MotivoPlanificadoDeNoAsistencia;
 
 export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, equipo, colaboradores, dias, celdasIniciales, publicados, procesados, modelos, sedes, vigencias = {}, soloLectura = false }: {
@@ -152,11 +152,18 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
     finally { setPublicando(false); }
   }
   async function republicar(dni: string, motivo: string) {
-    if (cambios) { setError("Guarde el borrador antes de republicar."); return; }
     setPublicando(true); setError(undefined);
     const datos = new FormData();
     datos.set("planId", planId); datos.set("dni", dni); datos.set("motivo", motivo);
-    try { await republicarPlanSemanalDesdeGrilla(datos); router.refresh(); }
+    try {
+      if (cambios) {
+        await guardarBorradorDesdeGrilla(planId, JSON.stringify(celdas));
+        setCambios(false);
+        setGuardadoEn(new Date().toISOString());
+      }
+      await republicarPlanSemanalDesdeGrilla(datos);
+      router.refresh();
+    }
     catch (causa) { setError(causa instanceof Error ? causa.message : "No se pudo republicar el horario semanal."); }
     finally { setPublicando(false); }
   }
@@ -226,7 +233,7 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
     dialogoConfirmacion.current?.close();
     setConfirmacion(undefined);
     if (!actual) return;
-    if (actual.tipo === "cambiar-semana") navegarSemana(actual.destino);
+    if (actual.tipo === "cambiar-semana") actual.vista ? router.push(`${actual.destino}`) : navegarSemana(actual.destino);
     if (actual.tipo === "publicar") void publicarPlanificacion();
     if (actual.tipo === "republicar") void republicar(actual.dni, String(formData.get("motivo") ?? "").trim());
   }
@@ -294,6 +301,7 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
   const porcentajeDeCobertura = resumen.total ? Math.round((resumen.asignadas / resumen.total) * 100) : 0;
 
   return <>
+    <nav aria-label="Vista" className="pestanas-personal"><a aria-current="page" className="activo" href={`/turnos?semana=${semana}&equipo=${encodeURIComponent(equipo)}`}>Vista semanal</a><a href={`/turnos?semana=${semana}&equipo=${encodeURIComponent(equipo)}&vista=mensual`} onClick={evento => { evento.preventDefault(); const destino = `/turnos?semana=${semana}&equipo=${encodeURIComponent(equipo)}&vista=mensual`; if (cambios) pedirConfirmacion({ tipo: "cambiar-semana", destino, vista: "mensual" }); else router.push(destino); }}>Vista mensual</a></nav>
     <section className="tile panel tile-barra-plan">
       <div className="barra-plan">
         <label className="campo-plan campo-grupo"><span>Grupo operativo</span><select aria-label="Grupo operativo" onChange={(evento) => router.push(`/turnos?semana=${semana}&equipo=${evento.target.value}`)} value={equipo}>{equipos.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>

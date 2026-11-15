@@ -13,8 +13,10 @@ const listarProcesamientosDeSemana = vi.fn();
 const listarModelosPorSede = vi.fn();
 const listarSedesActivasPorGrupo = vi.fn();
 const listarVigenciasConfirmadas = vi.fn();
+const listarBorradoresDelEquipoEnRango = vi.fn();
+const consultarEstadoDeFechas = vi.fn();
 
-vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
+vi.mock("next/navigation", () => ({ redirect: vi.fn(), useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("@/autenticacion/sesion-del-servidor", () => ({ obtenerActorActual }));
 vi.mock("@/turnos/casos-de-uso-planes-semanales", () => ({
   crearCasosDeUsoDePlanesSemanales: () => ({ obtenerOCrear }),
@@ -30,6 +32,8 @@ vi.mock("@/turnos/servicio", () => ({
     listarPublicadosPorColaboradoresYSemana,
     listarSedesActivasPorGrupo,
     listarVigenciasConfirmadas,
+    listarBorradoresDelEquipoEnRango,
+    consultarEstadoDeFechas,
   },
 }));
 vi.mock("./planificador-semanal", () => ({
@@ -56,7 +60,36 @@ describe("página de Horarios (/turnos)", () => {
     listarProcesamientosDeSemana.mockResolvedValue([]);
     listarSedesActivasPorGrupo.mockResolvedValue([]);
     listarVigenciasConfirmadas.mockResolvedValue([{ ingreso: "2026-01-01", cese: null }]);
+    listarBorradoresDelEquipoEnRango.mockResolvedValue([]);
+    consultarEstadoDeFechas.mockResolvedValue({ cerradas: [], sinPeriodo: [] });
     obtenerOCrear.mockResolvedValue({ id: "plan-1", celdas: [] });
+  });
+
+  it("abre el calendario del mes elegido y enlaza cada día a su semana conservando el grupo", async () => {
+    listarColaboradoresActivosPorEquipo.mockResolvedValue([{ dni: "00000011", nombre: "Ana", sede: "Norte" }]);
+    const { default: PaginaDeTurnos } = await import("./page");
+    const html = renderToStaticMarkup(await PaginaDeTurnos({
+      searchParams: Promise.resolve({ vista: "mensual", mes: "2026-10", equipo: "Tiendas", colaborador: "00000011" }),
+    }));
+    expect(html).toContain("Vista mensual");
+    expect(html).toContain("Vista semanal");
+    expect(html).toContain("Ana");
+    expect(html).toContain('aria-label="Grupo"');
+    expect(html).toContain('aria-label="Colaborador"');
+    expect(html).toContain('2026-10');
+    expect(html).toContain('semana=2026-09-28&amp;equipo=Tiendas');
+    expect(obtenerOCrear).not.toHaveBeenCalled();
+  });
+
+  it("muestra liquidada solo la semana procesada de la persona elegida, incluso al cruzar el mes", async () => {
+    listarColaboradoresActivosPorEquipo.mockResolvedValue([{ dni: "00000011", nombre: "Ana", sede: "Norte" }, { dni: "00000022", nombre: "Beto", sede: "Norte" }]);
+    listarProcesamientosDeSemana.mockImplementation(async (semana: string, grupo: string) => grupo === "Tiendas" && semana === "2026-09-28" ? ["00000011"] : ["00000022"]);
+    const { default: PaginaDeTurnos } = await import("./page");
+    const html = renderToStaticMarkup(await PaginaDeTurnos({ searchParams: Promise.resolve({ vista: "mensual", mes: "2026-10", equipo: "Tiendas", colaborador: "00000011" }) }));
+    expect(html).toContain("Horario del 2026-10-01: Liquidado. Abrir semana");
+    expect(html).toContain("Horario del 2026-10-05: Borrador editable. Abrir semana");
+    expect(listarProcesamientosDeSemana).toHaveBeenCalledWith("2026-09-28", "Tiendas");
+    expect(listarProcesamientosDeSemana).toHaveBeenCalledWith("2026-10-26", "Tiendas");
   });
 
   it("muestra la planificación sin un enlace redundante para crear horario", async () => {

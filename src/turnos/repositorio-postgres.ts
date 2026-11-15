@@ -291,6 +291,18 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
     return Boolean(periodo);
   }
 
+  async consultarEstadoDeFechas(inicio: string, fin: string): Promise<{ cerradas: string[]; sinPeriodo: string[] }> {
+    const periodos = await this.db.select({ inicio: periodosPlanilla.inicio, fin: periodosPlanilla.fin, estado: periodosPlanilla.estado }).from(periodosPlanilla)
+      .where(and(lte(periodosPlanilla.inicio, fin), gte(periodosPlanilla.fin, inicio)));
+    const resultado = { cerradas: [] as string[], sinPeriodo: [] as string[] };
+    for (let fecha = inicio; fecha <= fin; fecha = desplazarFecha(fecha, 1)) {
+      const periodo = periodos.find(p => p.inicio <= fecha && p.fin >= fecha);
+      if (!periodo) resultado.sinPeriodo.push(fecha);
+      else if (periodo.estado === "cerrado") resultado.cerradas.push(fecha);
+    }
+    return resultado;
+  }
+
   async listarSedesConColaboradoresActivos(): Promise<string[]> {
     const resultados = await this.db
       .select({ sede: sedes.nombre })
@@ -447,6 +459,23 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
       eq(turnosPublicados.dni, dni),
       gte(turnosPublicados.fecha, inicio),
       lte(turnosPublicados.fecha, fin),
+    ));
+  }
+
+  async listarBorradoresDelEquipoEnRango(equipo: Grupo, inicio: string, fin: string): Promise<CeldaDePlanSemanalEnBorrador[]> {
+    return this.db.select({
+      planId: celdasDePlanesSemanalesEnBorrador.planId,
+      dni: celdasDePlanesSemanalesEnBorrador.dni,
+      fecha: celdasDePlanesSemanalesEnBorrador.fecha,
+      sede: celdasDePlanesSemanalesEnBorrador.sede,
+      modeloHorarioId: celdasDePlanesSemanalesEnBorrador.modeloHorarioId,
+      entradaProgramada: celdasDePlanesSemanalesEnBorrador.entradaProgramada,
+      salidaProgramada: celdasDePlanesSemanalesEnBorrador.salidaProgramada,
+      descanso: celdasDePlanesSemanalesEnBorrador.descanso,
+      motivoNoAsistencia: celdasDePlanesSemanalesEnBorrador.motivoNoAsistencia,
+    }).from(celdasDePlanesSemanalesEnBorrador).innerJoin(planesSemanalesEnBorrador,
+      eq(planesSemanalesEnBorrador.id, celdasDePlanesSemanalesEnBorrador.planId)).where(and(
+      eq(planesSemanalesEnBorrador.equipo, equipo), gte(celdasDePlanesSemanalesEnBorrador.fecha, inicio), lte(celdasDePlanesSemanalesEnBorrador.fecha, fin),
     ));
   }
 
