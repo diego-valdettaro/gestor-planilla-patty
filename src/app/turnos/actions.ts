@@ -5,7 +5,14 @@ import { revalidatePath } from "next/cache";
 import { exigir, puedeConsultarHorarios, puedeOperarAsistenciaDelGrupo } from "@/autenticacion/permisos";
 import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
 import { crearCasosDeUsoDeTurnos } from "@/turnos/casos-de-uso-servidor";
-import { crearCasosDeUsoDePlanesSemanales } from "@/turnos/casos-de-uso-planes-semanales";
+import {
+  aplicarPatronSemanalAlMes,
+  crearCasosDeUsoDePlanesSemanales,
+  exigirPermisoParaEditarPlanSemanal,
+  validarMesDelPatron,
+  type PatronSemanalMensual,
+  type ResultadoDelPatronMensual,
+} from "@/turnos/casos-de-uso-planes-semanales";
 import { publicarPlanSemanal } from "@/turnos/publicar-plan-semanal";
 import { republicarPlanSemanal } from "@/turnos/republicar-plan-semanal";
 import { repositorioDeModelosDeHorario, repositorioDeTurnos } from "@/turnos/servicio";
@@ -53,6 +60,35 @@ export async function guardarCeldaDelBorrador(formData: FormData): Promise<void>
     descanso: datosDelHorario.descanso,
   });
   revalidatePath("/turnos");
+}
+
+export async function guardarPatronSemanalDelMes(formData: FormData): Promise<ResultadoDelPatronMensual> {
+  const actor = await obtenerActorActual();
+  const equipo = obtenerTexto(formData, "equipo");
+  exigirPermisoParaEditarPlanSemanal(actor, equipo);
+  const dni = obtenerTexto(formData, "dni");
+  const mes = obtenerTexto(formData, "mes");
+  validarMesDelPatron(mes);
+
+  const patron: PatronSemanalMensual = {};
+  for (const dia of [0, 1, 2, 3, 4, 5, 6] as const) {
+    const seleccion = formData.get(`dia-${dia}`);
+    if (seleccion === null || seleccion === "") continue;
+    if (seleccion === "descanso") {
+      patron[dia] = "descanso";
+      continue;
+    }
+    const modelo = typeof seleccion === "string"
+      ? /^modelo:([0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12})$/i.exec(seleccion)
+      : null;
+    if (!modelo) throw new Error("El horario seleccionado no es válido.");
+    patron[dia] = { modeloHorarioId: modelo[1] };
+  }
+
+  const resultado = await repositorioDeTurnos.enTransaccionDePatronMensual(dni, repositorio =>
+    aplicarPatronSemanalAlMes(repositorio, { obtenerActorActual: async () => actor }, { equipo, dni, mes, patron }));
+  revalidatePath("/turnos");
+  return resultado;
 }
 
 async function seleccionMensualEditable(formData: FormData) {

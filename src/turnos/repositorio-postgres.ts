@@ -22,9 +22,10 @@ import {
 import type { RepositorioDeGruposDeSedes, Grupo } from "./configurar-equipos-operativos";
 import type { CeldaDePlanSemanalEnBorrador, PlanSemanalEnBorrador, RepositorioDePlanesSemanales } from "./plan-semanal-en-borrador";
 import type { RepositorioDeTurnos, TurnoPublicado } from "./publicar-turno-semanal";
+import type { JornadaDelPatronMensual, RepositorioDelPatronMensual, ResultadoDelPatronMensual } from "./casos-de-uso-planes-semanales";
 import type { ProcesamientoDeHorarioSemanal } from "./procesar-horario-semanal";
 import type { Actor } from "@/colaboradores/registrar-colaborador";
-import { invalidarAprobacionesDeAsistencia, rangoDeFechas, type ConexionDeAprobaciones } from "@/periodos/aprobaciones";
+import { bloquearPeriodos, invalidarAprobacionesDeAsistencia, rangoDeFechas, type ConexionDeAprobaciones } from "@/periodos/aprobaciones";
 import { vigenciasConfirmadasDe } from "@/relaciones-laborales/repositorio-postgres";
 import { verificarQueLaSemanaTengaRelacion, type Vigencia } from "@/relaciones-laborales/vigencia";
 import { motivoPlanificadoDe, validarJornadaPlanificada } from "./jornada-planificada";
@@ -490,6 +491,55 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
   async buscarPorId(id: string): Promise<PlanSemanalEnBorrador | undefined> {
     const [plan] = await this.db.select().from(planesSemanalesEnBorrador).where(eq(planesSemanalesEnBorrador.id, id));
     return plan ? this.conCeldas(plan) : undefined;
+  }
+
+  async enTransaccionDePatronMensual<T>(
+    dni: string,
+    ejecutar: (repositorio: RepositorioDelPatronMensual) => Promise<T>,
+  ): Promise<T> {
+    return this.db.transaction(async tx => {
+      // Mismo orden que publicar horarios y confirmar relaciones: período, luego persona.
+      await bloquearPeriodos(tx);
+      await tx.select({ dni: colaboradores.dni }).from(colaboradores)
+        .where(eq(colaboradores.dni, dni)).for("no key update");
+      const repositorio = new RepositorioPostgresDeTurnos(tx);
+      return ejecutar(Object.assign(repositorio, {
+        guardarNuevasJornadasDelMes: (equipo: Grupo, jornadas: JornadaDelPatronMensual[]) =>
+          repositorio.persistirNuevasJornadasDelMes(equipo, jornadas),
+      }));
+    });
+  }
+
+  private async persistirNuevasJornadasDelMes(
+    equipo: Grupo,
+    jornadas: JornadaDelPatronMensual[],
+  ): Promise<ResultadoDelPatronMensual> {
+    const planes = new Map<string, string>();
+    const guardadas: string[] = [];
+    const omitidas: ResultadoDelPatronMensual["omitidas"] = [];
+
+    for (const jornada of jornadas) {
+      const semana = inicioDeSemana(jornada.fecha);
+      let planId = planes.get(semana);
+      if (!planId) {
+        ({ id: planId } = await this.obtenerOCrear(semana, equipo));
+        planes.set(semana, planId);
+      }
+      const [insertada] = await this.db.insert(celdasDePlanesSemanalesEnBorrador)
+        .values(normalizarJornada({ ...jornada, planId }, equipo))
+        .onConflictDoNothing({
+          target: [
+            celdasDePlanesSemanalesEnBorrador.planId,
+            celdasDePlanesSemanalesEnBorrador.dni,
+            celdasDePlanesSemanalesEnBorrador.fecha,
+          ],
+        })
+        .returning({ fecha: celdasDePlanesSemanalesEnBorrador.fecha });
+      if (insertada) guardadas.push(insertada.fecha);
+      else omitidas.push({ fecha: jornada.fecha, motivo: "Asignación existente" });
+    }
+
+    return { guardadas, omitidas };
   }
 
   async guardarCelda(celda: CeldaDePlanSemanalEnBorrador): Promise<void> {
