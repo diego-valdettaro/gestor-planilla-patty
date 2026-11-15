@@ -2,7 +2,7 @@ import React, { createElement, isValidElement, type ComponentProps, type ReactNo
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-const mensual = vi.hoisted(() => ({ guardar: vi.fn(), refresh: vi.fn(), push: vi.fn() }));
+const mensual = vi.hoisted(() => ({ guardar: vi.fn(), borrar: vi.fn(), refresh: vi.fn(), push: vi.fn() }));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mensual.push, refresh: mensual.refresh }),
@@ -13,6 +13,7 @@ vi.mock("@/app/icono-candado", () => ({ IconoCandado: () => null }));
 vi.mock("./actions", () => ({
   guardarBorradorDesdeGrilla: vi.fn(),
   guardarCeldaDelBorrador: mensual.guardar,
+  borrarCeldaDelBorrador: mensual.borrar,
   publicarPlanSemanalDesdeGrilla: vi.fn(),
   republicarPlanSemanalDesdeGrilla: vi.fn(),
 }));
@@ -402,7 +403,7 @@ const mesEditable = {
 type PropsDeControl = {
   children?: ReactNode;
   "aria-label"?: string;
-  onClick?: () => void;
+  onClick?: (evento?: { currentTarget: Pick<HTMLButtonElement, "focus"> }) => void;
   action?: (datos: FormData) => Promise<void>;
 };
 
@@ -418,12 +419,17 @@ function buscarControl(arbol: ReactNode, predicado: (props: PropsDeControl) => b
   }
 }
 
-function calendarioInteractivo(fecha?: string, horario = "personalizado") {
+function calendarioInteractivo(fecha?: string, horario = "personalizado", props: ComponentProps<typeof PlanificadorMensual> = mesEditable) {
   const seleccionar = vi.fn();
   const fechaMock = vi.spyOn(React, "useState").mockImplementationOnce(() => [fecha ? { fecha, horario } : null, seleccionar]);
-  const arbol = PlanificadorMensual(mesEditable);
+  const referencia = { current: null as HTMLButtonElement | null };
+  const ref = vi.spyOn(React, "useRef").mockReturnValueOnce(referencia);
+  const effect = vi.spyOn(React, "useEffect").mockImplementationOnce(efecto => { efecto(); });
+  const arbol = PlanificadorMensual(props);
   fechaMock.mockRestore();
-  return { arbol, seleccionar };
+  ref.mockRestore();
+  effect.mockRestore();
+  return { arbol, seleccionar, referencia };
 }
 
 describe("edición de un día en el calendario mensual", () => {
@@ -431,7 +437,7 @@ describe("edición de un día en el calendario mensual", () => {
     const cerrado = calendarioInteractivo();
     const boton = buscarControl(cerrado.arbol, props => props["aria-label"]?.includes("Editar horario del 2026-09-07") ?? false);
     expect(boton, "acción de edición mensual").toBeDefined();
-    boton?.onClick?.();
+    boton?.onClick?.({ currentTarget: { focus: vi.fn() } });
     expect(cerrado.seleccionar).toHaveBeenCalledWith({ fecha: "2026-09-07", horario: "personalizado" });
 
     const abierto = calendarioInteractivo("2026-09-07");
@@ -460,6 +466,24 @@ describe("edición de un día en el calendario mensual", () => {
     cancelar?.onClick?.();
     expect(seleccionar).toHaveBeenCalledWith(null);
     expect(mensual.guardar).not.toHaveBeenCalled();
+  });
+
+  it("permite quitar la asignación vigente solo en un borrador sin publicación", async () => {
+    mensual.borrar.mockReset().mockResolvedValue(undefined);
+    const borrador = { ...mesEditable, borradores: [jornadaPersonalizada], publicados: [] };
+    expect(renderToStaticMarkup(calendarioInteractivo("2026-09-07", "personalizado").arbol)).not.toContain("Quitar asignación");
+    const { arbol } = calendarioInteractivo("2026-09-07", "quitar", borrador);
+    expect(renderToStaticMarkup(arbol)).toContain("Quitar asignación");
+    const form = buscarControl(arbol, props => typeof props.action === "function");
+    const datos = new FormData();
+    datos.set("horario", "quitar");
+
+    await form?.action?.(datos);
+
+    expect(mensual.borrar).toHaveBeenCalledTimes(1);
+    expect(Object.fromEntries(mensual.borrar.mock.lastCall?.[0] ?? [])).toMatchObject({
+      equipo: "Tiendas", fecha: "2026-09-07", dni: "00001024",
+    });
   });
 
   it("refrescar edición mensual guarda la selección puntual y conserva el contexto", async () => {

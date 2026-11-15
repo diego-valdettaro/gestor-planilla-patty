@@ -9,6 +9,7 @@ import { crearCasosDeUsoDePlanesSemanales } from "@/turnos/casos-de-uso-planes-s
 import { publicarPlanSemanal } from "@/turnos/publicar-plan-semanal";
 import { republicarPlanSemanal } from "@/turnos/republicar-plan-semanal";
 import { repositorioDeModelosDeHorario, repositorioDeTurnos } from "@/turnos/servicio";
+import { estaVigenteEn } from "@/relaciones-laborales/vigencia";
 import { esMotivoPlanificadoDeNoAsistencia, type MotivoPlanificadoDeNoAsistencia } from "@/turnos/jornada-planificada";
 
 export async function publicarTurnoDesdeGrilla(formData: FormData): Promise<void> {
@@ -54,7 +55,7 @@ export async function guardarCeldaDelBorrador(formData: FormData): Promise<void>
   revalidatePath("/turnos");
 }
 
-async function guardarCeldaMensual(formData: FormData): Promise<void> {
+async function seleccionMensualEditable(formData: FormData) {
   const equipo = obtenerTexto(formData, "equipo");
   exigir(puedeOperarAsistenciaDelGrupo(await obtenerActorActual(), equipo), "No tiene permiso para editar planes semanales de este grupo.");
   const fecha = obtenerTexto(formData, "fecha");
@@ -65,7 +66,11 @@ async function guardarCeldaMensual(formData: FormData): Promise<void> {
   const { cerradas } = await repositorioDeTurnos.consultarEstadoDeFechas(fecha, fecha);
   if (cerradas.includes(fecha)) throw new Error("La fecha seleccionada está cerrada y requiere reapertura.");
 
-  const dni = obtenerTexto(formData, "dni");
+  return { equipo, fecha, dni: obtenerTexto(formData, "dni") };
+}
+
+async function guardarCeldaMensual(formData: FormData): Promise<void> {
+  const { equipo, fecha, dni } = await seleccionMensualEditable(formData);
   const horario = obtenerTexto(formData, "horario");
   const casos = casosDeUsoDePlanesSemanales();
   if (esMotivoPlanificadoDeNoAsistencia(horario) && horario !== "sin_relacion_laboral") {
@@ -113,7 +118,18 @@ export async function guardarBorradorDesdeGrilla(planId: string, celdasJson: str
 }
 
 export async function borrarCeldaDelBorrador(formData: FormData): Promise<void> {
-  await casosDeUsoDePlanesSemanales().borrarCelda(obtenerTexto(formData, "planId"), obtenerTexto(formData, "dni"), obtenerTexto(formData, "fecha"));
+  if (!formData.has("planId")) {
+    await exigirAccesoAHorarios();
+    const { equipo, fecha, dni } = await seleccionMensualEditable(formData);
+    if (!estaVigenteEn(await repositorioDeTurnos.listarVigenciasConfirmadas(dni), fecha)) {
+      throw new Error("La fecha está fuera de la relación laboral confirmada.");
+    }
+    const celdas = await repositorioDeTurnos.listarBorradoresDelEquipoEnRango(equipo, fecha, fecha);
+    const celda = celdas.find(jornada => jornada.dni === dni);
+    if (celda) await casosDeUsoDePlanesSemanales().borrarCelda(celda.planId, dni, fecha);
+  } else {
+    await casosDeUsoDePlanesSemanales().borrarCelda(obtenerTexto(formData, "planId"), obtenerTexto(formData, "dni"), obtenerTexto(formData, "fecha"));
+  }
   revalidatePath("/turnos");
 }
 

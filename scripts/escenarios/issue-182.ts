@@ -55,6 +55,17 @@ export async function crearEscenario182(pool: Pool) {
       VALUES ($1, '2020-01-01', $3, now(), $3), ($2, $4::date + 2, $3, now(), $3)
     `, [ana, beto, gerente, semana]);
 
+    const plan = await cliente.query<{ id: string }>(
+      "INSERT INTO planes_semanales_en_borrador (semana, equipo) VALUES ($1, $2) RETURNING id",
+      [semana, GRUPO_182],
+    );
+    await cliente.query(`
+      INSERT INTO celdas_planes_semanales_en_borrador
+        (plan_id, dni, fecha, grupo, sede, modelo_horario_id, entrada_programada, salida_programada, descanso)
+      SELECT $1, $2, $3::date + dia, $4, $5, $6, '08:00', '16:00', false
+      FROM generate_series(0, 6) AS dias(dia)
+    `, [plan.rows[0].id, ana, semana, GRUPO_182, SEDE_182, modelos.rows[0].id]);
+
     const publicados = await cliente.query<{ id: string; fecha: string }>(`
       INSERT INTO turnos_publicados (dni, fecha, grupo, sede, modelo_horario_id, entrada_programada, salida_programada, descanso)
       SELECT $1, $2::date + dia, $3, $4, $5, '08:00', '16:00', false

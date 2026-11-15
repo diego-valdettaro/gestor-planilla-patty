@@ -11,7 +11,7 @@ import { estaVigenteEn, type Vigencia } from "@/relaciones-laborales/vigencia";
 
 import { estadoDeCelda, NOMBRE_DEL_ESTADO_DE_HORARIO } from "./estado-de-celda";
 
-import { guardarCeldaDelBorrador } from "./actions";
+import { borrarCeldaDelBorrador, guardarCeldaDelBorrador } from "./actions";
 import { opcionesDeHorario, valorDe } from "./planificador-semanal";
 
 type Jornada = DatosDeJornadaPlanificada & { dni: string; fecha: string };
@@ -23,6 +23,13 @@ export function PlanificadorMensual({ mes, equipo, equipos, colaboradores, dni, 
 }) {
   const router = useRouter();
   const [edicion, setEdicion] = React.useState<{ fecha: string; horario: string; guardando?: boolean; error?: string } | null>(null);
+  const disparador = React.useRef<HTMLButtonElement | null>(null);
+  React.useEffect(() => {
+    if (!edicion && disparador.current) {
+      disparador.current.focus();
+      disparador.current = null;
+    }
+  }, [edicion]);
   const persona = colaboradores.find(p => p.dni === dni);
   const porFecha = new Map(borradores.filter(c => c.dni === dni).map(c => [c.fecha, c]));
   const publicadosPorFecha = new Map(publicados.filter(c => c.dni === dni).map(c => [c.fecha, c]));
@@ -47,7 +54,8 @@ export function PlanificadorMensual({ mes, equipo, equipos, colaboradores, dni, 
       ? `${formulario.get("entrada")}|${formulario.get("salida")}`
       : horario.replace(/^motivo:/, ""));
     try {
-      await guardarCeldaDelBorrador(datos);
+      if (horario === "quitar") await borrarCeldaDelBorrador(datos);
+      else await guardarCeldaDelBorrador(datos);
       setEdicion(null);
       router.refresh();
     } catch (error) {
@@ -58,6 +66,7 @@ export function PlanificadorMensual({ mes, equipo, equipos, colaboradores, dni, 
   const fechaEditada = edicion?.fecha;
   const jornadaEditada = fechaEditada ? porFecha.get(fechaEditada) ?? publicadosPorFecha.get(fechaEditada) : undefined;
   const opciones = opcionesDeHorario(modelos).filter(opcion => opcion.value);
+  const sePuedeQuitar = fechaEditada && jornadaEditada && !publicadosPorFecha.has(fechaEditada);
   function ruta(cambios: Record<string, string> = {}) {
     return `/turnos?${new URLSearchParams({ vista: "mensual", mes, equipo, ...(dni ? { colaborador: dni } : {}), ...cambios })}`;
   }
@@ -80,6 +89,7 @@ export function PlanificadorMensual({ mes, equipo, equipos, colaboradores, dni, 
             <select name="horario" autoFocus required value={edicion.horario} disabled={edicion.guardando} onChange={event => setEdicion({ ...edicion, horario: event.target.value, error: undefined })}>
               <option value="" disabled>Seleccione el horario</option>
               {opciones.map(opcion => <option key={opcion.value} value={opcion.value}>{opcion.label}</option>)}
+              {sePuedeQuitar && <option value="quitar">Quitar asignación</option>}
             </select>
           </label>
           {edicion.horario === "personalizado" && <>
@@ -119,7 +129,10 @@ export function PlanificadorMensual({ mes, equipo, equipos, colaboradores, dni, 
           const horarioActual = valorDe(celda);
           return <div key={fecha}>
             <button aria-label={`Editar horario del ${fecha}: ${estado}`} className={claseDia} type="button" disabled={edicion?.guardando}
-              onClick={() => setEdicion({ fecha, horario: opciones.some(opcion => opcion.value === horarioActual) ? horarioActual : celda?.entradaProgramada ? "personalizado" : "" })}>{contenido}</button>
+              onClick={event => {
+                disparador.current = event.currentTarget;
+                setEdicion({ fecha, horario: opciones.some(opcion => opcion.value === horarioActual) ? horarioActual : celda?.entradaProgramada ? "personalizado" : "" });
+              }}>{contenido}</button>
             <Link aria-label={etiqueta} href={destino}><small>Abrir semana</small></Link>
           </div>;
         })}</div>
