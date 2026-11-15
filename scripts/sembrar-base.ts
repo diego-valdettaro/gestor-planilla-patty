@@ -553,7 +553,7 @@ function resumen(): string {
     "  Karen Reingreso  -> dos relaciones con el mismo DNI; reingresó el martes de la semana de actividad",
     "  Luis Pendiente   -> ingreso sin confirmar: no se le puede publicar el horario",
     "",
-    "Pagos · Condiciones laborales (finanzas / finanzas; el Administrador no tiene acceso):",
+    "Pagos · Condiciones laborales (finanzas / finanzas; el Administrador también tiene acceso):",
     "  Ana Borrador     -> dos vigencias de sueldo en el mes actual (cambio el día 16; antes del 16 la segunda es «Programado»)",
     "  Beto Publicado   -> AFP Integra con esquema mixto y asignación familiar otorgada; Carla Cambios -> REMYPE con beneficio familiar otorgado",
     "  Darío / Elena    -> datos incompletos («Pendiente» y «Falta: …»); el resto, sin ningún dato",
