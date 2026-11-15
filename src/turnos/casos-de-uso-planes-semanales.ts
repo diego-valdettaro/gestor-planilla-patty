@@ -7,7 +7,7 @@ import { jornadasPlanificadasSonIguales, motivoPlanificadoDe, validarJornadaPlan
 import type { CeldaDePlanSemanalEnBorrador, PlanSemanalEnBorrador, RepositorioDePlanesSemanales } from "./plan-semanal-en-borrador";
 import { estaVigenteEn, type Vigencia } from "@/relaciones-laborales/vigencia";
 
-import { desplazarFecha } from "./semana";
+import { desplazarFecha, inicioDeSemana } from "./semana";
 import { esDiaSinRelacionLaboral } from "./semana-con-relacion-laboral";
 
 type SeleccionDeCelda = Pick<CeldaDePlanSemanalEnBorrador, "dni" | "fecha" | "sede">;
@@ -23,7 +23,29 @@ export function crearCasosDeUsoDePlanesSemanales(
     if (equipo !== undefined) exigir(puedeOperarAsistenciaDelGrupo(actor, equipo), "No tiene permiso para editar planes semanales de este grupo.");
   }
 
+  async function validarGuardadoPuntual(
+    plan: Pick<PlanSemanalEnBorrador, "semana" | "equipo">,
+    celda: Omit<CeldaDePlanSemanalEnBorrador, "planId">,
+  ): Promise<void> {
+    await verificarQueNoEsteProcesado(repositorio, celda.dni, plan.semana);
+    await validarCelda(repositorio, plan, celda);
+    if (!(await repositorio.colaboradorPerteneceAEquipo(celda.dni, plan.equipo))) {
+      throw new Error("El colaborador no pertenece al equipo operativo del plan.");
+    }
+    await verificarQueNoSeaPublicadoProcesado(repositorio, celda);
+  }
+
   return {
+    async guardarCeldaPorFecha(
+      equipo: Grupo,
+      celda: Omit<CeldaDePlanSemanalEnBorrador, "planId">,
+    ): Promise<void> {
+      await autorizar(equipo);
+      const semana = inicioDeSemana(celda.fecha);
+      await validarGuardadoPuntual({ semana, equipo }, celda);
+      const plan = await repositorio.obtenerOCrear(semana, equipo);
+      await repositorio.guardarCelda({ planId: plan.id, ...celda });
+    },
     async obtenerOCrear(semana: string, equipo: Grupo): Promise<PlanSemanalEnBorrador> {
       await autorizar(equipo);
       return repositorio.obtenerOCrear(semana, equipo);
@@ -35,12 +57,7 @@ export function crearCasosDeUsoDePlanesSemanales(
       await autorizar();
       const plan = await obtenerPlan(repositorio, planId);
       await autorizar(plan.equipo);
-      await verificarQueNoEsteProcesado(repositorio, celda.dni, plan.semana);
-      await validarCelda(repositorio, plan, celda);
-      if (!(await repositorio.colaboradorPerteneceAEquipo(celda.dni, plan.equipo))) {
-        throw new Error("El colaborador no pertenece al equipo operativo del plan.");
-      }
-      await verificarQueNoSeaPublicadoProcesado(repositorio, celda);
+      await validarGuardadoPuntual(plan, celda);
       await repositorio.guardarCelda({ planId, ...celda });
     },
     async guardarBorrador(
@@ -171,7 +188,7 @@ async function obtenerPlan(repositorio: RepositorioDePlanesSemanales, id: string
   return plan;
 }
 
-async function validarCelda(repositorio: RepositorioDePlanesSemanales, plan: PlanSemanalEnBorrador, celda: Omit<CeldaDePlanSemanalEnBorrador, "planId">): Promise<void> {
+async function validarCelda(repositorio: RepositorioDePlanesSemanales, plan: Pick<PlanSemanalEnBorrador, "semana" | "equipo">, celda: Omit<CeldaDePlanSemanalEnBorrador, "planId">): Promise<void> {
   if (!fechaPerteneceALaSemana(celda.fecha, plan.semana)) throw new Error("La fecha no pertenece a la semana del plan.");
   await validarJornadaPlanificada(repositorio, plan.equipo, celda);
 }

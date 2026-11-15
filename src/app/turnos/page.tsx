@@ -31,16 +31,18 @@ export default async function PaginaDeTurnos({ searchParams }: { searchParams: P
     const dias = Array.from({ length: ultimoDia }, (_, i) => `${mes}-${String(i + 1).padStart(2, "0")}`);
     const colaboradores = await repositorioDeTurnos.listarColaboradoresActivosPorEquipo(equipo);
     const persona = colaboradores.find(c => c.dni === parametros.colaborador) ?? colaboradores[0];
-    const [borradores, publicados, condiciones, vigencias] = await Promise.all([
+    const [borradores, publicados, condiciones, vigencias, sedes] = await Promise.all([
       repositorioDeTurnos.listarBorradoresDelEquipoEnRango(equipo, dias[0], dias.at(-1)!),
       repositorioDeTurnos.listarPublicadosPorColaboradoresYSemana(persona ? [persona.dni] : [], dias[0], dias.at(-1)!),
       repositorioDeTurnos.consultarEstadoDeFechas(dias[0], dias.at(-1)!),
       persona ? repositorioDeTurnos.listarVigenciasConfirmadas(persona.dni) : Promise.resolve([]),
+      repositorioDeTurnos.listarSedesActivasPorGrupo(equipo),
     ]);
+    const modelos = (await Promise.all(sedes.map(sede => repositorioDeModelosDeHorario.listarPorSede(sede)))).flat();
     const semanas = [...new Set(dias.map(inicioDeSemana))];
     const procesamientos = persona ? await Promise.all(semanas.map(semanaDelMes => repositorioDeTurnos.listarProcesamientosDeSemana(semanaDelMes, equipo))) : [];
     const semanasProcesadas = semanas.filter((_, indice) => procesamientos[indice]?.includes(persona!.dni));
-    return <main className="contenido pagina pagina-ajustes pagina-turnos"><header className="encabezado encabezado-pagina"><div><h1>Planificación de horarios</h1><p>Consulte el mes y abra una semana para editar o publicar.</p></div></header><PlanificadorMensual mes={mes} equipo={equipo} equipos={equipos} colaboradores={colaboradores} dni={persona?.dni} dias={dias} borradores={borradores} publicados={publicados} vigencias={vigencias} fechasCerradas={condiciones.cerradas} semanasProcesadas={semanasProcesadas} /></main>;
+    return <main className="contenido pagina pagina-ajustes pagina-turnos"><header className="encabezado encabezado-pagina"><div><h1>Planificación de horarios</h1><p>Edite el día desde el mes. Publique los cambios desde su semana.</p></div></header><PlanificadorMensual key={`${mes}:${equipo}:${persona?.dni ?? ""}`} sedes={sedes} modelos={modelos} soloLectura={!puedeOperarAsistenciaDelGrupo(actor, equipo)} mes={mes} equipo={equipo} equipos={equipos} colaboradores={colaboradores} dni={persona?.dni} dias={dias} borradores={borradores} publicados={publicados} vigencias={vigencias} fechasCerradas={condiciones.cerradas} semanasProcesadas={semanasProcesadas} /></main>;
   }
   const dias = diasDeLaSemana(semana);
   const colaboradoresActivos = await repositorioDeTurnos.listarColaboradoresActivosPorEquipo(equipo);

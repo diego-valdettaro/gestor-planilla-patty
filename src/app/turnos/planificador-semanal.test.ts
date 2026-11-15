@@ -1,19 +1,23 @@
-import { createElement, type ComponentProps } from "react";
+import React, { createElement, isValidElement, type ComponentProps, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
+const mensual = vi.hoisted(() => ({ guardar: vi.fn(), refresh: vi.fn(), push: vi.fn() }));
+
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => ({ push: mensual.push, refresh: mensual.refresh }),
 }));
 
 vi.mock("@/app/icono-candado", () => ({ IconoCandado: () => null }));
 
 vi.mock("./actions", () => ({
   guardarBorradorDesdeGrilla: vi.fn(),
+  guardarCeldaDelBorrador: mensual.guardar,
   publicarPlanSemanalDesdeGrilla: vi.fn(),
   republicarPlanSemanalDesdeGrilla: vi.fn(),
 }));
 
+import { PlanificadorMensual } from "./planificador-mensual";
 import type { MotivoPlanificadoDeNoAsistencia } from "@/turnos/jornada-planificada";
 
 import { PlanificadorSemanal as PlanificadorSemanalBase, celdasDeSemanaCompleta, valorDe } from "./planificador-semanal";
@@ -382,5 +386,105 @@ describe("calendario mensual de horarios", () => {
     const cerrado = html.match(/<a aria-label="Horario del 2026-09-05:[\s\S]*?<\/a>/)?.[0] ?? "";
     expect(cerrado).toContain("09:00");
     expect(cerrado).not.toContain("10:00");
+  });
+});
+
+const mesEditable = {
+  mes: "2026-09", equipo: "Tiendas", equipos: ["Tiendas"], dni: "00001024",
+  colaboradores: [{ dni: "00001024", nombre: "Ana Pérez" }],
+  dias: ["2026-09-06", "2026-09-07", "2026-09-08", "2026-09-09", "2026-09-14"],
+  borradores: [], publicados: [jornadaPersonalizada],
+  vigencias: [{ ingreso: "2026-09-07", cese: null }],
+  fechasCerradas: ["2026-09-09"], semanasProcesadas: ["2026-09-14"],
+  sedes: ["Tienda Norte", "Tienda Sur"], modelos: [modeloApertura],
+};
+
+type PropsDeControl = {
+  children?: ReactNode;
+  "aria-label"?: string;
+  onClick?: () => void;
+  action?: (datos: FormData) => Promise<void>;
+};
+
+function buscarControl(arbol: ReactNode, predicado: (props: PropsDeControl) => boolean): PropsDeControl | undefined {
+  if (Array.isArray(arbol)) {
+    for (const hijo of arbol) {
+      const encontrado = buscarControl(hijo, predicado);
+      if (encontrado) return encontrado;
+    }
+  }
+  if (isValidElement<PropsDeControl>(arbol)) {
+    return predicado(arbol.props) ? arbol.props : buscarControl(arbol.props.children, predicado);
+  }
+}
+
+function calendarioInteractivo(fecha?: string, horario = "personalizado") {
+  const seleccionar = vi.fn();
+  const fechaMock = vi.spyOn(React, "useState").mockImplementationOnce(() => [fecha ? { fecha, horario } : null, seleccionar]);
+  const arbol = PlanificadorMensual(mesEditable);
+  fechaMock.mockRestore();
+  return { arbol, seleccionar };
+}
+
+describe("edición de un día en el calendario mensual", () => {
+  it("editor mensual editable muestra la persona, el día, la jornada y las opciones semanales", () => {
+    const cerrado = calendarioInteractivo();
+    const boton = buscarControl(cerrado.arbol, props => props["aria-label"]?.includes("Editar horario del 2026-09-07") ?? false);
+    expect(boton, "acción de edición mensual").toBeDefined();
+    boton?.onClick?.();
+    expect(cerrado.seleccionar).toHaveBeenCalledWith({ fecha: "2026-09-07", horario: "personalizado" });
+
+    const abierto = calendarioInteractivo("2026-09-07");
+    const html = renderToStaticMarkup(abierto.arbol);
+    expect(html).toContain("Editar horario de Ana Pérez");
+    expect(html).toContain("2026-09-07");
+    expect(html).toContain('value="08:00"');
+    expect(html).toContain("Apertura");
+    expect(html).toContain("Vacaciones");
+  });
+
+  it("restricciones del editor mensual dejan habilitada la edición solo para días editables", () => {
+    const html = renderToStaticMarkup(createElement(PlanificadorMensual, mesEditable));
+    expect(html, "acción de edición mensual").toContain("Editar horario del 2026-09-07");
+    for (const dia of ["06", "09", "14"]) expect(html).not.toContain(`Editar horario del 2026-09-${dia}`);
+    const lectura = renderToStaticMarkup(createElement(PlanificadorMensual, { ...mesEditable, soloLectura: true }));
+    expect(lectura).not.toContain("Editar horario del");
+    expect(lectura).toContain("Abrir semana");
+  });
+
+  it("cancelar edición mensual cierra el editor sin guardar", () => {
+    mensual.guardar.mockClear();
+    const { arbol, seleccionar } = calendarioInteractivo("2026-09-07", "descanso");
+    const cancelar = buscarControl(arbol, props => props.children === "Cancelar");
+    expect(cancelar, "formulario de edición mensual").toBeDefined();
+    cancelar?.onClick?.();
+    expect(seleccionar).toHaveBeenCalledWith(null);
+    expect(mensual.guardar).not.toHaveBeenCalled();
+  });
+
+  it("refrescar edición mensual guarda la selección puntual y conserva el contexto", async () => {
+    mensual.push.mockClear();
+    mensual.refresh.mockClear();
+    mensual.guardar.mockReset().mockResolvedValue(undefined);
+    const { arbol, seleccionar } = calendarioInteractivo("2026-09-07", "descanso");
+    const form = buscarControl(arbol, props => typeof props.action === "function");
+    expect(form, "formulario de edición mensual").toBeDefined();
+    const datos = new FormData();
+    datos.set("horario", "descanso");
+
+    await form?.action?.(datos);
+
+    expect(Object.fromEntries(mensual.guardar.mock.lastCall?.[0] ?? [])).toEqual({
+      equipo: "Tiendas", fecha: "2026-09-07", dni: "00001024", horario: "descanso",
+    });
+    expect(mensual.guardar).toHaveBeenCalledTimes(1);
+    expect(seleccionar).toHaveBeenCalledWith(null);
+    expect(mensual.refresh).toHaveBeenCalledTimes(1);
+    expect(mensual.push).not.toHaveBeenCalled();
+    const actualizado = renderToStaticMarkup(createElement(PlanificadorMensual, {
+      ...mesEditable, borradores: [{ ...jornadaPersonalizada, sede: null, entradaProgramada: null, salidaProgramada: null, descanso: true }],
+    }));
+    expect(actualizado).toContain("Editar horario del 2026-09-07: Cambios sin publicar");
+    expect(actualizado).toContain("/turnos?semana=2026-09-07");
   });
 });

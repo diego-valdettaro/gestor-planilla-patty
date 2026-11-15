@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { exigir, puedeConsultarHorarios } from "@/autenticacion/permisos";
+import { exigir, puedeConsultarHorarios, puedeOperarAsistenciaDelGrupo } from "@/autenticacion/permisos";
 import { obtenerActorActual } from "@/autenticacion/sesion-del-servidor";
 import { crearCasosDeUsoDeTurnos } from "@/turnos/casos-de-uso-servidor";
 import { crearCasosDeUsoDePlanesSemanales } from "@/turnos/casos-de-uso-planes-semanales";
@@ -37,6 +37,11 @@ async function exigirAccesoAHorarios(): Promise<void> {
 
 export async function guardarCeldaDelBorrador(formData: FormData): Promise<void> {
   await exigirAccesoAHorarios();
+  if (!formData.has("planId")) {
+    await guardarCeldaMensual(formData);
+    revalidatePath("/turnos");
+    return;
+  }
   const sede = obtenerTexto(formData, "sede");
   const datosDelHorario = await interpretarHorarioParaSede(obtenerTexto(formData, "horario"), sede);
   if (!datosDelHorario) throw new Error("El horario seleccionado no es válido.");
@@ -47,6 +52,37 @@ export async function guardarCeldaDelBorrador(formData: FormData): Promise<void>
     descanso: datosDelHorario.descanso,
   });
   revalidatePath("/turnos");
+}
+
+async function guardarCeldaMensual(formData: FormData): Promise<void> {
+  const equipo = obtenerTexto(formData, "equipo");
+  exigir(puedeOperarAsistenciaDelGrupo(await obtenerActorActual(), equipo), "No tiene permiso para editar planes semanales de este grupo.");
+  const fecha = obtenerTexto(formData, "fecha");
+  const fechaUtc = new Date(`${fecha}T00:00:00.000Z`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha) || !Number.isFinite(fechaUtc.getTime()) || fechaUtc.toISOString().slice(0, 10) !== fecha) {
+    throw new Error("La fecha seleccionada no es válida.");
+  }
+  const { cerradas } = await repositorioDeTurnos.consultarEstadoDeFechas(fecha, fecha);
+  if (cerradas.includes(fecha)) throw new Error("La fecha seleccionada está cerrada y requiere reapertura.");
+
+  const dni = obtenerTexto(formData, "dni");
+  const horario = obtenerTexto(formData, "horario");
+  const casos = casosDeUsoDePlanesSemanales();
+  if (esMotivoPlanificadoDeNoAsistencia(horario) && horario !== "sin_relacion_laboral") {
+    await casos.guardarCeldaPorFecha(equipo, {
+      dni, fecha, sede: null, entradaProgramada: null, salidaProgramada: null,
+      ...(horario === "descanso" ? { descanso: true } : { motivoNoAsistencia: horario }),
+    });
+    return;
+  }
+
+  const sede = obtenerTexto(formData, "sede");
+  const datos = await interpretarHorarioParaSede(horario, sede);
+  if (!datos) throw new Error("El horario seleccionado no es válido.");
+  await casos.guardarCeldaPorFecha(equipo, {
+    dni, fecha, sede, modeloHorarioId: datos.modeloHorarioId,
+    entradaProgramada: datos.entrada, salidaProgramada: datos.salida, descanso: datos.descanso,
+  });
 }
 
 export async function guardarBorradorDesdeGrilla(planId: string, celdasJson: string): Promise<void> {
