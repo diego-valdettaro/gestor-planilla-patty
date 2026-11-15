@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const simulacro = vi.hoisted(() => ({
   actor: vi.fn(),
   buscarModelo: vi.fn(),
-  repositorioDeTurnos: { buscarPorId: vi.fn(), obtenerOCrear: vi.fn(), colaboradorPerteneceAEquipo: vi.fn(), listarVigenciasConfirmadas: vi.fn() },
+  repositorioDeTurnos: { buscarPorId: vi.fn(), obtenerOCrear: vi.fn(), colaboradorPerteneceAEquipo: vi.fn(), listarVigenciasConfirmadas: vi.fn(), consultarEstadoDeFechas: vi.fn(), horarioSemanalEstaProcesado: vi.fn(), buscarPublicado: vi.fn(), guardarCelda: vi.fn(), borrarCelda: vi.fn(), listarBorradoresDelEquipoEnRango: vi.fn() },
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -60,5 +60,81 @@ describe("acciones de Horarios (borde del servidor)", () => {
     await expect(borrarCeldaDelBorrador(formulario({ planId: "p9", dni: "00000001", fecha: "2026-09-07" }))).rejects.toThrow("No tiene permiso para editar planes semanales de este grupo.");
     await expect(publicarPlanSemanalDesdeGrilla(formulario({ planId: "p9", dni: "00000001" }))).rejects.toThrow("No tiene permiso para publicar planes semanales de este grupo.");
     await expect(republicarPlanSemanalDesdeGrilla(formulario({ planId: "p9", dni: "00000001", motivo: "Corrección" }))).rejects.toThrow("No tiene permiso para republicar horarios semanales de este grupo.");
+  });
+});
+
+describe("guardado mensual", () => {
+  const repositorio = simulacro.repositorioDeTurnos;
+  const gerente = { id: "g1", rol: "gerente_de_area", grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] };
+  const fecha = "2030-09-03";
+  const seleccion = { equipo: "Tiendas", dni: "00000001", fecha, horario: "descanso", sede: "Lima" };
+  const plan = { id: "p1", semana: "2030-09-02", equipo: "Tiendas", celdas: [] };
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    simulacro.actor.mockResolvedValue(gerente);
+    repositorio.obtenerOCrear.mockResolvedValue(plan);
+    repositorio.buscarPorId.mockResolvedValue(plan);
+    repositorio.colaboradorPerteneceAEquipo.mockResolvedValue(true);
+    repositorio.listarVigenciasConfirmadas.mockResolvedValue([{ ingreso: "2030-09-01", cese: null }]);
+    repositorio.consultarEstadoDeFechas.mockResolvedValue({ cerradas: [], sinPeriodo: [] });
+  });
+
+  it.each([
+    ["sin jornada previa", undefined],
+    ["con jornada publicada", { sede: "Lima", entradaProgramada: "08:00", salidaProgramada: "17:00" }],
+  ])("guardado mensual puntual %s", async (_nombre, publicado) => {
+    repositorio.buscarPublicado.mockResolvedValue(publicado);
+
+    await guardarCeldaDelBorrador(formulario(seleccion));
+
+    expect(repositorio.obtenerOCrear).toHaveBeenCalledWith("2030-09-02", "Tiendas");
+    expect(repositorio.guardarCelda).toHaveBeenCalledExactlyOnceWith({
+      planId: "p1", dni: seleccion.dni, fecha, sede: null,
+      entradaProgramada: null, salidaProgramada: null, descanso: true,
+    });
+  });
+
+  it.each([
+    ["fecha cerrada", () => repositorio.consultarEstadoDeFechas.mockResolvedValue({ cerradas: [fecha] }), /cerrad/],
+    ["sin vigencia", () => repositorio.listarVigenciasConfirmadas.mockResolvedValue([]), /relación laboral/],
+    ["semana procesada", () => repositorio.horarioSemanalEstaProcesado.mockResolvedValue(true), /procesado/],
+    ["persona fuera del grupo", () => repositorio.colaboradorPerteneceAEquipo.mockResolvedValue(false), /no pertenece/],
+    ["grupo fuera del alcance", () => simulacro.actor.mockResolvedValue({ ...gerente, grupos: [{ nombre: "Taller", gestionaAsistencia: true }] }), /este grupo/],
+  ])("guardado mensual rechazado %s", async (_nombre, preparar, mensaje) => {
+    preparar();
+
+    await expect(guardarCeldaDelBorrador(formulario(seleccion))).rejects.toThrow(mensaje);
+    expect(repositorio.obtenerOCrear).not.toHaveBeenCalled();
+    expect(repositorio.guardarCelda).not.toHaveBeenCalled();
+  });
+
+  it("quita asignación mensual sin crear otro plan y mantiene las guardas", async () => {
+    const datos = formulario(seleccion);
+    repositorio.listarBorradoresDelEquipoEnRango.mockResolvedValue([{ planId: "p1", dni: seleccion.dni, fecha }]);
+
+    await borrarCeldaDelBorrador(datos);
+    expect(repositorio.borrarCelda).toHaveBeenCalledExactlyOnceWith("p1", seleccion.dni, fecha);
+    expect(repositorio.obtenerOCrear).not.toHaveBeenCalled();
+
+    repositorio.borrarCelda.mockClear();
+    repositorio.buscarPublicado.mockResolvedValue({ fecha });
+    await expect(borrarCeldaDelBorrador(datos)).rejects.toThrow(/publicado/);
+    repositorio.buscarPublicado.mockReset();
+    repositorio.consultarEstadoDeFechas.mockResolvedValue({ cerradas: [fecha] });
+    await expect(borrarCeldaDelBorrador(datos)).rejects.toThrow(/cerrada/);
+    repositorio.consultarEstadoDeFechas.mockResolvedValue({ cerradas: [] });
+    repositorio.listarBorradoresDelEquipoEnRango.mockResolvedValue([]);
+    await borrarCeldaDelBorrador(datos);
+    expect(repositorio.borrarCelda).not.toHaveBeenCalled();
+    expect(repositorio.obtenerOCrear).not.toHaveBeenCalled();
+  });
+
+  it("conserva el rechazo existente para un rol de solo lectura", async () => {
+    simulacro.actor.mockResolvedValue({ id: "f1", rol: "finanzas" });
+
+    await expect(guardarCeldaDelBorrador(formulario(seleccion))).rejects.toThrow(/No tiene permiso/);
+    expect(repositorio.obtenerOCrear).not.toHaveBeenCalled();
+    expect(repositorio.guardarCelda).not.toHaveBeenCalled();
   });
 });

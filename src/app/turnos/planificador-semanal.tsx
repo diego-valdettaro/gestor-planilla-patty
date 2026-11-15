@@ -87,15 +87,6 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
     setOverridesDeSeleccion((actuales) => new Map(actuales).set(dni, seleccionado));
   }
 
-  function opcionesDeCelda() {
-    return [
-      ...MOTIVOS_ELEGIBLES_DE_NO_ASISTENCIA.map((motivo) => ({ value: `motivo:${motivo}`, label: ETIQUETA_DE_MOTIVO[motivo] })),
-      ...modelos.filter((modelo) => modelo.activo).map((modelo) => ({ value: `modelo:${modelo.id}`, label: `${modelo.sede} · ${modelo.nombre} · ${modelo.entrada} a ${modelo.salida}` })),
-      { value: "personalizado", label: "Horario personalizado…" },
-      { value: "", label: "Quitar asignación" },
-    ];
-  }
-
   function cambiarSemana(destino: string) {
     if (cambios) return pedirConfirmacion({ tipo: "cambiar-semana", destino });
     navegarSemana(destino);
@@ -346,7 +337,7 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
     </section>
     {!soloLectura && <>
     <dialog aria-labelledby="titulo-dialogo-confirmacion" className="dialogo-confirmacion" ref={dialogoConfirmacion}><form action={confirmarOperacion} className="formulario-dialogo"><h2 id="titulo-dialogo-confirmacion">{tituloDeConfirmacion(confirmacion)}</h2><p>{descripcionDeConfirmacion(confirmacion)}</p>{confirmacion?.tipo === "publicar" && <ul className="resumen-publicacion"><li>{seleccionados.size} {seleccionados.size === 1 ? "colaborador se publica" : "colaboradores se publican"}</li></ul>}{confirmacion?.tipo === "republicar" && <label>Motivo de la republicación<input maxLength={250} name="motivo" placeholder="Ej.: cambio de turno por cobertura" required /></label>}<div className="acciones-dialogo"><button className="boton-secundario" onClick={() => dialogoConfirmacion.current?.close()} type="button">Cancelar</button><button className={confirmacion?.tipo === "cambiar-semana" ? "peligro" : "boton-principal"} type="submit">{etiquetaDeConfirmacion(confirmacion)}</button></div></form></dialog>
-    <dialog aria-labelledby="titulo-dialogo-celda" className="dialogo-confirmacion" ref={dialogoCelda}><form action={elegirEnDialogoCelda} key={celdaEnEdicion ? `${celdaEnEdicion.colaborador.dni}:${celdaEnEdicion.fecha}` : "sin-celda"}><h2 id="titulo-dialogo-celda">Horario semanal de {celdaEnEdicion?.colaborador.nombre ?? ""}</h2><p>{celdaEnEdicion ? formatearDiaLargo(celdaEnEdicion.fecha) : ""}</p><div className="opciones-celda">{opcionesDeCelda().map((opcion) => <label key={opcion.value}><input defaultChecked={opcion.value === valorDe(celdaEnEdicion ? porClave.get(`${celdaEnEdicion.colaborador.dni}:${celdaEnEdicion.fecha}`) ?? publicadosPorClave.get(`${celdaEnEdicion.colaborador.dni}:${celdaEnEdicion.fecha}`) : undefined)} name="opcion" type="radio" value={opcion.value} />{opcion.label}</label>)}</div><div className="acciones-dialogo"><button className="boton-secundario" onClick={() => dialogoCelda.current?.close()} type="button">Cancelar</button><button className="boton-principal" type="submit">Usar</button></div></form></dialog>
+    <dialog aria-labelledby="titulo-dialogo-celda" className="dialogo-confirmacion" ref={dialogoCelda}><form action={elegirEnDialogoCelda} key={celdaEnEdicion ? `${celdaEnEdicion.colaborador.dni}:${celdaEnEdicion.fecha}` : "sin-celda"}><h2 id="titulo-dialogo-celda">Horario semanal de {celdaEnEdicion?.colaborador.nombre ?? ""}</h2><p>{celdaEnEdicion ? formatearDiaLargo(celdaEnEdicion.fecha) : ""}</p><div className="opciones-celda">{opcionesDeHorario(modelos).map((opcion) => <label key={opcion.value}><input defaultChecked={opcion.value === valorDe(celdaEnEdicion ? porClave.get(`${celdaEnEdicion.colaborador.dni}:${celdaEnEdicion.fecha}`) ?? publicadosPorClave.get(`${celdaEnEdicion.colaborador.dni}:${celdaEnEdicion.fecha}`) : undefined)} name="opcion" type="radio" value={opcion.value} />{opcion.label}</label>)}</div><div className="acciones-dialogo"><button className="boton-secundario" onClick={() => dialogoCelda.current?.close()} type="button">Cancelar</button><button className="boton-principal" type="submit">Usar</button></div></form></dialog>
     <dialog aria-labelledby="titulo-dialogo-personalizado" className="dialogo-confirmacion" ref={dialogoPersonalizado}><form action={guardarPersonalizado} className="formulario-dialogo" key={personalizado ? `${personalizado.colaborador.dni}:${personalizado.fecha}:${personalizado.apertura}` : "sin-personalizar"}><h2 id="titulo-dialogo-personalizado">Horario personalizado</h2><label>Sede<select defaultValue={personalizado?.celda?.sede ?? sedes[0]} name="sede" required>{sedes.map((sede) => <option key={sede} value={sede}>{sede}</option>)}</select></label><div className="campos-horario-personalizado"><label>Entrada<input defaultValue={personalizado?.celda?.entradaProgramada ?? "09:00"} name="entrada" type="time" required /></label><label>Salida<input defaultValue={personalizado?.celda?.salidaProgramada ?? "18:00"} name="salida" type="time" required /></label></div>{errorDeDialogo?.dialogo === "personalizado" && <p className="mensaje-operacion error" role="alert">{errorDeDialogo.mensaje}</p>}<div className="acciones-dialogo"><button className="boton-secundario" onClick={cerrarPersonalizado} type="button">Cancelar</button><button className="boton-principal" type="submit">Usar horario</button></div></form></dialog>
     <dialog aria-labelledby="titulo-dialogo-completar-semana" className="dialogo-confirmacion dialogo-completar-semana" ref={dialogoCompletarSemana}><form action={confirmarCompletarSemana} className="formulario-dialogo" key={completarSemana ? `${completarSemana.colaborador.dni}:${completarSemana.apertura}` : "sin-completar"}>
       <h2 id="titulo-dialogo-completar-semana">Completar semana de {completarSemana?.colaborador.nombre ?? ""}</h2>
@@ -380,6 +371,15 @@ const CLASE_DE_ESTADO_DE_HORARIO: Record<EstadoDeHorario, string> = {
 };
 function IconoDeAlerta() { return <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3 22.5 21H1.5z" fill="currentColor" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.6" /><path d="M12 9.6v5M12 17.4v.1" stroke="#fff" strokeLinecap="round" strokeWidth="2.2" /></svg>; }
 function IconoDeInfo() { return <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="currentColor" /><path d="M12 11v5.4M12 7.7v.1" stroke="#fff" strokeLinecap="round" strokeWidth="2.2" /></svg>; }
+
+export function opcionesDeHorario(modelos: Modelo[]) {
+  return [
+    ...MOTIVOS_ELEGIBLES_DE_NO_ASISTENCIA.map((motivo) => ({ value: `motivo:${motivo}`, label: ETIQUETA_DE_MOTIVO[motivo] })),
+    ...modelos.filter((modelo) => modelo.activo).map((modelo) => ({ value: `modelo:${modelo.id}`, label: `${modelo.sede} · ${modelo.nombre} · ${modelo.entrada} a ${modelo.salida}` })),
+    { value: "personalizado", label: "Horario personalizado…" },
+    { value: "", label: "Quitar asignación" },
+  ];
+}
 
 const ETIQUETA_DE_MOTIVO: Record<MotivoPlanificadoDeNoAsistencia, string> = {
   descanso: "Descanso",

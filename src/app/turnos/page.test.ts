@@ -36,7 +36,8 @@ vi.mock("@/turnos/servicio", () => ({
     consultarEstadoDeFechas,
   },
 }));
-vi.mock("./planificador-semanal", () => ({
+vi.mock(import("./planificador-semanal"), async (importOriginal) => ({
+  ...await importOriginal(),
   PlanificadorSemanal: ({ soloLectura }: { soloLectura?: boolean }) => createElement("div", undefined, soloLectura ? "Planificador semanal de solo lectura" : "Planificador semanal editable"),
 }));
 
