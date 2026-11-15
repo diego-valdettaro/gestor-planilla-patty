@@ -45,7 +45,8 @@ export function PlanificadorMensual({ mes, equipo, equipos, colaboradores, dni, 
           const celdaEnVigencia = borrador?.motivoNoAsistencia === "sin_relacion_laboral" ? undefined : borrador;
           const cerrada = cerradas.has(fecha);
           const celda = vigente ? (cerrada ? publicado : celdaEnVigencia ?? publicado) : undefined;
-          const estado = !vigente ? "Sin relación laboral" : cerrada && !publicado ? "Sin publicar" : NOMBRE_DEL_ESTADO_DE_HORARIO[estadoDeCelda(cerrada ? undefined : celdaEnVigencia, publicado, procesadas.has(inicioDeSemana(fecha)))];
+          const procesada = procesadas.has(inicioDeSemana(fecha));
+          const estado = !vigente ? "Sin relación laboral" : cerrada && !publicado && !procesada ? "Sin publicar" : NOMBRE_DEL_ESTADO_DE_HORARIO[estadoDeCelda(cerrada ? undefined : celdaEnVigencia, publicado, procesada)];
           const clase = estado === "Publicado" ? "est-publicado" : estado === "Liquidado" ? "est-liquidado" : estado === "Cambios sin publicar" ? "est-cambiado" : "est-borrador";
           const motivo = celda?.motivoNoAsistencia ?? (celda?.descanso ? "descanso" : undefined);
           return <Link aria-label={`Horario del ${fecha}: ${estado}. ${cerrada ? "Período cerrado; requiere reapertura. " : ""}Abrir semana`} className={`dia-calendario est ${clase}`} href={`/turnos?${new URLSearchParams({ semana: inicioDeSemana(fecha), equipo })}`} key={fecha}>

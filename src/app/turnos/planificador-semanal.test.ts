@@ -366,10 +366,10 @@ describe("calendario mensual de horarios", () => {
     const jornada = (fecha: string, entradaProgramada = "09:00") => ({ dni: "00001024", fecha, sede: "Norte", modeloHorarioId: null, entradaProgramada, salidaProgramada: "18:00", descanso: false, motivoNoAsistencia: null });
     const html = renderToStaticMarkup(createElement(PlanificadorMensual, {
       mes: "2026-09", equipo: "Tiendas", equipos: ["Tiendas"], colaboradores: [{ dni: "00001024", nombre: "Ana" }], dni: "00001024",
-      dias: ["2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04", "2026-09-05", "2026-09-06", "2026-09-07"],
+      dias: ["2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04", "2026-09-05", "2026-09-06", "2026-09-07", "2026-09-08"],
       borradores: [jornada("2026-09-02"), jornada("2026-09-04", "10:00"), jornada("2026-09-05", "10:00"), jornada("2026-09-06")],
       publicados: [jornada("2026-09-03"), jornada("2026-09-04"), jornada("2026-09-05"), jornada("2026-09-07")],
-      vigencias: [{ ingreso: "2026-09-02", cese: null }], fechasCerradas: ["2026-09-05", "2026-09-06"], semanasProcesadas: ["2026-09-07"],
+      vigencias: [{ ingreso: "2026-09-02", cese: null }], fechasCerradas: ["2026-09-05", "2026-09-06", "2026-09-08"], semanasProcesadas: ["2026-09-07"],
     }));
     const casos = [
       ["2026-09-01", "Sin relación laboral"], ["2026-09-02", "Borrador editable"],
@@ -378,6 +378,7 @@ describe("calendario mensual de horarios", () => {
     for (const [fecha, estado] of casos) expect(html).toContain(`Horario del ${fecha}: ${estado}. Abrir semana`);
     expect(html).toContain("Horario del 2026-09-05: Publicado. Período cerrado; requiere reapertura. Abrir semana");
     expect(html).toContain("Horario del 2026-09-06: Sin publicar. Período cerrado; requiere reapertura. Abrir semana");
+    expect(html).toContain("Horario del 2026-09-08: Liquidado. Período cerrado; requiere reapertura. Abrir semana");
     const cerrado = html.match(/<a aria-label="Horario del 2026-09-05:[\s\S]*?<\/a>/)?.[0] ?? "";
     expect(cerrado).toContain("09:00");
     expect(cerrado).not.toContain("10:00");
