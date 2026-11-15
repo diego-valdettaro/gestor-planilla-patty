@@ -37,7 +37,10 @@ export default async function PaginaDeTurnos({ searchParams }: { searchParams: P
       repositorioDeTurnos.consultarEstadoDeFechas(dias[0], dias.at(-1)!),
       persona ? repositorioDeTurnos.listarVigenciasConfirmadas(persona.dni) : Promise.resolve([]),
     ]);
-    return <main className="contenido pagina pagina-ajustes pagina-turnos"><header className="encabezado encabezado-pagina"><div><h1>Planificación de horarios</h1><p>Consulte el mes y abra una semana para editar o publicar.</p></div></header><PlanificadorMensual mes={mes} equipo={equipo} equipos={equipos} colaboradores={colaboradores} dni={persona?.dni} dias={dias} borradores={borradores} publicados={publicados} vigencias={vigencias} fechasCerradas={condiciones.cerradas} /></main>;
+    const semanas = [...new Set(dias.map(inicioDeSemana))];
+    const procesamientos = persona ? await Promise.all(semanas.map(semanaDelMes => repositorioDeTurnos.listarProcesamientosDeSemana(semanaDelMes, equipo))) : [];
+    const semanasProcesadas = semanas.filter((_, indice) => procesamientos[indice]?.includes(persona!.dni));
+    return <main className="contenido pagina pagina-ajustes pagina-turnos"><header className="encabezado encabezado-pagina"><div><h1>Planificación de horarios</h1><p>Consulte el mes y abra una semana para editar o publicar.</p></div></header><PlanificadorMensual mes={mes} equipo={equipo} equipos={equipos} colaboradores={colaboradores} dni={persona?.dni} dias={dias} borradores={borradores} publicados={publicados} vigencias={vigencias} fechasCerradas={condiciones.cerradas} semanasProcesadas={semanasProcesadas} /></main>;
   }
   const dias = diasDeLaSemana(semana);
   const colaboradoresActivos = await repositorioDeTurnos.listarColaboradoresActivosPorEquipo(equipo);

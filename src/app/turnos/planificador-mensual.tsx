@@ -12,15 +12,16 @@ import { estadoDeCelda, NOMBRE_DEL_ESTADO_DE_HORARIO } from "./estado-de-celda";
 
 type Jornada = DatosDeJornadaPlanificada & { dni: string; fecha: string };
 
-export function PlanificadorMensual({ mes, equipo, equipos, colaboradores, dni, dias, borradores, publicados, vigencias, fechasCerradas }: {
+export function PlanificadorMensual({ mes, equipo, equipos, colaboradores, dni, dias, borradores, publicados, vigencias, fechasCerradas, semanasProcesadas = [] }: {
   mes: string; equipo: string; equipos: string[]; colaboradores: Array<{ dni: string; nombre: string }>; dni?: string; dias: string[];
-  borradores: Jornada[]; publicados: Jornada[]; vigencias: Vigencia[]; fechasCerradas: string[];
+  borradores: Jornada[]; publicados: Jornada[]; vigencias: Vigencia[]; fechasCerradas: string[]; semanasProcesadas?: string[];
 }) {
   const router = useRouter();
   const persona = colaboradores.find(p => p.dni === dni);
   const porFecha = new Map(borradores.filter(c => c.dni === dni).map(c => [c.fecha, c]));
   const publicadosPorFecha = new Map(publicados.filter(c => c.dni === dni).map(c => [c.fecha, c]));
   const cerradas = new Set(fechasCerradas);
+  const procesadas = new Set(semanasProcesadas);
   function ruta(cambios: Record<string, string> = {}) {
     return `/turnos?${new URLSearchParams({ vista: "mensual", mes, equipo, ...(dni ? { colaborador: dni } : {}), ...cambios })}`;
   }
@@ -42,12 +43,13 @@ export function PlanificadorMensual({ mes, equipo, equipos, colaboradores, dni, 
           const vigente = estaVigenteEn(vigencias, fecha);
           const borrador = porFecha.get(fecha);
           const celdaEnVigencia = borrador?.motivoNoAsistencia === "sin_relacion_laboral" ? undefined : borrador;
-          const celda = vigente ? (cerradas.has(fecha) && publicado ? publicado : celdaEnVigencia ?? publicado) : undefined;
-          const estado = !vigente ? "Sin relación laboral" : NOMBRE_DEL_ESTADO_DE_HORARIO[estadoDeCelda(celdaEnVigencia, publicado, cerradas.has(fecha) && Boolean(publicado))];
+          const cerrada = cerradas.has(fecha);
+          const celda = vigente ? (cerrada ? publicado : celdaEnVigencia ?? publicado) : undefined;
+          const estado = !vigente ? "Sin relación laboral" : cerrada && !publicado ? "Sin publicar" : NOMBRE_DEL_ESTADO_DE_HORARIO[estadoDeCelda(cerrada ? undefined : celdaEnVigencia, publicado, procesadas.has(inicioDeSemana(fecha)))];
           const clase = estado === "Publicado" ? "est-publicado" : estado === "Liquidado" ? "est-liquidado" : estado === "Cambios sin publicar" ? "est-cambiado" : "est-borrador";
           const motivo = celda?.motivoNoAsistencia ?? (celda?.descanso ? "descanso" : undefined);
-          return <Link aria-label={`Horario del ${fecha}: ${estado}. Abrir semana`} className={`dia-calendario est ${clase}`} href={`/turnos?${new URLSearchParams({ semana: inicioDeSemana(fecha), equipo })}`} key={fecha}>
-            <time dateTime={fecha}>{Number(fecha.slice(-2))}</time><em>{estado}</em>
+          return <Link aria-label={`Horario del ${fecha}: ${estado}. ${cerrada ? "Período cerrado; requiere reapertura. " : ""}Abrir semana`} className={`dia-calendario est ${clase}`} href={`/turnos?${new URLSearchParams({ semana: inicioDeSemana(fecha), equipo })}`} key={fecha}>
+            <time dateTime={fecha}>{Number(fecha.slice(-2))}</time><em>{estado}</em>{cerrada && <small>Período cerrado; requiere reapertura.</small>}
             {vigente && (motivo ? <b>{motivo[0].toUpperCase() + motivo.slice(1)}</b> : celda ? <><b>{celda.sede}</b><small>{celda.entradaProgramada}–{celda.salidaProgramada}</small></> : <small>Sin asignar</small>)}
           </Link>;
         })}</div>

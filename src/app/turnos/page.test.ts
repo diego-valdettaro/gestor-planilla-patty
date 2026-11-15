@@ -81,6 +81,17 @@ describe("página de Horarios (/turnos)", () => {
     expect(obtenerOCrear).not.toHaveBeenCalled();
   });
 
+  it("muestra liquidada solo la semana procesada de la persona elegida, incluso al cruzar el mes", async () => {
+    listarColaboradoresActivosPorEquipo.mockResolvedValue([{ dni: "00000011", nombre: "Ana", sede: "Norte" }, { dni: "00000022", nombre: "Beto", sede: "Norte" }]);
+    listarProcesamientosDeSemana.mockImplementation(async (semana: string, grupo: string) => grupo === "Tiendas" && semana === "2026-09-28" ? ["00000011"] : ["00000022"]);
+    const { default: PaginaDeTurnos } = await import("./page");
+    const html = renderToStaticMarkup(await PaginaDeTurnos({ searchParams: Promise.resolve({ vista: "mensual", mes: "2026-10", equipo: "Tiendas", colaborador: "00000011" }) }));
+    expect(html).toContain("Horario del 2026-10-01: Liquidado. Abrir semana");
+    expect(html).toContain("Horario del 2026-10-05: Borrador editable. Abrir semana");
+    expect(listarProcesamientosDeSemana).toHaveBeenCalledWith("2026-09-28", "Tiendas");
+    expect(listarProcesamientosDeSemana).toHaveBeenCalledWith("2026-10-26", "Tiendas");
+  });
+
   it("muestra la planificación sin un enlace redundante para crear horario", async () => {
     const html = await render();
 
