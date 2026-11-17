@@ -1,5 +1,11 @@
 import { expect, test, type Page } from "@playwright/test";
+import { Pool } from "pg";
 import * as XLSX from "xlsx";
+
+import {
+  FECHA_CERRADA_184, GRUPO_184, NOMBRES_184, OTRO_GRUPO_184, PERSONAS_184, SEMANA_CON_CIERRE_184, SEMANA_SIGUIENTE_184, SEMANA_SIN_PERIODO_184,
+  crearEscenario184, limpiarEscenario184, urlEscenario184,
+} from "../../scripts/escenarios/issue-184";
 
 function observarErroresDelNavegador(page: Page): string[] {
   const errores: string[] = [];
@@ -1309,4 +1315,128 @@ test("Importar fuentes externas cabe en 375 px y la lista de errores no desborda
   await expect(page.getByRole("alert").filter({ hasText: "no se importa ninguna fila" })).toBeVisible({ timeout: 30_000 });
   expect(await desbordeHorizontalDeLaPagina(page)).toBeLessThanOrEqual(0);
   expect(errores).toEqual([]);
+});
+
+
+// #184: cambiar de semana o grupo, confirmar con ediciones, publicar sin período y rechazo por fecha cerrada (escenario «QA 184», base desechable).
+test.describe("Horarios · publicación semanal (#184)", () => {
+  test.beforeEach(async () => { const pool = new Pool({ connectionString: urlEscenario184() }); try { await crearEscenario184(pool); } finally { await pool.end(); } });
+  test.afterEach(async () => { const pool = new Pool({ connectionString: urlEscenario184() }); try { await limpiarEscenario184(pool); } finally { await pool.end(); } });
+
+  async function entrarAHorarios(page: Page, semana: string, equipo: string) {
+    await page.goto("/iniciar-sesion");
+    await page.getByLabel("Usuario").fill("gerente-tiendas");
+    await page.getByLabel("Contraseña").fill("gerente-tiendas");
+    await page.getByRole("button", { name: "Entrar" }).click();
+    await expect(page).toHaveURL(/\/turnos$/);
+    await page.goto(`/turnos?semana=${semana}&equipo=${encodeURIComponent(equipo)}`);
+    await expect(page.getByRole("heading", { name: `Grupo ${equipo}`, level: 2 })).toBeVisible();
+  }
+  const celdaDe = (page: Page, nombre: string, fecha: string) => page.getByRole("button", { name: new RegExp(`Horario de ${nombre} para ${fecha}`) });
+  const marcarSinRecarga = (page: Page) => page.evaluate(() => { (window as unknown as { marca184: string }).marca184 = "viva"; });
+  const marcaSigueViva = (page: Page) => page.evaluate(() => (window as unknown as { marca184?: string }).marca184);
+
+  test("G8 cambiar de semana o de grupo carga el borrador de destino sin recargar y conserva el foco", async ({ page }) => {
+    test.setTimeout(90_000);
+    await entrarAHorarios(page, SEMANA_SIN_PERIODO_184, GRUPO_184);
+    await marcarSinRecarga(page);
+
+    const siguiente = page.getByRole("button", { name: "Semana siguiente" });
+    await siguiente.focus();
+    await siguiente.click();
+    await expect(celdaDe(page, NOMBRES_184.ana, "2026-09-29")).toContainText("10:00–18:00");
+    await expect(celdaDe(page, NOMBRES_184.ana, SEMANA_SIN_PERIODO_184)).toHaveCount(0);
+    expect(await marcaSigueViva(page)).toBe("viva");
+    await expect(siguiente).toBeFocused();
+
+    const grupo = page.getByRole("combobox", { name: "Grupo operativo" });
+    await page.goto(`/turnos?semana=${SEMANA_SIN_PERIODO_184}&equipo=${encodeURIComponent(GRUPO_184)}`);
+    await marcarSinRecarga(page);
+    await grupo.focus();
+    await grupo.selectOption(OTRO_GRUPO_184);
+    await expect(page.getByRole("heading", { name: `Grupo ${OTRO_GRUPO_184}`, level: 2 })).toBeVisible();
+    await expect(celdaDe(page, NOMBRES_184.carla, "2026-09-22")).toContainText("09:00–17:00");
+    expect(await marcaSigueViva(page)).toBe("viva");
+    await expect(grupo).toBeFocused();
+  });
+
+  test("G9 con ediciones sin guardar, cambiar de grupo pide confirmar; cancelar conserva y descartar carga el destino", async ({ page }) => {
+    test.setTimeout(90_000);
+    await entrarAHorarios(page, SEMANA_SIN_PERIODO_184, GRUPO_184);
+    const celda = celdaDe(page, NOMBRES_184.ana, SEMANA_SIN_PERIODO_184);
+    await celda.click();
+    const dialogoDeCelda = page.getByRole("dialog", { name: `Horario semanal de ${NOMBRES_184.ana}` });
+    await dialogoDeCelda.getByLabel("Vacaciones").check();
+    await dialogoDeCelda.getByRole("button", { name: "Usar" }).click();
+    await expect(celda).toContainText("Vacaciones");
+    await expect(page.getByText("Sin guardar", { exact: true })).toBeVisible();
+
+    const grupo = page.getByRole("combobox", { name: "Grupo operativo" });
+    await grupo.selectOption(OTRO_GRUPO_184);
+    const confirmacion = page.getByRole("dialog", { name: "¿Descartar los cambios sin guardar?" });
+    await expect(confirmacion).toBeVisible();
+    await confirmacion.getByRole("button", { name: "Cancelar" }).click();
+    await expect(confirmacion).toBeHidden();
+    await expect(page).toHaveURL(new RegExp(`equipo=${encodeURIComponent(GRUPO_184)}`));
+    await expect(grupo).toHaveValue(GRUPO_184);
+    await expect(celda).toContainText("Vacaciones");
+    await expect(page.getByText("Sin guardar", { exact: true })).toBeVisible();
+
+    await grupo.selectOption(OTRO_GRUPO_184);
+    await confirmacion.getByRole("button", { name: "Descartar y cambiar" }).click();
+    await expect(page.getByRole("heading", { name: `Grupo ${OTRO_GRUPO_184}`, level: 2 })).toBeVisible();
+    await expect(celdaDe(page, NOMBRES_184.carla, "2026-09-22")).toContainText("09:00–17:00");
+    await grupo.selectOption(GRUPO_184);
+    await expect(page.getByRole("heading", { name: `Grupo ${GRUPO_184}`, level: 2 })).toBeVisible();
+    await expect(celda).toContainText("08:00–16:00");
+    await expect(page.getByText("Sin guardar", { exact: true })).toHaveCount(0);
+  });
+
+  async function publicarSeleccion(page: Page) {
+    await page.getByRole("button", { name: "Publicar planificación" }).click();
+    const confirmacion = page.getByRole("dialog", { name: "¿Publicar la selección?" });
+    await confirmacion.getByRole("button", { name: "Publicar planificación" }).click();
+  }
+  async function turnosDe(pool: Pool, dni: string) {
+    return (await pool.query("SELECT fecha::text, motivo_no_asistencia FROM turnos_publicados WHERE dni = $1 ORDER BY fecha", [dni])).rows;
+  }
+
+  test("G10 publicar una semana sin período avisa sin bloquear y publica la semana completa de cada persona", async ({ page }) => {
+    test.setTimeout(90_000);
+    const pool = new Pool({ connectionString: urlEscenario184() });
+    try {
+      await entrarAHorarios(page, SEMANA_SIN_PERIODO_184, GRUPO_184);
+      await expect(page.getByRole("status").filter({ hasText: "todavía no pertenecen a un período de asistencia" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Publicar planificación" })).toBeEnabled();
+      await publicarSeleccion(page);
+      await expect(page.locator("tr", { hasText: NOMBRES_184.ana }).locator("th .est-etiqueta")).toHaveText("Publicado", { timeout: 15_000 });
+      await page.reload();
+      for (const nombre of [NOMBRES_184.ana, NOMBRES_184.beto]) await expect(page.locator("tr", { hasText: nombre }).locator("th .est-etiqueta")).toHaveText("Publicado");
+      expect(await turnosDe(pool, PERSONAS_184.ana)).toHaveLength(7);
+      const beto = await turnosDe(pool, PERSONAS_184.beto);
+      expect(beto).toHaveLength(7);
+      expect(beto.filter((turno) => turno.motivo_no_asistencia === "sin_relacion_laboral").map((turno) => turno.fecha)).toEqual(["2026-09-21", "2026-09-22"]);
+    } finally { await pool.end(); }
+  });
+
+  test("G11 un día cerrado rechaza la publicación con la fecha y la causa en español, sin cambiar nada", async ({ page }) => {
+    test.setTimeout(90_000);
+    const pool = new Pool({ connectionString: urlEscenario184() });
+    try {
+      const celdasDelBorrador = async () => (await pool.query("SELECT count(*)::int AS n FROM celdas_planes_semanales_en_borrador c JOIN planes_semanales_en_borrador p ON p.id = c.plan_id WHERE p.semana = $1 AND p.equipo = $2", [SEMANA_CON_CIERRE_184, GRUPO_184])).rows[0].n;
+      const antes = await celdasDelBorrador();
+      await entrarAHorarios(page, SEMANA_CON_CIERRE_184, GRUPO_184);
+      await publicarSeleccion(page);
+      const alerta = page.getByRole("alert").filter({ hasText: "16/09/2026" });
+      await expect(alerta).toBeVisible({ timeout: 15_000 });
+      await expect(alerta).toContainText("cerrada");
+      await expect(alerta).toContainText("reapertura");
+      const texto = (await alerta.innerText()).toLowerCase();
+      for (const tecnico of [PERSONAS_184.ana, "sql", "failed", "error:", "digest"]) expect(texto).not.toContain(tecnico.toLowerCase());
+      expect(FECHA_CERRADA_184).toBe("2026-09-16");
+      await page.reload();
+      expect(await turnosDe(pool, PERSONAS_184.ana)).toEqual([]);
+      expect(await celdasDelBorrador()).toBe(antes);
+    } finally { await pool.end(); }
+  });
 });

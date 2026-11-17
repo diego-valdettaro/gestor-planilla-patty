@@ -56,7 +56,9 @@ export default async function PaginaDeTurnos({ searchParams }: { searchParams: P
   const modelos = (await Promise.all(sedes.map((sede) => repositorioDeModelosDeHorario.listarPorSede(sede)))).flat();
   // Relaciones laborales confirmadas por Recursos Humanos: fuera de ellas no se publica (ADR 0012).
   const vigencias = Object.fromEntries(await Promise.all(colaboradores.map(async ({ dni }) => [dni, await repositorioDeTurnos.listarVigenciasConfirmadas(dni)] as const)));
+  // Fechas sin período de asistencia: se avisan en la grilla pero no bloquean la publicación.
+  const { sinPeriodo } = await repositorioDeTurnos.consultarEstadoDeFechas(dias[0], dias.at(-1)!);
   return <main className="contenido pagina pagina-ajustes pagina-turnos"><header className="encabezado encabezado-pagina"><div><p className="eyebrow">{NOMBRE_DE_ROL[actor.rol]}</p><h1>Planificación de horarios</h1><p>Asigna sede y modelo de horario en el horario semanal de cada persona del grupo.</p></div></header>
-    <PlanificadorSemanal actualizadoEn={plan.actualizadoEn?.toISOString()} equipos={equipos} planId={plan.id} semana={semana} equipo={equipo} colaboradores={colaboradores} dias={dias} celdasIniciales={plan.celdas} publicados={publicados} procesados={procesados} modelos={modelos} sedes={sedes} vigencias={vigencias} soloLectura={false} />
+    <PlanificadorSemanal actualizadoEn={plan.actualizadoEn?.toISOString()} equipos={equipos} planId={plan.id} semana={semana} equipo={equipo} colaboradores={colaboradores} dias={dias} celdasIniciales={plan.celdas} publicados={publicados} procesados={procesados} modelos={modelos} sedes={sedes} vigencias={vigencias} fechasSinPeriodo={sinPeriodo} soloLectura={false} />
   </main>;
 }

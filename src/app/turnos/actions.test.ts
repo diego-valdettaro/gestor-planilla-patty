@@ -6,7 +6,8 @@ const simulacro = vi.hoisted(() => ({
   revalidatePath: vi.fn(),
   repositorioDeTurnos: {
     enTransaccionDePatronMensual: vi.fn(), guardarNuevasJornadasDelMes: vi.fn(), publicarEnLote: vi.fn(),
-    buscarPorId: vi.fn(), obtenerOCrear: vi.fn(), colaboradorPerteneceAEquipo: vi.fn(), listarVigenciasConfirmadas: vi.fn(), consultarEstadoDeFechas: vi.fn(), horarioSemanalEstaProcesado: vi.fn(), buscarPublicado: vi.fn(), guardarCelda: vi.fn(), borrarCelda: vi.fn(), listarBorradoresDelEquipoEnRango: vi.fn() },
+    buscarPorId: vi.fn(), obtenerOCrear: vi.fn(), colaboradorPerteneceAEquipo: vi.fn(), listarVigenciasConfirmadas: vi.fn(), consultarEstadoDeFechas: vi.fn(), horarioSemanalEstaProcesado: vi.fn(), buscarPublicado: vi.fn(), guardarCelda: vi.fn(), borrarCelda: vi.fn(), listarBorradoresDelEquipoEnRango: vi.fn(),
+    reemplazarCeldasDelPlan: vi.fn(), reemplazarSemanaPublicada: vi.fn(), asistenciaEstaProcesada: vi.fn(), sedeActivaPerteneceAlGrupo: vi.fn(), buscarModeloDeHorario: vi.fn() },
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: simulacro.revalidatePath }));
@@ -180,5 +181,81 @@ describe("patrón semanal mensual", () => {
       expect(simulacro.revalidatePath).toHaveBeenCalledWith("/turnos");
     }
     expect(repositorio.publicarEnLote).not.toHaveBeenCalled();
+  });
+});
+
+// G6: las acciones de publicar, republicar y guardar el borrador devuelven el rechazo por fecha cerrada como resultado (no como
+// excepción, que en producción Next oculta), en español, con fecha y causa y sin DNI; los fallos inesperados se enmascaran.
+// Fuente de los textos: contrato C3 (ejemplo del 24/09/2026) y Diego (fecha + reapertura; «Reabrir el período» sin nombrar rol).
+describe("G6 · resultado de las acciones ante fechas cerradas", () => {
+  const repositorio = simulacro.repositorioDeTurnos;
+  const dni = "00000001";
+  const semana = "2026-09-21";
+  const fechasDeLaSemana = ["2026-09-21", "2026-09-22", "2026-09-23", "2026-09-24", "2026-09-25", "2026-09-26", "2026-09-27"];
+  const descanso = (fecha: string) => ({ dni, fecha, sede: null, entradaProgramada: null, salidaProgramada: null, descanso: true });
+  const MENSAJE_GENERICO = "No se pudo completar la operación. Intente de nuevo; si el problema continúa, avise al Administrador del sistema.";
+  const MENSAJE_DEL_24 = "La fecha 24/09/2026 está cerrada y requiere reapertura. Reabrir el período para modificarla.";
+  const MENSAJE_DEL_24_Y_25 = "Las fechas 24/09/2026 y 25/09/2026 están cerradas y requieren reapertura. Reabrir el período para modificarlas.";
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    simulacro.actor.mockResolvedValue({ id: "admin-1", rol: "administrador" });
+    repositorio.buscarPorId.mockResolvedValue({ id: "p1", semana, equipo: "Tiendas", celdas: fechasDeLaSemana.map((fecha) => ({ planId: "p1", ...descanso(fecha) })) });
+    repositorio.colaboradorPerteneceAEquipo.mockResolvedValue(true);
+    repositorio.listarVigenciasConfirmadas.mockResolvedValue([{ ingreso: "2020-01-01", cese: null }]);
+    repositorio.consultarEstadoDeFechas.mockResolvedValue({ cerradas: [], sinPeriodo: [] });
+    repositorio.buscarPublicado.mockResolvedValue(undefined);
+    repositorio.horarioSemanalEstaProcesado.mockResolvedValue(false);
+    repositorio.asistenciaEstaProcesada.mockResolvedValue(false);
+  });
+
+  const acciones = {
+    publicar: () => publicarPlanSemanalDesdeGrilla(formulario({ planId: "p1", dni })),
+    republicar: async () => {
+      // Lo publicado es una jornada laboral y el borrador ahora es descanso: los siete días cambian.
+      repositorio.buscarPublicado.mockImplementation(async (_dni: string, fecha: string) => ({ dni, fecha, sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false }));
+      return republicarPlanSemanalDesdeGrilla(formulario({ planId: "p1", dni, motivo: "Corrección" }));
+    },
+    guardarBorrador: () => guardarBorradorDesdeGrilla("p1", JSON.stringify([{ ...descanso("2026-09-24"), motivoNoAsistencia: "permiso" }])),
+  };
+
+  it.each([
+    { fila: "A1 publicar con el 24 cerrado", accion: "publicar" as const, cerradas: ["2026-09-24"], mensaje: MENSAJE_DEL_24, fechas: ["2026-09-24"] },
+    { fila: "A1b publicar con el 24 y el 25 cerrados: agrupa las fechas y usa el plural", accion: "publicar" as const, cerradas: ["2026-09-24", "2026-09-25"], mensaje: MENSAJE_DEL_24_Y_25, fechas: ["2026-09-24", "2026-09-25"] },
+    { fila: "A2 republicar con una fecha cerrada", accion: "republicar" as const, cerradas: ["2026-09-24"], mensaje: MENSAJE_DEL_24, fechas: ["2026-09-24"] },
+    { fila: "A3 guardar el borrador con una celda cambiada en fecha cerrada", accion: "guardarBorrador" as const, cerradas: ["2026-09-24"], mensaje: MENSAJE_DEL_24, fechas: ["2026-09-24"] },
+  ])("$fila devuelve el rechazo como resultado y no invalida la pantalla", async ({ accion, cerradas, mensaje, fechas }) => {
+    repositorio.consultarEstadoDeFechas.mockResolvedValue({ cerradas, sinPeriodo: [] });
+
+    const resultado = await acciones[accion]();
+
+    expect(resultado).toEqual({ ok: false, rechazo: { fechas, mensaje } });
+    expect(JSON.stringify(resultado)).not.toContain(dni);
+    expect(simulacro.revalidatePath).not.toHaveBeenCalled();
+    expect(repositorio.publicarEnLote).not.toHaveBeenCalled();
+    expect(repositorio.reemplazarSemanaPublicada).not.toHaveBeenCalled();
+    expect(repositorio.reemplazarCeldasDelPlan).not.toHaveBeenCalled();
+  });
+
+  it("A4 un fallo inesperado del repositorio devuelve un mensaje genérico, sin SQL ni DNI", async () => {
+    repositorio.publicarEnLote.mockRejectedValue(Object.assign(
+      new Error(`Failed query: insert into "turnos_publicados" (dni) values ($1) -- params: ${dni}; relation "turnos_publicados" does not exist`),
+      { code: "42P01" },
+    ));
+
+    const resultado = await acciones.publicar();
+
+    expect(resultado).toEqual({ ok: false, rechazo: { fechas: [], mensaje: MENSAJE_GENERICO } });
+    expect(simulacro.revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["publicar", acciones.publicar],
+    ["guardarBorrador", () => guardarBorradorDesdeGrilla("p1", JSON.stringify([descanso("2026-09-24")]))],
+  ])("A5 %s con éxito devuelve ok e invalida /turnos", async (_nombre, accion) => {
+    const resultado = await accion();
+
+    expect(resultado).toEqual({ ok: true });
+    expect(simulacro.revalidatePath).toHaveBeenCalledExactlyOnceWith("/turnos");
   });
 });

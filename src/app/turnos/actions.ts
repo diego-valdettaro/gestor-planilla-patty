@@ -13,7 +13,7 @@ import {
   type PatronSemanalMensual,
   type ResultadoDelPatronMensual,
 } from "@/turnos/casos-de-uso-planes-semanales";
-import { publicarPlanSemanal } from "@/turnos/publicar-plan-semanal";
+import { FechasCerradasError, mensajeDeFechaCerrada, mensajeDeFechasCerradas, publicarPlanSemanal, type ResultadoDeAccion } from "@/turnos/publicar-plan-semanal";
 import { republicarPlanSemanal } from "@/turnos/republicar-plan-semanal";
 import { repositorioDeModelosDeHorario, repositorioDeTurnos } from "@/turnos/servicio";
 import { estaVigenteEn } from "@/relaciones-laborales/vigencia";
@@ -126,7 +126,7 @@ async function guardarCeldaMensual(formData: FormData): Promise<void> {
   });
 }
 
-export async function guardarBorradorDesdeGrilla(planId: string, celdasJson: string): Promise<void> {
+export async function guardarBorradorDesdeGrilla(planId: string, celdasJson: string): Promise<ResultadoDeAccion> {
   await exigirAccesoAHorarios();
   let celdas: Array<{ dni: string; fecha: string; sede: string | null; modeloHorarioId?: string | null; entradaProgramada: string | null; salidaProgramada: string | null; descanso?: boolean; motivoNoAsistencia?: MotivoPlanificadoDeNoAsistencia | null }>;
   try {
@@ -149,8 +149,7 @@ export async function guardarBorradorDesdeGrilla(planId: string, celdasJson: str
       }
     }
   }
-  await casosDeUsoDePlanesSemanales().guardarBorrador(planId, celdas);
-  revalidatePath("/turnos");
+  return comoResultado(() => casosDeUsoDePlanesSemanales().guardarBorrador(planId, celdas));
 }
 
 export async function borrarCeldaDelBorrador(formData: FormData): Promise<void> {
@@ -196,23 +195,52 @@ export async function aplicarHorarioEnLoteAlBorrador(formData: FormData): Promis
   revalidatePath("/turnos");
 }
 
-export async function publicarPlanSemanalDesdeGrilla(formData: FormData): Promise<void> {
+export async function publicarPlanSemanalDesdeGrilla(formData: FormData): Promise<ResultadoDeAccion> {
   const seleccion = formData.getAll("dni").filter((valor): valor is string => typeof valor === "string" && valor.trim().length > 0);
   if (!seleccion.length) throw new Error("Seleccione al menos un colaborador para publicar.");
-  const resultado = await publicarPlanSemanal(repositorioDeTurnos, await obtenerActorActual(), obtenerTexto(formData, "planId"), seleccion);
-  if (resultado.errores.length) throw new Error(resultado.errores.map(({ dni, fecha, mensaje }) => `${dni} ${fecha}: ${mensaje}`).join(" "));
-  revalidatePath("/turnos");
+  return comoResultado(async () => {
+    const resultado = await publicarPlanSemanal(repositorioDeTurnos, await obtenerActorActual(), obtenerTexto(formData, "planId"), seleccion);
+    if (!resultado.errores.length) return;
+    const cerradas = resultado.errores.filter(({ fecha, mensaje }) => mensaje === mensajeDeFechaCerrada(fecha)).map(({ fecha }) => fecha);
+    if (cerradas.length) throw new FechasCerradasError(cerradas);
+    throw new Error(resultado.errores.map(({ dni, fecha, mensaje }) => `${dni} ${fecha}: ${mensaje}`).join(" "));
+  });
 }
 
-export async function republicarPlanSemanalDesdeGrilla(formData: FormData): Promise<void> {
-  await republicarPlanSemanal(
+export async function republicarPlanSemanalDesdeGrilla(formData: FormData): Promise<ResultadoDeAccion> {
+  return comoResultado(async () => republicarPlanSemanal(
     repositorioDeTurnos,
     await obtenerActorActual(),
     obtenerTexto(formData, "planId"),
     obtenerTexto(formData, "dni"),
     obtenerTexto(formData, "motivo"),
-  );
+  ));
+}
+
+const MENSAJE_DE_ERROR_INESPERADO = "No se pudo completar la operación. Intente de nuevo; si el problema continúa, avise al Administrador del sistema.";
+
+/**
+ * Convierte en resultado el rechazo por fechas cerradas (con fechas y causa en español) y enmascara los fallos técnicos
+ * (de base de datos o de ejecución). Los demás rechazos de negocio, como permisos o selección vacía, siguen lanzando.
+ */
+async function comoResultado(operacion: () => Promise<unknown>): Promise<ResultadoDeAccion> {
+  try {
+    await operacion();
+  } catch (error) {
+    if (error instanceof FechasCerradasError) return { ok: false, rechazo: { fechas: error.fechas, mensaje: mensajeDeFechasCerradas(error.fechas) } };
+    if (esErrorTecnico(error)) {
+      console.error("Error inesperado en Horarios:", error instanceof Error ? `${error.name} ${(error as { code?: unknown }).code ?? ""}` : typeof error);
+      return { ok: false, rechazo: { fechas: [], mensaje: MENSAJE_DE_ERROR_INESPERADO } };
+    }
+    throw error;
+  }
   revalidatePath("/turnos");
+  return { ok: true };
+}
+
+// Los rechazos de negocio son `Error` simples con mensaje en español; los del controlador de base de datos traen `code` o `cause`.
+function esErrorTecnico(error: unknown): boolean {
+  return !(error instanceof Error) || error.name !== "Error" || "code" in error || "cause" in error;
 }
 
 function casosDeUsoDePlanesSemanales() {

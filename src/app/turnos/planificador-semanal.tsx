@@ -15,6 +15,7 @@ import { inicioDeSemana } from "@/turnos/semana";
 import { ajustarSemanaALaRelacionLaboral } from "@/turnos/semana-con-relacion-laboral";
 
 import { MenuDeAcciones, type AccionDeMenu } from "./menu-de-acciones";
+import type { ResultadoDeAccion } from "@/turnos/publicar-plan-semanal";
 import { guardarBorradorDesdeGrilla, publicarPlanSemanalDesdeGrilla, republicarPlanSemanalDesdeGrilla } from "./actions";
 import { ESTADOS_DE_HORARIO, type EstadoDeHorario, NOMBRE_DEL_ESTADO_DE_HORARIO, difiereDelPublicado, estadoDeCelda, estadoDeSemana } from "./estado-de-celda";
 import { resumirPlanSemanal } from "./resumen-plan-semanal";
@@ -24,11 +25,11 @@ type Celda = Omit<CeldaDePlanSemanalEnBorrador, "planId">;
 type Colaborador = { dni: string; nombre: string; sede: string | null };
 type Modelo = ModeloDeHorario;
 type Publicado = HorarioSemanalParaCopiar;
-type Confirmacion = { tipo: "cambiar-semana"; destino: string; vista?: "mensual" } | { tipo: "publicar" } | { tipo: "republicar"; dni: string; nombre: string };
+type Confirmacion = { tipo: "cambiar-semana"; destino: string; equipo?: Grupo; vista?: "mensual" } | { tipo: "publicar" } | { tipo: "republicar"; dni: string; nombre: string };
 type ResultadoDeDia = "laboral" | MotivoPlanificadoDeNoAsistencia;
 
-export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, equipo, colaboradores, dias, celdasIniciales, publicados, procesados, modelos, sedes, vigencias = {}, soloLectura = false }: {
-  actualizadoEn?: string; equipos: Grupo[]; planId: string; semana: string; equipo: Grupo; colaboradores: Colaborador[]; dias: string[]; celdasIniciales: Celda[]; publicados: Publicado[]; procesados: string[]; modelos: Modelo[]; sedes: string[]; vigencias?: Record<string, Vigencia[]>; soloLectura?: boolean;
+export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, equipo, colaboradores, dias, celdasIniciales, publicados, procesados, modelos, sedes, vigencias = {}, fechasSinPeriodo = [], soloLectura = false }: {
+  actualizadoEn?: string; equipos: Grupo[]; planId: string; semana: string; equipo: Grupo; colaboradores: Colaborador[]; dias: string[]; celdasIniciales: Celda[]; publicados: Publicado[]; procesados: string[]; modelos: Modelo[]; sedes: string[]; fechasSinPeriodo?: string[]; vigencias?: Record<string, Vigencia[]>; soloLectura?: boolean;
 }) {
   const router = useRouter();
   const dialogoPersonalizado = useRef<HTMLDialogElement>(null);
@@ -44,6 +45,17 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
   const [guardando, setGuardando] = useState(false);
   const [publicando, setPublicando] = useState(false);
   const [error, setError] = useState<string>();
+  const [rechazo, setRechazo] = useState<string>();
+  // Al cambiar de plan (semana o grupo) el componente sigue montado, para no perder el foco del selector: se reinicia el borrador local
+  // con el del plan de destino en vez de arrastrar las celdas y los cambios del anterior.
+  const [planMostrado, setPlanMostrado] = useState(planId);
+  if (planMostrado !== planId) {
+    setPlanMostrado(planId);
+    setCeldas(celdasIniciales);
+    setCambios(false);
+    setError(undefined);
+    setRechazo(undefined);
+  }
   const [errorDeDialogo, setErrorDeDialogo] = useState<{ dialogo: "personalizado" | "completar"; mensaje: string }>();
   const [guardadoEn, setGuardadoEn] = useState(actualizadoEn);
   const [personalizado, setPersonalizado] = useState<{ colaborador: Colaborador; fecha: string; celda?: Celda | Publicado; apertura: number }>();
@@ -87,9 +99,15 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
     setOverridesDeSeleccion((actuales) => new Map(actuales).set(dni, seleccionado));
   }
 
-  function cambiarSemana(destino: string) {
-    if (cambios) return pedirConfirmacion({ tipo: "cambiar-semana", destino });
-    navegarSemana(destino);
+  function cambiarSemana(destino: string, nuevoEquipo: Grupo = equipo) {
+    if (cambios) return pedirConfirmacion({ tipo: "cambiar-semana", destino, equipo: nuevoEquipo });
+    navegarSemana(destino, nuevoEquipo);
+  }
+  // Un rechazo de negocio llega como resultado; devuelve true si la operación se hizo.
+  function aceptado(resultado: ResultadoDeAccion): boolean {
+    if (resultado.ok) return true;
+    setRechazo(resultado.rechazo.mensaje);
+    return false;
   }
   function actualizar(celda: Celda | Publicado | undefined, colaborador: Colaborador, fecha: string, valor: string) {
     if (valor === "personalizado") {
@@ -120,39 +138,39 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
     actualizar(porClave.get(clave) ?? publicadosPorClave.get(clave), celdaEnEdicion.colaborador, celdaEnEdicion.fecha, valor);
   }
   async function guardar() {
-    setGuardando(true); setError(undefined);
-    try { await guardarBorradorDesdeGrilla(planId, JSON.stringify(celdas)); setCambios(false); setGuardadoEn(new Date().toISOString()); router.refresh(); }
+    setGuardando(true); setError(undefined); setRechazo(undefined);
+    try { if (!aceptado(await guardarBorradorDesdeGrilla(planId, JSON.stringify(celdas)))) return; setCambios(false); setGuardadoEn(new Date().toISOString()); router.refresh(); }
     catch (causa) { setError(causa instanceof Error ? causa.message : "No se pudo guardar el borrador."); }
     finally { setGuardando(false); }
   }
   async function publicarPlanificacion() {
-    setPublicando(true); setError(undefined);
+    setPublicando(true); setError(undefined); setRechazo(undefined);
     try {
       if (cambios) {
-        await guardarBorradorDesdeGrilla(planId, JSON.stringify(celdas));
+        if (!aceptado(await guardarBorradorDesdeGrilla(planId, JSON.stringify(celdas)))) return;
         setCambios(false);
         setGuardadoEn(new Date().toISOString());
       }
       const datos = new FormData();
       datos.set("planId", planId);
       for (const dni of seleccionados) datos.append("dni", dni);
-      await publicarPlanSemanalDesdeGrilla(datos);
+      if (!aceptado(await publicarPlanSemanalDesdeGrilla(datos))) return;
       router.refresh();
     }
     catch (causa) { setError(causa instanceof Error ? causa.message : "No se pudo publicar el horario semanal."); }
     finally { setPublicando(false); }
   }
   async function republicar(dni: string, motivo: string) {
-    setPublicando(true); setError(undefined);
+    setPublicando(true); setError(undefined); setRechazo(undefined);
     const datos = new FormData();
     datos.set("planId", planId); datos.set("dni", dni); datos.set("motivo", motivo);
     try {
       if (cambios) {
-        await guardarBorradorDesdeGrilla(planId, JSON.stringify(celdas));
+        if (!aceptado(await guardarBorradorDesdeGrilla(planId, JSON.stringify(celdas)))) return;
         setCambios(false);
         setGuardadoEn(new Date().toISOString());
       }
-      await republicarPlanSemanalDesdeGrilla(datos);
+      if (!aceptado(await republicarPlanSemanalDesdeGrilla(datos))) return;
       router.refresh();
     }
     catch (causa) { setError(causa instanceof Error ? causa.message : "No se pudo republicar el horario semanal."); }
@@ -214,7 +232,7 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
     setConfirmacion(siguiente);
     dialogoConfirmacion.current?.showModal();
   }
-  function navegarSemana(destino: string) { router.push(`/turnos?semana=${destino}&equipo=${equipo}`); }
+  function navegarSemana(destino: string, nuevoEquipo: Grupo = equipo) { router.push(`/turnos?semana=${destino}&equipo=${encodeURIComponent(nuevoEquipo)}`); }
   function solicitarPublicacion() {
     if (!seleccionados.size) { setError("Seleccione al menos un colaborador para publicar."); return; }
     pedirConfirmacion({ tipo: "publicar" });
@@ -224,7 +242,7 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
     dialogoConfirmacion.current?.close();
     setConfirmacion(undefined);
     if (!actual) return;
-    if (actual.tipo === "cambiar-semana") actual.vista ? router.push(`${actual.destino}`) : navegarSemana(actual.destino);
+    if (actual.tipo === "cambiar-semana") actual.vista ? router.push(`${actual.destino}`) : navegarSemana(actual.destino, actual.equipo);
     if (actual.tipo === "publicar") void publicarPlanificacion();
     if (actual.tipo === "republicar") void republicar(actual.dni, String(formData.get("motivo") ?? "").trim());
   }
@@ -295,7 +313,7 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
     <nav aria-label="Vista" className="pestanas-personal"><a aria-current="page" className="activo" href={`/turnos?semana=${semana}&equipo=${encodeURIComponent(equipo)}`}>Vista semanal</a><a href={`/turnos?semana=${semana}&equipo=${encodeURIComponent(equipo)}&vista=mensual`} onClick={evento => { evento.preventDefault(); const destino = `/turnos?semana=${semana}&equipo=${encodeURIComponent(equipo)}&vista=mensual`; if (cambios) pedirConfirmacion({ tipo: "cambiar-semana", destino, vista: "mensual" }); else router.push(destino); }}>Vista mensual</a></nav>
     <section className="tile panel tile-barra-plan">
       <div className="barra-plan">
-        <label className="campo-plan campo-grupo"><span>Grupo operativo</span><select aria-label="Grupo operativo" onChange={(evento) => router.push(`/turnos?semana=${semana}&equipo=${evento.target.value}`)} value={equipo}>{equipos.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+        <label className="campo-plan campo-grupo"><span>Grupo operativo</span><select aria-label="Grupo operativo" onChange={(evento) => cambiarSemana(semana, evento.target.value)} value={equipo}>{equipos.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
         <SelectorSemanal semana={semana} alSeleccionar={cambiarSemana} />
         {!soloLectura && <div className={`dato-plan ${cambios ? "sin-guardar" : ""}`}>
           <span>Borrador</span>
@@ -328,6 +346,8 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
       </header>
       {!soloLectura && motivosDeAccionesDeshabilitadas && <p className="sr-only" id="motivo-acciones-plan">{motivosDeAccionesDeshabilitadas}</p>}
       {error && <p className="sr-only" role="alert">{error}</p>}
+      {rechazo && <p className="mensaje-operacion error" role="alert">{rechazo}</p>}
+      {fechasSinPeriodo.length > 0 && <p className="mensaje-operacion informativo" role="status">{fechasSinPeriodo.length === 1 ? "La fecha" : "Las fechas"} {listaDeFechas(fechasSinPeriodo)} todavía no {fechasSinPeriodo.length === 1 ? "pertenece" : "pertenecen"} a un período de asistencia. Puede publicar igualmente.</p>}
       <ul aria-label="Estados de la planificación" className="est-leyenda"><li className="est-titulo">Estados</li>{ESTADOS_DE_HORARIO.map((estado) => <li className={`est ${CLASE_DE_ESTADO_DE_HORARIO[estado]}`} key={estado}><EtiquetaEstado estado={estado} /></li>)}<li className="est est-fuera">Sin relación laboral</li></ul>
       <div aria-label="Horario semanal, desplazable horizontalmente" className="tabla-plan-semanal" role="region" tabIndex={0}><table><thead><tr><th scope="col">Colaborador</th>{dias.map((fecha) => <th key={fecha} scope="col">{new Intl.DateTimeFormat("es-PE", { weekday: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${fecha}T00:00:00Z`))}</th>)}</tr></thead><tbody>
         {colaboradores.map((colaborador) => { const semana = resumenesPorColaborador.get(colaborador.dni)!; return <tr key={colaborador.dni}><th scope="row"><div className="persona-plan"><span aria-hidden="true" className="ini">{iniciales(colaborador.nombre)}</span><span className="datos-persona"><span className="nombre-persona"><strong>{colaborador.nombre}</strong>{semana.semanaSinRelacionLaboral && !semana.semanaPublicada && <ConAviso aviso={{ titulo: "No se puede publicar", filas: [{ rotulo: "Causa", texto: DETALLE_SIN_RELACION.causa }, { rotulo: "Siguiente paso", texto: DETALLE_SIN_RELACION.paso }] }}>{(descripcion) => <button aria-describedby={descripcion} aria-label={`No se puede publicar a ${colaborador.nombre}: ver causa y siguiente paso`} className="aviso-btn" type="button"><IconoDeAlerta /></button>}</ConAviso>}</span><span className={`est ${CLASE_DE_ESTADO_DE_HORARIO[semana.estado]} est-etiqueta`}><EtiquetaEstado estado={semana.estado} /></span>{!soloLectura && <span className="fila-persona"><MenuDeAcciones acciones={accionesDe(colaborador, semana)} nombre={colaborador.nombre} />{elegiblesParaPublicar.has(colaborador.dni) && <label className="checkbox-publicar-fila"><input checked={seleccionados.has(colaborador.dni)} disabled={publicando} onChange={(evento) => alternarSeleccion(colaborador.dni, evento.target.checked)} type="checkbox" />Publicar</label>}</span>}</span></div></th>{dias.map((fecha) => renderCelda(colaborador, fecha, semana.semanaLiquidada))}</tr>; })}
@@ -475,4 +495,10 @@ const PRIORIDAD_ESTADO_PLANIFICACION: EstadoDeHorario[] = ["cambios-sin-publicar
 function EtiquetaEstado({ estado, className }: { estado: EstadoDeHorario; className?: string }) {
   const contenido = <>{estado === "liquidado" && <IconoCandado />}{NOMBRE_DEL_ESTADO_DE_HORARIO[estado]}</>;
   return className ? <span className={className}>{contenido}</span> : contenido;
+}
+
+/** «07/09/2026», «07/09/2026 y 08/09/2026» o «07/09/2026, 08/09/2026 y 09/09/2026». */
+function listaDeFechas(fechas: string[]): string {
+  const visibles = fechas.map((fecha) => fecha.split("-").reverse().join("/"));
+  return visibles.length === 1 ? visibles[0] : `${visibles.slice(0, -1).join(", ")} y ${visibles[visibles.length - 1]}`;
 }

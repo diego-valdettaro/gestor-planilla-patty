@@ -21,6 +21,7 @@ function crearContexto(vigencias = [{ ingreso: "2026-01-01", cese: null as strin
     sedeActivaPerteneceAlGrupo: async (sede, grupo) => grupo === "Tiendas" && (sede === "Norte" || sede === "Sur"),
     buscarModeloDeHorario: async (id) => modelos.get(id),
     buscarPublicado: async () => undefined,
+    consultarEstadoDeFechas: async () => ({ cerradas: [], sinPeriodo: [] }),
   } satisfies Partial<RepositorioDePlanesSemanales>;
   const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio as unknown as RepositorioDePlanesSemanales, {
     obtenerActorActual: async () => ({ id: "operaciones-1", rol: "administrador" }),

@@ -265,6 +265,22 @@ describe("selección de publicación", () => {
     expect(conUnaElegible).not.toContain("Publicar planificación está deshabilitado");
   });
 
+  // G7: las fechas sin período se avisan como nota informativa (role="status"), distinta de un rechazo (role="alert"), y no bloquean publicar
+  // (decisión de Diego: «sin período» es un aviso que no bloquea; contrato C2/C3).
+  it("G7 · avisa de las fechas sin período con un estado informativo y no bloquea publicar", () => {
+    const html = renderToStaticMarkup(createElement(PlanificadorSemanal, {
+      equipos: ["tiendas"], planId: "plan-1", semana: "2026-09-07", equipo: "tiendas",
+      colaboradores: [colaboradores[0]], dias,
+      celdasIniciales: [celdaLaboral("00000011", "2026-09-07", "Tienda Norte"), celdaLaboral("00000011", "2026-09-08", "Tienda Norte")],
+      publicados: [], procesados: [], modelos: [modeloApertura], sedes: ["Tienda Norte"],
+      fechasSinPeriodo: ["2026-09-07", "2026-09-08"],
+    }));
+
+    expect(html).toContain('<p class="mensaje-operacion informativo" role="status">Las fechas 07/09/2026 y 08/09/2026 todavía no pertenecen a un período de asistencia. Puede publicar igualmente.</p>');
+    expect(html).not.toContain('role="alert"');
+    expect(html).not.toContain('class="boton-principal" disabled=""');
+  });
+
   it("explica que Guardar borrador está deshabilitado cuando no hay cambios", () => {
     const html = renderToStaticMarkup(createElement(PlanificadorSemanal, {
       equipos: ["tiendas"], planId: "plan-1", semana: "2026-09-07", equipo: "tiendas",

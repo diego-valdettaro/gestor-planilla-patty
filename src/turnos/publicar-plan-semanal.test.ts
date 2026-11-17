@@ -5,7 +5,13 @@ import type { CeldaDePlanSemanalEnBorrador, PlanSemanalEnBorrador, RepositorioDe
 import type { RepositorioDeTurnos, TurnoPublicado } from "./publicar-turno-semanal";
 import type { Vigencia } from "@/relaciones-laborales/vigencia";
 
-function crearRepositorio(plan: PlanSemanalEnBorrador, vigencias: Record<string, Vigencia[]> | undefined = undefined) {
+type EstadoDeFechas = { cerradas: string[]; sinPeriodo: string[] };
+
+function crearRepositorio(
+  plan: PlanSemanalEnBorrador,
+  vigencias: Record<string, Vigencia[]> | undefined = undefined,
+  estado: EstadoDeFechas = { cerradas: [], sinPeriodo: [] },
+) {
   const publicados: TurnoPublicado[] = [];
   const repositorio: RepositorioDePlanesSemanales & RepositorioDeTurnos = {
     buscarPorId: async () => plan,
@@ -27,21 +33,56 @@ function crearRepositorio(plan: PlanSemanalEnBorrador, vigencias: Record<string,
     buscarPublicado: async (id, fecha) => publicados.find((turno) => turno.dni === id && turno.fecha === fecha),
     publicar: async (turno) => { publicados.push(turno); },
     publicarEnLote: async (turnos) => { publicados.push(...turnos); },
-    perteneceAPeriodoAbierto: async (fecha) => fecha <= "2026-09-06",
+    consultarEstadoDeFechas: async (inicio, fin) => ({
+      cerradas: estado.cerradas.filter((fecha) => fecha >= inicio && fecha <= fin),
+      sinPeriodo: estado.sinPeriodo.filter((fecha) => fecha >= inicio && fecha <= fin),
+    }),
     asistenciaEstaProcesada: async () => false,
     reemplazarSemanaPublicada: async () => undefined,
   };
   return { publicados, repositorio };
 }
 
-function celdasDeSemana(dni: string): CeldaDePlanSemanalEnBorrador[] {
+function celdasDeSemana(dni: string, inicio = "2026-08-31"): CeldaDePlanSemanalEnBorrador[] {
+  const [anio, mes, dia] = inicio.split("-").map(Number);
   return Array.from({ length: 7 }, (_, indice) => ({
-    planId: "plan-1", dni, fecha: new Date(Date.UTC(2026, 7, 31 + indice)).toISOString().slice(0, 10),
+    planId: "plan-1", dni, fecha: new Date(Date.UTC(anio, mes - 1, dia + indice)).toISOString().slice(0, 10),
     sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false,
   }));
 }
 
+const SEMANA_DEL_21_DE_SEPTIEMBRE = ["2026-09-21", "2026-09-22", "2026-09-23", "2026-09-24", "2026-09-25", "2026-09-26", "2026-09-27"];
+
 describe("publicar plan semanal", () => {
+  // G1: publicar no exige un período abierto; la semana completa de la persona se publica igual (contrato C2; diseno-software §Horarios).
+  describe("G1 · publicar no exige período abierto", () => {
+    it.each([
+      {
+        fila: "F1.1 ninguna fecha de la semana pertenece a un período",
+        sinPeriodo: SEMANA_DEL_21_DE_SEPTIEMBRE, ingreso: "2020-01-01", celdasDefinidas: 7, sinRelacionLaboral: [] as string[], laborales: 7,
+      },
+      {
+        fila: "F1.2 semana que cruza el corte: 21-23 con período abierto y 24-27 sin período",
+        sinPeriodo: SEMANA_DEL_21_DE_SEPTIEMBRE.slice(3), ingreso: "2020-01-01", celdasDefinidas: 7, sinRelacionLaboral: [] as string[], laborales: 7,
+      },
+      {
+        fila: "F1.3 persona que ingresa el 23 en una semana sin período conserva los siete días",
+        sinPeriodo: SEMANA_DEL_21_DE_SEPTIEMBRE, ingreso: "2026-09-23", celdasDefinidas: 5, sinRelacionLaboral: ["2026-09-21", "2026-09-22"], laborales: 5,
+      },
+    ])("$fila", async ({ sinPeriodo, ingreso, celdasDefinidas, sinRelacionLaboral, laborales }) => {
+      const celdas = celdasDeSemana("00000011", "2026-09-21").slice(7 - celdasDefinidas);
+      const plan = { id: "plan-1", semana: "2026-09-21", equipo: "tiendas" as const, celdas };
+      const { publicados, repositorio } = crearRepositorio(plan, { "00000011": [{ ingreso, cese: null }] }, { cerradas: [], sinPeriodo });
+
+      const resultado = await publicarPlanSemanal(repositorio, { id: "operaciones-1", rol: "administrador" }, plan.id, ["00000011"]);
+
+      expect(resultado).toEqual({ publicados: 1, errores: [] });
+      expect(publicados.map((turno) => turno.fecha)).toEqual(SEMANA_DEL_21_DE_SEPTIEMBRE);
+      expect(publicados.filter((turno) => turno.motivoNoAsistencia === "sin_relacion_laboral").map((turno) => turno.fecha)).toEqual(sinRelacionLaboral);
+      expect(publicados.filter((turno) => !turno.descanso)).toHaveLength(laborales);
+    });
+  });
+
   it("publica todas las personas seleccionadas que tienen sus siete días definidos, incluido un descanso", async () => {
     const celdasDeHu1 = celdasDeSemana("00000011");
     celdasDeHu1[6] = { ...celdasDeHu1[6], sede: null, entradaProgramada: null, salidaProgramada: null, descanso: true, motivoNoAsistencia: "descanso" };
@@ -56,17 +97,48 @@ describe("publicar plan semanal", () => {
     expect(publicados.find((turno) => turno.dni === "00000011" && turno.fecha === "2026-09-06")).toMatchObject({ descanso: true });
   });
 
-  it("no publica ninguna persona seleccionada y devuelve el error por celda si una es inválida o queda fuera de un período abierto", async () => {
-    const celdas = celdasDeSemana("00000011");
-    const plan = { id: "plan-1", semana: "2026-08-31", equipo: "tiendas" as const, celdas };
-    const { publicados, repositorio } = crearRepositorio(plan);
-    repositorio.perteneceAPeriodoAbierto = async (fecha) => fecha <= "2026-09-05";
+  // G2: una fecha de período cerrado rechaza la publicación completa, con la(s) fecha(s) y la causa (reapertura) (contrato C3; Diego, Q2: se rechaza toda la operación).
+  describe("G2 · una fecha cerrada rechaza la publicación completa", () => {
+    const mensajeDeFechaCerrada: Record<string, string> = {
+      "2026-09-24": "La fecha 24/09/2026 está cerrada y requiere reapertura. Reabrir el período para modificarla.",
+      "2026-09-25": "La fecha 25/09/2026 está cerrada y requiere reapertura. Reabrir el período para modificarla.",
+    };
 
-    const resultado = await publicarPlanSemanal(repositorio, { id: "administracion-1", rol: "administrador" }, plan.id, ["00000011"]);
+    it.each([
+      { fila: "F2.1 el 24 está cerrado, una persona", cerradas: ["2026-09-24"], seleccion: ["00000011"] },
+      { fila: "F2.2 el 24 y el 25 están cerrados", cerradas: ["2026-09-24", "2026-09-25"], seleccion: ["00000011"] },
+      { fila: "F2.3 el 24 está cerrado y se seleccionan dos personas: no se publica a ninguna", cerradas: ["2026-09-24"], seleccion: ["00000011", "00000012"] },
+    ])("$fila", async ({ cerradas, seleccion }) => {
+      const celdas = seleccion.flatMap((dni) => celdasDeSemana(dni, "2026-09-21"));
+      const plan = { id: "plan-1", semana: "2026-09-21", equipo: "tiendas" as const, celdas };
+      const { publicados, repositorio } = crearRepositorio(plan, undefined, { cerradas, sinPeriodo: [] });
 
-    expect(resultado.publicados).toBe(0);
-    expect(resultado.errores).toContainEqual({ dni: "00000011", fecha: "2026-09-06", mensaje: "La fecha no pertenece a un período de planilla abierto." });
-    expect(publicados).toEqual([]);
+      const resultado = await publicarPlanSemanal(repositorio, { id: "administracion-1", rol: "administrador" }, plan.id, seleccion);
+
+      expect(resultado.publicados).toBe(0);
+      expect(resultado.errores).toHaveLength(seleccion.length * cerradas.length);
+      for (const dni of seleccion) {
+        for (const fecha of cerradas) {
+          expect(resultado.errores).toContainEqual({ dni, fecha, mensaje: mensajeDeFechaCerrada[fecha] });
+        }
+      }
+      expect(publicados).toEqual([]);
+    });
+  });
+
+  // G2b (F2.5, decisión Q3): un día «Sin relación laboral» en fecha cerrada lo fija el sistema, no es una modificación de la persona: no bloquea ni se escribe.
+  describe("G2b · un día «Sin relación laboral» en fecha cerrada no bloquea ni se escribe", () => {
+    it("F2.5 persona que ingresa el 25 con el 24 cerrado: se publica sin el 24 y sin error", async () => {
+      const gerente = { id: "gerente-1", rol: "gerente_de_area" as const, grupos: [{ nombre: "tiendas", gestionaAsistencia: true }] };
+      const plan = { id: "plan-1", semana: "2026-09-21", equipo: "tiendas" as const, celdas: celdasDeSemana("00000011", "2026-09-21").slice(4) };
+      const { publicados, repositorio } = crearRepositorio(plan, { "00000011": [{ ingreso: "2026-09-25", cese: null }] }, { cerradas: ["2026-09-24"], sinPeriodo: [] });
+
+      const resultado = await publicarPlanSemanal(repositorio, gerente, plan.id, ["00000011"]);
+
+      expect(resultado).toEqual({ publicados: 1, errores: [] });
+      expect(publicados.map((turno) => turno.fecha)).toEqual(["2026-09-21", "2026-09-22", "2026-09-23", "2026-09-25", "2026-09-26", "2026-09-27"]);
+      expect(publicados.filter((turno) => turno.motivoNoAsistencia === "sin_relacion_laboral")).toHaveLength(3);
+    });
   });
 
   it("no publica ninguna persona seleccionada si a otra de la selección le falta una jornada", async () => {

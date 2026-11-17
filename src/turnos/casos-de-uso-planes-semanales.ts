@@ -5,6 +5,7 @@ import { exigir, puedeConsultarHorarios, puedeOperarAsistenciaDelGrupo, type Act
 import type { Grupo } from "./configurar-equipos-operativos";
 import { jornadasPlanificadasSonIguales, motivoPlanificadoDe, validarJornadaPlanificada } from "./jornada-planificada";
 import type { CeldaDePlanSemanalEnBorrador, PlanSemanalEnBorrador, RepositorioDePlanesSemanales } from "./plan-semanal-en-borrador";
+import { FechasCerradasError } from "./publicar-plan-semanal";
 import { estaVigenteEn, type Vigencia } from "@/relaciones-laborales/vigencia";
 
 import { desplazarFecha, inicioDeSemana } from "./semana";
@@ -160,6 +161,7 @@ export function crearCasosDeUsoDePlanesSemanales(
       const plan = await obtenerPlan(repositorio, planId);
       await autorizar(plan.equipo);
       await validarGuardadoPuntual(plan, celda);
+      await exigirQueNoSeModifiquenFechasCerradas(repositorio, plan.celdas, [{ planId, ...celda }]);
       await repositorio.guardarCelda({ planId, ...celda });
     },
     async guardarBorrador(
@@ -190,7 +192,9 @@ export function crearCasosDeUsoDePlanesSemanales(
         await verificarQueNoSeaPublicadoProcesado(repositorio, celda);
         celdasEditables.push({ planId, ...celda });
       }
-      await repositorio.reemplazarCeldasDelPlan(planId, [...celdasEditables, ...celdasProcesadas.values()]);
+      const celdasNuevas = [...celdasEditables, ...celdasProcesadas.values()];
+      await exigirQueNoSeModifiquenFechasCerradas(repositorio, plan.celdas, celdasNuevas, { reemplazaElPlan: true });
+      await repositorio.reemplazarCeldasDelPlan(planId, celdasNuevas);
     },
     async borrarCelda(planId: string, dni: string, fecha: string): Promise<void> {
       await autorizar();
@@ -252,9 +256,34 @@ export function crearCasosDeUsoDePlanesSemanales(
         }
         await verificarQueNoSeaPublicadoProcesado(repositorio, celda);
       }
+      await exigirQueNoSeModifiquenFechasCerradas(repositorio, plan.celdas, celdas);
       await repositorio.guardarCeldas(celdas);
     },
   };
+}
+
+/** Rechaza el guardado si cambia alguna fecha de un período cerrado; las celdas que quedan iguales no cuentan. */
+async function exigirQueNoSeModifiquenFechasCerradas(
+  repositorio: RepositorioDePlanesSemanales,
+  actuales: CeldaDePlanSemanalEnBorrador[],
+  nuevas: CeldaDePlanSemanalEnBorrador[],
+  { reemplazaElPlan = false }: { reemplazaElPlan?: boolean } = {},
+): Promise<void> {
+  const celdasActuales = new Map(actuales.map((celda) => [claveDeCelda(celda), celda]));
+  const celdasNuevas = new Map(nuevas.map((celda) => [claveDeCelda(celda), celda]));
+  const modificadas = new Set<string>();
+  for (const [clave, celda] of celdasNuevas) {
+    const actual = celdasActuales.get(clave);
+    if (!actual || !jornadasPlanificadasSonIguales(actual, celda)) modificadas.add(celda.fecha);
+  }
+  if (reemplazaElPlan) {
+    for (const [clave, celda] of celdasActuales) if (!celdasNuevas.has(clave)) modificadas.add(celda.fecha);
+  }
+  if (!modificadas.size) return;
+  const fechas = [...modificadas].sort();
+  const { cerradas } = await repositorio.consultarEstadoDeFechas(fechas[0], fechas[fechas.length - 1]);
+  const cerradasModificadas = fechas.filter((fecha) => cerradas.includes(fecha));
+  if (cerradasModificadas.length) throw new FechasCerradasError(cerradasModificadas);
 }
 
 async function verificarQueNoEsteProcesado(repositorio: RepositorioDePlanesSemanales, dni: string, semana: string): Promise<void> {
