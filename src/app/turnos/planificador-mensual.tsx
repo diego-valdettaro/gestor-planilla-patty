@@ -11,8 +11,11 @@ import { estaVigenteEn, type Vigencia } from "@/relaciones-laborales/vigencia";
 
 import { estadoDeCelda, NOMBRE_DEL_ESTADO_DE_HORARIO } from "./estado-de-celda";
 
-import { borrarCeldaDelBorrador, guardarCeldaDelBorrador } from "./actions";
+import type { ResultadoDelPatronMensual } from "@/turnos/casos-de-uso-planes-semanales";
+import { borrarCeldaDelBorrador, guardarCeldaDelBorrador, guardarPatronSemanalDelMes } from "./actions";
 import { opcionesDeHorario, valorDe } from "./planificador-semanal";
+
+const DIAS_DEL_PATRON = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 
 type Jornada = DatosDeJornadaPlanificada & { dni: string; fecha: string };
 
@@ -81,6 +84,9 @@ export function PlanificadorMensual({ mes, equipo, equipos, colaboradores, dni, 
         <label>Colaborador<select aria-label="Colaborador" value={dni ?? ""} onChange={e => router.push(ruta({ colaborador: e.target.value }))}>{colaboradores.map(p => <option key={p.dni} value={p.dni}>{p.nombre}</option>)}</select></label>
       </div>
       <h2>{persona?.nombre ?? "No hay colaboradores activos"}</h2>
+      {persona && !soloLectura && (
+        <PatronSemanalDelMes equipo={equipo} mes={mes} persona={persona} opciones={opciones} deshabilitado={edicion?.guardando} />
+      )}
       {edicion && persona && editable(edicion.fecha) && (
         <form action={guardar} aria-labelledby="titulo-edicion-mensual" className="formulario-dialogo" style={{ marginBlock: "1rem", maxWidth: "32rem" }} key={edicion.fecha}>
           <h3 id="titulo-edicion-mensual">Editar horario de {persona.nombre}</h3>
@@ -138,5 +144,103 @@ export function PlanificadorMensual({ mes, equipo, equipos, colaboradores, dni, 
         })}</div>
       </div>
     </section>
+  </>;
+}
+
+
+function PatronSemanalDelMes({ equipo, mes, persona, opciones, deshabilitado }: {
+  equipo: string;
+  mes: string;
+  persona: { dni: string; nombre: string };
+  opciones: ReturnType<typeof opcionesDeHorario>;
+  deshabilitado?: boolean;
+}) {
+  const router = useRouter();
+  const dialogoPatron = React.useRef<HTMLDialogElement>(null);
+  const abrirPatron = React.useRef<HTMLButtonElement>(null);
+  const envioPatronEnCurso = React.useRef(false);
+  const [patron, seleccionarPatron] = React.useState<Record<number, string>>({});
+  const [guardandoPatron, cambiarGuardandoPatron] = React.useState(false);
+  const [errorPatron, mostrarErrorPatron] = React.useState<string>();
+  const [resultadoPatron, mostrarResultadoPatron] = React.useState<ResultadoDelPatronMensual>();
+  const tituloPatron = React.useId();
+  const tituloResultado = React.useId();
+
+  async function aplicarPatron(evento: React.FormEvent<HTMLFormElement>) {
+    evento.preventDefault();
+    if (envioPatronEnCurso.current || !Object.values(patron).some(Boolean)) return;
+    const datos = new FormData(evento.currentTarget);
+    datos.set("dni", persona.dni);
+    datos.set("equipo", equipo);
+    datos.set("mes", mes);
+    envioPatronEnCurso.current = true;
+    cambiarGuardandoPatron(true);
+    mostrarErrorPatron(undefined);
+    try {
+      const resultado = await guardarPatronSemanalDelMes(datos);
+      if (dialogoPatron.current?.open) {
+        mostrarResultadoPatron(resultado);
+        dialogoPatron.current.close();
+        router.refresh();
+      }
+    } catch {
+      if (dialogoPatron.current?.open) {
+        mostrarErrorPatron("No se pudo aplicar el patrón. Revisa la selección y vuelve a intentarlo.");
+      }
+    } finally {
+      envioPatronEnCurso.current = false;
+      if (dialogoPatron.current) cambiarGuardandoPatron(false);
+    }
+  }
+
+  const opcionesDelPatron = opciones.filter(opcion => opcion.value.startsWith("modelo:"));
+  const nombreDelMes = new Intl.DateTimeFormat("es-PE", { month: "long", year: "numeric", timeZone: "UTC" })
+    .format(new Date(`${mes}-01T00:00:00Z`));
+
+  return <>
+    <button aria-haspopup="dialog" className="boton-secundario" disabled={deshabilitado}
+      onClick={() => dialogoPatron.current?.showModal()} ref={abrirPatron} type="button">Repetir horario semanal</button>
+    <dialog aria-labelledby={tituloPatron} className="dialogo-confirmacion" ref={dialogoPatron}
+      onCancel={evento => { if (envioPatronEnCurso.current) evento.preventDefault(); }}
+      onClose={() => {
+        seleccionarPatron({});
+        mostrarErrorPatron(undefined);
+        abrirPatron.current?.focus();
+      }}>
+      <form aria-busy={guardandoPatron} className="formulario-dialogo" onSubmit={aplicarPatron}>
+        <h2 id={tituloPatron}>Repetir horario semanal</h2>
+        <p>{persona.nombre} · {nombreDelMes}</p>
+        <p>El patrón se guarda como borrador. Publica cada semana desde Vista semanal.</p>
+        {DIAS_DEL_PATRON.map((dia, indice) => <label key={dia}>{dia}
+          <select aria-label={dia} disabled={guardandoPatron} name={`dia-${indice}`} value={patron[indice] ?? ""}
+            onChange={evento => {
+              const horario = evento.currentTarget.value;
+              seleccionarPatron(actual => ({ ...actual, [indice]: horario }));
+            }}>
+            <option value="">Sin selección</option>
+            <option value="descanso">Descanso</option>
+            {opcionesDelPatron.map(opcion => <option key={opcion.value} value={opcion.value}>{opcion.label}</option>)}
+          </select>
+        </label>)}
+        {errorPatron && <p className="mensaje-operacion error" role="alert">{errorPatron}</p>}
+        <div className="acciones-dialogo">
+          <button className="boton-secundario" disabled={guardandoPatron}
+            onClick={() => dialogoPatron.current?.close()} type="button">Cancelar</button>
+          <button className="boton-principal" disabled={guardandoPatron || !Object.values(patron).some(Boolean)} type="submit">
+            {guardandoPatron ? "Guardando…" : "Aplicar patrón"}
+          </button>
+        </div>
+      </form>
+    </dialog>
+    {resultadoPatron && <section aria-labelledby={tituloResultado} className="panel">
+      <h3 id={tituloResultado}>Resultado del patrón</h3>
+      <p className="mensaje-operacion" role="status">
+        {resultadoPatron.guardadas.length} {resultadoPatron.guardadas.length === 1 ? "fecha guardada" : "fechas guardadas"}.
+        {" "}{resultadoPatron.omitidas.length} {resultadoPatron.omitidas.length === 1 ? "fecha omitida" : "fechas omitidas"}.
+      </p>
+      {resultadoPatron.guardadas.length > 0 && <p>{resultadoPatron.guardadas.join(", ")}</p>}
+      {resultadoPatron.omitidas.length > 0 && <ul>{resultadoPatron.omitidas.map(({ fecha, motivo }) =>
+        <li key={fecha}><time dateTime={fecha}>{fecha}</time> — {motivo}</li>)}</ul>}
+    </section>}
   </>;
 }

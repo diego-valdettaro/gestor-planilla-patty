@@ -3,17 +3,20 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const simulacro = vi.hoisted(() => ({
   actor: vi.fn(),
   buscarModelo: vi.fn(),
-  repositorioDeTurnos: { buscarPorId: vi.fn(), obtenerOCrear: vi.fn(), colaboradorPerteneceAEquipo: vi.fn(), listarVigenciasConfirmadas: vi.fn(), consultarEstadoDeFechas: vi.fn(), horarioSemanalEstaProcesado: vi.fn(), buscarPublicado: vi.fn(), guardarCelda: vi.fn(), borrarCelda: vi.fn(), listarBorradoresDelEquipoEnRango: vi.fn() },
+  revalidatePath: vi.fn(),
+  repositorioDeTurnos: {
+    enTransaccionDePatronMensual: vi.fn(), guardarNuevasJornadasDelMes: vi.fn(), publicarEnLote: vi.fn(),
+    buscarPorId: vi.fn(), obtenerOCrear: vi.fn(), colaboradorPerteneceAEquipo: vi.fn(), listarVigenciasConfirmadas: vi.fn(), consultarEstadoDeFechas: vi.fn(), horarioSemanalEstaProcesado: vi.fn(), buscarPublicado: vi.fn(), guardarCelda: vi.fn(), borrarCelda: vi.fn(), listarBorradoresDelEquipoEnRango: vi.fn() },
 }));
 
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("next/cache", () => ({ revalidatePath: simulacro.revalidatePath }));
 vi.mock("@/autenticacion/sesion-del-servidor", () => ({ obtenerActorActual: simulacro.actor }));
 vi.mock("@/turnos/servicio", () => ({
   repositorioDeTurnos: simulacro.repositorioDeTurnos,
   repositorioDeModelosDeHorario: { buscarPorId: simulacro.buscarModelo },
 }));
 
-import { borrarCeldaDelBorrador, guardarBorradorDesdeGrilla, guardarCeldaDelBorrador, publicarPlanSemanalDesdeGrilla, republicarPlanSemanalDesdeGrilla } from "./actions";
+import { borrarCeldaDelBorrador, guardarBorradorDesdeGrilla, guardarCeldaDelBorrador, guardarPatronSemanalDelMes, publicarPlanSemanalDesdeGrilla, republicarPlanSemanalDesdeGrilla } from "./actions";
 
 function formulario(campos: Record<string, string>): FormData {
   const datos = new FormData();
@@ -136,5 +139,46 @@ describe("guardado mensual", () => {
     await expect(guardarCeldaDelBorrador(formulario(seleccion))).rejects.toThrow(/No tiene permiso/);
     expect(repositorio.obtenerOCrear).not.toHaveBeenCalled();
     expect(repositorio.guardarCelda).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("patrón semanal mensual", () => {
+  const repositorio = simulacro.repositorioDeTurnos;
+  const gerente = { id: "g1", rol: "gerente_de_area", grupos: [{ nombre: "Tiendas", gestionaAsistencia: true }] };
+  const dni = "00000001";
+  const fechas = ["2026-04-06", "2026-04-13", "2026-04-20", "2026-04-27"];
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    simulacro.actor.mockResolvedValue(gerente);
+    repositorio.enTransaccionDePatronMensual.mockImplementation(async (_dni, ejecutar) => ejecutar(repositorio));
+    repositorio.colaboradorPerteneceAEquipo.mockImplementation(async dniSolicitado => dniSolicitado === dni);
+    repositorio.consultarEstadoDeFechas.mockResolvedValue({ cerradas: [] });
+    repositorio.listarBorradoresDelEquipoEnRango.mockResolvedValue([]);
+    repositorio.listarVigenciasConfirmadas.mockResolvedValue([{ ingreso: "2026-01-01", cese: null }]);
+    repositorio.guardarNuevasJornadasDelMes.mockResolvedValue({ guardadas: fechas, omitidas: [] });
+  });
+
+  it.each([
+    { caso: "gerente del grupo y colaborador asignado", equipo: "Tiendas", persona: dni, error: undefined },
+    { caso: "grupo adulterado", equipo: "Otro grupo", persona: dni, error: "No tiene permiso para editar planes semanales de este grupo." },
+    { caso: "colaborador ajeno", equipo: "Tiendas", persona: "00000002", error: "El colaborador no pertenece al equipo operativo del plan." },
+  ])("G5 valida alcance con $caso", async ({ equipo, persona, error }) => {
+    const resultado = await guardarPatronSemanalDelMes(formulario({ equipo, dni: persona, mes: "2026-04", "dia-0": "descanso" }))
+      .catch((causa: unknown) => causa);
+
+    if (error) {
+      expect(resultado, "la acción mensual valida el grupo y el colaborador solicitados").toMatchObject({ message: error });
+      expect(repositorio.guardarNuevasJornadasDelMes).not.toHaveBeenCalled();
+      expect(simulacro.revalidatePath).not.toHaveBeenCalled();
+      if (equipo !== "Tiendas") expect(repositorio.enTransaccionDePatronMensual).not.toHaveBeenCalled();
+      else expect(repositorio.listarVigenciasConfirmadas).not.toHaveBeenCalled();
+    } else {
+      expect(resultado, "la acción mensual valida el grupo y el colaborador solicitados").toEqual({ guardadas: fechas, omitidas: [] });
+      expect(repositorio.guardarNuevasJornadasDelMes).toHaveBeenCalledTimes(1);
+      expect(simulacro.revalidatePath).toHaveBeenCalledWith("/turnos");
+    }
+    expect(repositorio.publicarEnLote).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,6 @@
 import type { SesionDelServidor } from "@/colaboradores/casos-de-uso-servidor";
 
-import { exigir, puedeConsultarHorarios, puedeOperarAsistenciaDelGrupo } from "@/autenticacion/permisos";
+import { exigir, puedeConsultarHorarios, puedeOperarAsistenciaDelGrupo, type Actor } from "@/autenticacion/permisos";
 
 import type { Grupo } from "./configurar-equipos-operativos";
 import { jornadasPlanificadasSonIguales, motivoPlanificadoDe, validarJornadaPlanificada } from "./jornada-planificada";
@@ -10,6 +10,110 @@ import { estaVigenteEn, type Vigencia } from "@/relaciones-laborales/vigencia";
 import { desplazarFecha, inicioDeSemana } from "./semana";
 import { esDiaSinRelacionLaboral } from "./semana-con-relacion-laboral";
 
+export type JornadaDelPatronMensual = Omit<CeldaDePlanSemanalEnBorrador, "planId">;
+export type PatronSemanalMensual = Partial<Record<0 | 1 | 2 | 3 | 4 | 5 | 6, "descanso" | { modeloHorarioId: string }>>;
+export type MotivoDeOmisionDelPatron = "Asignación existente" | "Fecha cerrada" | "Sin relación laboral" | "Semana liquidada";
+export type ResultadoDelPatronMensual = {
+  guardadas: string[];
+  omitidas: Array<{ fecha: string; motivo: MotivoDeOmisionDelPatron }>;
+};
+
+export type RepositorioDelPatronMensual = Pick<RepositorioDePlanesSemanales,
+  "colaboradorPerteneceAEquipo" | "buscarModeloDeHorario" | "sedeActivaPerteneceAlGrupo" |
+  "listarVigenciasConfirmadas" | "buscarPublicado" | "horarioSemanalEstaProcesado"
+> & {
+  consultarEstadoDeFechas(inicio: string, fin: string): Promise<{ cerradas: string[] }>;
+  listarBorradoresDelEquipoEnRango(equipo: Grupo, inicio: string, fin: string): Promise<Array<Pick<JornadaDelPatronMensual, "dni" | "fecha">>>;
+  guardarNuevasJornadasDelMes(equipo: Grupo, jornadas: JornadaDelPatronMensual[]): Promise<ResultadoDelPatronMensual>;
+};
+
+export async function aplicarPatronSemanalAlMes(
+  repositorio: RepositorioDelPatronMensual,
+  sesion: SesionDelServidor,
+  { equipo, dni, mes, patron }: { equipo: Grupo; dni: string; mes: string; patron: PatronSemanalMensual },
+): Promise<ResultadoDelPatronMensual> {
+  exigirPermisoParaEditarPlanSemanal(await sesion.obtenerActorActual(), equipo);
+  exigir(await repositorio.colaboradorPerteneceAEquipo(dni, equipo), "El colaborador no pertenece al equipo operativo del plan.");
+  validarMesDelPatron(mes);
+
+  const horarios = new Map<number, Omit<JornadaDelPatronMensual, "dni" | "fecha">>();
+  for (const [dia, seleccion] of Object.entries(patron)) {
+    if (seleccion === "descanso") {
+      horarios.set(Number(dia), { descanso: true, motivoNoAsistencia: "descanso", sede: null, entradaProgramada: null, salidaProgramada: null });
+      continue;
+    }
+    const modelo = await repositorio.buscarModeloDeHorario(seleccion.modeloHorarioId);
+    if (!modelo) throw new Error("El modelo de horario no existe.");
+    if (!modelo.activo) throw new Error("El modelo de horario seleccionado no está activo.");
+    if (!(await repositorio.sedeActivaPerteneceAlGrupo(modelo.sede, equipo))) {
+      throw new Error("La sede debe estar activa y pertenecer al grupo del colaborador.");
+    }
+    horarios.set(Number(dia), {
+      modeloHorarioId: modelo.id, sede: modelo.sede, entradaProgramada: modelo.entrada, salidaProgramada: modelo.salida,
+    });
+  }
+
+  const jornadas: JornadaDelPatronMensual[] = [];
+  for (let fecha = `${mes}-01`; fecha.startsWith(mes); fecha = desplazarFecha(fecha, 1)) {
+    const dia = (new Date(`${fecha}T00:00:00Z`).getUTCDay() + 6) % 7;
+    const horario = horarios.get(dia);
+    if (horario) jornadas.push({ dni, fecha, ...horario });
+  }
+  if (!jornadas.length) return { guardadas: [], omitidas: [] };
+
+  const inicio = jornadas[0].fecha;
+  const fin = jornadas.at(-1)!.fecha;
+  const [estado, borradores, vigencias] = await Promise.all([
+    repositorio.consultarEstadoDeFechas(inicio, fin),
+    repositorio.listarBorradoresDelEquipoEnRango(equipo, inicio, fin),
+    repositorio.listarVigenciasConfirmadas(dni),
+  ]);
+  const cerradas = new Set(estado.cerradas);
+  const conBorrador = new Set(borradores.filter(borrador => borrador.dni === dni).map(borrador => borrador.fecha));
+  const semanasProcesadas = new Map<string, Promise<boolean>>();
+  const omitidas: ResultadoDelPatronMensual["omitidas"] = [];
+  const nuevas: JornadaDelPatronMensual[] = [];
+
+  for (const jornada of jornadas) {
+    const { fecha } = jornada;
+    if (cerradas.has(fecha)) {
+      omitidas.push({ fecha, motivo: "Fecha cerrada" });
+    } else if (!estaVigenteEn(vigencias, fecha)) {
+      omitidas.push({ fecha, motivo: "Sin relación laboral" });
+    } else if (conBorrador.has(fecha) || await repositorio.buscarPublicado(dni, fecha)) {
+      omitidas.push({ fecha, motivo: "Asignación existente" });
+    } else {
+      const semana = inicioDeSemana(fecha);
+      if (!semanasProcesadas.has(semana)) {
+        semanasProcesadas.set(semana, repositorio.horarioSemanalEstaProcesado?.(dni, semana) ?? Promise.resolve(false));
+      }
+      if (await semanasProcesadas.get(semana)) {
+        omitidas.push({ fecha, motivo: "Semana liquidada" });
+      } else {
+        nuevas.push(jornada);
+      }
+    }
+  }
+
+  if (!nuevas.length) return { guardadas: [], omitidas };
+  const resultado = await repositorio.guardarNuevasJornadasDelMes(equipo, nuevas);
+  return {
+    guardadas: resultado.guardadas,
+    omitidas: [...omitidas, ...resultado.omitidas].sort((a, b) => a.fecha.localeCompare(b.fecha)),
+  };
+}
+
+export function validarMesDelPatron(mes: string): void {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(mes) || mes.startsWith("0000")) {
+    throw new Error("Seleccione un mes válido.");
+  }
+}
+
+export function exigirPermisoParaEditarPlanSemanal(actor: Actor, equipo?: Grupo): void {
+  exigir(puedeConsultarHorarios(actor), "No tiene permiso para editar planes semanales en borrador.");
+  if (equipo !== undefined) exigir(puedeOperarAsistenciaDelGrupo(actor, equipo), "No tiene permiso para editar planes semanales de este grupo.");
+}
+
 type SeleccionDeCelda = Pick<CeldaDePlanSemanalEnBorrador, "dni" | "fecha" | "sede">;
 type HorarioParaAplicar = Pick<CeldaDePlanSemanalEnBorrador, "modeloHorarioId" | "entradaProgramada" | "salidaProgramada" | "descanso" | "motivoNoAsistencia">;
 
@@ -18,9 +122,7 @@ export function crearCasosDeUsoDePlanesSemanales(
   sesion: SesionDelServidor,
 ) {
   async function autorizar(equipo?: Grupo): Promise<void> {
-    const actor = await sesion.obtenerActorActual();
-    exigir(puedeConsultarHorarios(actor), "No tiene permiso para editar planes semanales en borrador.");
-    if (equipo !== undefined) exigir(puedeOperarAsistenciaDelGrupo(actor, equipo), "No tiene permiso para editar planes semanales de este grupo.");
+    exigirPermisoParaEditarPlanSemanal(await sesion.obtenerActorActual(), equipo);
   }
 
   async function validarGuardadoPuntual(
