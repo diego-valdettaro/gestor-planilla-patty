@@ -29,6 +29,7 @@ import { bloquearPeriodos, invalidarAprobacionesDeAsistencia, rangoDeFechas, typ
 import { vigenciasConfirmadasDe } from "@/relaciones-laborales/repositorio-postgres";
 import { verificarQueLaSemanaTengaRelacion, type Vigencia } from "@/relaciones-laborales/vigencia";
 import { jornadasPlanificadasSonIguales, motivoPlanificadoDe, validarJornadaPlanificada } from "./jornada-planificada";
+import { esDiaSinRelacionLaboral } from "./semana-con-relacion-laboral";
 import { FechasCerradasError } from "./publicar-plan-semanal";
 import { desplazarFecha, diasDeLaSemana, inicioDeSemana } from "./semana";
 
@@ -70,9 +71,13 @@ async function exigirQueElBorradorNoCambieFechasCerradas(
   const celdasNuevas = new Set(nuevas.map(clave));
   const modificadas = nuevas.filter((celda) => {
     const actual = celdasActuales.get(clave(celda));
+    // Un día «Sin relación laboral» que la grilla agrega solo (sin celda de trabajo previa) no es una modificación.
+    if (esDiaSinRelacionLaboral(celda) && (!actual || esDiaSinRelacionLaboral(actual))) return false;
     return !actual || !jornadasPlanificadasSonIguales(actual, celda);
   }).map(({ fecha }) => fecha);
-  if (reemplazaElPlan) modificadas.push(...actuales.filter((celda) => !celdasNuevas.has(clave(celda))).map(({ fecha }) => fecha));
+  if (reemplazaElPlan) {
+    modificadas.push(...actuales.filter((celda) => !celdasNuevas.has(clave(celda)) && !esDiaSinRelacionLaboral(celda)).map(({ fecha }) => fecha));
+  }
   await exigirFechasSinPeriodoCerrado(tx, modificadas);
 }
 

@@ -276,4 +276,38 @@ describe.skipIf(!databaseUrl)("guardar el borrador con fechas cerradas (integrac
       { fecha: dias[1], entradaProgramada: "10:00" }, { fecha: dias[3], entradaProgramada: "09:00" },
     ]);
   });
+
+  // S-01 (revisión 1): un día «Sin relación laboral» nuevo en fecha cerrada no cuenta como modificado; una celda de trabajo sí.
+  it.each([
+    { fila: "P6 reemplazar el borrador agregando el 4.º día cerrado «Sin relación laboral» y cambiando el 2.º", usar: "reemplazar" as const },
+    { fila: "P6 guardar celdas agregando el 4.º día cerrado «Sin relación laboral» y cambiando el 2.º", usar: "guardar" as const },
+  ])("P-B · $fila", async ({ usar }) => {
+    const plan = await repositorio.obtenerOCrear(semana, grupo);
+    await repositorio.guardarCeldas([jornada(plan.id, dias[1])]);
+    const [periodo] = await db.insert(schema.periodosPlanilla).values({ inicio: dias[3], fin: dias[3], estado: "cerrado" }).returning({ id: schema.periodosPlanilla.id });
+    periodosCreados.push(periodo.id);
+    const sinRelacion = { planId: plan.id, dni: dniBorrador, fecha: dias[3], sede: null, entradaProgramada: null, salidaProgramada: null, descanso: true, motivoNoAsistencia: "sin_relacion_laboral" as const };
+    const cambio = jornada(plan.id, dias[1], "10:00", "19:00");
+
+    if (usar === "reemplazar") await repositorio.reemplazarCeldasDelPlan(plan.id, [cambio, sinRelacion]);
+    else await repositorio.guardarCeldas([cambio, sinRelacion]);
+
+    const despues = (await repositorio.buscarPorId(plan.id))!;
+    expect(ordenadas(despues.celdas).map(({ fecha, entradaProgramada, motivoNoAsistencia }) => ({ fecha, entradaProgramada, motivoNoAsistencia }))).toEqual([
+      { fecha: dias[1], entradaProgramada: "10:00", motivoNoAsistencia: null },
+      { fecha: dias[3], entradaProgramada: null, motivoNoAsistencia: "sin_relacion_laboral" },
+    ]);
+  });
+
+  it("P-B · P6 reemplazar el borrador agregando una celda de trabajo en el 4.º día cerrado sigue rechazando", async () => {
+    const plan = await repositorio.obtenerOCrear(semana, grupo);
+    await repositorio.guardarCeldas([jornada(plan.id, dias[1])]);
+    const [periodo] = await db.insert(schema.periodosPlanilla).values({ inicio: dias[3], fin: dias[3], estado: "cerrado" }).returning({ id: schema.periodosPlanilla.id });
+    periodosCreados.push(periodo.id);
+    const antes = (await repositorio.buscarPorId(plan.id))!;
+
+    await expect(repositorio.reemplazarCeldasDelPlan(plan.id, [jornada(plan.id, dias[1]), jornada(plan.id, dias[3])]))
+      .rejects.toMatchObject({ name: "FechasCerradasError", fechas: [dias[3]] });
+    expect(ordenadas((await repositorio.buscarPorId(plan.id))!.celdas)).toEqual(ordenadas(antes.celdas));
+  });
 });

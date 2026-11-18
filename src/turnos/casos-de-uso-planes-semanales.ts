@@ -274,10 +274,12 @@ async function exigirQueNoSeModifiquenFechasCerradas(
   const modificadas = new Set<string>();
   for (const [clave, celda] of celdasNuevas) {
     const actual = celdasActuales.get(clave);
+    // Un día «Sin relación laboral» que la grilla agrega solo (sin celda de trabajo previa) no es una modificación.
+    if (esDiaSinRelacionLaboral(celda) && (!actual || esDiaSinRelacionLaboral(actual))) continue;
     if (!actual || !jornadasPlanificadasSonIguales(actual, celda)) modificadas.add(celda.fecha);
   }
   if (reemplazaElPlan) {
-    for (const [clave, celda] of celdasActuales) if (!celdasNuevas.has(clave)) modificadas.add(celda.fecha);
+    for (const [clave, celda] of celdasActuales) if (!celdasNuevas.has(clave) && !esDiaSinRelacionLaboral(celda)) modificadas.add(celda.fecha);
   }
   if (!modificadas.size) return;
   const fechas = [...modificadas].sort();
