@@ -4,11 +4,23 @@ import type { PlanSemanalEnBorrador, RepositorioDePlanesSemanales } from "./plan
 import type { RepositorioDeTurnos, TurnoPublicado } from "./publicar-turno-semanal";
 import { republicarPlanSemanal } from "./republicar-plan-semanal";
 
+function fechaDe(inicio: string, indice: number): string {
+  const [anio, mes, dia] = inicio.split("-").map(Number);
+  return new Date(Date.UTC(anio, mes - 1, dia + indice)).toISOString().slice(0, 10);
+}
+
 // `diasSinRelacion`: los primeros días de la semana ya se publicaron «Sin relación laboral» (ingreso a mitad de semana).
-function crearRepositorio(procesada = false, cambiaSoloMotivo = false, diasSinRelacion = 0) {
+// `opciones.cambian`: posiciones (0 = lunes) de los días cuyo borrador difiere de lo publicado; por defecto, el primer día laboral.
+function crearRepositorio(
+  procesada = false,
+  cambiaSoloMotivo = false,
+  diasSinRelacion = 0,
+  opciones: { estado?: { cerradas: string[]; sinPeriodo: string[] }; inicio?: string; cambian?: number[] } = {},
+) {
+  const { estado = { cerradas: [], sinPeriodo: [] }, inicio = "2026-08-31", cambian = [diasSinRelacion] } = opciones;
   const publicados = new Map<string, TurnoPublicado>();
   const celdas = Array.from({ length: 7 }, (_, indice) => {
-    const fecha = new Date(Date.UTC(2026, 7, 31 + indice)).toISOString().slice(0, 10);
+    const fecha = fechaDe(inicio, indice);
     if (indice < diasSinRelacion) {
       publicados.set(fecha, { dni: "00000011", fecha, sede: null, modeloHorarioId: null, entradaProgramada: null, salidaProgramada: null, descanso: true, motivoNoAsistencia: "sin_relacion_laboral" });
       return undefined;
@@ -19,9 +31,9 @@ function crearRepositorio(procesada = false, cambiaSoloMotivo = false, diasSinRe
     publicados.set(fecha, turno);
     return cambiaSoloMotivo && indice === 0
       ? { ...turno, planId: "plan-1", motivoNoAsistencia: "feriado" as const }
-      : { ...turno, planId: "plan-1", entradaProgramada: indice === diasSinRelacion ? "10:00" : "09:00" };
+      : { ...turno, planId: "plan-1", entradaProgramada: cambian.includes(indice) ? "10:00" : "09:00" };
   });
-  const plan: PlanSemanalEnBorrador = { id: "plan-1", semana: "2026-08-31", equipo: "tiendas", celdas: celdas.filter((celda) => celda !== undefined) };
+  const plan: PlanSemanalEnBorrador = { id: "plan-1", semana: inicio, equipo: "tiendas", celdas: celdas.filter((celda) => celda !== undefined) };
   const reemplazos: Array<{ turnos: TurnoPublicado[]; motivo: string }> = [];
   const repositorio: RepositorioDePlanesSemanales & RepositorioDeTurnos = {
     obtenerOCrear: async () => plan,
@@ -40,14 +52,79 @@ function crearRepositorio(procesada = false, cambiaSoloMotivo = false, diasSinRe
     buscarPublicado: async (_dni, fecha) => publicados.get(fecha),
     publicar: async () => undefined,
     publicarEnLote: async () => undefined,
-    perteneceAPeriodoAbierto: async () => true,
+    consultarEstadoDeFechas: async (desde, hasta) => ({
+      cerradas: estado.cerradas.filter((fecha) => fecha >= desde && fecha <= hasta),
+      sinPeriodo: estado.sinPeriodo.filter((fecha) => fecha >= desde && fecha <= hasta),
+    }),
     asistenciaEstaProcesada: async () => procesada,
     reemplazarSemanaPublicada: async (turnos, _actor, motivo) => { reemplazos.push({ turnos, motivo }); },
   };
   return { reemplazos, repositorio };
 }
 
+const SEMANA_DEL_21_DE_SEPTIEMBRE = ["2026-09-21", "2026-09-22", "2026-09-23", "2026-09-24", "2026-09-25", "2026-09-26", "2026-09-27"];
+
 describe("republicar plan semanal", () => {
+  // G4: republicar no exige período abierto; solo se rechaza si una fecha CAMBIADA es cerrada y una cerrada sin cambios no se toca
+  // (contrato C2/C3; diseno-software §Horarios «las correcciones afectan únicamente las fechas cambiadas»; Diego, Q5).
+  describe("G4 · republicar rechaza solo fechas cerradas cambiadas", () => {
+    it.each([
+      {
+        fila: "F4.1 el 24 está cerrado y es una de las fechas corregidas",
+        estado: { cerradas: ["2026-09-24"], sinPeriodo: [] as string[] }, cambian: [3], rechazadas: ["2026-09-24"], escritas: [] as string[],
+      },
+      {
+        fila: "F4.2 el 24 está cerrado y no cambia; se corrige el 22",
+        estado: { cerradas: ["2026-09-24"], sinPeriodo: [] as string[] }, cambian: [1], rechazadas: [] as string[],
+        escritas: SEMANA_DEL_21_DE_SEPTIEMBRE.filter((fecha) => fecha !== "2026-09-24"),
+      },
+      {
+        fila: "F4.3 la semana no tiene período: se republica con su motivo",
+        estado: { cerradas: [] as string[], sinPeriodo: SEMANA_DEL_21_DE_SEPTIEMBRE }, cambian: [1], rechazadas: [] as string[],
+        escritas: SEMANA_DEL_21_DE_SEPTIEMBRE,
+      },
+    ])("$fila", async ({ estado, cambian, rechazadas, escritas }) => {
+      const { reemplazos, repositorio } = crearRepositorio(false, false, 0, { estado, cambian, inicio: "2026-09-21" });
+      const republicar = republicarPlanSemanal(repositorio, { id: "operaciones-1", rol: "administrador" }, "plan-1", "00000011", "Corrige entrada pactada");
+
+      if (rechazadas.length) {
+        await expect(republicar).rejects.toMatchObject({
+          name: "FechasCerradasError",
+          fechas: rechazadas,
+          message: "La fecha 24/09/2026 está cerrada y requiere reapertura. Reabrir el período para modificarla.",
+        });
+        expect(reemplazos).toEqual([]);
+        return;
+      }
+      await republicar;
+      expect(reemplazos).toHaveLength(1);
+      expect(reemplazos[0].motivo).toBe("Corrige entrada pactada");
+      expect(reemplazos[0].turnos.map((turno) => turno.fecha)).toEqual(escritas);
+      expect(reemplazos[0].turnos.find((turno) => turno.fecha === "2026-09-22")).toMatchObject({ entradaProgramada: "10:00" });
+    });
+  });
+
+  // G4b (F2.5 aplicado a republicar, decisión Q3): un día que pasa a «Sin relación laboral» en fecha cerrada no bloquea ni se escribe.
+  describe("G4b · un día «Sin relación laboral» en fecha cerrada no bloquea la corrección", () => {
+    it("F4.5 la relación empieza el 25, el 24 está cerrado y se corrige el 25: se republica sin escribir el 24", async () => {
+      const { reemplazos, repositorio } = crearRepositorio(false, false, 0, {
+        estado: { cerradas: ["2026-09-24"], sinPeriodo: [] }, cambian: [4], inicio: "2026-09-21",
+      });
+      const plan = await repositorio.buscarPorId("plan-1");
+      const planSinDiasPrevios = { ...plan!, celdas: plan!.celdas.filter(({ fecha }) => fecha >= "2026-09-25") };
+      const repositorioConIngresoElDia25 = {
+        ...repositorio,
+        buscarPorId: async () => planSinDiasPrevios,
+        listarVigenciasConfirmadas: async () => [{ ingreso: "2026-09-25", cese: null }],
+      };
+
+      await republicarPlanSemanal(repositorioConIngresoElDia25, { id: "operaciones-1", rol: "administrador" }, "plan-1", "00000011", "Ingreso confirmado el 25");
+
+      expect(reemplazos).toHaveLength(1);
+      expect(reemplazos[0].turnos.map((turno) => turno.fecha)).toEqual(["2026-09-21", "2026-09-22", "2026-09-23", "2026-09-25", "2026-09-26", "2026-09-27"]);
+    });
+  });
+
   it.each(["", "   "])("rechaza motivo vacío sin republicar", async (motivo) => {
     const { reemplazos, repositorio } = crearRepositorio();
     await expect(republicarPlanSemanal(repositorio, { id: "administrador", rol: "administrador" }, "plan-1", "00000011", motivo)).rejects.toThrow("El motivo de republicación es obligatorio");

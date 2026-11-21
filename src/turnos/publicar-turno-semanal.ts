@@ -3,6 +3,7 @@ import { exigir, puedeConsultarHorarios, puedeOperarAsistenciaDelGrupo } from "@
 import type { Grupo } from "./configurar-equipos-operativos";
 import type { DatosDeJornadaPlanificada, RepositorioParaValidarJornadaPlanificada } from "./jornada-planificada";
 import { validarJornadaPlanificada } from "./jornada-planificada";
+import { FechasCerradasError } from "./publicar-plan-semanal";
 
 export interface TurnoPublicado extends DatosDeJornadaPlanificada {
   dni: string;
@@ -25,7 +26,7 @@ export interface RepositorioDeTurnos extends RepositorioParaValidarJornadaPlanif
   publicarEnLote(turnos: TurnoPublicado[], actor?: Actor): Promise<void>;
   asistenciaEstaProcesada(dni: string, fecha: string): Promise<boolean>;
   reemplazarSemanaPublicada(turnos: TurnoPublicado[], actor: Actor, motivo: string): Promise<void>;
-  perteneceAPeriodoAbierto(fecha: string): Promise<boolean>;
+  consultarEstadoDeFechas(inicio: string, fin: string): Promise<{ cerradas: string[]; sinPeriodo: string[] }>;
   obtenerGrupoDelColaborador(dni: string): Promise<Grupo | undefined>;
 }
 
@@ -36,8 +37,8 @@ export async function publicarTurnoSemanal(
 ): Promise<void> {
   exigir(puedeConsultarHorarios(actor), "No tiene permiso para publicar turnos.");
 
-  if (!(await repositorio.perteneceAPeriodoAbierto(turno.fecha))) {
-    throw new Error("La fecha no pertenece a un período de planilla abierto.");
+  if ((await repositorio.consultarEstadoDeFechas(turno.fecha, turno.fecha)).cerradas.includes(turno.fecha)) {
+    throw new FechasCerradasError([turno.fecha]);
   }
 
   if (await repositorio.buscarPublicado(turno.dni, turno.fecha)) {

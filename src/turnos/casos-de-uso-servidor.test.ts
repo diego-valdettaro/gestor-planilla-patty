@@ -8,8 +8,9 @@ import type {
   TurnoPublicado,
 } from "./publicar-turno-semanal";
 import type { RepositorioParaProcesarHorarioSemanal } from "./procesar-horario-semanal";
+import { desplazarFecha } from "./semana";
 
-function crearRepositorioEnMemoria(): {
+function crearRepositorioEnMemoria(cerradas: string[] = []): {
   asistenciasEsperadas: AsistenciaEsperada[];
   historial: TurnoPublicado[];
   repositorio: RepositorioDeTurnos & RepositorioParaProcesarHorarioSemanal;
@@ -39,7 +40,14 @@ function crearRepositorioEnMemoria(): {
           asistenciasEsperadas.push({ dni: turno.dni, fecha: turno.fecha, estado: "pendiente" });
         }
       },
-      perteneceAPeriodoAbierto: async (fecha) => fecha >= "2026-08-26" && fecha <= "2026-09-25",
+      consultarEstadoDeFechas: async (inicio, fin) => {
+        const fechas: string[] = [];
+        for (let fecha = inicio; fecha <= fin; fecha = desplazarFecha(fecha, 1)) fechas.push(fecha);
+        return {
+          cerradas: fechas.filter((fecha) => cerradas.includes(fecha)),
+          sinPeriodo: fechas.filter((fecha) => (fecha < "2026-08-26" || fecha > "2026-09-25") && !cerradas.includes(fecha)),
+        };
+      },
       obtenerGrupoDelColaborador: async () => "Tiendas",
       listarVigenciasConfirmadas: async () => [{ ingreso: "2026-01-01", cese: null }],
       sedeActivaPerteneceAlGrupo: async (sede, grupo) => sede === "Lima" && grupo === "Tiendas",
@@ -112,22 +120,35 @@ describe("casos de uso de turnos en el servidor", () => {
     expect(asistenciasEsperadas).toHaveLength(1);
   });
 
-  it("rechaza un turno cuya fecha no pertenece al período de planilla abierto", async () => {
+  it("G1 · F1.4 publica un turno individual en una fecha que no pertenece a ningún período", async () => {
     const { asistenciasEsperadas, historial, repositorio } = crearRepositorioEnMemoria();
+    const casosDeUso = crearCasosDeUsoDeTurnos(repositorio, {
+      obtenerActorActual: async () => ({ id: "operaciones-1", rol: "administrador" }),
+    });
+
+    await casosDeUso.publicar({
+      dni: "00001024", fecha: "2026-09-28", sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false,
+    });
+
+    expect(historial).toEqual([expect.objectContaining({ dni: "00001024", fecha: "2026-09-28" })]);
+    expect(asistenciasEsperadas).toEqual([{ dni: "00001024", fecha: "2026-09-28", estado: "pendiente" }]);
+  });
+
+  it("G2 · F2.6 rechaza un turno individual cuya fecha está en un período cerrado, con la fecha y la reapertura", async () => {
+    const { asistenciasEsperadas, historial, repositorio } = crearRepositorioEnMemoria(["2026-09-24"]);
     const casosDeUso = crearCasosDeUsoDeTurnos(repositorio, {
       obtenerActorActual: async () => ({ id: "operaciones-1", rol: "administrador" }),
     });
 
     await expect(
       casosDeUso.publicar({
-        dni: "00001024",
-        fecha: "2026-09-26",
-        sede: "Lima",
-        entradaProgramada: "09:00",
-        salidaProgramada: "18:00",
-        descanso: false,
+        dni: "00001024", fecha: "2026-09-24", sede: "Lima", entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false,
       }),
-    ).rejects.toThrow("La fecha no pertenece a un período de planilla abierto.");
+    ).rejects.toMatchObject({
+      name: "FechasCerradasError",
+      fechas: ["2026-09-24"],
+      message: "La fecha 24/09/2026 está cerrada y requiere reapertura. Reabrir el período para modificarla.",
+    });
 
     expect(historial).toHaveLength(0);
     expect(asistenciasEsperadas).toHaveLength(0);

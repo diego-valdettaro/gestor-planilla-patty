@@ -4,13 +4,14 @@ import { randomUUID } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import { estadoDeCelda } from "@/app/turnos/estado-de-celda";
 import * as schema from "@/db/schema";
 import { eliminarRelacionesDePrueba, registrarRelacionConfirmadaDePrueba } from "@/relaciones-laborales/relacion-de-prueba";
 
 import { RepositorioPostgresDeTurnos } from "./repositorio-postgres";
+import { diasDeLaSemana, inicioDeSemana } from "./semana";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 
@@ -189,5 +190,124 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeTurnos", () => {
     const semanaSinPublicar = "2030-09-02";
     const sinPublicar = await repositorio.listarProcesamientosDeSemana(semanaSinPublicar, "tiendas");
     expect(estadoDeCelda(undefined, undefined, sinPublicar.includes(dni))).toBe("borrador-editable");
+  });
+});
+
+// P-B: guardar el borrador dentro de la transacción no puede modificar una fecha de un período cerrado y deja el borrador como estaba
+// (contrato C3; Diego: «fecha cerrada bloquea también guardar borrador semanal»; Q5: lo que no cambia no cuenta).
+describe.skipIf(!databaseUrl)("guardar el borrador con fechas cerradas (integración PostgreSQL)", () => {
+  const pool = new Pool({ connectionString: databaseUrl });
+  const db = drizzle({ client: pool, schema });
+  const repositorio = new RepositorioPostgresDeTurnos(db);
+  const grupo = `Grupo borrador ${randomUUID()}`;
+  const sede = `Sede borrador ${randomUUID()}`;
+  const dniBorrador = dniDePrueba();
+  const semana = inicioDeSemana("2036-05-05");
+  const dias = diasDeLaSemana(semana);
+  const periodosCreados: string[] = [];
+  const jornada = (planId: string, fecha: string, entrada = "09:00", salida = "18:00") => ({
+    planId, dni: dniBorrador, fecha, sede, entradaProgramada: entrada, salidaProgramada: salida, descanso: false,
+  });
+
+  async function limpiar() {
+    const planes = await db.select({ id: schema.planesSemanalesEnBorrador.id }).from(schema.planesSemanalesEnBorrador)
+      .where(and(eq(schema.planesSemanalesEnBorrador.semana, semana), eq(schema.planesSemanalesEnBorrador.equipo, grupo)));
+    if (planes.length) await db.delete(schema.celdasDePlanesSemanalesEnBorrador).where(inArray(schema.celdasDePlanesSemanalesEnBorrador.planId, planes.map(({ id }) => id)));
+    await db.delete(schema.planesSemanalesEnBorrador).where(and(eq(schema.planesSemanalesEnBorrador.semana, semana), eq(schema.planesSemanalesEnBorrador.equipo, grupo)));
+    if (periodosCreados.length) await db.delete(schema.periodosPlanilla).where(inArray(schema.periodosPlanilla.id, periodosCreados.splice(0)));
+  }
+
+  const ordenadas = <T extends { fecha: string }>(celdas: T[]) => [...celdas].sort((a, b) => a.fecha.localeCompare(b.fecha));
+
+  beforeAll(async () => {
+    await db.insert(schema.grupos).values({ nombre: grupo });
+    await db.insert(schema.sedes).values({ nombre: sede, grupo, activa: true });
+    await db.insert(schema.colaboradores).values({ dni: dniBorrador, nombre: "Colaborador borrador", sede, grupo, activo: true });
+  });
+  afterEach(limpiar);
+  afterAll(async () => {
+    await limpiar();
+    await db.delete(schema.colaboradores).where(eq(schema.colaboradores.dni, dniBorrador));
+    await db.delete(schema.sedes).where(eq(schema.sedes.nombre, sede));
+    await db.delete(schema.grupos).where(eq(schema.grupos.nombre, grupo));
+    await pool.end();
+  });
+
+  it.each([
+    {
+      fila: "P5 reemplazar el borrador cambiando una celda del 4.º día cerrado",
+      operar: (planId: string) => repositorio.reemplazarCeldasDelPlan(planId, [jornada(planId, dias[1]), jornada(planId, dias[3], "10:00", "19:00")]),
+      rechaza: true,
+    },
+    {
+      fila: "P5 reemplazar el borrador quitando la celda del 4.º día cerrado",
+      operar: (planId: string) => repositorio.reemplazarCeldasDelPlan(planId, [jornada(planId, dias[1])]),
+      rechaza: true,
+    },
+    {
+      fila: "P5 guardar celdas cambiando el 4.º día cerrado",
+      operar: (planId: string) => repositorio.guardarCeldas([jornada(planId, dias[3], "10:00", "19:00")]),
+      rechaza: true,
+    },
+    {
+      fila: "P5 reemplazar el borrador con el 4.º día cerrado sin cambios y un cambio en el 2.º",
+      operar: (planId: string) => repositorio.reemplazarCeldasDelPlan(planId, [jornada(planId, dias[1], "10:00", "19:00"), jornada(planId, dias[3])]),
+      rechaza: false,
+    },
+  ])("P-B · $fila", async ({ operar, rechaza }) => {
+    const plan = await repositorio.obtenerOCrear(semana, grupo);
+    await repositorio.guardarCeldas([jornada(plan.id, dias[1]), jornada(plan.id, dias[3])]);
+    const [periodo] = await db.insert(schema.periodosPlanilla).values({ inicio: dias[3], fin: dias[3], estado: "cerrado" }).returning({ id: schema.periodosPlanilla.id });
+    periodosCreados.push(periodo.id);
+    const antes = (await repositorio.buscarPorId(plan.id))!;
+
+    const operacion = operar(plan.id);
+
+    if (rechaza) {
+      await expect(operacion).rejects.toMatchObject({ name: "FechasCerradasError", fechas: [dias[3]] });
+      const despues = (await repositorio.buscarPorId(plan.id))!;
+      expect(ordenadas(despues.celdas)).toEqual(ordenadas(antes.celdas));
+      expect(despues.actualizadoEn).toEqual(antes.actualizadoEn);
+      return;
+    }
+    await operacion;
+    const despues = (await repositorio.buscarPorId(plan.id))!;
+    expect(ordenadas(despues.celdas).map(({ fecha, entradaProgramada }) => ({ fecha, entradaProgramada }))).toEqual([
+      { fecha: dias[1], entradaProgramada: "10:00" }, { fecha: dias[3], entradaProgramada: "09:00" },
+    ]);
+  });
+
+  // S-01 (revisión 1): un día «Sin relación laboral» nuevo en fecha cerrada no cuenta como modificado; una celda de trabajo sí.
+  it.each([
+    { fila: "P6 reemplazar el borrador agregando el 4.º día cerrado «Sin relación laboral» y cambiando el 2.º", usar: "reemplazar" as const },
+    { fila: "P6 guardar celdas agregando el 4.º día cerrado «Sin relación laboral» y cambiando el 2.º", usar: "guardar" as const },
+  ])("P-B · $fila", async ({ usar }) => {
+    const plan = await repositorio.obtenerOCrear(semana, grupo);
+    await repositorio.guardarCeldas([jornada(plan.id, dias[1])]);
+    const [periodo] = await db.insert(schema.periodosPlanilla).values({ inicio: dias[3], fin: dias[3], estado: "cerrado" }).returning({ id: schema.periodosPlanilla.id });
+    periodosCreados.push(periodo.id);
+    const sinRelacion = { planId: plan.id, dni: dniBorrador, fecha: dias[3], sede: null, entradaProgramada: null, salidaProgramada: null, descanso: true, motivoNoAsistencia: "sin_relacion_laboral" as const };
+    const cambio = jornada(plan.id, dias[1], "10:00", "19:00");
+
+    if (usar === "reemplazar") await repositorio.reemplazarCeldasDelPlan(plan.id, [cambio, sinRelacion]);
+    else await repositorio.guardarCeldas([cambio, sinRelacion]);
+
+    const despues = (await repositorio.buscarPorId(plan.id))!;
+    expect(ordenadas(despues.celdas).map(({ fecha, entradaProgramada, motivoNoAsistencia }) => ({ fecha, entradaProgramada, motivoNoAsistencia }))).toEqual([
+      { fecha: dias[1], entradaProgramada: "10:00", motivoNoAsistencia: null },
+      { fecha: dias[3], entradaProgramada: null, motivoNoAsistencia: "sin_relacion_laboral" },
+    ]);
+  });
+
+  it("P-B · P6 reemplazar el borrador agregando una celda de trabajo en el 4.º día cerrado sigue rechazando", async () => {
+    const plan = await repositorio.obtenerOCrear(semana, grupo);
+    await repositorio.guardarCeldas([jornada(plan.id, dias[1])]);
+    const [periodo] = await db.insert(schema.periodosPlanilla).values({ inicio: dias[3], fin: dias[3], estado: "cerrado" }).returning({ id: schema.periodosPlanilla.id });
+    periodosCreados.push(periodo.id);
+    const antes = (await repositorio.buscarPorId(plan.id))!;
+
+    await expect(repositorio.reemplazarCeldasDelPlan(plan.id, [jornada(plan.id, dias[1]), jornada(plan.id, dias[3])]))
+      .rejects.toMatchObject({ name: "FechasCerradasError", fechas: [dias[3]] });
+    expect(ordenadas((await repositorio.buscarPorId(plan.id))!.celdas)).toEqual(ordenadas(antes.celdas));
   });
 });

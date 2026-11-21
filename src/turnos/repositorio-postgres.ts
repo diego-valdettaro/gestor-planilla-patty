@@ -28,7 +28,9 @@ import type { Actor } from "@/colaboradores/registrar-colaborador";
 import { bloquearPeriodos, invalidarAprobacionesDeAsistencia, rangoDeFechas, type ConexionDeAprobaciones } from "@/periodos/aprobaciones";
 import { vigenciasConfirmadasDe } from "@/relaciones-laborales/repositorio-postgres";
 import { verificarQueLaSemanaTengaRelacion, type Vigencia } from "@/relaciones-laborales/vigencia";
-import { motivoPlanificadoDe, validarJornadaPlanificada } from "./jornada-planificada";
+import { jornadasPlanificadasSonIguales, motivoPlanificadoDe, validarJornadaPlanificada } from "./jornada-planificada";
+import { esDiaSinRelacionLaboral } from "./semana-con-relacion-laboral";
+import { FechasCerradasError } from "./publicar-plan-semanal";
 import { desplazarFecha, diasDeLaSemana, inicioDeSemana } from "./semana";
 
 /** Publicar o corregir horarios cambia la situación de las personas del grupo: invalida su aprobación de asistencia (ADR 0012). */
@@ -36,6 +38,47 @@ async function invalidarPorHorarios(tx: ConexionDeAprobaciones, turnos: TurnoPub
   if (!turnos.length) return;
   const rango = rangoDeFechas(turnos.map(({ fecha }) => fecha));
   await invalidarAprobacionesDeAsistencia(tx, { dnis: turnos.map(({ dni }) => dni), ...rango, motivo: `${motivo} del ${rango.desde} al ${rango.hasta}.` });
+}
+
+/**
+ * Con los períodos ya bloqueados (`bloquearPeriodos`), rechaza la operación si alguna de las fechas cae en un período
+ * cerrado: un cierre confirmado antes de esta transacción se ve, y uno posterior espera a que esta termine.
+ */
+async function exigirFechasSinPeriodoCerrado(tx: Pick<NodePgDatabase<typeof schema>, "select">, fechas: string[]): Promise<void> {
+  if (!fechas.length) return;
+  const { desde, hasta } = rangoDeFechas(fechas);
+  const cerrados = await tx.select({ inicio: periodosPlanilla.inicio, fin: periodosPlanilla.fin }).from(periodosPlanilla).where(and(
+    eq(periodosPlanilla.estado, "cerrado"), lte(periodosPlanilla.inicio, hasta), gte(periodosPlanilla.fin, desde),
+  ));
+  const cerradas = [...new Set(fechas)].sort().filter((fecha) => cerrados.some(({ inicio, fin }) => inicio <= fecha && fin >= fecha));
+  if (cerradas.length) throw new FechasCerradasError(cerradas);
+}
+
+/**
+ * Con los períodos bloqueados, rechaza guardar celdas del borrador que cambian una fecha cerrada. Las celdas que quedan
+ * iguales no cuentan; si se reemplaza todo un plan (`reemplazaElPlan`), también cuentan las que desaparecen de él.
+ */
+async function exigirQueElBorradorNoCambieFechasCerradas(
+  tx: Pick<NodePgDatabase<typeof schema>, "select">,
+  nuevas: CeldaDePlanSemanalEnBorrador[],
+  { reemplazaElPlan }: { reemplazaElPlan?: string } = {},
+): Promise<void> {
+  const planIds = reemplazaElPlan ? [reemplazaElPlan] : [...new Set(nuevas.map(({ planId }) => planId))];
+  if (!planIds.length) return;
+  const actuales = await tx.select().from(celdasDePlanesSemanalesEnBorrador).where(inArray(celdasDePlanesSemanalesEnBorrador.planId, planIds));
+  const clave = ({ planId, dni, fecha }: { planId: string; dni: string; fecha: string }) => `${planId}:${dni}:${fecha}`;
+  const celdasActuales = new Map(actuales.map((celda) => [clave(celda), celda]));
+  const celdasNuevas = new Set(nuevas.map(clave));
+  const modificadas = nuevas.filter((celda) => {
+    const actual = celdasActuales.get(clave(celda));
+    // Un día «Sin relación laboral» que la grilla agrega solo (sin celda de trabajo previa) no es una modificación.
+    if (esDiaSinRelacionLaboral(celda) && (!actual || esDiaSinRelacionLaboral(actual))) return false;
+    return !actual || !jornadasPlanificadasSonIguales(actual, celda);
+  }).map(({ fecha }) => fecha);
+  if (reemplazaElPlan) {
+    modificadas.push(...actuales.filter((celda) => !celdasNuevas.has(clave(celda)) && !esDiaSinRelacionLaboral(celda)).map(({ fecha }) => fecha));
+  }
+  await exigirFechasSinPeriodoCerrado(tx, modificadas);
 }
 
 export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, RepositorioDeGruposDeSedes, RepositorioDePlanesSemanales {
@@ -109,6 +152,8 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
 
   async publicarEnLote(turnos: TurnoPublicado[], actor?: Actor): Promise<void> {
     await this.db.transaction(async (tx) => {
+      await bloquearPeriodos(tx);
+      await exigirFechasSinPeriodoCerrado(tx, turnos.map(({ fecha }) => fecha));
       await invalidarPorHorarios(tx, turnos, "Se publicó un horario");
       const jornadas: Array<TurnoPublicado & { grupo: Grupo; descanso: boolean }> = [];
       for (const turno of turnos) {
@@ -139,10 +184,6 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
           eq(horariosSemanalesProcesados.dni, turno.dni), eq(horariosSemanalesProcesados.semana, inicioDeSemana(turno.fecha)),
         ));
         if (procesado) throw new Error("El horario semanal ya fue procesado y no se puede publicar.");
-        const [periodo] = await tx.select({ id: periodosPlanilla.id }).from(periodosPlanilla).where(and(
-          eq(periodosPlanilla.estado, "abierto"), lte(periodosPlanilla.inicio, turno.fecha), gte(periodosPlanilla.fin, turno.fecha),
-        ));
-        if (!periodo) throw new Error("La fecha no pertenece a un período de planilla abierto.");
         const [existente] = await tx.select({ id: turnosPublicados.id }).from(turnosPublicados).where(and(
           eq(turnosPublicados.dni, turno.dni), eq(turnosPublicados.fecha, turno.fecha),
         ));
@@ -228,6 +269,8 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
 
   async reemplazarSemanaPublicada(turnos: TurnoPublicado[], actor: Actor, motivo: string): Promise<void> {
     await this.db.transaction(async (tx) => {
+      await bloquearPeriodos(tx);
+      await exigirFechasSinPeriodoCerrado(tx, turnos.map(({ fecha }) => fecha));
       await invalidarPorHorarios(tx, turnos, "Se corrigió un horario publicado");
       for (const { dni, fecha } of turnos) {
         const [procesado] = await tx.select({ id: horariosSemanalesProcesados.id }).from(horariosSemanalesProcesados).where(and(
@@ -236,10 +279,6 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
         if (procesado) throw new Error("No se puede corregir un horario semanal que ya fue procesado.");
       }
       for (const turno of turnos) {
-        const [periodo] = await tx.select({ id: periodosPlanilla.id }).from(periodosPlanilla).where(and(
-          eq(periodosPlanilla.estado, "abierto"), lte(periodosPlanilla.inicio, turno.fecha), gte(periodosPlanilla.fin, turno.fecha),
-        ));
-        if (!periodo) throw new Error("La fecha no pertenece a un período de planilla abierto.");
         const [existente] = await tx.select({ id: turnosPublicados.id, grupo: turnosPublicados.grupo }).from(turnosPublicados).where(and(
           eq(turnosPublicados.dni, turno.dni), eq(turnosPublicados.fecha, turno.fecha),
         ));
@@ -275,21 +314,6 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
         });
       }
     });
-  }
-
-  async perteneceAPeriodoAbierto(fecha: string): Promise<boolean> {
-    const [periodo] = await this.db
-      .select({ id: periodosPlanilla.id })
-      .from(periodosPlanilla)
-      .where(
-        and(
-          eq(periodosPlanilla.estado, "abierto"),
-          lte(periodosPlanilla.inicio, fecha),
-          gte(periodosPlanilla.fin, fecha),
-        ),
-      );
-
-    return Boolean(periodo);
   }
 
   async consultarEstadoDeFechas(inicio: string, fin: string): Promise<{ cerradas: string[]; sinPeriodo: string[] }> {
@@ -548,6 +572,8 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
 
   async guardarCeldas(celdas: CeldaDePlanSemanalEnBorrador[]): Promise<void> {
     await this.db.transaction(async (tx) => {
+      await bloquearPeriodos(tx);
+      await exigirQueElBorradorNoCambieFechasCerradas(tx, celdas);
       for (const celda of celdas) {
         const [plan] = await tx.select({ grupo: planesSemanalesEnBorrador.equipo }).from(planesSemanalesEnBorrador)
           .where(eq(planesSemanalesEnBorrador.id, celda.planId));
@@ -575,6 +601,8 @@ export class RepositorioPostgresDeTurnos implements RepositorioDeTurnos, Reposit
 
   async reemplazarCeldasDelPlan(planId: string, celdas: CeldaDePlanSemanalEnBorrador[]): Promise<void> {
     await this.db.transaction(async (tx) => {
+      await bloquearPeriodos(tx);
+      await exigirQueElBorradorNoCambieFechasCerradas(tx, celdas, { reemplazaElPlan: planId });
       const [plan] = await tx.select({ grupo: planesSemanalesEnBorrador.equipo }).from(planesSemanalesEnBorrador)
         .where(eq(planesSemanalesEnBorrador.id, planId));
       if (!plan) throw new Error("El plan semanal en borrador no existe.");

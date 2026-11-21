@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import * as schema from "@/db/schema";
 import { eliminarRelacionesDePrueba, registrarRelacionConfirmadaDePrueba } from "@/relaciones-laborales/relacion-de-prueba";
@@ -98,5 +98,83 @@ describe.skipIf(!databaseUrl)("republicarPlanSemanal (atomicidad, integración P
     // Solo queda el historial de la publicación inicial: ninguna fila de "Corrige entrada
     // pactada" se agregó para ningún día de los siete.
     expect(historial.every(({ motivo }) => motivo !== "Corrige entrada pactada")).toBe(true);
+  });
+});
+
+// P-A: la transacción de corregir una semana ya publicada acepta fechas sin período y rechaza una fecha cerrada sin cambiar nada.
+describe.skipIf(!databaseUrl)("reemplazarSemanaPublicada: fechas sin período y períodos cerrados (integración PostgreSQL)", () => {
+  const pool = new Pool({ connectionString: databaseUrl });
+  const db = drizzle({ client: pool, schema });
+  const repositorio = new RepositorioPostgresDeTurnos(db);
+  const grupo = `Grupo correccion ${randomUUID()}`;
+  const sede = `Sede correccion ${randomUUID()}`;
+  const dni = dniDePrueba();
+  const dias = diasDeLaSemana(inicioDeSemana("2036-04-07"));
+  const cuentaId = randomUUID();
+  const actor = { id: cuentaId, rol: "administrador" as const };
+  const periodosCreados: string[] = [];
+  const originales = dias.map((fecha) => ({ dni, fecha, sede, entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false }));
+
+  async function limpiar() {
+    const turnos = await db.select({ id: schema.turnosPublicados.id }).from(schema.turnosPublicados)
+      .where(and(eq(schema.turnosPublicados.dni, dni), inArray(schema.turnosPublicados.fecha, dias)));
+    if (turnos.length) await db.delete(schema.historialDeTurnosPublicados).where(inArray(schema.historialDeTurnosPublicados.turnoPublicadoId, turnos.map(({ id }) => id)));
+    await db.delete(schema.turnosPublicados).where(and(eq(schema.turnosPublicados.dni, dni), inArray(schema.turnosPublicados.fecha, dias)));
+    await db.delete(schema.asistenciasEsperadas).where(and(eq(schema.asistenciasEsperadas.dni, dni), inArray(schema.asistenciasEsperadas.fecha, dias)));
+    if (periodosCreados.length) await db.delete(schema.periodosPlanilla).where(inArray(schema.periodosPlanilla.id, periodosCreados.splice(0)));
+  }
+
+  async function motivosDeHistorial() {
+    const filas = await db.select({ fecha: schema.turnosPublicados.fecha, motivo: schema.historialDeTurnosPublicados.motivo }).from(schema.historialDeTurnosPublicados)
+      .innerJoin(schema.turnosPublicados, eq(schema.historialDeTurnosPublicados.turnoPublicadoId, schema.turnosPublicados.id))
+      .where(and(eq(schema.turnosPublicados.dni, dni), inArray(schema.turnosPublicados.fecha, dias)));
+    return filas.sort((a, b) => a.fecha.localeCompare(b.fecha) || String(a.motivo).localeCompare(String(b.motivo)));
+  }
+
+  beforeAll(async () => {
+    await db.insert(schema.grupos).values({ nombre: grupo });
+    await db.insert(schema.sedes).values({ nombre: sede, grupo, activa: true });
+    await db.insert(schema.colaboradores).values({ dni, nombre: "Colaborador corrección", sede, grupo, activo: true });
+    await registrarRelacionConfirmadaDePrueba(db, dni);
+    await db.insert(schema.cuentasLocales).values({ id: cuentaId, nombreUsuario: `correccion-${cuentaId}`, hashContrasena: "prueba", rol: "administrador" });
+  });
+  afterEach(limpiar);
+  afterAll(async () => {
+    await limpiar();
+    await eliminarRelacionesDePrueba(db, [dni]);
+    await db.delete(schema.colaboradores).where(eq(schema.colaboradores.dni, dni));
+    await db.delete(schema.sedes).where(eq(schema.sedes.nombre, sede));
+    await db.delete(schema.cuentasLocales).where(eq(schema.cuentasLocales.id, cuentaId));
+    await db.delete(schema.grupos).where(eq(schema.grupos.nombre, grupo));
+    await pool.end();
+  });
+
+  it.each([
+    { fila: "P3 el 4.º día está en un período cerrado y se corrige: nada cambia", cerrado: 3, corregido: 3 },
+    { fila: "P4 la semana no tiene período: la corrección se aplica con su historial y motivo", cerrado: undefined, corregido: 1 },
+  ])("P-A · $fila", async ({ cerrado, corregido }) => {
+    // La semana se publica con su período abierto; luego el período desaparece (o queda solo un día cerrado).
+    const [abierto] = await db.insert(schema.periodosPlanilla).values({ inicio: dias[0], fin: dias[6], estado: "abierto" }).returning({ id: schema.periodosPlanilla.id });
+    await repositorio.publicarEnLote(originales, actor);
+    await db.delete(schema.periodosPlanilla).where(eq(schema.periodosPlanilla.id, abierto.id));
+    if (cerrado !== undefined) {
+      const [periodo] = await db.insert(schema.periodosPlanilla).values({ inicio: dias[cerrado], fin: dias[cerrado], estado: "cerrado" }).returning({ id: schema.periodosPlanilla.id });
+      periodosCreados.push(periodo.id);
+    }
+    const historialAntes = await motivosDeHistorial();
+    const corregidos = originales.map((turno, indice) => indice === corregido ? { ...turno, entradaProgramada: "10:00", salidaProgramada: "19:00" } : turno);
+
+    const correccion = repositorio.reemplazarSemanaPublicada(corregidos, actor, "Corrige entrada pactada");
+
+    if (cerrado !== undefined) {
+      await expect(correccion).rejects.toMatchObject({ name: "FechasCerradasError", fechas: [dias[cerrado]] });
+      for (const fecha of dias) await expect(repositorio.buscarPublicado(dni, fecha)).resolves.toMatchObject({ entradaProgramada: "09:00", salidaProgramada: "18:00" });
+      await expect(motivosDeHistorial()).resolves.toEqual(historialAntes);
+      return;
+    }
+    await correccion;
+    await expect(repositorio.buscarPublicado(dni, dias[corregido])).resolves.toMatchObject({ entradaProgramada: "10:00", salidaProgramada: "19:00" });
+    const historial = await motivosDeHistorial();
+    expect(historial.filter(({ fecha }) => fecha === dias[corregido]).map(({ motivo }) => motivo)).toContain("Corrige entrada pactada");
   });
 });

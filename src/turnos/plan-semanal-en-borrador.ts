@@ -33,6 +33,7 @@ export interface RepositorioDePlanesSemanales extends RepositorioParaValidarJorn
   buscarPublicado(dni: string, fecha: string): Promise<HorarioSemanalParaCopiar | undefined>;
   listarHorariosPublicadosDelEquipoEnSemana(semana: string, equipo: Grupo): Promise<HorarioSemanalParaCopiar[]>;
   listarColaboradoresActivosPorEquipo(equipo: Grupo): Promise<Array<{ dni: string; nombre: string; sede: string | null }>>;
+  consultarEstadoDeFechas(inicio: string, fin: string): Promise<{ cerradas: string[]; sinPeriodo: string[] }>;
   asistenciaEstaProcesada?(dni: string, fecha: string): Promise<boolean>;
   horarioSemanalEstaProcesado?(dni: string, semana: string): Promise<boolean>;
 }

@@ -7,7 +7,7 @@ import { verificarQueLaSemanaTengaRelacion } from "@/relaciones-laborales/vigenc
 
 import { validarJornadaPlanificada } from "./jornada-planificada";
 import { diasDeLaSemana } from "./semana";
-import { ajustarSemanaALaRelacionLaboral } from "./semana-con-relacion-laboral";
+import { ajustarSemanaALaRelacionLaboral, esDiaSinRelacionLaboral } from "./semana-con-relacion-laboral";
 
 export interface ErrorDePublicacionDePlan {
   dni: string;
@@ -18,6 +18,30 @@ export interface ResultadoDePublicacionDePlan {
   publicados: number;
   errores: ErrorDePublicacionDePlan[];
 }
+
+/** Una o varias fechas dd/mm/aaaa y la causa de un rechazo por período cerrado: lo único que se muestra al usuario (sin DNI ni detalles técnicos). */
+export function mensajeDeFechasCerradas(fechas: string[]): string {
+  const visibles = [...new Set(fechas)].sort().map((fecha) => fecha.split("-").reverse().join("/"));
+  if (visibles.length === 1) return `La fecha ${visibles[0]} está cerrada y requiere reapertura. Reabrir el período para modificarla.`;
+  const lista = `${visibles.slice(0, -1).join(", ")} y ${visibles[visibles.length - 1]}`;
+  return `Las fechas ${lista} están cerradas y requieren reapertura. Reabrir el período para modificarlas.`;
+}
+
+export function mensajeDeFechaCerrada(fecha: string): string {
+  return mensajeDeFechasCerradas([fecha]);
+}
+
+/** Una operación modificaría fechas de períodos cerrados: se rechaza completa y no cambia nada. */
+export class FechasCerradasError extends Error {
+  override readonly name = "FechasCerradasError";
+
+  constructor(readonly fechas: string[]) {
+    super(mensajeDeFechasCerradas(fechas));
+  }
+}
+
+/** Resultado de las acciones de Horarios: el rechazo de negocio viaja como dato (Next oculta el mensaje de una excepción de Server Action). */
+export type ResultadoDeAccion = { ok: true } | { ok: false; rechazo: { fechas: string[]; mensaje: string } };
 
 type RepositorioParaPublicarPlan = RepositorioDePlanesSemanales & RepositorioDeTurnos;
 
@@ -30,7 +54,11 @@ export async function publicarPlanSemanal(
   const { idsSeleccionados, plan, errores } = await revisarPlanSemanal(repositorio, actor, planId, personasSeleccionadas);
   if (errores.length) return { publicados: 0, errores };
 
+  const semana = diasDeLaSemana(plan.semana);
+  const { cerradas } = await repositorio.consultarEstadoDeFechas(semana[0], semana[semana.length - 1]);
+  // Un día «Sin relación laboral» en fecha cerrada lo fija el sistema: no se escribe (ni bloquea, ver validarPersona).
   const turnos = (await Promise.all(idsSeleccionados.map((dni) => celdasEfectivasDe(repositorio, plan, dni)))).flat()
+    .filter((celda) => !(cerradas.includes(celda.fecha) && esDiaSinRelacionLaboral(celda)))
     .map(({ planId: _planId, ...turno }) => turno as TurnoPublicado & { planId?: string });
   try {
     await repositorio.publicarEnLote(turnos, actor);
@@ -84,6 +112,7 @@ async function validarPersona(
     return fechas.map((fecha) => ({ dni, fecha, mensaje: error instanceof Error ? error.message : "La persona no tiene una relación laboral confirmada." }));
   }
   const celdasPorFecha = new Map((await celdasEfectivasDe(repositorio, plan, dni)).map((celda) => [celda.fecha, celda]));
+  const { cerradas } = await repositorio.consultarEstadoDeFechas(fechas[0], fechas[fechas.length - 1]);
 
   for (const fecha of fechas) {
     const celda = celdasPorFecha.get(fecha);
@@ -96,7 +125,7 @@ async function validarPersona(
     } catch (error) {
       errores.push({ dni, fecha, mensaje: error instanceof Error ? error.message : "El horario semanal no es válido." });
     }
-    if (!(await repositorio.perteneceAPeriodoAbierto(fecha))) errores.push({ dni, fecha, mensaje: "La fecha no pertenece a un período de planilla abierto." });
+    if (cerradas.includes(fecha) && !esDiaSinRelacionLaboral(celda)) errores.push({ dni, fecha, mensaje: mensajeDeFechaCerrada(fecha) });
     if (await repositorio.buscarPublicado(dni, fecha)) errores.push({ dni, fecha, mensaje: "Ya existe un horario semanal publicado para este colaborador y fecha." });
   }
   return errores;

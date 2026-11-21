@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { crearCasosDeUsoDePlanesSemanales } from "./casos-de-uso-planes-semanales";
 import type { PlanSemanalEnBorrador, RepositorioDePlanesSemanales } from "./plan-semanal-en-borrador";
 
-function crearRepositorioEnMemoria(vigencias = [{ ingreso: "2026-01-01", cese: null as string | null }]): {
+function crearRepositorioEnMemoria(vigencias = [{ ingreso: "2026-01-01", cese: null as string | null }], cerradas: string[] = []): {
   asistenciasEsperadas: unknown[];
   turnosPublicados: unknown[];
   repositorio: RepositorioDePlanesSemanales;
@@ -34,6 +34,7 @@ function crearRepositorioEnMemoria(vigencias = [{ ingreso: "2026-01-01", cese: n
       },
       borrarCelda: async (planId, dni, fecha) => { celdas.delete(`${planId}:${dni}:${fecha}`); },
       buscarPublicado: async () => undefined,
+      consultarEstadoDeFechas: async (inicio, fin) => ({ cerradas: cerradas.filter((fecha) => fecha >= inicio && fecha <= fin), sinPeriodo: [] }),
       colaboradorPerteneceAEquipo: async (dni, equipo) => (dni === "00001024" || dni === "00002048") && equipo === "tiendas",
       listarVigenciasConfirmadas: async () => vigencias,
       sedeActivaPerteneceAlGrupo: async (sede, equipo) => sede === "Lima" && equipo === "tiendas",
@@ -50,6 +51,111 @@ function crearRepositorioEnMemoria(vigencias = [{ ingreso: "2026-01-01", cese: n
 }
 
 describe("casos de uso de planes semanales en borrador", () => {
+  // G5: guardar el borrador (completo o por celda) no puede modificar una fecha cerrada; lo que no cambia no cuenta
+  // (contrato C3; Diego: «fecha cerrada bloquea también guardar borrador semanal»; Q5; diseno-software §Horarios).
+  describe("G5 · guardar el borrador no modifica fechas cerradas", () => {
+    type Celda = { dni: string; fecha: string; sede: string | null; entradaProgramada: string | null; salidaProgramada: string | null; descanso: boolean };
+    type Casos = ReturnType<typeof crearCasosDeUsoDePlanesSemanales>;
+    const celda = (fecha: string, entrada = "09:00", salida = "18:00"): Celda => ({
+      dni: "00001024", fecha, sede: "Lima", entradaProgramada: entrada, salidaProgramada: salida, descanso: false,
+    });
+    const MENSAJE_24 = "La fecha 24/09/2026 está cerrada y requiere reapertura. Reabrir el período para modificarla.";
+
+    it.each<{ fila: string; existentes: Celda[]; operar: (casos: Casos, planId: string) => Promise<void>; rechaza: boolean }>([
+      {
+        fila: "F5.1 guardarBorrador cambia una celda ya guardada del 24 cerrado",
+        existentes: [celda("2026-09-22"), celda("2026-09-24")],
+        operar: (casos, planId) => casos.guardarBorrador(planId, [celda("2026-09-22"), celda("2026-09-24", "10:00", "19:00")]),
+        rechaza: true,
+      },
+      {
+        fila: "F5.1 guardarBorrador agrega una celda en el 24 cerrado",
+        existentes: [celda("2026-09-22")],
+        operar: (casos, planId) => casos.guardarBorrador(planId, [celda("2026-09-22"), celda("2026-09-24")]),
+        rechaza: true,
+      },
+      {
+        fila: "F5.1 guardarBorrador quita la celda del 24 cerrado",
+        existentes: [celda("2026-09-22"), celda("2026-09-24")],
+        operar: (casos, planId) => casos.guardarBorrador(planId, [celda("2026-09-22")]),
+        rechaza: true,
+      },
+      {
+        fila: "F5.2 guardarBorrador con el 24 cerrado sin cambios y un cambio en el 22 guarda",
+        existentes: [celda("2026-09-22"), celda("2026-09-24")],
+        operar: (casos, planId) => casos.guardarBorrador(planId, [celda("2026-09-22", "10:00", "19:00"), celda("2026-09-24")]),
+        rechaza: false,
+      },
+      {
+        fila: "F5.3 guardarCelda cambia el 24 cerrado",
+        existentes: [celda("2026-09-24")],
+        operar: (casos, planId) => casos.guardarCelda(planId, celda("2026-09-24", "10:00", "19:00")),
+        rechaza: true,
+      },
+      {
+        fila: "F5.3 aplicarHorarioACeldas sobre el 24 cerrado",
+        existentes: [celda("2026-09-22"), celda("2026-09-24")],
+        operar: (casos, planId) => casos.aplicarHorarioACeldas(planId, [{ dni: "00001024", fecha: "2026-09-24", sede: "Lima" }], { entradaProgramada: "10:00", salidaProgramada: "19:00", descanso: false }),
+        rechaza: true,
+      },
+    ])("$fila", async ({ existentes, operar, rechaza }) => {
+      const { repositorio } = crearRepositorioEnMemoria(undefined, ["2026-09-24"]);
+      const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio, { obtenerActorActual: async () => ({ id: "operaciones-1", rol: "administrador" }) });
+      const plan = await casosDeUso.obtenerOCrear("2026-09-21", "tiendas");
+      await repositorio.guardarCeldas(existentes.map((existente) => ({ planId: plan.id, ...existente })));
+      const antes = (await repositorio.buscarPorId(plan.id))!.celdas;
+
+      const operacion = operar(casosDeUso, plan.id);
+
+      if (rechaza) {
+        await expect(operacion).rejects.toMatchObject({ name: "FechasCerradasError", fechas: ["2026-09-24"], message: MENSAJE_24 });
+        expect((await repositorio.buscarPorId(plan.id))!.celdas).toEqual(antes);
+      } else {
+        await operacion;
+        const despues = (await repositorio.buscarPorId(plan.id))!.celdas;
+        expect(despues.find((guardada) => guardada.fecha === "2026-09-22")).toMatchObject({ entradaProgramada: "10:00", salidaProgramada: "19:00" });
+        expect(despues.find((guardada) => guardada.fecha === "2026-09-24")).toMatchObject({ entradaProgramada: "09:00", salidaProgramada: "18:00" });
+      }
+    });
+  });
+
+  // S-01 (revisión 1): un día «Sin relación laboral» que la grilla agrega solo no cuenta como modificado (contrato C3, Q3).
+  describe("S-01 · guardar el borrador con días «Sin relación laboral» en fechas cerradas", () => {
+    const trabajo = (fecha: string, entrada = "09:00") => ({
+      dni: "00001024", fecha, sede: "Lima", entradaProgramada: entrada, salidaProgramada: "18:00", descanso: false,
+    });
+    const sinRelacion = (fecha: string) => ({
+      dni: "00001024", fecha, sede: null, entradaProgramada: null, salidaProgramada: null, descanso: true, motivoNoAsistencia: "sin_relacion_laboral" as const,
+    });
+    const preparar = async (cerradas: string[]) => {
+      // La relación laboral empieza el 25: el 24 queda fuera de ella.
+      const { repositorio } = crearRepositorioEnMemoria([{ ingreso: "2026-09-25", cese: null }], cerradas);
+      const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio, { obtenerActorActual: async () => ({ id: "operaciones-1", rol: "administrador" }) });
+      const plan = await casosDeUso.obtenerOCrear("2026-09-21", "tiendas");
+      await repositorio.guardarCeldas([{ planId: plan.id, ...trabajo("2026-09-26") }]);
+      return { repositorio, casosDeUso, plan };
+    };
+
+    it("F5.4 guardarBorrador con un 24 cerrado «Sin relación laboral» nuevo y un cambio en el 26 abierto guarda", async () => {
+      const { repositorio, casosDeUso, plan } = await preparar(["2026-09-24"]);
+
+      await casosDeUso.guardarBorrador(plan.id, [sinRelacion("2026-09-24"), trabajo("2026-09-26", "10:00")]);
+
+      const celdas = (await repositorio.buscarPorId(plan.id))!.celdas;
+      expect(celdas.find(({ fecha }) => fecha === "2026-09-24")).toMatchObject({ motivoNoAsistencia: "sin_relacion_laboral" });
+      expect(celdas.find(({ fecha }) => fecha === "2026-09-26")).toMatchObject({ entradaProgramada: "10:00" });
+    });
+
+    it("F5.5 guardarBorrador sigue rechazando una celda de trabajo nueva en fecha cerrada aunque haya un día sin relación cerrado", async () => {
+      const { repositorio, casosDeUso, plan } = await preparar(["2026-09-24", "2026-09-25"]);
+      const antes = (await repositorio.buscarPorId(plan.id))!.celdas;
+
+      await expect(casosDeUso.guardarBorrador(plan.id, [sinRelacion("2026-09-24"), trabajo("2026-09-25"), trabajo("2026-09-26")]))
+        .rejects.toMatchObject({ name: "FechasCerradasError", fechas: ["2026-09-25"] });
+      expect((await repositorio.buscarPorId(plan.id))!.celdas).toEqual(antes);
+    });
+  });
+
   it("permite a Operaciones guardar y continuar una celda de borrador sin publicar horarios ni asistencias", async () => {
     const { asistenciasEsperadas, repositorio, turnosPublicados } = crearRepositorioEnMemoria();
     const casosDeUso = crearCasosDeUsoDePlanesSemanales(repositorio, {
