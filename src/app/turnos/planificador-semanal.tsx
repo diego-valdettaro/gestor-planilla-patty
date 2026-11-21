@@ -28,8 +28,8 @@ type Publicado = HorarioSemanalParaCopiar;
 type Confirmacion = { tipo: "cambiar-semana"; destino: string; equipo?: Grupo; vista?: "mensual" } | { tipo: "publicar" } | { tipo: "republicar"; dni: string; nombre: string };
 type ResultadoDeDia = "laboral" | MotivoPlanificadoDeNoAsistencia;
 
-export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, equipo, colaboradores, dias, celdasIniciales, publicados, procesados, modelos, sedes, vigencias = {}, fechasSinPeriodo = [], soloLectura = false }: {
-  actualizadoEn?: string; equipos: Grupo[]; planId: string; semana: string; equipo: Grupo; colaboradores: Colaborador[]; dias: string[]; celdasIniciales: Celda[]; publicados: Publicado[]; procesados: string[]; modelos: Modelo[]; sedes: string[]; fechasSinPeriodo?: string[]; vigencias?: Record<string, Vigencia[]>; soloLectura?: boolean;
+export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, equipo, colaboradores, dias, celdasIniciales, publicados, procesados, modelos, sedes, vigencias = {}, soloLectura = false }: {
+  actualizadoEn?: string; equipos: Grupo[]; planId: string; semana: string; equipo: Grupo; colaboradores: Colaborador[]; dias: string[]; celdasIniciales: Celda[]; publicados: Publicado[]; procesados: string[]; modelos: Modelo[]; sedes: string[]; vigencias?: Record<string, Vigencia[]>; soloLectura?: boolean;
 }) {
   const router = useRouter();
   const dialogoPersonalizado = useRef<HTMLDialogElement>(null);
@@ -347,7 +347,6 @@ export function PlanificadorSemanal({ actualizadoEn, equipos, planId, semana, eq
       {!soloLectura && motivosDeAccionesDeshabilitadas && <p className="sr-only" id="motivo-acciones-plan">{motivosDeAccionesDeshabilitadas}</p>}
       {error && <p className="sr-only" role="alert">{error}</p>}
       {rechazo && <p className="mensaje-operacion error" role="alert">{rechazo}</p>}
-      {fechasSinPeriodo.length > 0 && <p className="mensaje-operacion informativo" role="status">{fechasSinPeriodo.length === 1 ? "La fecha" : "Las fechas"} {listaDeFechas(fechasSinPeriodo)} todavía no {fechasSinPeriodo.length === 1 ? "pertenece" : "pertenecen"} a un período de asistencia. Puede publicar igualmente.</p>}
       <ul aria-label="Estados de la planificación" className="est-leyenda"><li className="est-titulo">Estados</li>{ESTADOS_DE_HORARIO.map((estado) => <li className={`est ${CLASE_DE_ESTADO_DE_HORARIO[estado]}`} key={estado}><EtiquetaEstado estado={estado} /></li>)}<li className="est est-fuera">Sin relación laboral</li></ul>
       <div aria-label="Horario semanal, desplazable horizontalmente" className="tabla-plan-semanal" role="region" tabIndex={0}><table><thead><tr><th scope="col">Colaborador</th>{dias.map((fecha) => <th key={fecha} scope="col">{new Intl.DateTimeFormat("es-PE", { weekday: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${fecha}T00:00:00Z`))}</th>)}</tr></thead><tbody>
         {colaboradores.map((colaborador) => { const semana = resumenesPorColaborador.get(colaborador.dni)!; return <tr key={colaborador.dni}><th scope="row"><div className="persona-plan"><span aria-hidden="true" className="ini">{iniciales(colaborador.nombre)}</span><span className="datos-persona"><span className="nombre-persona"><strong>{colaborador.nombre}</strong>{semana.semanaSinRelacionLaboral && !semana.semanaPublicada && <ConAviso aviso={{ titulo: "No se puede publicar", filas: [{ rotulo: "Causa", texto: DETALLE_SIN_RELACION.causa }, { rotulo: "Siguiente paso", texto: DETALLE_SIN_RELACION.paso }] }}>{(descripcion) => <button aria-describedby={descripcion} aria-label={`No se puede publicar a ${colaborador.nombre}: ver causa y siguiente paso`} className="aviso-btn" type="button"><IconoDeAlerta /></button>}</ConAviso>}</span><span className={`est ${CLASE_DE_ESTADO_DE_HORARIO[semana.estado]} est-etiqueta`}><EtiquetaEstado estado={semana.estado} /></span>{!soloLectura && <span className="fila-persona"><MenuDeAcciones acciones={accionesDe(colaborador, semana)} nombre={colaborador.nombre} />{elegiblesParaPublicar.has(colaborador.dni) && <label className="checkbox-publicar-fila"><input checked={seleccionados.has(colaborador.dni)} disabled={publicando} onChange={(evento) => alternarSeleccion(colaborador.dni, evento.target.checked)} type="checkbox" />Publicar</label>}</span>}</span></div></th>{dias.map((fecha) => renderCelda(colaborador, fecha, semana.semanaLiquidada))}</tr>; })}
@@ -495,10 +494,4 @@ const PRIORIDAD_ESTADO_PLANIFICACION: EstadoDeHorario[] = ["cambios-sin-publicar
 function EtiquetaEstado({ estado, className }: { estado: EstadoDeHorario; className?: string }) {
   const contenido = <>{estado === "liquidado" && <IconoCandado />}{NOMBRE_DEL_ESTADO_DE_HORARIO[estado]}</>;
   return className ? <span className={className}>{contenido}</span> : contenido;
-}
-
-/** «07/09/2026», «07/09/2026 y 08/09/2026» o «07/09/2026, 08/09/2026 y 09/09/2026». */
-function listaDeFechas(fechas: string[]): string {
-  const visibles = fechas.map((fecha) => fecha.split("-").reverse().join("/"));
-  return visibles.length === 1 ? visibles[0] : `${visibles.slice(0, -1).join(", ")} y ${visibles[visibles.length - 1]}`;
 }

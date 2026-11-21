@@ -1401,12 +1401,12 @@ test.describe("Horarios · publicación semanal (#184)", () => {
     return (await pool.query("SELECT fecha::text, motivo_no_asistencia FROM turnos_publicados WHERE dni = $1 ORDER BY fecha", [dni])).rows;
   }
 
-  test("G10 publicar una semana sin período avisa sin bloquear y publica la semana completa de cada persona", async ({ page }) => {
+  test("G10 publicar una semana sin período no muestra aviso ni bloquea y publica la semana completa de cada persona", async ({ page }) => {
     test.setTimeout(90_000);
     const pool = new Pool({ connectionString: urlEscenario184() });
     try {
       await entrarAHorarios(page, SEMANA_SIN_PERIODO_184, GRUPO_184);
-      await expect(page.getByRole("status").filter({ hasText: "todavía no pertenecen a un período de asistencia" })).toBeVisible();
+      await expect(page.getByText("período de asistencia")).toHaveCount(0);
       await expect(page.getByRole("button", { name: "Publicar planificación" })).toBeEnabled();
       await publicarSeleccion(page);
       await expect(page.locator("tr", { hasText: NOMBRES_184.ana }).locator("th .est-etiqueta")).toHaveText("Publicado", { timeout: 15_000 });

@@ -38,7 +38,7 @@ vi.mock("@/turnos/servicio", () => ({
 }));
 vi.mock(import("./planificador-semanal"), async (importOriginal) => ({
   ...await importOriginal(),
-  PlanificadorSemanal: ({ soloLectura, fechasSinPeriodo }: { soloLectura?: boolean; fechasSinPeriodo?: string[] }) => createElement("div", undefined, soloLectura ? "Planificador semanal de solo lectura" : "Planificador semanal editable", ` sin período: ${(fechasSinPeriodo ?? []).join(",")}`),
+  PlanificadorSemanal: ({ soloLectura }: { soloLectura?: boolean }) => createElement("div", undefined, soloLectura ? "Planificador semanal de solo lectura" : "Planificador semanal editable"),
 }));
 
 async function render() {
@@ -100,16 +100,6 @@ describe("página de Horarios (/turnos)", () => {
     expect(html).toContain("modelo de horario en el horario semanal de cada persona del grupo");
     expect(html).not.toContain("Crear horario");
     expect(html).not.toContain('class="crear-horario"');
-  });
-
-  // Prueba posterior (cableado X2): la semana consultada pasa al planificador como fechas sin período.
-  it("pasa al planificador las fechas sin período de la semana consultada", async () => {
-    consultarEstadoDeFechas.mockResolvedValue({ cerradas: [], sinPeriodo: ["2026-09-07", "2026-09-08"] });
-
-    const html = await render();
-
-    expect(consultarEstadoDeFechas).toHaveBeenCalledWith("2026-09-07", "2026-09-13");
-    expect(html).toContain("sin período: 2026-09-07,2026-09-08");
   });
 
   it("carga colaboradores y sedes activas por el grupo operativo", async () => {
