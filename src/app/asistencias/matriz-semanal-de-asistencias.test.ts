@@ -23,3 +23,23 @@ describe("matriz semanal de asistencias", () => {
     expect(html).toContain("Feriado");
   });
 });
+
+describe("185 acceso diario compartido", () => {
+  it.each([
+    { caso: "pendiente", estado: "pendiente" as const, estadoManual: null, enPeriodoCerrado: false, etiqueta: "Esperada" },
+    { caso: "confirmada", estado: "confirmada" as const, estadoManual: null, enPeriodoCerrado: false, etiqueta: "Registrada" },
+    { caso: "liquidada", estado: "confirmada" as const, estadoManual: null, enPeriodoCerrado: true, etiqueta: "Liquidado" },
+    { caso: "sin planificación", estado: "pendiente" as const, estadoManual: null, enPeriodoCerrado: false, etiqueta: "Sin planificación" },
+    { caso: "manual", estado: "manual" as const, estadoManual: "feriado" as const, enPeriodoCerrado: false, etiqueta: "Registrada" },
+  ])("ofrece botón nativo identificado para $caso", ({ caso, estado, estadoManual, enPeriodoCerrado, etiqueta }) => {
+    const fecha = "2019-09-26";
+    const html = renderToStaticMarkup(createElement(MatrizSemanalDeAsistencias, {
+      dias: [fecha], colaboradores: [{ dni: "18500001", nombre: "Ana QA185" }],
+      asistencias: caso === "sin planificación" ? [] : [{ dni: "18500001", fecha, estado, estadoManual, enPeriodoCerrado,
+        entrada: null, salida: null, sedeProgramada: "QA185 Sede", entradaPropuesta: null, salidaPropuesta: null, hayMarcasCrudas: false }],
+    }));
+    expect(html).toMatch(new RegExp(`<button[^>]*aria-label="Asistencia de Ana QA185 para ${fecha}: ${etiqueta}"[^>]*type="button"`));
+    expect(html).not.toContain("pase a la vista mensual");
+    expect(html).not.toContain('role="group"');
+  });
+});

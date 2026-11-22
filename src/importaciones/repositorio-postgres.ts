@@ -53,9 +53,9 @@ export class RepositorioPostgresDeImportaciones implements RepositorioDeImportac
     return turno;
   }
 
-  async perteneceAPeriodoAbierto(fecha: string): Promise<boolean> {
+  async perteneceAPeriodoCerrado(fecha: string): Promise<boolean> {
     const [periodo] = await this.db.select({ id: periodosPlanilla.id }).from(periodosPlanilla)
-      .where(and(eq(periodosPlanilla.estado, "abierto"), lte(periodosPlanilla.inicio, fecha), gte(periodosPlanilla.fin, fecha)));
+      .where(and(eq(periodosPlanilla.estado, "cerrado"), lte(periodosPlanilla.inicio, fecha), gte(periodosPlanilla.fin, fecha)));
     return Boolean(periodo);
   }
 
@@ -112,11 +112,12 @@ export class RepositorioPostgresDeImportaciones implements RepositorioDeImportac
   async guardar(importacion: ImportacionDeAsistencias): Promise<void> {
     await this.db.transaction(async (tx) => {
       // Una importación que agrega propuestas o reemplaza asistencias ya registradas es una corrección (ADR 0012).
-      const afectadas = [...importacion.propuestas, ...importacion.reemplazos];
+      const afectadas = [...importacion.propuestas, ...importacion.reemplazos, ...importacion.marcasCrudas];
       if (afectadas.length) {
         const rango = rangoDeFechas(afectadas.map(({ fecha }) => fecha));
         await invalidarAprobacionesDeAsistencia(tx, {
-          dnis: afectadas.map(({ dni }) => dni), ...rango, motivo: `Se importaron marcas del ${rango.desde} al ${rango.hasta}.`,
+          dnis: afectadas.map(({ dni }) => dni), ...rango,
+          jornadas: afectadas.map(({ dni, fecha }) => ({ dni, fecha })), protegerFechasCerradas: true, motivo: `Se importaron marcas del ${rango.desde} al ${rango.hasta}.`,
         });
       }
       const [guardada] = await tx.insert(importacionesSemanales).values({

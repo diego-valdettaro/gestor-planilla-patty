@@ -65,10 +65,6 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
           lte(periodosPlanilla.inicio, solicitud.fin),
           gte(periodosPlanilla.fin, solicitud.inicio),
         )).orderBy(asc(periodosPlanilla.id)).for("update");
-        await invalidarAprobacionesDeAsistencia(tx, {
-          dnis: solicitud.dnis, desde: solicitud.inicio, hasta: solicitud.fin,
-          motivo: `Se confirmaron asistencias del ${solicitud.inicio} al ${solicitud.fin}.`,
-        });
         const filas = await consultaJornadasDelRango(tx, solicitud.dnis, solicitud.inicio, solicitud.fin)
           .for("update", { of: asistenciasEsperadas });
         const evaluacion = evaluarJornadasDelRango({
@@ -85,6 +81,11 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
         }
 
         const jornadasPendientes = filas.filter(({ estado }) => estado === "pendiente").sort((a, b) => a.fecha.localeCompare(b.fecha));
+        await invalidarAprobacionesDeAsistencia(tx, {
+          dnis: solicitud.dnis, desde: solicitud.inicio, hasta: solicitud.fin,
+          jornadas: jornadasPendientes.map(({ dni, fecha }) => ({ dni, fecha })), protegerFechasCerradas: true,
+          motivo: `Se confirmaron asistencias del ${solicitud.inicio} al ${solicitud.fin}.`,
+        });
         for (const fila of jornadasPendientes) {
           if (fila.motivoNoAsistencia === "sin_relacion_laboral") {
             // Un día fuera de la relación laboral no tiene asistencia por registrar; nunca debería haber una pendiente.
@@ -147,7 +148,7 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
         const recalculos = new Map<string, { dni: string; inicio: string; fin: string }>();
         for (const fila of jornadasPendientes) {
           const periodo = periodos.find(({ inicio, fin }) => inicio <= fila.fecha && fin >= fila.fecha);
-          if (!periodo) throw new Error(`La jornada de ${fila.fecha} ya no pertenece a un período abierto.`);
+          if (!periodo) continue;
           recalculos.set(`${fila.dni}:${periodo.inicio}:${periodo.fin}`, { dni: fila.dni, inicio: periodo.inicio, fin: periodo.fin });
         }
         for (const recalculo of recalculos.values()) await recalcularPenalizaciones(tx, recalculo);
@@ -180,7 +181,7 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
   async confirmar(asistencia: AsistenciaConfirmada): Promise<void> {
     await this.db.transaction(async (tx) => {
       await invalidarAprobacionesDeAsistencia(tx, {
-        dnis: [asistencia.dni], desde: asistencia.fecha, hasta: asistencia.fecha, motivo: `Se confirmó la asistencia del ${asistencia.fecha}.`,
+        protegerFechasCerradas: true, dnis: [asistencia.dni], desde: asistencia.fecha, hasta: asistencia.fecha, motivo: `Se confirmó la asistencia del ${asistencia.fecha}.`,
       });
       const resultado = await tx.update(asistenciasEsperadas).set({
         estado: "confirmada", entradaReal: asistencia.entradaReal, salidaReal: asistencia.salidaReal,
@@ -204,7 +205,7 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
   async ajustar(solicitud: AjusteDeAsistencia, responsableId: string): Promise<void> {
     await this.db.transaction(async (tx) => {
       await invalidarAprobacionesDeAsistencia(tx, {
-        dnis: [solicitud.dni], desde: solicitud.fecha, hasta: solicitud.fecha, motivo: `Se ajustó la asistencia del ${solicitud.fecha}.`,
+        protegerFechasCerradas: true, dnis: [solicitud.dni], desde: solicitud.fecha, hasta: solicitud.fecha, motivo: `Se ajustó la asistencia del ${solicitud.fecha}.`,
       });
       const [asistencia] = await tx.update(asistenciasEsperadas).set({
         entradaReal: solicitud.entradaReal, salidaReal: solicitud.salidaReal, minutosTrabajados: solicitud.minutosTrabajados,
@@ -240,7 +241,7 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
   async registrarEstadoManual(estadoManual: EstadoManual): Promise<void> {
     await this.db.transaction(async (tx) => {
       await invalidarAprobacionesDeAsistencia(tx, {
-        dnis: [estadoManual.dni], desde: estadoManual.fecha, hasta: estadoManual.fecha, motivo: `Se registró un estado manual el ${estadoManual.fecha}.`,
+        protegerFechasCerradas: true, dnis: [estadoManual.dni], desde: estadoManual.fecha, hasta: estadoManual.fecha, motivo: `Se registró un estado manual el ${estadoManual.fecha}.`,
       });
       const [asistencia] = await tx.update(asistenciasEsperadas).set({ estado: "manual" })
         .where(and(eq(asistenciasEsperadas.dni, estadoManual.dni), eq(asistenciasEsperadas.fecha, estadoManual.fecha), eq(asistenciasEsperadas.estado, "pendiente")))
@@ -338,7 +339,6 @@ interface FilaParaConfirmarPorRango {
   descanso: boolean;
   motivoNoAsistencia: MotivoPlanificadoDeNoAsistencia | null;
   enPeriodoCerrado: boolean;
-  enPeriodoAbierto: boolean;
 }
 
 type FuenteDeConsultaDeAsistencias = Pick<NodePgDatabase<typeof schema>, "select">;
@@ -361,7 +361,6 @@ function consultaJornadasDelRango(
     descanso: turnosPublicados.descanso,
     motivoNoAsistencia: turnosPublicados.motivoNoAsistencia,
     enPeriodoCerrado: sql<boolean>`exists (select 1 from ${periodosPlanilla} where ${periodosPlanilla.estado} = 'cerrado' and ${asistenciasEsperadas.fecha} between ${periodosPlanilla.inicio} and ${periodosPlanilla.fin})`,
-    enPeriodoAbierto: sql<boolean>`exists (select 1 from ${periodosPlanilla} where ${periodosPlanilla.estado} = 'abierto' and ${asistenciasEsperadas.fecha} between ${periodosPlanilla.inicio} and ${periodosPlanilla.fin})`,
   }).from(asistenciasEsperadas).innerJoin(turnosPublicados, and(
     eq(turnosPublicados.dni, asistenciasEsperadas.dni),
     eq(turnosPublicados.fecha, asistenciasEsperadas.fecha),
@@ -389,10 +388,6 @@ function evaluarJornadasDelRango(
       jornadasPendientes += 1;
       if (fila.enPeriodoCerrado) {
         bloqueos.push({ fecha: fila.fecha, causa: "La jornada pertenece a un período cerrado." });
-        continue;
-      }
-      if (!fila.enPeriodoAbierto) {
-        bloqueos.push({ fecha: fila.fecha, causa: "No hay un período de planilla abierto para la jornada." });
         continue;
       }
       if (fila.motivoNoAsistencia || fila.descanso) continue;

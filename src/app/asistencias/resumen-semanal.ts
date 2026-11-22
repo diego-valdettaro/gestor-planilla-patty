@@ -35,9 +35,10 @@ function resumirJornada(fecha: string, asistencia: AsistenciaSemanal | undefined
   const estado = estadoDeCeldaAsistencia(asistencia);
   if (!asistencia) return { fecha, estado, causa: "Sin horario publicado", bloqueada: false };
   if (asistencia.estadoManual) return { fecha, estado, motivo: etiquetaDeCeldaAsistencia(estado, asistencia.estadoManual), bloqueada: estado === "liquidado" };
+  const propuesta = asistencia.estado === "pendiente" && Boolean(asistencia.entradaPropuesta && asistencia.salidaPropuesta);
   return {
-    fecha, estado, sede: asistencia.sedeProgramada ?? undefined, entrada: hora(asistencia.entrada), salida: hora(asistencia.salida),
-    causa: estado === "pendiente-de-revision" ? "Marcas incompletas" : estado === "esperada" ? "Faltan marcas" : estado === "liquidado" ? "Período cerrado" : undefined,
+    fecha, estado, sede: asistencia.sedeProgramada ?? undefined, entrada: hora(propuesta ? asistencia.entradaPropuesta : asistencia.entrada), salida: hora(propuesta ? asistencia.salidaPropuesta : asistencia.salida),
+    causa: propuesta ? "Propuesta importada por revisar" : estado === "pendiente-de-revision" ? "Marcas incompletas" : estado === "esperada" ? "Faltan marcas" : estado === "liquidado" ? "Período cerrado" : undefined,
     bloqueada: estado === "liquidado",
   };
 }

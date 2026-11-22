@@ -48,7 +48,7 @@ vi.mock("@/importaciones/servicio", () => ({
     buscarColaborador: async (dni: string) => GRUPO_DE.has(dni) ? { dni, grupo: GRUPO_DE.get(dni) } : undefined,
     buscarSede: async () => "Lima",
     buscarTurnoPublicado: async (dni: string, fecha: string) => ({ dni, fecha, sede: "Lima", descanso: false, motivoNoAsistencia: null }),
-    perteneceAPeriodoAbierto: async () => true,
+    perteneceAPeriodoCerrado: async () => false,
     buscarAsistenciasExistentes: async () => [],
     guardar: simulacro.guardar,
   },

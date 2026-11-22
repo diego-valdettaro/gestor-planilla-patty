@@ -26,8 +26,8 @@ describe("estadoDeCeldaAsistencia", () => {
     expect(estadoDeCeldaAsistencia({ ...base })).toBe("esperada");
   });
 
-  it("es 'esperada' cuando hay marcas que sí permiten proponer entrada y salida completas", () => {
-    expect(estadoDeCeldaAsistencia({ ...base, hayMarcasCrudas: true, entradaPropuesta: "2026-09-01T09:00", salidaPropuesta: "2026-09-01T18:00" })).toBe("esperada");
+  it("185 propuestas importadas: una propuesta completa sigue pendiente de revisión", () => {
+    expect(estadoDeCeldaAsistencia({ ...base, hayMarcasCrudas: true, entradaPropuesta: "2026-09-01T09:00", salidaPropuesta: "2026-09-01T18:00" })).toBe("pendiente-de-revision");
   });
 
   it("es 'pendiente-de-revision' cuando hay marcas que no permiten proponer entrada/salida completas", () => {

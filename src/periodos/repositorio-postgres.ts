@@ -19,6 +19,7 @@ import {
   turnosPublicados,
 } from "@/db/schema";
 
+import { recalcularPenalizaciones } from "@/asistencias/recalcular-tardanza";
 import { vigenciasConfirmadas, type RelacionLaboral } from "@/relaciones-laborales/vigencia";
 
 import { construirHechosDiarios } from "./hechos-de-asistencia-postgres";
@@ -171,6 +172,12 @@ export class RepositorioPostgresDePeriodos implements RepositorioDePeriodos, Lec
         .where(and(lte(periodosPlanilla.inicio, fin), gte(periodosPlanilla.fin, inicio)));
       if (solapados.length) throw new PeriodosSolapadosError();
       await tx.insert(periodosPlanilla).values({ inicio, fin, estado: "abierto" });
+      const personasConTardanzas = await tx.selectDistinct({ dni: asistenciasEsperadas.dni })
+        .from(tardanzas).innerJoin(asistenciasEsperadas, eq(tardanzas.asistenciaId, asistenciasEsperadas.id))
+        .where(and(gte(asistenciasEsperadas.fecha, inicio), lte(asistenciasEsperadas.fecha, fin)));
+      for (const { dni } of personasConTardanzas) {
+        await recalcularPenalizaciones(tx, { dni, inicio, fin });
+      }
     });
   }
 

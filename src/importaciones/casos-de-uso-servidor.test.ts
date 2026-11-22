@@ -21,7 +21,7 @@ function crearRepositorioEnMemoria(existentes: AsistenciaExistente[] = []): {
     buscarTurnoPublicado: async (dni, fecha) => (dni === "00001024" || dni === "00002048")
       ? { dni, fecha, sede: "Centro", descanso: false, motivoNoAsistencia: null }
       : undefined,
-    perteneceAPeriodoAbierto: async (fecha) => fecha !== "2026-08-31",
+    perteneceAPeriodoCerrado: async (fecha) => fecha === "2026-08-31",
     buscarAsistenciasExistentes: async (identidades) => existentes.filter((existente) =>
       identidades.some(({ dni, fecha }) => dni === existente.dni && fecha === existente.fecha)),
     guardar: async (importacion) => { importaciones.push(importacion); },
@@ -36,6 +36,33 @@ function casosDeUso(repositorio: RepositorioDeImportaciones) {
 }
 
 describe("casos de uso de importaciones", () => {
+  it.each([
+    ["antes del primer corte", "2026-08-25"],
+    ["en el hueco posterior al corte", "2026-10-01"],
+  ])("185 importación anterior al período: %s", async (_caso, fecha) => {
+    const { repositorio, importaciones } = crearRepositorioEnMemoria();
+    const solicitud = { filas: [{ ...filaValida, fecha }], erroresDelArchivo: [] };
+
+    await expect(casosDeUso(repositorio).previsualizar(solicitud)).resolves.toMatchObject({
+      errores: [], vistaPrevia: { conteos: { nuevo: 1, igual: 0, pendiente: 0, confirmado: 0 } },
+    });
+    await expect(casosDeUso(repositorio).aplicar({
+      ...solicitud,
+      archivo: { nombre: "sin-periodo.xlsx", ubicacion: "pruebas/sin-periodo.xlsx", hashSha256: "185" },
+      confirmarReemplazoDeConfirmadas: false,
+    })).resolves.toEqual({ requiereConfirmacion: false, jornadas: 1 });
+
+    expect(importaciones).toHaveLength(1);
+    expect(importaciones[0].propuestas).toEqual([{
+      dni: filaValida.dni, fecha, estado: "pendiente",
+      entradaPropuesta: `${fecha}T09:00:00`, salidaPropuesta: `${fecha}T18:00:00`,
+    }]);
+    expect(importaciones[0].marcasCrudas).toEqual([
+      { dni: filaValida.dni, sede: "Centro", fecha, instante: `${fecha}T09:00:00` },
+      { dni: filaValida.dni, sede: "Centro", fecha, instante: `${fecha}T18:00:00` },
+    ]);
+  });
+
   it("prevalida cada jornada y reúne todas las incidencias sin guardar nada", async () => {
     const { importaciones, repositorio } = crearRepositorioEnMemoria();
     repositorio.buscarTurnoPublicado = async (dni, fecha) => {
