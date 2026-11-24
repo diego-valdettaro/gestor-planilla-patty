@@ -10,6 +10,7 @@ import { RepositorioPostgresDeAsistencias } from "@/asistencias/repositorio-post
 import { RepositorioPostgresDeImportaciones } from "@/importaciones/repositorio-postgres";
 import { aprobarGruposQueGestionanAsistenciaDePrueba } from "./aprobaciones-de-prueba";
 import { RepositorioPostgresDePeriodos } from "./repositorio-postgres";
+import { bloquearPeriodos } from "./aprobaciones";
 import { construirHechosDiarios } from "./hechos-de-asistencia-postgres";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
@@ -50,6 +51,7 @@ describe.skipIf(!databaseUrl)("registro y cierre #185", () => {
       if (creados.length) await db.delete(tabla).where(inArray(tabla.periodoId, creados));
     }
     if (creados.length) await db.delete(schema.periodosPlanilla).where(inArray(schema.periodosPlanilla.id, creados));
+    await db.delete(schema.relacionesLaborales).where(inArray(schema.relacionesLaborales.dni, [dni, dniB]));
     await db.delete(schema.colaboradores).where(inArray(schema.colaboradores.dni, [dni, dniB]));
     await db.delete(schema.politicasTardanzasGrupo).where(eq(schema.politicasTardanzasGrupo.grupo, grupo));
     await db.delete(schema.cuentasLocales).where(eq(schema.cuentasLocales.id, responsableId));
@@ -381,6 +383,180 @@ describe.skipIf(!databaseUrl)("registro y cierre #185", () => {
     const [revision] = await revisionesCrudas();
     expect((await datosVivos()).hechos).toEqual(revision.hechos);
     expect(revision.numero).toBe(1);
+  });
+
+  // Ronda2 E321 / plan E322-E325: período inicialmente inexistente; oráculos literales.
+  let semanaNueva = 0;
+  async function prepararCreacion(escritor: "confirmar" | "ajustar" | "rango") {
+    const base = new Date("2092-01-01T00:00:00Z");
+    while (base.getUTCDay() !== 1) base.setUTCDate(base.getUTCDate() + 1);
+    const fechas = Array.from({ length: 7 }, (_, i) => new Date(base.getTime() + (7 * semanaNueva + i) * 86400000).toISOString().slice(0, 10));
+    semanaNueva++;
+    const corte = { inicio: fechas[3], fin: fechas[6] };
+    for (const [persona, ingreso] of [[dni, fechas[0]], [dniB, fechas[3]]] as const) {
+      await db.insert(schema.relacionesLaborales).values({ dni: persona, ingreso, cese: fechas[6], registradaPorId: responsableId,
+        ingresoConfirmadoPorId: responsableId, ingresoConfirmadoEn: new Date(), ceseConfirmadoPorId: responsableId, ceseConfirmadoEn: new Date() });
+    }
+    for (const [persona, dias] of [[dni, fechas], [dniB, fechas.slice(3)]] as const) {
+      for (const fecha of dias) {
+        await db.insert(schema.turnosPublicados).values({ dni: persona, fecha, grupo: persona === dni ? grupo : grupoB, ...turno });
+        await db.insert(schema.asistenciasEsperadas).values({ dni: persona, fecha, estado: "pendiente", entradaPropuesta: `${fecha}T09:00`, salidaPropuesta: `${fecha}T17:00` });
+        if (fecha !== fechas[0] || persona === dniB || escritor === "ajustar") {
+          const horas = fecha === fechas[0] && persona === dni ? 1 : 8;
+          await asistencias.confirmar({ dni: persona, fecha, entradaReal: `${fecha}T09:00`, salidaReal: `${fecha}T${9 + horas}:00`, minutosTrabajados: horas * 60, instantaneaDeTurno: turno, confirmadoPorId: responsableId, confirmadoEn: new Date() });
+        }
+      }
+    }
+    for (const extra of (await asistencias.listarHorasExtra()).filter((e) => e.dni === dni && fechas.includes(e.fecha))) {
+      await asistencias.decidirHoraExtra(dni, extra.fecha, { estado: "aprobada" }, responsableId);
+    }
+    const escribir = async (conexion: NodePgDatabase<typeof schema>) => {
+      const repo = new RepositorioPostgresDeAsistencias(conexion);
+      if (escritor === "rango") await repo.confirmarColaboradoresPorRango({ dnis: [dni], inicio: fechas[0], fin: fechas[0] }, responsableId);
+      else if (escritor === "ajustar") await repo.ajustar({ dni, fecha: fechas[0], entradaReal: `${fechas[0]}T09:00`, salidaReal: `${fechas[0]}T17:00`, minutosTrabajados: 480, motivo: "Corrección exterior R2" }, responsableId);
+      else await repo.confirmar({ dni, fecha: fechas[0], entradaReal: `${fechas[0]}T09:00`, salidaReal: `${fechas[0]}T17:00`, minutosTrabajados: 480, instantaneaDeTurno: turno, confirmadoPorId: responsableId, confirmadoEn: new Date() });
+    };
+    const crear = async (repo: RepositorioPostgresDePeriodos) => {
+      await repo.crear(corte.inicio, corte.fin);
+      const periodo = (await repo.listar()).find((p) => p.inicio === corte.inicio)!;
+      creados.push(periodo.id);
+      return periodo.id;
+    };
+    const aprobar = async (conexion: NodePgDatabase<typeof schema>, id: string) => {
+      await aprobarGruposQueGestionanAsistenciaDePrueba(conexion, id, responsableId, { excepto: [grupo, grupoB] });
+      const repo = new RepositorioPostgresDePeriodos(conexion);
+      await repo.aprobarAsistencia(id, grupo, responsableId, new Date());
+      await repo.aprobarAsistencia(id, grupoB, responsableId, new Date());
+    };
+    const vivos = async (conexion = db) => ({
+      jornadas: await conexion.select().from(schema.asistenciasEsperadas).where(and(inArray(schema.asistenciasEsperadas.dni, [dni, dniB]), gte(schema.asistenciasEsperadas.fecha, corte.inicio), lte(schema.asistenciasEsperadas.fecha, corte.fin))).orderBy(schema.asistenciasEsperadas.dni, schema.asistenciasEsperadas.fecha),
+      extras: (await new RepositorioPostgresDeAsistencias(conexion).listarHorasExtra()).filter((e) => [dni, dniB].includes(e.dni) && fechas.slice(3).includes(e.fecha)),
+      hechos: await construirHechosDiarios(conexion, corte),
+    });
+    return { fechas, corte, escribir, crear, aprobar, vivos };
+  }
+
+  const carrerasNuevas = (["confirmar", "ajustar", "rango"] as const).flatMap((escritor) =>
+    (["escritor primero", "creación y cierre primero", "creación y aprobación abierta primero"] as const).map((orden) => ({ escritor, orden })));
+  it.each(carrerasNuevas)("185-SPEC-002 creación concurrente: $escritor / $orden", async ({ escritor, orden }) => {
+    const f = await prepararCreacion(escritor);
+    expect((await periodos.listar()).some((p) => p.inicio === f.corte.inicio)).toBe(false);
+    const a = await pool.connect(); const b = await pool.connect();
+    const ca = drizzle({ client: a, schema }); const cb = drizzle({ client: b, schema });
+    const rb = new RepositorioPostgresDePeriodos(cb);
+    let pendiente: Promise<unknown> = Promise.resolve(); let id = ""; let espera = false; let resultado: unknown;
+    let congelado: Awaited<ReturnType<typeof f.vivos>> | undefined;
+    let revision: Awaited<ReturnType<typeof periodos.listarRevisiones>> | undefined;
+    let aprobaciones: Awaited<ReturnType<typeof periodos.listarAprobaciones>> | undefined;
+    try {
+      const pidA = (await a.query("select pg_backend_pid() as pid")).rows[0].pid;
+      const pidB = (await b.query("select pg_backend_pid() as pid")).rows[0].pid;
+      expect(pidA).not.toBe(pidB);
+      await a.query("set statement_timeout = '10s'"); await b.query("set statement_timeout = '10s'");
+      console.log("R2 dos conexiones", { escritor, orden, pidA, pidB });
+      if (orden === "escritor primero") {
+        await ca.transaction(async (tx) => {
+          await f.escribir(tx as unknown as typeof db);
+          pendiente = f.crear(rb).then((nuevoId) => { id = nuevoId; return null; }, (error: unknown) => error);
+          espera = await esperarBloqueo(a);
+          console.log("R2 barrera", { escritor, orden, espera });
+        }, { isolationLevel: escritor === "rango" ? "serializable" : "read committed" });
+      } else {
+        await cb.transaction(async (tx) => {
+          const conexion = tx as unknown as typeof db; const repo = new RepositorioPostgresDePeriodos(conexion);
+          id = await f.crear(repo); await f.aprobar(conexion, id);
+          if (orden === "creación y cierre primero") await repo.cerrar(id, responsableId, new Date());
+          congelado = await f.vivos(conexion);
+          revision = await repo.listarRevisiones(id); aprobaciones = await repo.listarAprobaciones(id);
+          pendiente = f.escribir(ca).then(() => null, (error: unknown) => error);
+          espera = await esperarBloqueo(b);
+          console.log("R2 barrera", { escritor, orden, espera });
+        });
+      }
+      resultado = await pendiente;
+    } finally {
+      await pendiente;
+      await a.query("reset statement_timeout"); await b.query("reset statement_timeout"); a.release(); b.release();
+    }
+    expect(espera, "Crear y escritor deben esperar incluso cuando el período no era visible").toBe(true);
+    if (resultado) {
+      expect(escritor).toBe("rango"); expect(String(resultado)).toContain("La selección cambió");
+      await f.escribir(db);
+    }
+    if (orden === "creación y cierre primero") {
+      expect(await f.vivos()).toEqual(congelado);
+      expect(await periodos.listarRevisiones(id)).toEqual(revision);
+      expect(await periodos.listarAprobaciones(id)).toEqual(aprobaciones);
+      const extra = (await f.vivos()).extras;
+      expect(extra).toEqual(escritor === "ajustar" ? [expect.objectContaining({ fecha: f.fechas[6], minutosAl25: 60, minutosAl35: 0, estado: "aprobada" })] : []);
+    } else {
+      if (orden === "escritor primero") await f.aprobar(db, id);
+      else {
+        const actuales = await periodos.listarAprobaciones(id);
+        expect(actuales.find((g) => g.grupo === grupo)?.estado).toBe("invalidada");
+        expect(actuales.find((g) => g.grupo === grupoB)).toEqual(aprobaciones!.find((g) => g.grupo === grupoB));
+        expect((await f.vivos()).jornadas.filter((j) => j.dni === dniB)).toEqual(congelado!.jornadas.filter((j) => j.dni === dniB));
+        await expect(periodos.cerrar(id, responsableId, new Date())).rejects.toThrow("falta la aprobación");
+        await periodos.aprobarAsistencia(id, grupo, responsableId, new Date());
+      }
+      expect((await f.vivos()).extras).toEqual([expect.objectContaining({ dni, fecha: f.fechas[6], minutosAl25: 120, minutosAl35: 360, estado: "pendiente" })]);
+      await expect(periodos.cerrar(id, responsableId, new Date())).rejects.toThrow("horas extra pendientes");
+      await asistencias.decidirHoraExtra(dni, f.fechas[6], { estado: "aprobada" }, responsableId);
+      await periodos.cerrar(id, responsableId, new Date());
+    }
+    const [cerrada] = await periodos.listarRevisiones(id);
+    expect(cerrada.numero).toBe(1);
+    expect(cerrada.resumen.totales).toMatchObject({ jornadasTrabajadas: 8, minutosTrabajados: 3840, minutosPenalizados: 0 });
+    expect(cerrada.resumen.filas.flatMap((g) => g.jornadas).map((j) => j.fecha).sort()).toEqual(f.fechas.slice(3).flatMap((fecha) => [fecha, fecha]).sort());
+    const vivos = await f.vivos();
+    expect(vivos.hechos).toEqual((await periodos.leerHechosDelPeriodo(id)).hechos);
+    // Contraste independiente con filas vivas, no con listarResumen del corte cerrado (que lee la misma revisión).
+    for (const jornada of vivos.jornadas) {
+      const detalle = cerrada.resumen.filas.find((fila) => fila.dni === jornada.dni)?.jornadas.find((j) => j.fecha === jornada.fecha);
+      expect(detalle).toMatchObject({ fecha: jornada.fecha, resultado: "trabajada", minutosTrabajados: jornada.minutosTrabajados, entradaReal: jornada.entradaReal, salidaReal: jornada.salidaReal });
+    }
+    expect(vivos.hechos).toHaveLength(8);
+    for (const hecho of vivos.hechos) expect(hecho).toMatchObject({ resultado: "trabajada", minutosTrabajados: 480 });
+    const antes = await periodos.listarRevisiones(id);
+    await new RepositorioPostgresDeAsistencias(db).ajustar({ dni, fecha: f.fechas[0], entradaReal: `${f.fechas[0]}T09:00`, salidaReal: `${f.fechas[0]}T16:00`, minutosTrabajados: 420, motivo: "Guarda exterior" }, responsableId);
+    expect(await f.vivos()).toEqual(vivos); expect(await periodos.listarRevisiones(id)).toEqual(antes);
+  });
+
+  // Compatibilidad obligatoria E325: guardas que ya pueden pasar antes del gate, no TDD nuevo.
+  it.each(["bloquear-cerrar", "bloquear-reabrir", "aprobar-cerrar", "decidir-cerrar"] as const)("185-SPEC-002 creación concurrente compatibilidad: %s", async (cliente) => {
+    const f = await prepararCreacion("confirmar"); const id = await f.crear(periodos);
+    if (cliente !== "aprobar-cerrar") await f.aprobar(db, id);
+    let extraId = "";
+    if (cliente === "decidir-cerrar") {
+      const [jornada] = await db.select().from(schema.asistenciasEsperadas).where(and(eq(schema.asistenciasEsperadas.dni, dni), eq(schema.asistenciasEsperadas.fecha, f.fechas[6])));
+      const [extra] = await db.insert(schema.horasExtra).values({ asistenciaId: jornada.id, minutosAl25: 8, minutosAl35: 0, estado: "pendiente" }).returning(); extraId = extra.id;
+    }
+    if (cliente === "bloquear-reabrir") await periodos.cerrar(id, responsableId, new Date());
+    const a = await pool.connect(); const b = await pool.connect();
+    const ca = drizzle({ client: a, schema }); const cb = drizzle({ client: b, schema });
+    let pendiente: Promise<unknown> = Promise.resolve(); let espera = false;
+    try {
+      await a.query("set statement_timeout = '10s'"); await b.query("set statement_timeout = '10s'");
+      await ca.transaction(async (tx) => {
+        const conexion = tx as unknown as typeof db; const repo = new RepositorioPostgresDePeriodos(conexion);
+        if (cliente.startsWith("bloquear")) await bloquearPeriodos(tx);
+        else if (cliente === "aprobar-cerrar") {
+          await aprobarGruposQueGestionanAsistenciaDePrueba(conexion, id, responsableId, { excepto: [grupo] });
+          await repo.aprobarAsistencia(id, grupo, responsableId, new Date());
+        } else await repo.decidirHorasExtra(id, [extraId], { estado: "aprobada" }, responsableId, new Date());
+        const rival = new RepositorioPostgresDePeriodos(cb);
+        pendiente = (cliente === "bloquear-reabrir" ? rival.reabrir(id, responsableId, "Rival", new Date()) : rival.cerrar(id, responsableId, new Date())).then(() => null, (e: unknown) => e);
+        espera = await esperarBloqueo(a);
+        if (cliente === "bloquear-reabrir") await repo.reabrir(id, responsableId, "Anidada", new Date());
+        else await repo.cerrar(id, responsableId, new Date());
+      });
+      expect(espera).toBe(true);
+      expect(String(await pendiente)).toMatch(/ya est|ya cerrad|no est|no existe/i);
+    } finally {
+      await pendiente; await a.query("reset statement_timeout"); await b.query("reset statement_timeout"); a.release(); b.release();
+    }
+    expect((await periodos.buscar(id))?.estado).toBe(cliente === "bloquear-reabrir" ? "abierto" : "cerrado");
+    expect(await periodos.listarRevisiones(id)).toHaveLength(1);
   });
 
 });

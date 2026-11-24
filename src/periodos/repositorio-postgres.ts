@@ -1,3 +1,4 @@
+import { coordinarCreacionYCierreDePeriodos } from "./aprobaciones";
 import { and, asc, desc, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
@@ -150,6 +151,7 @@ export class RepositorioPostgresDePeriodos implements RepositorioDePeriodos, Lec
 
   async aprobarAsistencia(periodoId: string, grupo: string, responsableId: string, aprobadaEn: Date): Promise<void> {
     await this.db.transaction(async (tx) => {
+      await coordinarCreacionYCierreDePeriodos(tx);
       // Mismo bloqueo del período que toma toda corrección de asistencia: aprobar y corregir se serializan.
       const [periodo] = await tx.select().from(periodosPlanilla).where(eq(periodosPlanilla.id, periodoId)).for("update");
       if (!periodo || periodo.estado !== "abierto") throw new Error("El período no existe o no está abierto.");
@@ -168,6 +170,7 @@ export class RepositorioPostgresDePeriodos implements RepositorioDePeriodos, Lec
 
   async crear(inicio: string, fin: string): Promise<void> {
     await this.db.transaction(async (tx) => {
+      await coordinarCreacionYCierreDePeriodos(tx);
       const solapados = await tx.select({ id: periodosPlanilla.id }).from(periodosPlanilla)
         .where(and(lte(periodosPlanilla.inicio, fin), gte(periodosPlanilla.fin, inicio)));
       if (solapados.length) throw new PeriodosSolapadosError();
@@ -191,6 +194,7 @@ export class RepositorioPostgresDePeriodos implements RepositorioDePeriodos, Lec
     const ids = [...new Set(horasExtraIds)];
     if (!ids.length) throw new Error("Debe seleccionar al menos una hora extra.");
     await this.db.transaction(async (tx) => {
+      await coordinarCreacionYCierreDePeriodos(tx);
       const [periodo] = await tx.select().from(periodosPlanilla)
         .where(eq(periodosPlanilla.id, periodoId))
         .for("update");
@@ -220,6 +224,7 @@ export class RepositorioPostgresDePeriodos implements RepositorioDePeriodos, Lec
 
   async cerrar(id: string, responsableId: string, registradoEn: Date): Promise<void> {
     await this.db.transaction(async (tx) => {
+      await coordinarCreacionYCierreDePeriodos(tx);
       const [periodo] = await tx.select().from(periodosPlanilla)
         .where(eq(periodosPlanilla.id, id))
         .for("update");
@@ -281,6 +286,7 @@ export class RepositorioPostgresDePeriodos implements RepositorioDePeriodos, Lec
 
   async reabrir(id: string, responsableId: string, motivo: string, registradoEn: Date): Promise<void> {
     await this.db.transaction(async (tx) => {
+      await coordinarCreacionYCierreDePeriodos(tx);
       // Con el período bloqueado, igual que al aprobar o corregir (#114), se comprueba que no sustente un mes pagado antes de reabrirlo.
       await tx.select({ id: periodosPlanilla.id }).from(periodosPlanilla).where(eq(periodosPlanilla.id, id)).for("update");
       const mesPagado = await mesPagadoQueSustenta(tx, id);

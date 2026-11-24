@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import * as schema from "@/db/schema";
@@ -70,13 +70,25 @@ export function rangoDeFechas(fechas: string[]): { desde: string; hasta: string 
 }
 
 /**
+ * Protege también la ausencia de períodos frente a creación concurrente (C6).
+ * Primera sentencia de la transacción, antes de fijar snapshot SERIALIZABLE o bloquear filas.
+ * Serializa los participantes incluso en rangos ajenos: coste deliberado de consistencia.
+ */
+export async function coordinarCreacionYCierreDePeriodos(
+  conexion: Pick<NodePgDatabase<typeof schema>, "execute">,
+): Promise<void> {
+  await conexion.execute(sql`lock table ${periodosPlanilla} in share row exclusive mode`);
+}
+
+/**
  * Toma primero los bloqueos de todos los períodos, en el mismo orden que la invalidación. Quien además bloquea a la
  * persona (Recursos Humanos al confirmar fechas) lo hace antes para respetar el orden período → persona → asistencia.
  */
 export async function bloquearPeriodos(
-  conexion: Pick<NodePgDatabase<typeof schema>, "select">,
+  conexion: Pick<NodePgDatabase<typeof schema>, "select" | "execute">,
   alcance?: { desde: string; hasta: string },
 ): Promise<void> {
+  await coordinarCreacionYCierreDePeriodos(conexion);
   await conexion.select({ id: periodosPlanilla.id }).from(periodosPlanilla)
     .where(alcance ? and(lte(periodosPlanilla.inicio, alcance.hasta), gte(periodosPlanilla.fin, alcance.desde)) : undefined)
     .orderBy(asc(periodosPlanilla.id)).for("update");
