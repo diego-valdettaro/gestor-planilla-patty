@@ -195,6 +195,12 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
       }).where(and(eq(asistenciasEsperadas.dni, asistencia.dni), eq(asistenciasEsperadas.fecha, asistencia.fecha), eq(asistenciasEsperadas.estado, "pendiente"))).returning({ id: asistenciasEsperadas.id });
       if (!resultado.length) throw new Error("La asistencia no está pendiente de revisión.");
       if (asistencia.tardanza) await tx.insert(tardanzas).values({ asistenciaId: resultado[0].id, ...asistencia.tardanza });
+      // El cálculo previo puede usar el corte habitual 26–25. Bajo el gate, el período
+      // real manda y se renumeran también las demás tardanzas afectadas de la persona.
+      const periodos = await tx.select({ inicio: periodosPlanilla.inicio, fin: periodosPlanilla.fin }).from(periodosPlanilla).where(and(
+        eq(periodosPlanilla.estado, "abierto"), lte(periodosPlanilla.inicio, asistencia.fecha), gte(periodosPlanilla.fin, asistencia.fecha),
+      ));
+      for (const periodo of periodos) await recalcularPenalizaciones(tx, { dni: asistencia.dni, ...periodo });
       await recalcularHorasExtraDeSemana(tx, asistencia.dni, asistencia.fecha);
     });
   }
@@ -245,6 +251,7 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
 
   async registrarEstadoManual(estadoManual: EstadoManual): Promise<void> {
     await this.db.transaction(async (tx) => {
+      await bloquearSemanasDeAsistencia(tx, [estadoManual.dni], estadoManual.fecha, estadoManual.fecha);
       await invalidarAprobacionesDeAsistencia(tx, {
         protegerFechasCerradas: true, dnis: [estadoManual.dni], desde: estadoManual.fecha, hasta: estadoManual.fecha, motivo: `Se registró un estado manual el ${estadoManual.fecha}.`,
       });
