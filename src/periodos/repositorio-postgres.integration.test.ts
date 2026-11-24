@@ -36,6 +36,11 @@ describe.skipIf(!databaseUrl)("períodos de planilla persistidos", () => {
       { dni: ana, nombre: "Ana Historica", sede: "Sede fija actual", grupo: grupoActual },
       { dni: beto, nombre: "Beto Segundo", sede: "Otra sede fija", grupo: segundoGrupo },
     ]);
+    // Los bloqueos de Ana son exigibles por vigencia confirmada (ADR0012 #114).
+    await db.insert(schema.relacionesLaborales).values({
+      dni: ana, ingreso: "2042-01-01", registradaPorId: cuentaId,
+      ingresoConfirmadoPorId: cuentaId, ingresoConfirmadoEn: new Date("2042-01-01T00:00:00Z"),
+    });
     const [periodoDeRevision] = await db.insert(schema.periodosPlanilla).values({ inicio: "2042-01-01", fin: "2042-01-10", estado: "abierto" }).returning({ id: schema.periodosPlanilla.id });
     periodoDeRevisionId = periodoDeRevision.id;
     const fechas = ["2041-12-31", ...Array.from({ length: 10 }, (_, indice) => `2042-01-${String(indice + 1).padStart(2, "0")}`), "2042-01-11"];
@@ -76,6 +81,7 @@ describe.skipIf(!databaseUrl)("períodos de planilla persistidos", () => {
     await db.delete(schema.asistenciasEsperadas).where(inArray(schema.asistenciasEsperadas.dni, [ana, beto]));
     await db.delete(schema.turnosPublicados).where(inArray(schema.turnosPublicados.dni, [ana, beto]));
     await db.delete(schema.periodosPlanilla).where(eq(schema.periodosPlanilla.id, periodoDeRevisionId));
+    await db.delete(schema.relacionesLaborales).where(eq(schema.relacionesLaborales.dni, ana));
     await db.delete(schema.colaboradores).where(inArray(schema.colaboradores.dni, [ana, beto]));
     await db.delete(schema.cuentasLocales).where(eq(schema.cuentasLocales.id, cuentaId));
     await db.delete(schema.grupos).where(inArray(schema.grupos.nombre, [grupoActual, grupoHistorico, segundoGrupo]));

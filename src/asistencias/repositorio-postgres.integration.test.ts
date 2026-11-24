@@ -21,6 +21,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeAsistencias · resumen mensu
   const repositorio = new RepositorioPostgresDeAsistencias(db);
 
   const dni = dniDePrueba();
+  const dniAjeno = dniDePrueba();
   const cuentaId = randomUUID();
   const importacionId = randomUUID();
 
@@ -37,6 +38,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeAsistencias · resumen mensu
 
   beforeAll(async () => {
     await db.insert(schema.colaboradores).values({ dni, nombre: "Nora Prueba", sede: "Lima", grupo: "Tiendas", activo: true });
+    await db.insert(schema.colaboradores).values({ dni: dniAjeno, nombre: "Otra persona", sede: "Lima", grupo: "Tiendas", activo: true });
     await db.insert(schema.cuentasLocales).values({ id: cuentaId, nombreUsuario: `asis-${cuentaId}`, hashContrasena: "prueba", rol: "administrador" });
     await db.insert(schema.periodosPlanilla).values([
       { inicio: periodoAbierto.inicio, fin: periodoAbierto.fin, estado: "abierto" },
@@ -46,7 +48,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeAsistencias · resumen mensu
     await db.insert(schema.asistenciasEsperadas).values([
       { dni, fecha: fechaEsperada, estado: "pendiente" },
       { dni, fecha: fechaPendienteDeRevision, estado: "pendiente" },
-      { dni, fecha: fechaConfirmada, estado: "confirmada", entradaReal: `${fechaConfirmada}T09:00`, salidaReal: `${fechaConfirmada}T18:00`, minutosTrabajados: 540 },
+      { dni, fecha: fechaConfirmada, estado: "confirmada", entradaReal: `${fechaConfirmada}T09:00`, salidaReal: `${fechaConfirmada}T18:00`, minutosTrabajados: 540, entradaPropuesta: `${fechaConfirmada}T09:00`, salidaPropuesta: `${fechaConfirmada}T17:00` },
       { dni, fecha: fechaManual, estado: "manual" },
       { dni, fecha: fechaLiquidada, estado: "pendiente" },
     ]);
@@ -61,6 +63,11 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeAsistencias · resumen mensu
     });
     // Una sola marca del día: no permite proponer entrada y salida completas.
     await db.insert(schema.marcasCrudas).values({ importacionId, dni, fecha: fechaPendienteDeRevision, instante: `${fechaPendienteDeRevision}T09:03` });
+    // Orden de inserción distinto del cronológico; la marca intermedia no es un extremo propuesto.
+    await db.insert(schema.marcasCrudas).values([
+      ...["17:00", "12:15:30", "09:00"].map((hora) => ({ importacionId, dni, fecha: fechaConfirmada, instante: `${fechaConfirmada}T${hora}` })),
+      { importacionId, dni: dniAjeno, fecha: fechaConfirmada, instante: `${fechaConfirmada}T10:45` },
+    ]);
   });
 
   afterAll(async () => {
@@ -74,6 +81,7 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeAsistencias · resumen mensu
     await db.delete(schema.asistenciasEsperadas).where(and(eq(schema.asistenciasEsperadas.dni, dni), inArray(schema.asistenciasEsperadas.fecha, todasLasFechas)));
     await db.delete(schema.periodosPlanilla).where(inArray(schema.periodosPlanilla.inicio, [periodoAbierto.inicio, periodoCerrado.inicio]));
     await db.delete(schema.colaboradores).where(eq(schema.colaboradores.dni, dni));
+    await db.delete(schema.colaboradores).where(eq(schema.colaboradores.dni, dniAjeno));
     await db.delete(schema.cuentasLocales).where(eq(schema.cuentasLocales.id, cuentaId));
     await pool.end();
   });
@@ -122,5 +130,24 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeAsistencias · resumen mensu
       expect.objectContaining({ dni, fecha: fechaEsperada }),
       expect.objectContaining({ dni, fecha: fechaManual, estadoManual: "feriado" }),
     ]));
+  });
+
+  const casosDeMarcas = ["mensual", "semanal"].flatMap((vista) => [
+    { vista, caso: "única sin propuesta (M1)", fecha: fechaPendienteDeRevision, esperadas: [`${fechaPendienteDeRevision}T09:03`], entradaPropuesta: null, salidaPropuesta: null },
+    { vista, caso: "múltiples con marca intermedia (M2)", fecha: fechaConfirmada, esperadas: ["09:00", "12:15:30", "17:00"].map((hora) => `${fechaConfirmada}T${hora}`), entradaPropuesta: `${fechaConfirmada}T09:00`, salidaPropuesta: `${fechaConfirmada}T17:00` },
+    { vista, caso: "sin marcas (guarda existente)", fecha: fechaEsperada, esperadas: [], entradaPropuesta: null, salidaPropuesta: null },
+  ]);
+
+  it.each(casosDeMarcas)("185-SPEC-001 marcas crudas: $vista / $caso", async ({ vista, fecha, esperadas, entradaPropuesta, salidaPropuesta }) => {
+    // C1 y ADR0005: evidencia original completa, acotada a persona/fecha y separada de la propuesta.
+    const marcasAntes = await repositorio.listarMarcasCrudasPorAsistencia();
+    const filas = vista === "mensual"
+      ? await repositorio.listarResumenMensual(dni, fecha, fecha)
+      : await repositorio.listarResumenSemanal([dni], fecha, fecha);
+    expect(filas).toHaveLength(1);
+    expect(filas[0]).toMatchObject({ fecha, entradaPropuesta, salidaPropuesta, hayMarcasCrudas: esperadas.length > 0 });
+    expect(filas[0].marcasCrudas).toEqual(esperadas);
+    if (fecha === fechaConfirmada) expect(filas[0]).toMatchObject({ entrada: `${fecha}T09:00`, salida: `${fecha}T18:00` });
+    expect(await repositorio.listarMarcasCrudasPorAsistencia()).toEqual(marcasAntes);
   });
 });

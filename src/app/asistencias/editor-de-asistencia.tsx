@@ -19,6 +19,7 @@ import {
 
 export interface AsistenciaDelEditor extends EvidenciaDeCeldaAsistencia {
   fecha: string;
+  marcasCrudas?: string[];
   entrada: string | null;
   salida: string | null;
   sedeProgramada: string | null;
@@ -99,7 +100,8 @@ export function EditorDeAsistencia({ asistencia, fechaSeleccionada, dni, nombreC
         {!resumen && <p className="subtitulo-dialogo">{nombreColaborador} · {fechaLarga(fechaSeleccionada)}</p>}
         {(asistencia.hayMarcasCrudas || asistencia.entradaPropuesta || asistencia.salidaPropuesta) && <section aria-label="Marcas importadas originales" className="resumen-de-ajuste">
           <h3>Marcas importadas originales</h3>
-          <p>Entrada propuesta: {hora(asistencia.entradaPropuesta) ?? "Sin marca de entrada"}. Salida propuesta: {hora(asistencia.salidaPropuesta) ?? "Sin marca de salida"}.</p>
+          <ul>{asistencia.marcasCrudas?.map((instante, indice) => <li key={`${instante}-${indice}`}><time dateTime={instante}>{hora(instante) ?? instante}</time></li>)}</ul>
+          <p>Entrada propuesta: {hora(asistencia.entradaPropuesta) ?? "Sin propuesta"}. Salida propuesta: {hora(asistencia.salidaPropuesta) ?? "Sin propuesta"}.</p>
           <p className="texto-suave">Las marcas originales se conservan como evidencia; registrar o ajustar no las modifica.</p>
         </section>}
         {confirmada && <p>Horas reales confirmadas: {hora(asistencia.entrada) ?? "Sin dato"}–{hora(asistencia.salida) ?? "Sin dato"}.</p>}

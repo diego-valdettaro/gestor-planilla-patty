@@ -4,7 +4,7 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { EvidenciaDeCeldaAsistencia } from "@/app/asistencias/estado-de-celda";
 import * as schema from "@/db/schema";
 import { ajustesDeAsistencia, asistenciasEsperadas, colaboradores, estadosManuales, horasExtra, marcasCrudas, periodosPlanilla, tardanzas, turnosPublicados } from "@/db/schema";
-import { invalidarAprobacionesDeAsistencia } from "@/periodos/aprobaciones";
+import { bloquearPeriodos, invalidarAprobacionesDeAsistencia } from "@/periodos/aprobaciones";
 import { buscarPoliticaVigente, RepositorioPostgresDeTardanzas } from "@/tardanzas/repositorio-postgres";
 import { minutosDeTardanzaFueraDeTolerancia } from "@/tardanzas/politica-de-penalizacion";
 
@@ -34,6 +34,8 @@ import type {
 // presentación del calendario de `/asistencias`.
 export interface FilaDeResumenMensual extends EvidenciaDeCeldaAsistencia {
   fecha: string;
+  /** Instantes originales del huellero, separados de las propuestas y las horas confirmadas. */
+  marcasCrudas: string[];
   entrada: string | null;
   salida: string | null;
   sedeProgramada: string | null;
@@ -60,6 +62,7 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
   async confirmarColaboradoresPorRango(solicitud: SolicitudDeConfirmacionPorRango, responsableId: string): Promise<void> {
     try {
       await this.db.transaction(async (tx) => {
+        await bloquearSemanasDeAsistencia(tx, solicitud.dnis, solicitud.inicio, solicitud.fin);
         // Ordenados por id, como en `invalidarAprobacionesDeAsistencia`: todos toman los bloqueos de períodos en el mismo orden.
         const periodos = await tx.select().from(periodosPlanilla).where(and(
           lte(periodosPlanilla.inicio, solicitud.fin),
@@ -180,6 +183,7 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
 
   async confirmar(asistencia: AsistenciaConfirmada): Promise<void> {
     await this.db.transaction(async (tx) => {
+      await bloquearSemanasDeAsistencia(tx, [asistencia.dni], asistencia.fecha, asistencia.fecha);
       await invalidarAprobacionesDeAsistencia(tx, {
         protegerFechasCerradas: true, dnis: [asistencia.dni], desde: asistencia.fecha, hasta: asistencia.fecha, motivo: `Se confirmó la asistencia del ${asistencia.fecha}.`,
       });
@@ -204,6 +208,7 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
 
   async ajustar(solicitud: AjusteDeAsistencia, responsableId: string): Promise<void> {
     await this.db.transaction(async (tx) => {
+      await bloquearSemanasDeAsistencia(tx, [solicitud.dni], solicitud.fecha, solicitud.fecha);
       await invalidarAprobacionesDeAsistencia(tx, {
         protegerFechasCerradas: true, dnis: [solicitud.dni], desde: solicitud.fecha, hasta: solicitud.fecha, motivo: `Se ajustó la asistencia del ${solicitud.fecha}.`,
       });
@@ -288,6 +293,7 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
       estadoManual: estadosManuales.tipo,
       entradaPropuesta: asistenciasEsperadas.entradaPropuesta,
       salidaPropuesta: asistenciasEsperadas.salidaPropuesta,
+      marcasCrudas: sql<string[]>`array(select ${marcasCrudas.instante} from ${marcasCrudas} where ${marcasCrudas.dni} = ${asistenciasEsperadas.dni} and ${marcasCrudas.fecha} = ${asistenciasEsperadas.fecha} order by ${marcasCrudas.instante})`,
       hayMarcasCrudas: sql<boolean>`exists (select 1 from ${marcasCrudas} where ${marcasCrudas.dni} = ${asistenciasEsperadas.dni} and ${marcasCrudas.fecha} = ${asistenciasEsperadas.fecha})`,
       enPeriodoCerrado: sql<boolean>`exists (select 1 from ${periodosPlanilla} where ${periodosPlanilla.estado} = 'cerrado' and ${asistenciasEsperadas.fecha} between ${periodosPlanilla.inicio} and ${periodosPlanilla.fin})`,
     }).from(asistenciasEsperadas).leftJoin(turnosPublicados, and(
@@ -309,6 +315,7 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
       estadoManual: estadosManuales.tipo,
       entradaPropuesta: asistenciasEsperadas.entradaPropuesta,
       salidaPropuesta: asistenciasEsperadas.salidaPropuesta,
+      marcasCrudas: sql<string[]>`array(select ${marcasCrudas.instante} from ${marcasCrudas} where ${marcasCrudas.dni} = ${asistenciasEsperadas.dni} and ${marcasCrudas.fecha} = ${asistenciasEsperadas.fecha} order by ${marcasCrudas.instante})`,
       hayMarcasCrudas: sql<boolean>`exists (select 1 from ${marcasCrudas} where ${marcasCrudas.dni} = ${asistenciasEsperadas.dni} and ${marcasCrudas.fecha} = ${asistenciasEsperadas.fecha})`,
       enPeriodoCerrado: sql<boolean>`exists (select 1 from ${periodosPlanilla} where ${periodosPlanilla.estado} = 'cerrado' and ${asistenciasEsperadas.fecha} between ${periodosPlanilla.inicio} and ${periodosPlanilla.fin})`,
     }).from(asistenciasEsperadas).leftJoin(turnosPublicados, and(
@@ -324,6 +331,21 @@ export class RepositorioPostgresDeAsistencias implements RepositorioDeAsistencia
 
   async contarTardanzas(dni: string, inicio: string, fin: string): Promise<number> {
     return this.repositorioDeTardanzas.contarTardanzas(dni, inicio, fin);
+  }
+}
+
+type TransaccionDeAsistencias = Parameters<Parameters<NodePgDatabase<typeof schema>["transaction"]>[0]>[0];
+
+/** Períodos por id → semanas por DNI/lunes → jornadas. También sin período se serializa antes de escribir. */
+async function bloquearSemanasDeAsistencia(tx: TransaccionDeAsistencias, dnis: string[], desde: string, hasta: string): Promise<void> {
+  const inicio = lunesDeLaSemana(desde);
+  const ultimoLunes = lunesDeLaSemana(hasta);
+  const sumarDias = (fecha: string, dias: number) => new Date(Date.parse(`${fecha}T00:00:00Z`) + dias * 86400000).toISOString().slice(0, 10);
+  await bloquearPeriodos(tx, { desde: inicio, hasta: sumarDias(ultimoLunes, 6) });
+  for (const dni of [...new Set(dnis)].sort()) {
+    for (let lunes = inicio; lunes <= ultimoLunes; lunes = sumarDias(lunes, 7)) {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${dni}), hashtext(${lunes}))`);
+    }
   }
 }
 

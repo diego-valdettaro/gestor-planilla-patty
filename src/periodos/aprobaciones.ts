@@ -73,6 +73,11 @@ export function rangoDeFechas(fechas: string[]): { desde: string; hasta: string 
  * Toma primero los bloqueos de todos los períodos, en el mismo orden que la invalidación. Quien además bloquea a la
  * persona (Recursos Humanos al confirmar fechas) lo hace antes para respetar el orden período → persona → asistencia.
  */
-export async function bloquearPeriodos(conexion: Pick<NodePgDatabase<typeof schema>, "select">): Promise<void> {
-  await conexion.select({ id: periodosPlanilla.id }).from(periodosPlanilla).orderBy(asc(periodosPlanilla.id)).for("update");
+export async function bloquearPeriodos(
+  conexion: Pick<NodePgDatabase<typeof schema>, "select">,
+  alcance?: { desde: string; hasta: string },
+): Promise<void> {
+  await conexion.select({ id: periodosPlanilla.id }).from(periodosPlanilla)
+    .where(alcance ? and(lte(periodosPlanilla.inicio, alcance.hasta), gte(periodosPlanilla.fin, alcance.desde)) : undefined)
+    .orderBy(asc(periodosPlanilla.id)).for("update");
 }

@@ -125,3 +125,91 @@ for (const caso of ["registrar", "ajustar", "cancelar", "liquidado", "sin planif
     }
   });
 }
+
+const casosDeMarcasVisibles = (["semanal", "mensual"] as const).flatMap((vista) =>
+  (["incompleta cancelar", "incompleta registrar", "múltiples ajustar", "múltiples cancelar ajuste"] as const).map((caso) => ({ vista, caso })),
+);
+for (const { vista, caso } of casosDeMarcasVisibles) {
+  test(`185-SPEC-001 marcas visibles: ${vista} / ${caso}`, async ({ page }, testInfo) => {
+    test.setTimeout(90_000);
+    const incompleta = caso.startsWith("incompleta");
+    const fecha = incompleta ? FECHAS_185.incompleta : FECHAS_185.ajustar;
+    const errores: string[] = [];
+    page.on("pageerror", (e) => errores.push(e.message));
+    page.on("console", (m) => { if (m.type() === "error") errores.push(m.text()); });
+    page.on("response", (r) => { if (r.status() >= 400) errores.push(`${r.status()} ${new URL(r.url()).pathname}`); });
+    await conBase(async (pool) => {
+      if (incompleta) {
+        // Permite registrar la fecha ficticia sin cambiar el fixture general ni sus recorridos de cierre.
+        await pool.query("UPDATE relaciones_laborales SET cese=$2 WHERE dni=$1", [PERSONAS_185.ana, fecha]);
+      } else {
+        await pool.query("INSERT INTO marcas_crudas(importacion_id,dni,fecha,instante,sede) SELECT importacion_id,dni,fecha,$3,sede FROM marcas_crudas WHERE dni=$1 AND fecha=$2 LIMIT 1", [PERSONAS_185.ana, fecha, `${fecha}T12:15:30`]);
+      }
+    });
+    const antes = await instantanea();
+    await entrar(page, vista);
+    const abrir = async () => {
+      const boton = page.getByRole("button", { name: vista === "semanal" ? new RegExp(`^Asistencia de ${NOMBRES_185.ana} para ${fecha}:`) : new RegExp(`^Asistencia del ${fecha}:`) });
+      if (vista === "semanal") { await boton.focus(); await page.keyboard.press("Enter"); }
+      else await boton.click();
+      return boton;
+    };
+    const boton = await abrir();
+    const dialogo = page.locator("dialog[open]");
+    const marcas = dialogo.getByRole("region", { name: "Marcas importadas originales" });
+    const comprobarMarcas = async () => {
+      for (const hora of incompleta ? ["09:00"] : ["09:00", "12:15:30", "17:00"]) {
+        // Texto propio de cada marca, separado de las frases de propuestas/horas confirmadas.
+        await expect(marcas.getByText(hora, { exact: true })).toBeVisible();
+      }
+    };
+    await comprobarMarcas();
+    if (incompleta) {
+      await expect(dialogo.getByLabel("Hora de ingreso")).toHaveValue("");
+      await expect(dialogo.getByLabel("Hora de salida")).toHaveValue("");
+    } else {
+      await expect(marcas).toContainText("Entrada propuesta: 09:00");
+      await expect(marcas).toContainText("Salida propuesta: 17:00");
+    }
+    if (page.viewportSize()?.width === 375) {
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+      expect(await dialogo.evaluate((d) => d.scrollWidth <= d.clientWidth)).toBe(true);
+      await page.screenshot({ path: testInfo.outputPath("marcas-375.png"), fullPage: true });
+    }
+    if (caso === "incompleta cancelar") {
+      await dialogo.getByRole("button", { name: "Cancelar", exact: true }).click();
+      await expect(boton).toBeFocused();
+      await page.reload();
+      expect(await instantanea()).toEqual(antes);
+    } else if (incompleta) {
+      await dialogo.getByLabel("Hora de ingreso").fill("09:00");
+      await dialogo.getByLabel("Hora de salida").fill("17:00");
+      await dialogo.getByRole("button", { name: "Guardar asistencia", exact: true }).click();
+      await expect(dialogo).toBeHidden();
+    } else {
+      await dialogo.getByLabel("Hora de salida").fill("16:30");
+      await dialogo.getByLabel("Motivo del ajuste").fill("Conservar marcas crudas QA185");
+      await dialogo.getByRole("button", { name: "Revisar ajuste", exact: true }).click();
+      await comprobarMarcas();
+      await expect(dialogo.getByRole("region", { name: "Resumen del ajuste" })).toContainText("conserva confirmada");
+      await dialogo.getByRole("button", { name: caso === "múltiples ajustar" ? "Confirmar ajuste" : "Cancelar", exact: true }).click();
+      await expect(dialogo).toBeHidden();
+      if (caso === "múltiples cancelar ajuste") {
+        await expect(boton).toBeFocused();
+        expect(await instantanea()).toEqual(antes);
+      }
+    }
+    await page.reload();
+    await abrir();
+    await comprobarMarcas();
+    const despues = await instantanea();
+    expect(despues.marcas).toEqual(antes.marcas);
+    expect(despues.jornadas.map((j) => [j.fecha, j.entrada_propuesta, j.salida_propuesta])).toEqual(antes.jornadas.map((j) => [j.fecha, j.entrada_propuesta, j.salida_propuesta]));
+    if (caso === "incompleta registrar" || caso === "múltiples ajustar") {
+      expect(despues.jornadas.find((j) => j.fecha === fecha)?.estado).toBe("confirmada");
+      await expect(dialogo.getByLabel("Hora de salida")).toHaveValue(caso === "múltiples ajustar" ? "16:30" : "17:00");
+    }
+    await testInfo.attach("diagnosticos-navegador", { body: JSON.stringify({ errores, vista, caso, viewport: page.viewportSize() }), contentType: "application/json" });
+    expect(errores).toEqual([]);
+  });
+}

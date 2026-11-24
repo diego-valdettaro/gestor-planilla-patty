@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { eq, inArray } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/node-postgres";
+import { and, eq, gte, inArray, lte } from "drizzle-orm";
+import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Pool, type PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -10,6 +10,7 @@ import { RepositorioPostgresDeAsistencias } from "@/asistencias/repositorio-post
 import { RepositorioPostgresDeImportaciones } from "@/importaciones/repositorio-postgres";
 import { aprobarGruposQueGestionanAsistenciaDePrueba } from "./aprobaciones-de-prueba";
 import { RepositorioPostgresDePeriodos } from "./repositorio-postgres";
+import { construirHechosDiarios } from "./hechos-de-asistencia-postgres";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 if (!databaseUrl && process.env.CI) throw new Error("CI requiere TEST_DATABASE_URL");
@@ -252,6 +253,134 @@ describe.skipIf(!databaseUrl)("registro y cierre #185", () => {
     expect(despues.asistencias.find((a) => a.fecha === exterior)).toMatchObject({ estado: "confirmada", minutosTrabajados: 480 });
     expect(despues.aprobaciones).toEqual(antes.aprobaciones);
     expect(despues.revisiones).toEqual(antes.revisiones);
+  });
+
+  const casosSemanales = (["confirmar", "ajustar", "rango"] as const).flatMap((escritor) =>
+    (["escritor primero", "cierre primero", "abierto"] as const).map((orden) => ({ escritor, orden, variante: "normal" as const })),
+  );
+  const tablaSemanal = [...casosSemanales,
+    { escritor: "ajustar" as const, orden: "abierto" as const, variante: "eliminar" as const },
+    { escritor: "ajustar" as const, orden: "abierto" as const, variante: "sin cambio derivado" as const },
+  ];
+  let semanaSiguiente = 0;
+  it.each(tablaSemanal)("185-SPEC-002 efectos semanales: $escritor / $orden / $variante", async ({ escritor, orden, variante }) => {
+    // F2 SPEC-002: seis jornadas de 8 h = 48 h; al confirmar el lunes, 56 h y domingo 120/360.
+    // Ajuste: lunes 1 -> 8 h: extra dominical 60/0 -> 120/360.
+    // Eliminación: martes–sábado 7 h y domingo 6 h = 41 h; lunes 8 -> 7: 49 -> 48 h.
+    const fechas = Array.from({ length: 7 }, (_, i) => new Date(Date.UTC(2090, 0, 2 + 7 * semanaSiguiente + i)).toISOString().slice(0, 10));
+    semanaSiguiente++;
+    const [lunes] = fechas;
+    const corte = { inicio: fechas[3], fin: fechas[6] };
+    const horasDelLunes = variante === "eliminar" ? 7 : variante === "sin cambio derivado" ? 2 : 8;
+    const confirmarDia = async (repo: RepositorioPostgresDeAsistencias, fecha: string, horas: number) => repo.confirmar({
+      dni, fecha, entradaReal: `${fecha}T09:00`, salidaReal: `${fecha}T${String(9 + horas).padStart(2, "0")}:00`,
+      minutosTrabajados: horas * 60, instantaneaDeTurno: turno, confirmadoPorId: responsableId, confirmadoEn: new Date(),
+    });
+    for (const fecha of fechas) {
+      await db.insert(schema.turnosPublicados).values({ dni, fecha, grupo, ...turno });
+      await db.insert(schema.asistenciasEsperadas).values({ dni, fecha, estado: "pendiente", entradaPropuesta: `${fecha}T09:00`, salidaPropuesta: `${fecha}T17:00` });
+    }
+    for (const [i, fecha] of fechas.slice(1).entries()) {
+      await confirmarDia(asistencias, fecha, variante === "eliminar" ? (i === 5 ? 6 : 7) : variante === "sin cambio derivado" ? 7 : 8);
+    }
+    if (escritor === "ajustar") await confirmarDia(asistencias, lunes, variante === "eliminar" ? 8 : 1);
+    const extrasDeSemana = async () => (await asistencias.listarHorasExtra()).filter((e) => e.dni === dni && fechas.includes(e.fecha));
+    for (const extra of await extrasDeSemana()) await asistencias.decidirHoraExtra(dni, extra.fecha, { estado: "aprobada" }, responsableId);
+    const [periodo] = await db.insert(schema.periodosPlanilla).values({ ...corte, estado: "abierto" }).returning();
+    creados.push(periodo.id);
+    await aprobarGruposQueGestionanAsistenciaDePrueba(db, periodo.id, responsableId);
+    const aprobacionesAntes = await periodos.listarAprobaciones(periodo.id);
+    const escribir = async (conexion: NodePgDatabase<typeof schema>) => {
+      const repo = new RepositorioPostgresDeAsistencias(conexion);
+      if (escritor === "confirmar") await confirmarDia(repo, lunes, 8);
+      else if (escritor === "rango") await repo.confirmarColaboradoresPorRango({ inicio: lunes, fin: lunes, dnis: [dni] }, responsableId);
+      else await repo.ajustar({ dni, fecha: lunes, entradaReal: `${lunes}T09:00`, salidaReal: `${lunes}T${String(9 + horasDelLunes).padStart(2, "0")}:00`, minutosTrabajados: horasDelLunes * 60, motivo: "Corrección semanal QA185" }, responsableId);
+    };
+    const revisionesCrudas = () => db.select().from(schema.revisionesDePeriodosPlanilla).where(eq(schema.revisionesDePeriodosPlanilla.periodoId, periodo.id));
+    const datosVivos = async () => ({
+      jornadas: await db.select().from(schema.asistenciasEsperadas).where(and(eq(schema.asistenciasEsperadas.dni, dni), gte(schema.asistenciasEsperadas.fecha, corte.inicio), lte(schema.asistenciasEsperadas.fecha, corte.fin))).orderBy(schema.asistenciasEsperadas.fecha),
+      extras: await extrasDeSemana(),
+      hechos: await construirHechosDiarios(db, corte),
+    });
+    let revisionAntes: Awaited<ReturnType<typeof revisionesCrudas>> | undefined;
+    let vivosAntes: Awaited<ReturnType<typeof datosVivos>> | undefined;
+    let esperaba = false;
+    let resultado: unknown;
+    if (orden === "abierto") await escribir(db);
+    else {
+      const a = await pool.connect();
+      const b = await pool.connect();
+      const conexionA = drizzle({ client: a, schema });
+      const conexionB = drizzle({ client: b, schema });
+      let pendiente: Promise<unknown> = Promise.resolve();
+      try {
+        const pidA = (await a.query("select pg_backend_pid() as pid")).rows[0].pid;
+        const pidB = (await b.query("select pg_backend_pid() as pid")).rows[0].pid;
+        expect(pidA).not.toBe(pidB);
+        console.log("QA185 dos conexiones", { escritor, orden, pidA, pidB });
+        if (orden === "escritor primero") {
+          await conexionA.transaction(async (tx) => {
+            await escribir(tx as unknown as typeof db);
+            pendiente = new RepositorioPostgresDePeriodos(conexionB).cerrar(periodo.id, responsableId, new Date()).then(() => null, (e: unknown) => e);
+            esperaba = await esperarBloqueo(a);
+          });
+        } else {
+          await conexionB.transaction(async (tx) => {
+            await new RepositorioPostgresDePeriodos(tx as unknown as typeof db).cerrar(periodo.id, responsableId, new Date());
+            pendiente = escribir(conexionA).then(() => null, (e: unknown) => e);
+            esperaba = await esperarBloqueo(b);
+          });
+        }
+        resultado = await pendiente;
+      } finally {
+        await pendiente;
+        a.release(); b.release();
+      }
+      if (orden === "escritor primero") {
+        // En el candidato, B puede cerrar sin esperar y congelar la versión anterior.
+        expect(esperaba, "El cierre debe esperar los efectos semanales del lunes exterior").toBe(true);
+        expect(String(resultado)).toContain("falta la aprobación");
+        expect(await periodos.listarRevisiones(periodo.id)).toHaveLength(0);
+      } else {
+        expect(esperaba, "El escritor debe esperar el cierre de otro período de su semana").toBe(true);
+        if (resultado) {
+          expect(escritor).toBe("rango");
+          expect(String(resultado)).toContain("La selección cambió");
+          expect((await db.select().from(schema.asistenciasEsperadas).where(and(eq(schema.asistenciasEsperadas.dni, dni), eq(schema.asistenciasEsperadas.fecha, lunes))))[0].estado).toBe("pendiente");
+          await escribir(db);
+        }
+        revisionAntes = await revisionesCrudas();
+        vivosAntes = await datosVivos();
+        expect(vivosAntes.hechos).toEqual(revisionAntes[0].hechos);
+        const esperado = escritor === "ajustar" ? [{ fecha: fechas[6], minutosAl25: 60, minutosAl35: 0, estado: "aprobada" }] : [];
+        expect(vivosAntes.extras).toEqual(esperado.map((e) => expect.objectContaining(e)));
+        expect(await periodos.listarAprobaciones(periodo.id)).toEqual(aprobacionesAntes);
+        // Otra escritura exterior tampoco altera los datos vivos ni la revisión ya cerrada.
+        if (escritor === "ajustar") await escribir(db);
+        expect(await revisionesCrudas()).toEqual(revisionAntes);
+        expect(await datosVivos()).toEqual(vivosAntes);
+        return;
+      }
+    }
+    const aprobaciones = await periodos.listarAprobaciones(periodo.id);
+    expect(aprobaciones.find((a) => a.grupo === grupoB)).toEqual(aprobacionesAntes.find((a) => a.grupo === grupoB));
+    expect(aprobaciones.find((a) => a.grupo === grupo)?.estado).toBe(variante === "sin cambio derivado" ? "aprobada" : "invalidada");
+    const esperadas = variante === "eliminar" || variante === "sin cambio derivado" ? [] : [{ dni, fecha: fechas[6], minutosAl25: 120, minutosAl35: 360, estado: "pendiente" }];
+    expect(await extrasDeSemana()).toEqual(esperadas);
+    expect((await db.select().from(schema.asistenciasEsperadas).where(and(eq(schema.asistenciasEsperadas.dni, dni), eq(schema.asistenciasEsperadas.fecha, lunes))))[0].estado).toBe("confirmada");
+    if (variante !== "sin cambio derivado") {
+      await expect(periodos.cerrar(periodo.id, responsableId, new Date())).rejects.toThrow("falta la aprobación");
+      for (const extra of await extrasDeSemana()) await asistencias.decidirHoraExtra(dni, extra.fecha, { estado: "aprobada" }, responsableId);
+      // Renovación agrega una aprobación, sin borrar el historial de la invalidada.
+      await periodos.aprobarAsistencia(periodo.id, grupo, responsableId, new Date());
+      const historial = await db.select().from(schema.aprobacionesDeAsistencia).where(and(eq(schema.aprobacionesDeAsistencia.periodoId, periodo.id), eq(schema.aprobacionesDeAsistencia.grupo, grupo)));
+      expect(historial).toHaveLength(2);
+      expect(historial.filter((a) => a.invalidadaEn !== null)).toHaveLength(1);
+    }
+    await periodos.cerrar(periodo.id, responsableId, new Date());
+    const [revision] = await revisionesCrudas();
+    expect((await datosVivos()).hechos).toEqual(revision.hechos);
+    expect(revision.numero).toBe(1);
   });
 
 });
