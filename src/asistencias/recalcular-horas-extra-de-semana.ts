@@ -3,6 +3,7 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import * as schema from "@/db/schema";
 import { asistenciasEsperadas, horasExtra, periodosPlanilla } from "@/db/schema";
+import { invalidarAprobacionesDeAsistencia } from "@/periodos/aprobaciones";
 
 import { calcularHorasExtraDeSemana, lunesDeLaSemana, type HoraExtraCalculada } from "./calcular-hora-extra";
 
@@ -12,7 +13,8 @@ type Transaccion = Parameters<NodePgDatabase<typeof schema>["transaction"]>[0] e
  * Recalcula las horas extra de la semana lunes–domingo que contiene `fecha`. Las jornadas de
  * períodos cerrados cuentan para el límite semanal, pero conservan su hora extra tal como quedó.
  * Una hora extra cuyos minutos no cambian conserva su decisión, salvo la de `fechaAjustada`,
- * que vuelve a decidirse aunque no cambie.
+ * que vuelve a decidirse aunque no cambie. El escritor ya bloqueó todos los períodos de la semana
+ * antes de modificar jornadas; los cambios derivados invalidan también la aprobación de su propia fecha.
  */
 export async function recalcularHorasExtraDeSemana(
   tx: Transaccion,
@@ -55,21 +57,31 @@ export async function recalcularHorasExtraDeSemana(
   const existentes = await tx.select().from(horasExtra).innerJoin(asistenciasEsperadas, eq(horasExtra.asistenciaId, asistenciasEsperadas.id))
     .where(and(eq(asistenciasEsperadas.dni, dni), gte(asistenciasEsperadas.fecha, lunes), lte(asistenciasEsperadas.fecha, domingo)));
   const existentePorAsistencia = new Map(existentes.map((fila) => [fila.horas_extra.asistenciaId, fila.horas_extra]));
+  const cambiadas: Array<{ dni: string; fecha: string }> = [];
 
   for (const jornada of medibles) {
     if (periodosCerrados.some(({ inicio, fin }) => inicio <= jornada.fecha && fin >= jornada.fecha)) continue;
     const calculada = calculadas.get(jornada.fecha);
     const existente = existentePorAsistencia.get(jornada.id);
     if (!calculada) {
-      if (existente) await tx.delete(horasExtra).where(eq(horasExtra.asistenciaId, jornada.id));
+      if (existente) {
+        await tx.delete(horasExtra).where(eq(horasExtra.asistenciaId, jornada.id));
+        cambiadas.push({ dni, fecha: jornada.fecha });
+      }
     } else if (!existente) {
       await tx.insert(horasExtra).values({ asistenciaId: jornada.id, ...calculada });
+      cambiadas.push({ dni, fecha: jornada.fecha });
     } else if (jornada.fecha === fechaAjustada || cambio(existente, calculada)) {
       await tx.update(horasExtra)
         .set({ ...calculada, causaDeDescarte: null, motivoDeDescarte: null, decididaPorId: null, decididaEn: null })
         .where(eq(horasExtra.asistenciaId, jornada.id));
+      cambiadas.push({ dni, fecha: jornada.fecha });
     }
   }
+  await invalidarAprobacionesDeAsistencia(tx, {
+    dnis: [dni], desde: lunes, hasta: domingo, jornadas: cambiadas, soloAbiertos: true,
+    motivo: `Cambió el sobretiempo semanal al revisar la asistencia del ${fecha}.`,
+  });
 }
 
 function cambio(existente: { minutosAl25: number; minutosAl35: number; trabajoNocturno: boolean }, calculada: HoraExtraCalculada): boolean {

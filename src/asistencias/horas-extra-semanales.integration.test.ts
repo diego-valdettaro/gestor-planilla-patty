@@ -183,15 +183,18 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeAsistencias · horas extra p
   it("no modifica la hora extra de una jornada de un período cerrado", async () => {
     const dni = await crearColaborador("cerrado");
     const [periodo] = await db.insert(schema.periodosPlanilla).values({
-      inicio: lunes, fin: miercoles, estado: "cerrado", cerradoPorId: cuentaId, cerradoEn: new Date(),
+      inicio: lunes, fin: miercoles, estado: "abierto",
     }).returning({ id: schema.periodosPlanilla.id });
     try {
       await confirmar(dni, lunes, "09:00", "18:30");
       const [asistenciaDeLunes] = await db.select({ id: schema.asistenciasEsperadas.id }).from(schema.asistenciasEsperadas)
         .where(and(eq(schema.asistenciasEsperadas.dni, dni), eq(schema.asistenciasEsperadas.fecha, lunes)));
-      // La hora extra del lunes quedó fijada con la revisión del período cerrado.
-      await db.insert(schema.horasExtra).values({ asistenciaId: asistenciaDeLunes.id, minutosAl25: 25, minutosAl35: 0, estado: "aprobada" });
       await confirmar(dni, martes, "09:00", "18:00");
+      // Preparar el valor fijado antes del cierre; confirmar ya creó la fila de sobretiempo.
+      await db.update(schema.horasExtra).set({ minutosAl25: 25, minutosAl35: 0, estado: "aprobada" })
+        .where(eq(schema.horasExtra.asistenciaId, asistenciaDeLunes.id));
+      await db.update(schema.periodosPlanilla).set({ estado: "cerrado", cerradoPorId: cuentaId, cerradoEn: new Date() })
+        .where(eq(schema.periodosPlanilla.id, periodo.id));
 
       await confirmar(dni, viernes, "09:00", "20:00");
 

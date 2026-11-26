@@ -25,6 +25,7 @@ describe.skipIf(!databaseUrl)("confirmación por rango en PostgreSQL", () => {
   const bruno = dniDePrueba();
   const carla = dniDePrueba();
   const diego = dniDePrueba();
+  const personasSinPeriodo: string[] = [];
   const fechas = ["2036-03-22", "2036-03-23", "2036-03-24"];
   const fechaConcurrente = "2036-04-02";
   const fechaCerrada = "2036-02-20";
@@ -100,7 +101,7 @@ describe.skipIf(!databaseUrl)("confirmación por rango en PostgreSQL", () => {
   });
 
   afterAll(async () => {
-    const ids = [ana, bruno, carla, diego];
+    const ids = [ana, bruno, carla, diego, ...personasSinPeriodo];
     const asistencias = await db.select({ id: schema.asistenciasEsperadas.id }).from(schema.asistenciasEsperadas).where(inArray(schema.asistenciasEsperadas.dni, ids));
     if (asistencias.length) {
       const asistenciaIds = asistencias.map(({ id }) => id);
@@ -216,14 +217,63 @@ describe.skipIf(!databaseUrl)("confirmación por rango en PostgreSQL", () => {
     expect(resultado).toMatchObject({ seleccionable: false, jornadasPendientes: 0, jornadasRegistradas: 1, bloqueos: [] });
   });
 
-  it("bloquea una jornada pendiente sin período de planilla configurado", async () => {
+  it.each([
+    ["propuesta completa", false, false],
+    ["descanso planificado", true, false],
+    ["pendiente junto a jornada ya registrada", false, true],
+  ])("185 confirmación anterior al período: %s", async (_caso, descanso, incluirRegistrada) => {
+    const dni = dniDePrueba();
+    personasSinPeriodo.push(dni);
+    await db.insert(schema.colaboradores).values({ dni, nombre: "Persona sin período", sede, grupo, activo: true });
+    const fechaRegistrada = "2036-05-03";
+    await db.insert(schema.turnosPublicados).values({
+      dni, fecha: fechaSinPeriodo, grupo,
+      sede: descanso ? null : sede,
+      entradaProgramada: descanso ? null : "09:00", salidaProgramada: descanso ? null : "18:00",
+      descanso, motivoNoAsistencia: descanso ? "descanso" : null,
+    });
+    await db.insert(schema.asistenciasEsperadas).values({
+      dni, fecha: fechaSinPeriodo, estado: "pendiente",
+      entradaPropuesta: descanso ? null : `${fechaSinPeriodo}T09:00`,
+      salidaPropuesta: descanso ? null : `${fechaSinPeriodo}T18:00`,
+    });
+    if (incluirRegistrada) {
+      await db.insert(schema.turnosPublicados).values({
+        dni, fecha: fechaRegistrada, grupo, sede, entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false,
+      });
+      await db.insert(schema.asistenciasEsperadas).values({
+        dni, fecha: fechaRegistrada, estado: "confirmada", entradaReal: `${fechaRegistrada}T09:00`, salidaReal: `${fechaRegistrada}T18:00`,
+        minutosTrabajados: 540, instantaneaDeTurno: { sede, entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false },
+        confirmadoPorId: cuentaId, confirmadoEn: new Date("2036-05-03T19:00:00Z"),
+      });
+    }
+    const registradasAntes = await db.select().from(schema.asistenciasEsperadas).where(and(
+      eq(schema.asistenciasEsperadas.dni, dni), eq(schema.asistenciasEsperadas.fecha, fechaRegistrada),
+    ));
     const [resultado] = await repositorio.evaluarColaboradoresPorRango({
-      inicio: fechaSinPeriodo,
-      fin: fechaSinPeriodo,
-      colaboradores: [{ dni: bruno, nombre: "Bruno Rango" }],
+      inicio: fechaSinPeriodo, fin: fechaRegistrada, colaboradores: [{ dni, nombre: "Persona sin período" }],
+    });
+    expect(resultado).toEqual({
+      dni, nombre: "Persona sin período", seleccionable: true, jornadasPendientes: 1,
+      jornadasRegistradas: incluirRegistrada ? 1 : 0, bloqueos: [],
     });
 
-    expect(resultado.bloqueos).toEqual([{ fecha: fechaSinPeriodo, causa: "No hay un período de planilla abierto para la jornada." }]);
+    await repositorio.confirmarColaboradoresPorRango({ inicio: fechaSinPeriodo, fin: fechaRegistrada, dnis: [dni] }, cuentaId);
+
+    const [confirmada] = await db.select().from(schema.asistenciasEsperadas).where(and(
+      eq(schema.asistenciasEsperadas.dni, dni), eq(schema.asistenciasEsperadas.fecha, fechaSinPeriodo),
+    ));
+    expect(confirmada).toMatchObject(descanso ? { estado: "manual" } : {
+      estado: "confirmada", entradaReal: `${fechaSinPeriodo}T09:00`, salidaReal: `${fechaSinPeriodo}T18:00`,
+      minutosTrabajados: 540, confirmadoPorId: cuentaId,
+    });
+    if (descanso) {
+      await expect(db.select({ tipo: schema.estadosManuales.tipo }).from(schema.estadosManuales)
+        .where(eq(schema.estadosManuales.asistenciaId, confirmada.id))).resolves.toEqual([{ tipo: "descanso" }]);
+    }
+    await expect(db.select().from(schema.asistenciasEsperadas).where(and(
+      eq(schema.asistenciasEsperadas.dni, dni), eq(schema.asistenciasEsperadas.fecha, fechaRegistrada),
+    ))).resolves.toEqual(registradasAntes);
   });
 
   it("ante dos confirmaciones concurrentes aplica un solo lote completo", async () => {

@@ -51,3 +51,18 @@ describe("resumir asistencias semanales", () => {
     expect(colaborador.jornadas[1]).toMatchObject({ estado: "liquidado", bloqueada: true });
   });
 });
+
+
+describe("185 propuestas importadas", () => {
+  it.each([
+    { entrada: "09:00", salida: "18:00" },
+    { entrada: "08:45", salida: "17:15" },
+  ])("muestra $entrada–$salida como propuesta pendiente de revisión", ({ entrada, salida }) => {
+    const [persona] = resumirAsistenciasSemanales([{ dni: "00000011", nombre: "Ana Torres" }], [dias[0]], [{
+      dni: "00000011", fecha: dias[0], estado: "pendiente", estadoManual: null,
+      entrada: null, salida: null, sedeProgramada: "Centro", entradaPropuesta: `${dias[0]}T${entrada}`,
+      salidaPropuesta: `${dias[0]}T${salida}`, hayMarcasCrudas: true, enPeriodoCerrado: false,
+    }]);
+    expect(persona.jornadas[0]).toMatchObject({ estado: "pendiente-de-revision", entrada, salida, causa: "Propuesta importada por revisar" });
+  });
+});

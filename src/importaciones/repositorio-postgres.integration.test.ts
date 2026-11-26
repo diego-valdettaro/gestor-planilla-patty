@@ -32,7 +32,10 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeImportaciones", () => {
     await db.insert(schema.sedes).values({ nombre: sede, grupo, activa: true });
     await db.insert(schema.colaboradores).values({ dni, nombre: "Colaborador de importación", sede, grupo, activo: true });
     await db.insert(schema.cuentasLocales).values({ id: cuentaId, nombreUsuario: `import-${sufijo}`, hashContrasena: "prueba", rol: "administrador" });
-    await db.insert(schema.periodosPlanilla).values({ inicio: "2032-08-26", fin: "2032-09-25", estado: "abierto" });
+    await db.insert(schema.periodosPlanilla).values([
+      { inicio: "2032-08-26", fin: "2032-09-25", estado: "abierto" },
+      { inicio: "2032-11-01", fin: "2032-11-01", estado: "cerrado", cerradoPorId: cuentaId, cerradoEn: new Date() },
+    ]);
   });
 
   afterAll(async () => {
@@ -52,11 +55,51 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeImportaciones", () => {
     await db.delete(schema.asistenciasEsperadas).where(eq(schema.asistenciasEsperadas.dni, dni));
     await db.delete(schema.turnosPublicados).where(eq(schema.turnosPublicados.dni, dni));
     await db.delete(schema.periodosPlanilla).where(and(eq(schema.periodosPlanilla.inicio, "2032-08-26"), eq(schema.periodosPlanilla.fin, "2032-09-25")));
+    await db.delete(schema.periodosPlanilla).where(and(eq(schema.periodosPlanilla.inicio, "2032-11-01"), eq(schema.periodosPlanilla.fin, "2032-11-01")));
     await db.delete(schema.colaboradores).where(eq(schema.colaboradores.dni, dni));
     await db.delete(schema.sedes).where(eq(schema.sedes.nombre, sede));
     await db.delete(schema.grupos).where(eq(schema.grupos.nombre, grupo));
     await db.delete(schema.cuentasLocales).where(eq(schema.cuentasLocales.id, cuentaId));
     await pool.end();
+  });
+
+  it.each([
+    ["antes del primer corte", "2032-08-25", "1"],
+    ["en el hueco posterior al corte", "2032-10-01", "2"],
+  ])("185 importación anterior al período: %s", async (_caso, dia, hash) => {
+    await db.insert(schema.turnosPublicados).values({
+      dni, fecha: dia, grupo, sede, entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false, motivoNoAsistencia: null,
+    });
+    const solicitud = {
+      filas: [{ fila: 2, dni, sede, fecha: dia, entrada: "09:05", salida: "18:10" }],
+      erroresDelArchivo: [],
+      archivo: { nombre: `sin-periodo-${dia}.xlsx`, ubicacion: `pruebas/sin-periodo-${dia}.xlsx`, hashSha256: hash.repeat(64) },
+      confirmarReemplazoDeConfirmadas: false,
+    };
+
+    try {
+      await expect(casosDeUso.previsualizar(solicitud)).resolves.toMatchObject({ errores: [], vistaPrevia: { conteos: { nuevo: 1 } } });
+      await expect(casosDeUso.aplicar(solicitud)).resolves.toEqual({ requiereConfirmacion: false, jornadas: 1 });
+      await expect(repositorio.buscarAsistenciasExistentes([{ dni, fecha: dia }])).resolves.toMatchObject([{
+        dni, fecha: dia, estado: "pendiente", entradaPropuesta: `${dia}T09:05:00`, salidaPropuesta: `${dia}T18:10:00`,
+        entradaReal: null, salidaReal: null,
+      }]);
+      await expect(db.select({ instante: schema.marcasCrudas.instante }).from(schema.marcasCrudas)
+        .where(and(eq(schema.marcasCrudas.dni, dni), eq(schema.marcasCrudas.fecha, dia))).orderBy(schema.marcasCrudas.instante))
+        .resolves.toEqual([{ instante: `${dia}T09:05:00` }, { instante: `${dia}T18:10:00` }]);
+      await expect(db.select({ nombre: schema.importacionesSemanales.archivoNombre, ubicacion: schema.importacionesSemanales.archivoUbicacion })
+        .from(schema.importacionesSemanales).where(and(eq(schema.importacionesSemanales.archivoHashSha256, hash.repeat(64)), eq(schema.importacionesSemanales.usuarioId, cuentaId))))
+        .resolves.toEqual([{ nombre: solicitud.archivo.nombre, ubicacion: solicitud.archivo.ubicacion }]);
+    } finally {
+      const fuentes = await db.select({ id: schema.importacionesSemanales.id }).from(schema.importacionesSemanales)
+        .where(and(eq(schema.importacionesSemanales.archivoHashSha256, hash.repeat(64)), eq(schema.importacionesSemanales.usuarioId, cuentaId)));
+      for (const { id } of fuentes) {
+        await db.delete(schema.marcasCrudas).where(eq(schema.marcasCrudas.importacionId, id));
+        await db.delete(schema.importacionesSemanales).where(eq(schema.importacionesSemanales.id, id));
+      }
+      await db.delete(schema.asistenciasEsperadas).where(and(eq(schema.asistenciasEsperadas.dni, dni), eq(schema.asistenciasEsperadas.fecha, dia)));
+      await db.delete(schema.turnosPublicados).where(and(eq(schema.turnosPublicados.dni, dni), eq(schema.turnosPublicados.fecha, dia)));
+    }
   });
 
   it("persiste una carga autosuficiente sin sede ni semana de alcance", async () => {
@@ -146,18 +189,18 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeImportaciones", () => {
     });
   });
 
-  it("rechaza toda la carga cuando una fila cae fuera de un período abierto, sin persistir ninguna fila", async () => {
-    const diaSinPeriodo = "2032-11-01";
+  it("rechaza toda la carga cuando una fila cae en un período cerrado, sin persistir ninguna fila", async () => {
+    const diaCerrado = "2032-11-01";
     const diaValido = "2032-09-04";
     await db.insert(schema.turnosPublicados).values([
       { dni, fecha: diaValido, grupo, sede, entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false, motivoNoAsistencia: null },
-      { dni, fecha: diaSinPeriodo, grupo, sede, entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false, motivoNoAsistencia: null },
+      { dni, fecha: diaCerrado, grupo, sede, entradaProgramada: "09:00", salidaProgramada: "18:00", descanso: false, motivoNoAsistencia: null },
     ]);
 
     await expect(casosDeUso.aplicar({
       filas: [
         { fila: 2, dni, sede, fecha: diaValido, entrada: "09:00", salida: "18:00" },
-        { fila: 3, dni, sede, fecha: diaSinPeriodo, entrada: "09:00", salida: "18:00" },
+        { fila: 3, dni, sede, fecha: diaCerrado, entrada: "09:00", salida: "18:00" },
       ],
       erroresDelArchivo: [], archivo: { nombre: "asistencias.xlsx", ubicacion: "pruebas/asistencias.xlsx", hashSha256: "d".repeat(64) },
       confirmarReemplazoDeConfirmadas: false,

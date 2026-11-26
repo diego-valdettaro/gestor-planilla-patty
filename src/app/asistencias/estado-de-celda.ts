@@ -50,19 +50,14 @@ export interface EvidenciaDeCeldaAsistencia {
   enPeriodoCerrado: boolean;
 }
 
-function propuestaCompleta(dia: EvidenciaDeCeldaAsistencia): boolean {
-  return Boolean(dia.entradaPropuesta && dia.salidaPropuesta);
-}
-
 // Deriva, para un día del calendario de asistencias, exactamente uno de los cinco
 // estados de celda. `undefined` = no hay horario publicado para ese día.
 export function estadoDeCeldaAsistencia(dia: EvidenciaDeCeldaAsistencia | undefined): EstadoDeCeldaAsistencia {
   if (!dia) return "sin-planificacion";
   if (dia.enPeriodoCerrado) return "liquidado";
   if (dia.estado === "confirmada" || dia.estado === "manual") return "registrada";
-  // estado === "pendiente": Esperada salvo que haya marcas del huellero que todavía
-  // no permiten proponer una entrada/salida completas.
-  if (dia.hayMarcasCrudas && !propuestaCompleta(dia)) return "pendiente-de-revision";
+  // Las propuestas importadas requieren revisión explícita, incluso si están completas.
+  if (dia.hayMarcasCrudas || dia.entradaPropuesta || dia.salidaPropuesta) return "pendiente-de-revision";
   return "esperada";
 }
 

@@ -146,12 +146,17 @@ describe.skipIf(!databaseUrl)("RepositorioPostgresDeAsistencias · tardanza al a
     const dni = await crearColaborador();
     await confirmar(dni, dia1, "09:30");
     await confirmar(dni, dia2, "09:30");
+    const antes = await tardanzas(dni);
+    expect(antes).toEqual([
+      { fecha: dia1, minutos: 30, penalizados: 0, politica: 1 },
+      { fecha: dia2, minutos: 30, penalizados: 60, politica: 1 },
+    ]);
     const [cerrado] = await db.update(schema.periodosPlanilla).set({ estado: "cerrado", cerradoPorId: cuentaId, cerradoEn: new Date() })
       .where(eq(schema.periodosPlanilla.id, periodos[0])).returning({ id: schema.periodosPlanilla.id });
     try {
-      await ajustarEntrada(dni, dia1, "09:00");
+      await expect(ajustarEntrada(dni, dia1, "09:00")).rejects.toThrow(/cerrad.*reabr/i);
 
-      expect(await tardanzas(dni)).toEqual([{ fecha: dia2, minutos: 30, penalizados: 60, politica: 1 }]);
+      expect(await tardanzas(dni)).toEqual(antes);
     } finally {
       await db.update(schema.periodosPlanilla).set({ estado: "abierto", cerradoPorId: null, cerradoEn: null }).where(eq(schema.periodosPlanilla.id, cerrado.id));
     }

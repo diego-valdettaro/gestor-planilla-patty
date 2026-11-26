@@ -77,16 +77,55 @@ describe.skipIf(!url)("persistencia PostgreSQL del patrón mensual", () => {
         .toEqual({ guardadas: [], omitidas: [{ fecha: primera, motivo: "Asignación existente" }] });
     } else {
       const plan = await repositorio.obtenerOCrear(primera, grupo);
-      const resultado = await repositorio.enTransaccionDePatronMensual(dni, tx => {
-        const guardar = tx.guardarNuevasJornadasDelMes;
-        tx.guardarNuevasJornadasDelMes = async (equipo, jornadas) => {
-          expect(jornadas.map(jornada => jornada.fecha)).toEqual([primera, segunda, tercera]);
-          // Otra conexión crea el borrador después de la selección y antes de la escritura del patrón.
-          await repositorio.guardarCelda({ dni, planId: plan.id, fecha: primera, ...descanso, motivoNoAsistencia: "permiso", descanso: false });
-          return guardar(equipo, jornadas);
-        };
-        return aplicarPatronSemanalAlMes(tx, sesion, entrada);
+      const conexionA = await pool.connect();
+      const conexionB = await pool.connect();
+      const dbA = drizzle({ client: conexionA, schema });
+      const repositorioB = new RepositorioPostgresDeTurnos(drizzle({ client: conexionB, schema }));
+      const { rows: [{ pid: pidA }] } = await conexionA.query<{ pid: number }>("select pg_backend_pid() as pid");
+      const { rows: [{ pid: pidB }] } = await conexionB.query<{ pid: number }>("select pg_backend_pid() as pid");
+      let liberarEscritura!: () => void;
+      const permisoDeCommit = new Promise<void>(resolve => { liberarEscritura = resolve; });
+      let avisarEscritura!: () => void;
+      let rechazarEscritura!: (error: unknown) => void;
+      const escrituraPreparada = new Promise<void>((resolve, reject) => {
+        avisarEscritura = resolve;
+        rechazarEscritura = reject;
       });
+      // A guarda el permiso y retiene su transacción; B debe esperar, sin que A espere el resultado de B.
+      const escritura = dbA.transaction(async tx => {
+        await new RepositorioPostgresDeTurnos(tx).guardarCelda({
+          dni, planId: plan.id, fecha: primera, ...descanso, motivoNoAsistencia: "permiso", descanso: false,
+        });
+        avisarEscritura();
+        await permisoDeCommit;
+      });
+      void escritura.catch(rechazarEscritura);
+      let aplicacion: ReturnType<typeof aplicarPatronSemanalAlMes> | undefined;
+      let resultado;
+      try {
+        await escrituraPreparada;
+        aplicacion = repositorioB.enTransaccionDePatronMensual(dni, tx => aplicarPatronSemanalAlMes(tx, sesion, entrada));
+        // Observación real de PostgreSQL: no basta con que la promesa aún no se haya resuelto.
+        await expect.poll(async () => {
+          const { rows } = await pool.query<{ esperando: boolean }>(`
+            select exists (
+              select 1 from pg_locks
+              where pid = $1 and relation = 'periodos_planilla'::regclass
+                and mode = 'ShareRowExclusiveLock' and not granted
+                and $2 = any(pg_blocking_pids($1))
+            ) as esperando
+          `, [pidB, pidA]);
+          return rows[0].esperando;
+        }, { timeout: 1000 }).toBe(true);
+        liberarEscritura();
+        await escritura;
+        resultado = await aplicacion;
+      } finally {
+        liberarEscritura();
+        await Promise.allSettled([escritura, aplicacion]);
+        conexionA.release();
+        conexionB.release();
+      }
       expect(resultado, "un borrador que ya existe no se vuelve a guardar").toEqual({
         guardadas: [segunda, tercera],
         omitidas: [{ fecha: primera, motivo: "Asignación existente" }, { fecha: publicada, motivo: "Asignación existente" }],

@@ -28,7 +28,7 @@ export function crearResumenDeAjuste(datos: DatosDeAjuste): ResumenDeAjuste {
     colaborador: datos.colaborador,
     cambios,
     motivo: datos.motivo,
-    consecuencia: "Esta asistencia ya está confirmada. El ajuste reemplaza sus horas y queda registrado con el motivo indicado.",
+    consecuencia: "Esta asistencia ya está confirmada y se conserva confirmada tras el ajuste. El cambio reemplaza sus horas y queda registrado con el motivo indicado. Si había una aprobación del grupo, se invalida y el gerente debe renovarla antes del nuevo cierre.",
   };
 }
 

@@ -1,4 +1,5 @@
-import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
+import { coordinarCreacionYCierreDePeriodos } from "./aprobaciones";
+import { and, asc, desc, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import * as schema from "@/db/schema";
@@ -19,7 +20,8 @@ import {
   turnosPublicados,
 } from "@/db/schema";
 
-import { vigenciasConfirmadas, type RelacionLaboral } from "@/relaciones-laborales/vigencia";
+import { recalcularPenalizaciones } from "@/asistencias/recalcular-tardanza";
+import { estaVigenteEn, vigenciasConfirmadas, type RelacionLaboral } from "@/relaciones-laborales/vigencia";
 
 import { construirHechosDiarios } from "./hechos-de-asistencia-postgres";
 import { RevisionDeAsistenciaNoDisponibleError, type LectorDeHechosDeAsistencia, type RevisionDeAsistenciaParaPagos } from "./hechos-para-pagos";
@@ -149,6 +151,7 @@ export class RepositorioPostgresDePeriodos implements RepositorioDePeriodos, Lec
 
   async aprobarAsistencia(periodoId: string, grupo: string, responsableId: string, aprobadaEn: Date): Promise<void> {
     await this.db.transaction(async (tx) => {
+      await coordinarCreacionYCierreDePeriodos(tx);
       // Mismo bloqueo del período que toma toda corrección de asistencia: aprobar y corregir se serializan.
       const [periodo] = await tx.select().from(periodosPlanilla).where(eq(periodosPlanilla.id, periodoId)).for("update");
       if (!periodo || periodo.estado !== "abierto") throw new Error("El período no existe o no está abierto.");
@@ -167,10 +170,17 @@ export class RepositorioPostgresDePeriodos implements RepositorioDePeriodos, Lec
 
   async crear(inicio: string, fin: string): Promise<void> {
     await this.db.transaction(async (tx) => {
+      await coordinarCreacionYCierreDePeriodos(tx);
       const solapados = await tx.select({ id: periodosPlanilla.id }).from(periodosPlanilla)
         .where(and(lte(periodosPlanilla.inicio, fin), gte(periodosPlanilla.fin, inicio)));
       if (solapados.length) throw new PeriodosSolapadosError();
       await tx.insert(periodosPlanilla).values({ inicio, fin, estado: "abierto" });
+      const personasConTardanzas = await tx.selectDistinct({ dni: asistenciasEsperadas.dni })
+        .from(tardanzas).innerJoin(asistenciasEsperadas, eq(tardanzas.asistenciaId, asistenciasEsperadas.id))
+        .where(and(gte(asistenciasEsperadas.fecha, inicio), lte(asistenciasEsperadas.fecha, fin)));
+      for (const { dni } of personasConTardanzas) {
+        await recalcularPenalizaciones(tx, { dni, inicio, fin });
+      }
     });
   }
 
@@ -184,6 +194,7 @@ export class RepositorioPostgresDePeriodos implements RepositorioDePeriodos, Lec
     const ids = [...new Set(horasExtraIds)];
     if (!ids.length) throw new Error("Debe seleccionar al menos una hora extra.");
     await this.db.transaction(async (tx) => {
+      await coordinarCreacionYCierreDePeriodos(tx);
       const [periodo] = await tx.select().from(periodosPlanilla)
         .where(eq(periodosPlanilla.id, periodoId))
         .for("update");
@@ -213,6 +224,7 @@ export class RepositorioPostgresDePeriodos implements RepositorioDePeriodos, Lec
 
   async cerrar(id: string, responsableId: string, registradoEn: Date): Promise<void> {
     await this.db.transaction(async (tx) => {
+      await coordinarCreacionYCierreDePeriodos(tx);
       const [periodo] = await tx.select().from(periodosPlanilla)
         .where(eq(periodosPlanilla.id, id))
         .for("update");
@@ -224,22 +236,23 @@ export class RepositorioPostgresDePeriodos implements RepositorioDePeriodos, Lec
         throw new Error(`No se puede cerrar el período: falta la aprobación ${sinAprobar.length === 1 ? "del grupo" : "de los grupos"} ${sinAprobar.join(", ")}. Pida al gerente de área ${sinAprobar.length === 1 ? "del grupo" : "de cada grupo"} que apruebe; Finanzas no aprueba en su nombre.`);
       }
 
-      const pendientes = await tx.select({ id: asistenciasEsperadas.id }).from(asistenciasEsperadas)
+      const esExigible = await consultarElegibilidadDePendientes(tx, periodo);
+      const pendientes = await tx.select({ dni: asistenciasEsperadas.dni, fecha: asistenciasEsperadas.fecha }).from(asistenciasEsperadas)
         .where(and(
           gte(asistenciasEsperadas.fecha, periodo.inicio),
           lte(asistenciasEsperadas.fecha, periodo.fin),
           eq(asistenciasEsperadas.estado, "pendiente"),
         ));
-      if (pendientes.length) throw new Error("No se puede cerrar el período: existen asistencias pendientes de revisión.");
+      if (pendientes.some(({ dni, fecha }) => esExigible(dni, fecha))) throw new Error("No se puede cerrar el período: existen asistencias pendientes de revisión.");
 
-      const extrasPendientes = await tx.select({ id: horasExtra.id }).from(horasExtra)
+      const extrasPendientes = await tx.select({ dni: asistenciasEsperadas.dni, fecha: asistenciasEsperadas.fecha }).from(horasExtra)
         .innerJoin(asistenciasEsperadas, eq(horasExtra.asistenciaId, asistenciasEsperadas.id))
         .where(and(
           gte(asistenciasEsperadas.fecha, periodo.inicio),
           lte(asistenciasEsperadas.fecha, periodo.fin),
           eq(horasExtra.estado, "pendiente"),
         ));
-      if (extrasPendientes.length) throw new Error("No se puede cerrar el período: existen horas extra pendientes de decisión.");
+      if (extrasPendientes.some(({ dni, fecha }) => esExigible(dni, fecha))) throw new Error("No se puede cerrar el período: existen horas extra pendientes de decisión.");
 
       const resumen = await construirResumen(tx, periodo, { periodoId: id });
       const [anterior] = await tx.select({ numero: revisionesDePeriodosPlanilla.numero })
@@ -273,6 +286,7 @@ export class RepositorioPostgresDePeriodos implements RepositorioDePeriodos, Lec
 
   async reabrir(id: string, responsableId: string, motivo: string, registradoEn: Date): Promise<void> {
     await this.db.transaction(async (tx) => {
+      await coordinarCreacionYCierreDePeriodos(tx);
       // Con el período bloqueado, igual que al aprobar o corregir (#114), se comprueba que no sustente un mes pagado antes de reabrirlo.
       await tx.select({ id: periodosPlanilla.id }).from(periodosPlanilla).where(eq(periodosPlanilla.id, id)).for("update");
       const mesPagado = await mesPagadoQueSustenta(tx, id);
@@ -359,6 +373,42 @@ async function bloqueosDeAprobacion(
   return calcularBloqueosDeAprobacion(periodo, personas, jornadas);
 }
 
+/** Misma población y fechas que la aprobación (ADR0012 #108/#109/#114).
+ * Solo limita bloqueos: conserva las filas originales y sus valores para consulta y auditoría.
+ */
+async function consultarElegibilidadDePendientes(
+  conexion: ConexionDeConsulta,
+  periodo: { inicio: string; fin: string },
+): Promise<(dni: string, fecha: string) => boolean> {
+  const relaciones = await conexion.select({
+    id: relacionesLaborales.id,
+    dni: relacionesLaborales.dni,
+    ingreso: relacionesLaborales.ingreso,
+    cese: relacionesLaborales.cese,
+    ingresoConfirmadoEn: relacionesLaborales.ingresoConfirmadoEn,
+    ceseConfirmadoEn: relacionesLaborales.ceseConfirmadoEn,
+  }).from(relacionesLaborales)
+    .innerJoin(colaboradores, eq(colaboradores.dni, relacionesLaborales.dni))
+    .innerJoin(grupos, eq(grupos.nombre, colaboradores.grupo))
+    .where(and(
+      eq(grupos.gestionaAsistencia, true),
+      lte(relacionesLaborales.ingreso, periodo.fin),
+      or(isNull(relacionesLaborales.ceseConfirmadoEn), isNull(relacionesLaborales.cese), gte(relacionesLaborales.cese, periodo.inicio)),
+    ));
+  const porPersona = new Map<string, RelacionLaboral[]>();
+  for (const relacion of relaciones) {
+    const anteriores = porPersona.get(relacion.dni) ?? [];
+    anteriores.push({
+      id: relacion.id, dni: relacion.dni, ingreso: relacion.ingreso, cese: relacion.cese,
+      ingresoConfirmado: relacion.ingresoConfirmadoEn !== null,
+      ceseConfirmado: relacion.ceseConfirmadoEn !== null,
+    });
+    porPersona.set(relacion.dni, anteriores);
+  }
+  const vigencias = new Map([...porPersona].map(([dni, registros]) => [dni, vigenciasConfirmadas(registros)]));
+  return (dni, fecha) => periodo.inicio <= fecha && fecha <= periodo.fin && estaVigenteEn(vigencias.get(dni) ?? [], fecha);
+}
+
 async function construirResumen(
   conexion: ConexionDeConsulta,
   periodo: PeriodoPlanilla,
@@ -396,6 +446,7 @@ async function construirResumen(
     .leftJoin(horasExtra, eq(horasExtra.asistenciaId, asistenciasEsperadas.id))
     .where(and(gte(asistenciasEsperadas.fecha, periodo.inicio), lte(asistenciasEsperadas.fecha, periodo.fin)));
 
+  const esExigible = await consultarElegibilidadDePendientes(conexion, periodo);
   const agrupadas = new Map<string, FilaDeResumen>();
   const bloqueos: BloqueoDePeriodo[] = [];
   for (const jornada of jornadas) {
@@ -431,8 +482,8 @@ async function construirResumen(
     fila.cantidadTardanzas += jornada.tardanza === null ? 0 : 1;
     fila.minutosPenalizados += detalle.minutosPenalizados;
     if (detalle.horaExtra) sumarHoraExtra(fila, detalle.horaExtra.estado, detalle.horaExtra.minutosAl25, detalle.horaExtra.minutosAl35);
-    if (resultado === "pendiente") bloqueos.push({ tipo: "asistencia", dni: jornada.dni, nombre: jornada.nombre, grupo: jornada.grupoActual, fecha: jornada.fecha });
-    if (jornada.estadoExtra === "pendiente") bloqueos.push({ tipo: "hora-extra", dni: jornada.dni, nombre: jornada.nombre, grupo: jornada.grupoActual, fecha: jornada.fecha });
+    if (resultado === "pendiente" && esExigible(jornada.dni, jornada.fecha)) bloqueos.push({ tipo: "asistencia", dni: jornada.dni, nombre: jornada.nombre, grupo: jornada.grupoActual, fecha: jornada.fecha });
+    if (jornada.estadoExtra === "pendiente" && esExigible(jornada.dni, jornada.fecha)) bloqueos.push({ tipo: "hora-extra", dni: jornada.dni, nombre: jornada.nombre, grupo: jornada.grupoActual, fecha: jornada.fecha });
     agrupadas.set(clave, fila);
   }
 

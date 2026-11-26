@@ -40,6 +40,11 @@ describe.skipIf(!databaseUrl)("decisiones y revisiones de períodos en PostgreSQ
       { id: administracionId, nombreUsuario: `admin-75-${sufijo}`, hashContrasena: "prueba", rol: "administrador" },
     ]);
     await db.insert(schema.colaboradores).values({ dni, nombre: "Ana Revisión", sede: "Centro", grupo });
+    // ADR0012: esta guarda prueba pendientes exigibles, dentro de una relación confirmada.
+    await db.insert(schema.relacionesLaborales).values({
+      dni, ingreso: "2071-01-01", registradaPorId: administracionId,
+      ingresoConfirmadoPorId: administracionId, ingresoConfirmadoEn: instantePrimerCierre,
+    });
     const periodos = await db.insert(schema.periodosPlanilla).values([
       { inicio: "2071-01-01", fin: "2071-01-10", estado: "abierto" },
       { inicio: "2071-02-01", fin: "2071-02-03", estado: "abierto" },
@@ -88,6 +93,7 @@ describe.skipIf(!databaseUrl)("decisiones y revisiones de períodos en PostgreSQ
     await db.delete(schema.asistenciasEsperadas).where(eq(schema.asistenciasEsperadas.dni, dni));
     await db.delete(schema.turnosPublicados).where(eq(schema.turnosPublicados.dni, dni));
     await db.delete(schema.periodosPlanilla).where(inArray(schema.periodosPlanilla.id, [periodoDecisionesId, periodoCierreId]));
+    await db.delete(schema.relacionesLaborales).where(eq(schema.relacionesLaborales.dni, dni));
     await db.delete(schema.colaboradores).where(eq(schema.colaboradores.dni, dni));
     await db.delete(schema.cuentasLocales).where(inArray(schema.cuentasLocales.id, [finanzasId, administracionId]));
     await db.delete(schema.grupos).where(eq(schema.grupos.nombre, grupo));
@@ -171,5 +177,108 @@ describe.skipIf(!databaseUrl)("decisiones y revisiones de períodos en PostgreSQ
     expect(revisiones[1].resumen.filas[0].jornadas[0].politicaDeTardanzaVersion).toBe(4);
     const reaperturas = await db.select().from(schema.auditoriaPeriodosPlanilla).where(eq(schema.auditoriaPeriodosPlanilla.periodoId, periodoCierreId));
     expect(reaperturas).toEqual(expect.arrayContaining([expect.objectContaining({ accion: "reapertura", motivo: "Corregir jornada" })]));
+  });
+});
+
+// QA4: esperados de ADR0012 #108/#109/#114 y contrato C5/C6 (plan E265/E266).
+// Cada fila usa una transacción revertida: conserva los datos históricos ajenos al caso.
+describe.skipIf(!databaseUrl)("185 QA4 elegibilidad de pendientes", () => {
+  const pool = new Pool({ connectionString: databaseUrl });
+  const db = drizzle({ client: pool, schema });
+  afterAll(() => pool.end());
+  const dia = (mesDia: string) => `2019-${mesDia}`;
+  const relacion = (ingreso = "09-26", cese = "09-27", confirmaIngreso = true, confirmaCese = true) => ({
+    ingreso: dia(ingreso), cese: dia(cese), confirmaIngreso, confirmaCese,
+  });
+  const escenarios = [
+    { numero: 1, fechas: ["09-28"], relaciones: [relacion()], bloquea: false },
+    { numero: 2, fechas: ["09-27"], relaciones: [relacion("09-28", "09-29")], bloquea: false },
+    { numero: 3, fechas: ["09-28"], relaciones: [relacion("09-26", "09-29", false, false)], bloquea: false },
+    { numero: 4, fechas: ["09-28"], relaciones: [relacion("09-26", "09-29")], bloquea: false, gestiona: false },
+    { numero: 5, fechas: ["09-26", "09-27"], relaciones: [relacion()], bloquea: true },
+    { numero: 6, fechas: ["09-28"], relaciones: [relacion("09-26", "09-27", true, false)], bloquea: true },
+    { numero: 7, fechas: ["09-25", "10-26"], relaciones: [relacion("09-01", "10-31")], bloquea: false },
+    { numero: 8, fechas: ["09-26", "10-25"], relaciones: [relacion("09-01", "10-31")], bloquea: true },
+    { numero: 9, fechas: ["09-28"], relaciones: [relacion(), relacion("09-30", "10-01")], bloquea: false },
+    { numero: 10, fechas: ["09-28"], relaciones: [], bloquea: false },
+  ];
+  const casos = (["asistencia", "hora-extra"] as const).flatMap((tipo) => escenarios.map((escenario) => ({
+    ...escenario, tipo, id: `${tipo === "asistencia" ? "A" : "X"}${escenario.numero}`, activo: true,
+  })));
+  casos.push({ ...escenarios[0], numero: 11, id: "A11", tipo: "asistencia", fechas: ["09-28"], relaciones: [relacion("09-26", "09-29")], bloquea: true, activo: false });
+
+  it.each(casos)("$id $tipo, regla de elegibilidad", async (caso) => {
+    // Los bordes de una fila se ejecutan como escenarios independientes, sin resolverse entre sí.
+    for (const mesDia of caso.fechas) {
+      const revertir = new Error("Revertir únicamente fixture QA4");
+      await db.transaction(async (tx) => {
+        const conexion = tx as unknown as typeof db;
+        const repositorio = new RepositorioPostgresDePeriodos(conexion);
+        const actor = randomUUID();
+        const grupo = `QA4 ${randomUUID()}`;
+        const dni = dniDePrueba();
+        const fecha = dia(mesDia);
+        const ahora = new Date("2019-10-26T10:00:00Z");
+        await tx.insert(schema.cuentasLocales).values({ id: actor, nombreUsuario: grupo, hashContrasena: "prueba", rol: "administrador" });
+        await tx.insert(schema.grupos).values({ nombre: grupo, gestionaAsistencia: caso.gestiona !== false });
+        await tx.insert(schema.colaboradores).values({ dni, nombre: "Ana QA4", grupo, sede: "Centro", activo: caso.activo });
+        for (const r of caso.relaciones) await tx.insert(schema.relacionesLaborales).values({
+          dni, ingreso: r.ingreso, cese: r.cese, registradaPorId: actor,
+          ingresoConfirmadoEn: r.confirmaIngreso ? ahora : null, ingresoConfirmadoPorId: r.confirmaIngreso ? actor : null,
+          ceseConfirmadoEn: r.confirmaCese ? ahora : null, ceseConfirmadoPorId: r.confirmaCese ? actor : null,
+        });
+        const [periodo] = await tx.insert(schema.periodosPlanilla).values({ inicio: dia("09-26"), fin: dia("10-25"), estado: "abierto" }).returning();
+        // Cubrir todas las fechas exigibles del corte para aislar la única pendiente de cada caso.
+        const fechas = new Set([fecha]);
+        for (let t = Date.parse("2019-09-26"); t <= Date.parse("2019-10-25"); t += 86400000) {
+          const f = new Date(t).toISOString().slice(0, 10);
+          if (caso.relaciones.some((r) => r.confirmaIngreso && r.ingreso <= f && (!r.confirmaCese || f <= r.cese))) fechas.add(f);
+        }
+        let asistenciaId = "";
+        for (const f of fechas) {
+          await tx.insert(schema.turnosPublicados).values({ dni, fecha: f, grupo, sede: "Centro", entradaProgramada: "09:00", salidaProgramada: "17:00", descanso: false });
+          const [a] = await tx.insert(schema.asistenciasEsperadas).values({
+            dni, fecha: f, estado: f === fecha && caso.tipo === "asistencia" ? "pendiente" : "confirmada",
+            minutosTrabajados: f === fecha && caso.tipo === "asistencia" ? null : 480,
+          }).returning();
+          if (f === fecha) asistenciaId = a.id;
+        }
+        if (caso.tipo === "hora-extra") await tx.insert(schema.horasExtra).values({ asistenciaId, estado: "pendiente", minutosAl25: 8, minutosAl35: 0 });
+        const originales = async () => ({
+          asistencias: await tx.select().from(schema.asistenciasEsperadas).where(eq(schema.asistenciasEsperadas.dni, dni)),
+          extras: await tx.select().from(schema.horasExtra).where(eq(schema.horasExtra.asistenciaId, asistenciaId)),
+          relaciones: await tx.select().from(schema.relacionesLaborales).where(eq(schema.relacionesLaborales.dni, dni)),
+        });
+        const antes = await originales();
+        await aprobarGruposQueGestionanAsistenciaDePrueba(conexion, periodo.id, actor, { excepto: [grupo] });
+        if (caso.gestiona === false) {
+          expect((await repositorio.listarAprobaciones(periodo.id)).some((a) => a.grupo === grupo)).toBe(false);
+        } else if (caso.bloquea && caso.tipo === "asistencia") {
+          await expect(repositorio.aprobarAsistencia(periodo.id, grupo, actor, ahora)).rejects.toThrow();
+          await expect(repositorio.cerrar(periodo.id, actor, ahora)).rejects.toThrow("falta la aprobación");
+          // Solo para comprobar la guarda redundante de cierre, después del rechazo real.
+          await aprobarGruposQueGestionanAsistenciaDePrueba(conexion, periodo.id, actor);
+        } else {
+          await repositorio.aprobarAsistencia(periodo.id, grupo, actor, ahora);
+        }
+        const resumen = await repositorio.listarResumen({ periodoId: periodo.id });
+        expect.soft(resumen.bloqueos.filter((b) => b.dni === dni), `${caso.id}/${fecha}: bloqueos del resumen`).toHaveLength(caso.bloquea ? 1 : 0);
+        if (caso.bloquea) {
+          await expect(repositorio.cerrar(periodo.id, actor, ahora)).rejects.toThrow(caso.tipo === "asistencia" ? "asistencias pendientes" : "horas extra pendientes");
+          expect((await repositorio.buscar(periodo.id))?.estado).toBe("abierto");
+          expect(await repositorio.listarRevisiones(periodo.id)).toHaveLength(0);
+        } else {
+          await expect(repositorio.cerrar(periodo.id, actor, ahora)).resolves.toBeUndefined();
+          expect((await repositorio.buscar(periodo.id))?.estado).toBe("cerrado");
+          const revisiones = await repositorio.listarRevisiones(periodo.id);
+          expect(revisiones).toHaveLength(1);
+          expect(revisiones[0].numero).toBe(1);
+          expect(revisiones[0].resumen.bloqueos).toEqual([]);
+          if (caso.numero === 7) expect(revisiones[0].resumen.filas.flatMap((f) => f.jornadas).some((j) => j.fecha === fecha)).toBe(false);
+        }
+        expect(await originales()).toEqual(antes);
+        throw revertir;
+      }).catch((error: unknown) => { if (error !== revertir) throw error; });
+    }
   });
 });

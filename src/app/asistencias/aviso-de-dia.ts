@@ -1,7 +1,7 @@
 import type { ContenidoDeAviso } from "../aviso-flotante";
 import { NOMBRE_DEL_ESTADO_DE_CELDA_ASISTENCIA, type EstadoDeCeldaAsistencia } from "./estado-de-celda";
 
-// Dónde se registra la asistencia desde la vista que muestra el día: en el calendario mensual se abre el día; en la matriz semanal hay que pasar a la vista mensual.
+// Ambas vistas abren el mismo editor diario.
 export type DondeRegistrar = "abrir-el-dia" | "vista-mensual";
 
 export interface DetalleDeDia { titulo: string; detalle: string; siguientePaso: string }
@@ -17,7 +17,7 @@ export function detalleDeDia(estado: EstadoDeCeldaAsistencia, donde: DondeRegist
     case "esperada":
       return { titulo: `${nombre} · faltan marcas`, detalle: "aún no hay marcas del huellero para este día.", siguientePaso: `importe el archivo del huellero o ${registrar} para registrar la asistencia.` };
     case "pendiente-de-revision":
-      return { titulo: `${nombre} · marcas incompletas`, detalle: "hay marcas del huellero, pero no alcanzan para proponer una entrada y una salida completas.", siguientePaso: `${registrar} para revisar las marcas y registrar la asistencia.` };
+      return { titulo: `${nombre} · marcas por revisar`, detalle: "hay marcas del huellero pendientes de revisión y confirmación explícita.", siguientePaso: `${registrar} para revisar las marcas y registrar la asistencia.` };
     case "liquidado":
       return { titulo: `${nombre} · período cerrado`, detalle: "la fecha cae en un período de planilla cerrado y quedó congelada.", siguientePaso: "no requiere acción: los días de un período cerrado no se editan." };
     default:

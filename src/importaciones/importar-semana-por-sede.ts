@@ -109,7 +109,7 @@ export interface RepositorioDeImportaciones {
     descanso: boolean;
     motivoNoAsistencia: MotivoPlanificadoDeNoAsistencia | null;
   } | undefined>;
-  perteneceAPeriodoAbierto(fecha: string): Promise<boolean>;
+  perteneceAPeriodoCerrado(fecha: string): Promise<boolean>;
   buscarAsistenciasExistentes(identidades: Array<{ dni: string; fecha: string }>): Promise<AsistenciaExistente[]>;
   guardar(importacion: ImportacionDeAsistencias): Promise<void>;
 }
@@ -140,7 +140,7 @@ export async function prevalidarImportacion(
     const sede = await repositorio.buscarSede(fila.sede);
     if (!sede) errores.push(errorDe(fila, "Sede desconocida."));
 
-    if (!(await repositorio.perteneceAPeriodoAbierto(fila.fecha))) {
+    if (await repositorio.perteneceAPeriodoCerrado(fila.fecha)) {
       errores.push(errorDe(fila, "El período de planilla está cerrado. Pida a Finanzas que lo reabra."));
     }
 
